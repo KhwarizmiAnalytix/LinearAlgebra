@@ -9,7 +9,7 @@
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
-#include "linear_algebra/matrix_operation/svd_decomposition.h"
+#include "include/matrix_operation/svd_decomposition.h"
 
 namespace
 {

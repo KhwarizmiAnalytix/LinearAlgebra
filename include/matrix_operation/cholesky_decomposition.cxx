@@ -1,8 +1,8 @@
-#include "linear_algebra/matrix_operation/cholesky_decomposition.h"
+#include "include/matrix_operation/cholesky_decomposition.h"
 
 #include <cmath>
 
-#include "linear_algebra/util/exception.h"
+#include "include/util/exception.h"
 
 #ifdef LINALG_ENABLE_MKL
 #include <mkl.h>

@@ -5,7 +5,7 @@
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
-#include "linear_algebra/matrix_operation/matrix_multiplication.h"
+#include "include/matrix_operation/matrix_multiplication.h"
 
 // #define DEBUG_MATRIXMULTIPLICATION
 
@@ -190,7 +190,7 @@ void matrix_vector_multiplication(int rows, int columns)
 // A's storage shape is (rows x depth) when !transpose_a, else (depth x rows);
 // B's storage shape is (depth x columns) when !transpose_b, else
 // (columns x depth) — matching linalg::matrix_multiplication's row-major
-// convention (see linear_algebra/matrix_operation/matrix_multiplication.cxx).
+// convention (see include/matrix_operation/matrix_multiplication.cxx).
 template <typename value_t>
 void matrix_multiplication_test(int rows, int columns, int depth, bool transpose_a, bool transpose_b)
 {

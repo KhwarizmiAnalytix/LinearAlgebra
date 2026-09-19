@@ -1,9 +1,9 @@
-#include "linear_algebra/matrix_operation/matrix_transpose.h"
+#include "include/matrix_operation/matrix_transpose.h"
 
 //#include <stdexcept>
-#include "linear_algebra/common/configure.h"  // IWYU pragma: keep
-#include "linear_algebra/common/macros.h"
-#include "linear_algebra/util/exception.h"
+#include "include/common/configure.h"  // IWYU pragma: keep
+#include "include/common/macros.h"
+#include "include/util/exception.h"
 
 #if defined(LINALG_VECTORIZED)
 #include <cmath>

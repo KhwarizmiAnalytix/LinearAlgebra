@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "linear_algebra/common/linear_algebra_export.h"
+#include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
 #define quarisma_int __int64

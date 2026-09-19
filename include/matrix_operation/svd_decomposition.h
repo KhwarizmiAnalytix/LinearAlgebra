@@ -2,7 +2,7 @@
 
 #include <cstddef>  // for quarisma_long
 
-#include "linear_algebra/common/linear_algebra_export.h"  // for LINALG_API
+#include "include/common/linear_algebra_export.h"  // for LINALG_API
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
 #define quarisma_int __int64

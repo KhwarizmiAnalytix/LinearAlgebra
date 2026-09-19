@@ -178,8 +178,8 @@ endif()
 
 # --- Configure-time headers ---
 configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/linear_algebra/common/configure.h.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/linear_algebra/common/configure.h" @ONLY
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/common/configure.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/common/configure.h" @ONLY
 )
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/Testing/LinearAlgebraTest.h.in"
@@ -190,8 +190,8 @@ configure_file(
 set(linalg_headers "")
 set(linalg_sources "")
 
-file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/linear_algebra/*.h")
-file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/linear_algebra/*.cxx")
+file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
+file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cxx")
 
 # --- Target definition ---
 set(CMAKE_CXX_STANDARD ${LINALG_CXX_STANDARD})
@@ -231,9 +231,9 @@ else()
   target_compile_options(LinearAlgebra PRIVATE -include cstdlib)
 endif()
 
-# Include roots: repo root → "linear_algebra/matrix_operation/lu_decomposition.h",
-#                             "linear_algebra/util/exception.h", ...
-# Build tree     → generated "linear_algebra/common/configure.h"
+# Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
+#                             "include/util/exception.h", ...
+# Build tree     → generated "include/common/configure.h"
 target_include_directories(
   LinearAlgebra
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -274,14 +274,14 @@ install(
   DESTINATION include
 )
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/linear_algebra"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DESTINATION include/LinearAlgebra
   FILES_MATCHING
   PATTERN "*.h"
 )
 install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/linear_algebra/common/configure.h"
-  DESTINATION include/LinearAlgebra/linear_algebra/common
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/include/common/configure.h"
+  DESTINATION include/LinearAlgebra/include/common
 )
 
 # --- Testing ---

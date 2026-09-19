@@ -4,19 +4,19 @@
 #pragma warning(disable : 4244)
 #endif  // _MSC_VER
 
-#include "linear_algebra/matrix_operation/matrix_multiplication.h"
+#include "include/matrix_operation/matrix_multiplication.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-#include "linear_algebra/common/configure.h"  // IWYU pragma: keep
+#include "include/common/configure.h"  // IWYU pragma: keep
 
 #ifdef LINALG_ENABLE_MKL
 #include <mkl.h>
 #else
-#include "linear_algebra/memory/allocator.h"
-#include "linear_algebra/util/cpu_info.h"
+#include "include/memory/allocator.h"
+#include "include/util/cpu_info.h"
 #ifdef LINALG_VECTORIZED
 #include "common/packet.h"
 #endif

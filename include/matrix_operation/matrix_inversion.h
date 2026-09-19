@@ -2,8 +2,8 @@
 
 #include <cstddef>
 
-#include "linear_algebra/common/linear_algebra_export.h"
-#include "linear_algebra/matrix_operation/linear_solver.h"
+#include "include/common/linear_algebra_export.h"
+#include "include/matrix_operation/linear_solver.h"
 
 namespace linalg
 {

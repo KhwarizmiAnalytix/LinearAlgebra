@@ -1,10 +1,10 @@
-#include "linear_algebra/matrix_operation/lu_decomposition.h"
+#include "include/matrix_operation/lu_decomposition.h"
 
 #include <algorithm>
 #include <cmath>
 #include <utility>
 
-#include "linear_algebra/common/macros.h"
+#include "include/common/macros.h"
 
 #ifdef LINALG_ENABLE_MKL
 #include <mkl_lapacke.h>

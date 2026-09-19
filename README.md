@@ -1,5 +1,6 @@
 # LinearAlgebra
 
+[![CI](https://github.com/KhwarizmiAnalytix/LinearAlgebra/actions/workflows/ci.yml/badge.svg)](https://github.com/KhwarizmiAnalytix/LinearAlgebra/actions/workflows/ci.yml)
 [![License: GPL v3 / Commercial](https://img.shields.io/badge/license-GPL--3.0--or--later%20%2F%20commercial-blue.svg)](LICENSE)
 
 **Dense linear algebra**: Cholesky/LU/SVD decompositions, linear solve, and
@@ -14,10 +15,10 @@ one consumer, not a required host.
 
 - `CMakeLists.txt` — `LINALG_ENABLE_MKL`, `LINALG_LU_PIVOTING`, `LINALG_ENABLE_*`.
 - `BUILD.bazel` — `//:LinearAlgebra`.
-- `linear_algebra/common/` — export macro, feature macros, generated `configure.h`.
-- `linear_algebra/memory/` — minimal scratch-buffer allocator.
-- `linear_algebra/util/` — exception helper, conservative CPU cache-size defaults.
-- `linear_algebra/matrix_operation/` — the seven public modules (below).
+- `include/common/` — export macro, feature macros, generated `configure.h`.
+- `include/memory/` — minimal scratch-buffer allocator.
+- `include/util/` — exception helper, conservative CPU cache-size defaults.
+- `include/matrix_operation/` — the seven public modules (below).
 - `Testing/Cxx/` — GoogleTest unit tests.
 - `ThirdParty/` — vendored `googletest` submodule.
 
@@ -56,8 +57,8 @@ When `LINALG_ENABLE_MKL` is `ON`, `find_package(MKL)` must resolve (via
 ## Public API (abridged)
 
 ```cpp
-#include "linear_algebra/matrix_operation/cholesky_decomposition.h"
-#include "linear_algebra/matrix_operation/linear_solver.h"
+#include "include/matrix_operation/cholesky_decomposition.h"
+#include "include/matrix_operation/linear_solver.h"
 
 // In-place lower-triangular Cholesky factor of an n x n row-major matrix.
 linalg::cholesky_decomposition(A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
@@ -91,5 +92,9 @@ wires `ThirdParty/googletest` in via `local_repository`.
 
 ## CI & Coverage
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for running the same checks locally
-(build, sanitizers, coverage, lintrunner).
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
+PR to `main`: CMake scalar-fallback build+test on Linux and macOS, a CMake
+build+test with `-DLINALG_ENABLE_MKL=ON` (Linux, Intel oneMKL via apt), and
+`bazel test //...` on Linux and macOS. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for running the same checks locally, plus sanitizers, coverage, and
+lintrunner (not yet wired into CI).

@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "linear_algebra/common/linear_algebra_export.h"
+#include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
 #define quarisma_int __int64
@@ -14,8 +14,8 @@
 
 namespace linalg
 {
-LINALG_API void matrix_transpose(quarisma_long rows, quarisma_long columns, float* m);
+LINALG_API bool lu_decomposition(float* m, quarisma_int lda, quarisma_int* pivot);
 
-LINALG_API void matrix_transpose(quarisma_long rows, quarisma_long columns, double* m);
+LINALG_API bool lu_decomposition(double* m, quarisma_int lda, quarisma_int* pivot);
 
 }  // namespace linalg

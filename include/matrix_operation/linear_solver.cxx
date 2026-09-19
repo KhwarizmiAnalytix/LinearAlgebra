@@ -1,12 +1,12 @@
-#include "linear_algebra/matrix_operation/linear_solver.h"
+#include "include/matrix_operation/linear_solver.h"
 
 #include <algorithm>
 
-#include "linear_algebra/common/macros.h"
-#include "linear_algebra/matrix_operation/cholesky_decomposition.h"
-#include "linear_algebra/matrix_operation/lu_decomposition.h"
-#include "linear_algebra/memory/allocator.h"
-#include "linear_algebra/util/exception.h"
+#include "include/common/macros.h"
+#include "include/matrix_operation/cholesky_decomposition.h"
+#include "include/matrix_operation/lu_decomposition.h"
+#include "include/memory/allocator.h"
+#include "include/util/exception.h"
 
 #ifdef LINALG_ENABLE_MKL
 #include <mkl.h>

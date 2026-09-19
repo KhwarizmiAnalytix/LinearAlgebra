@@ -4,7 +4,7 @@
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
-#include "linear_algebra/matrix_operation/matrix_inversion.h"
+#include "include/matrix_operation/matrix_inversion.h"
 
 namespace
 {

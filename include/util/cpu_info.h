@@ -4,7 +4,7 @@
  * Reconstructed minimal stand-in for the (orphaned) util/cpu_info.h this
  * code used to depend on. The only call site (matrix_multiplication.cxx's
  * gemm blocking-size heuristic) is itself gated behind the never-defined
- * LINALG_VECTORIZED macro (see linear_algebra/matrix_operation/
+ * LINALG_VECTORIZED macro (see include/matrix_operation/
  * matrix_multiplication.cxx), so this header only needs to exist and be
  * self-consistent for the unconditional #include to compile — it is not on
  * any currently-live code path.

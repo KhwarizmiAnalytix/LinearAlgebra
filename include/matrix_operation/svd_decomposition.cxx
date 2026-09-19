@@ -1,14 +1,14 @@
-#include "linear_algebra/matrix_operation/svd_decomposition.h"
+#include "include/matrix_operation/svd_decomposition.h"
 
 #include <algorithm>
 
-#include "linear_algebra/common/macros.h"
-#include "linear_algebra/memory/allocator.h"
+#include "include/common/macros.h"
+#include "include/memory/allocator.h"
 
 #ifdef LINALG_ENABLE_MKL
 #include <mkl.h>
 
-#include "linear_algebra/util/exception.h"
+#include "include/util/exception.h"
 #else
 #include <cassert>
 #include <cmath>

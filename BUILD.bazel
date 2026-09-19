@@ -1,18 +1,34 @@
 # Standalone LinearAlgebra library. Include root is the repository root; public headers live
-# under linear_algebra/ (e.g. #include "linear_algebra/matrix_operation/lu_decomposition.h").
+# under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h").
+load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
 
 package(default_visibility = ["//visibility:public"])
 
+# Bazel equivalent of CMake's configure_file() for include/common/configure.h.in.
+# LINALG_ENABLE_MKL / LINALG_LU_PIVOTING are left undefined here: those macros
+# already reach the compiler via linear_algebra_defines()'s select() below, so
+# this file only needs to exist on the include path, not redefine them.
+expand_template(
+    name = "configure_h",
+    out = "include/common/configure.h",
+    substitutions = {
+        "#cmakedefine LINALG_ENABLE_MKL": "/* #undef LINALG_ENABLE_MKL */",
+        "#cmakedefine LINALG_LU_PIVOTING": "/* #undef LINALG_LU_PIVOTING */",
+        "#cmakedefine LINALG_DISPLAY_WIN32_WARNINGS": "/* #undef LINALG_DISPLAY_WIN32_WARNINGS */",
+    },
+    template = "include/common/configure.h.in",
+)
+
 filegroup(
     name = "linear_algebra_hdrs",
     srcs = glob(
         [
-            "linear_algebra/common/*.h",
-            "linear_algebra/memory/*.h",
-            "linear_algebra/util/*.h",
-            "linear_algebra/matrix_operation/*.h",
+            "include/common/*.h",
+            "include/memory/*.h",
+            "include/util/*.h",
+            "include/matrix_operation/*.h",
         ],
         allow_empty = True,
     ),
@@ -22,7 +38,7 @@ filegroup(
     name = "linear_algebra_srcs",
     srcs = glob(
         [
-            "linear_algebra/matrix_operation/*.cxx",
+            "include/matrix_operation/*.cxx",
         ],
         allow_empty = True,
     ),
@@ -31,7 +47,7 @@ filegroup(
 cc_library(
     name = "linear_algebra_lib",
     srcs = [":linear_algebra_srcs"],
-    hdrs = [":linear_algebra_hdrs"],
+    hdrs = [":linear_algebra_hdrs", ":configure_h"],
     copts = linear_algebra_copts(),
     defines = linear_algebra_defines() + select({
         "//bazel:shared_libs": ["LINALG_SHARED_DEFINE"],

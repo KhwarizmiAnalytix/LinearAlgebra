@@ -3,9 +3,9 @@
 Standalone C++ dense linear algebra library: Cholesky/LU/SVD decompositions,
 linear solve, matrix inversion/multiplication/transpose, with a portable
 scalar fallback and an optional Intel MKL backend. Source lives in
-`linear_algebra/`; tests live in `Testing/Cxx/`. Use namespace `linalg` and
+`include/`; tests live in `Testing/Cxx/`. Use namespace `linalg` and
 the existing `LINALG_*` export/feature macros. Preserve the exception
-reporting in `linear_algebra/util/exception.h` (`LINALG_THROW`). Dependencies
+reporting in `include/util/exception.h` (`LINALG_THROW`). Dependencies
 are under `ThirdParty/`.
 
 ## Shared agent guidance
@@ -61,7 +61,7 @@ Follow neighboring Google Test cases and `LinearAlgebraTest.h`. Tests use
 uses a package-local glob. Check exclusions and register new subdirectories
 in both systems. `Testing/Cxx/dense_matrix_test_helper.h` is a test-only
 row-major dense matrix used to build fixtures — it is not part of the public
-library and must not be included from `linear_algebra/`.
+library and must not be included from `include/`.
 
 ## Verification and scope
 
