@@ -1,0 +1,28 @@
+# =============================================================================
+# LinearAlgebra — Bazel Configuration Settings (standalone)
+# =============================================================================
+# Starlark --define keys mirror this repo's CMake cache names: linalg_enable_mkl,
+# linalg_lu_pivoting, build_shared_libs.
+# =============================================================================
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "xsigma.bzl",
+    "linear_algebra.bzl",
+])
+
+config_setting(
+    name = "shared_libs",
+    define_values = {"build_shared_libs": "true"},
+)
+
+config_setting(
+    name = "linalg_enable_mkl",
+    define_values = {"linalg_enable_mkl": "true"},
+)
+
+config_setting(
+    name = "linalg_lu_pivoting",
+    define_values = {"linalg_lu_pivoting": "true"},
+)

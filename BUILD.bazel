@@ -1,0 +1,57 @@
+# Standalone LinearAlgebra library. Include root is the repository root; public headers live
+# under linear_algebra/ (e.g. #include "linear_algebra/matrix_operation/lu_decomposition.h").
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "linear_algebra_hdrs",
+    srcs = glob(
+        [
+            "linear_algebra/common/*.h",
+            "linear_algebra/memory/*.h",
+            "linear_algebra/util/*.h",
+            "linear_algebra/matrix_operation/*.h",
+        ],
+        allow_empty = True,
+    ),
+)
+
+filegroup(
+    name = "linear_algebra_srcs",
+    srcs = glob(
+        [
+            "linear_algebra/matrix_operation/*.cxx",
+        ],
+        allow_empty = True,
+    ),
+)
+
+cc_library(
+    name = "linear_algebra_lib",
+    srcs = [":linear_algebra_srcs"],
+    hdrs = [":linear_algebra_hdrs"],
+    copts = linear_algebra_copts(),
+    defines = linear_algebra_defines() + select({
+        "//bazel:shared_libs": ["LINALG_SHARED_DEFINE"],
+        "//conditions:default": ["LINALG_STATIC_DEFINE"],
+    }),
+    local_defines = select({
+        "//bazel:shared_libs": ["LINALG_BUILDING_DLL"],
+        "//conditions:default": [],
+    }),
+    linkopts = linear_algebra_linkopts(),
+    linkstatic = select({
+        "//bazel:shared_libs": False,
+        "//conditions:default": True,
+    }),
+    alwayslink = False,
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "LinearAlgebra",
+    deps = [":linear_algebra_lib"],
+    visibility = ["//visibility:public"],
+)

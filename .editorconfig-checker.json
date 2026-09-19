@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/editorconfig-checker/editorconfig-checker/v3.8.0/.editorconfig-checker.schema.json",
+  "Verbose": false,
+  "IgnoreDefaults": false,
+  "Exclude": [
+    "^ThirdParty/",
+    "/third_party/",
+    "/bespoke/",
+    "^build(_[^/]+)?/",
+    "^\\.lintbin/",
+    "^\\.git/"
+  ],
+  "Disable": {
+    "EndOfLine": false,
+    "Indentation": false,
+    "Charset": false,
+    "MaxLineLength": false,
+    "IndentSize": true,
+    "InsertFinalNewline": true,
+    "TrimTrailingWhitespace": true
+  }
+}

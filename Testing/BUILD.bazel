@@ -1,0 +1,17 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "linearAlgebraTest_header",
+    hdrs = [
+        "LinearAlgebraTest.h",
+        "LinearAlgebraTest.h.in",
+    ],
+    includes = [
+        ".",
+    ],
+    deps = [
+        "//:LinearAlgebra",
+    ],
+)

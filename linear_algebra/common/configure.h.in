@@ -1,0 +1,30 @@
+/*
+ * LinearAlgebra — CMake-configured feature switches.
+ *
+ * Reconstructed minimal stand-in for the (orphaned) common/configure.h this
+ * code used to depend on. Only the three switches matrix_operation actually
+ * tests via #ifdef are plumbed here; each mirrors an option() in the top
+ * level CMakeLists.txt and defaults to the historical effectively-off
+ * behavior when the corresponding CMake option is OFF.
+ */
+#pragma once
+
+// Enables the Intel MKL-backed code paths (LAPACKE_*gets, LAPACKE_*potrf, ...)
+// in cholesky_decomposition / linear_solver / lu_decomposition /
+// matrix_inversion / matrix_multiplication / matrix_transpose /
+// svd_decomposition. Off by default: the portable scalar fallback
+// implementations are used instead. Wired from LINALG_ENABLE_MKL (CMake
+// option) + find_package(MKL).
+#cmakedefine LINALG_ENABLE_MKL
+
+// Enables partial pivoting in the scalar (non-MKL) LU decomposition / solve
+// / invert fallback paths. Off by default, preserving the existing
+// fallback behavior exactly (matrix_operation's non-pivoting path is what
+// currently ships).
+#cmakedefine LINALG_LU_PIVOTING
+
+// On MSVC, matrix_multiplication.cxx wraps its narrowing-conversion warnings
+// (C4244) in a `#pragma warning(push/pop, disable : 4244)` guard unless this
+// is defined. Off by default (warnings suppressed), matching current
+// behavior.
+#cmakedefine LINALG_DISPLAY_WIN32_WARNINGS

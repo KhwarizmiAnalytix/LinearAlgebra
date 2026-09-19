@@ -1,0 +1,31 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_test(
+    name = "LinearAlgebraCxxTests",
+    size = "large",
+    timeout = "long",
+    srcs = glob(
+        ["Test*.cxx"],
+        allow_empty = True,
+    ) + [
+        "dense_matrix_test_helper.h",
+    ],
+    copts = linear_algebra_copts(),
+    defines = linear_algebra_defines() + [
+        "LINALG_GOOGLE_TEST",
+        "USE_GTEST",
+        "_VARIADIC_MAX=10",
+        "LINALG_HAS_GTEST=1",
+    ],
+    includes = ["."],
+    linkopts = linear_algebra_linkopts(),
+    deps = [
+        "//:LinearAlgebra",
+        "//Testing:linearAlgebraTest_header",
+        "@com_google_googletest//:gtest",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
