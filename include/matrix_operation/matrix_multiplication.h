@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "include/common/device.h"
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
@@ -15,6 +16,11 @@
 namespace linalg
 {
 
+// `device` tells the dispatcher whether a/b/c are host pointers or CUDA
+// device pointers (see include/common/device.h); it cannot be inferred from
+// the raw pointers themselves. Backend among CPU implementations (scalar /
+// blas_lapack / mkl) is chosen automatically via linalg::globalContext(),
+// overridable with linalg::globalContext().set_backend(...).
 LINALG_API void matrix_multiplication(
     bool         transpose_a,
     bool         transpose_b,
@@ -26,7 +32,8 @@ LINALG_API void matrix_multiplication(
     const float* b,
     quarisma_int   ldb,
     float*       c,
-    quarisma_int   ldc);
+    quarisma_int   ldc,
+    device_type  device = device_type::cpu);
 
 LINALG_API void matrix_multiplication(
     bool          transpose_a,
@@ -39,5 +46,6 @@ LINALG_API void matrix_multiplication(
     const double* b,
     quarisma_int    ldb,
     double*       c,
-    quarisma_int    ldc);
+    quarisma_int    ldc,
+    device_type   device = device_type::cpu);
 }  // namespace linalg

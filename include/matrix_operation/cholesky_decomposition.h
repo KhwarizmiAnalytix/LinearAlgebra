@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "include/common/device.h"
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
@@ -21,8 +22,15 @@ enum class cholesky_decomposition_enum : char
     UPPER_TRIANGULAR = 'U'
 };
 
+// `device` selects host vs. CUDA device pointers (see include/common/device.h);
+// CPU backend (scalar / blas_lapack / mkl) is chosen via linalg::globalContext().
+// cholesky_decomposition_aad (reverse-mode adjoint) has no vendor-library
+// equivalent and always runs the scalar implementation.
 LINALG_API bool cholesky_decomposition(
-    float* L, quarisma_int lda, linalg::cholesky_decomposition_enum type);
+    float*       L,
+    quarisma_int lda,
+    linalg::cholesky_decomposition_enum type,
+    device_type  device = device_type::cpu);
 
 LINALG_API bool cholesky_decomposition_aad(
     float*                              L_aad,
@@ -32,7 +40,10 @@ LINALG_API bool cholesky_decomposition_aad(
     float*                              A_aad);
 
 LINALG_API bool cholesky_decomposition(
-    double* L, quarisma_int lda, linalg::cholesky_decomposition_enum type);
+    double*      L,
+    quarisma_int lda,
+    linalg::cholesky_decomposition_enum type,
+    device_type  device = device_type::cpu);
 
 LINALG_API bool cholesky_decomposition_aad(
     double*                             L_aad,

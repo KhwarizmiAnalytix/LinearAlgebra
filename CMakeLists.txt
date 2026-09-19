@@ -50,6 +50,15 @@ include(third_party_helpers)
 # implementations are used instead.
 option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearAlgebra" OFF)
 
+# Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...),
+# selectable at runtime alongside MKL via linalg::Context / linalg::set_backend.
+option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
+
+# cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, selected at runtime
+# via device_type::cuda. Requires the CUDA toolkit; enables the CUDA language
+# only when this option is ON so plain CPU builds need no CUDA toolchain.
+option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
+
 # Enables partial pivoting in the scalar (non-MKL) LU decomposition / solve /
 # invert fallback paths. Off by default, preserving the existing fallback
 # behavior exactly (matrix_operation's non-pivoting path is what currently
@@ -176,6 +185,94 @@ if(LINALG_ENABLE_MKL)
   endif()
 endif()
 
+# --- Optional vendor-neutral BLAS/LAPACK backend ---
+if(LINALG_ENABLE_BLAS)
+  find_package(BLAS REQUIRED)
+  find_package(LAPACK REQUIRED)
+  # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
+  # back to the raw *_LIBRARIES lists on older CMake (project minimum: 3.16).
+  if(TARGET BLAS::BLAS)
+    list(APPEND LINALG_DEPENDENCY_LIBS BLAS::BLAS)
+  else()
+    list(APPEND LINALG_DEPENDENCY_LIBS ${BLAS_LIBRARIES})
+  endif()
+  if(TARGET LAPACK::LAPACK)
+    list(APPEND LINALG_DEPENDENCY_LIBS LAPACK::LAPACK)
+  else()
+    list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
+  endif()
+
+  # BLAS::BLAS/LAPACK::LAPACK link the libraries but do not guarantee a
+  # cblas.h/lapacke.h C declaration header is on the include path — Homebrew's
+  # OpenBLAS, for instance, is keg-only and needs its prefix's include/ added
+  # explicitly, which find_path() does via CMAKE_PREFIX_PATH/CMAKE_FIND_ROOT_PATH
+  # (unlike CheckIncludeFileCXX, which only sees the compiler's default search
+  # path). CMAKE_FIND_FRAMEWORK is forced to LAST for this lookup so a plain
+  # header from the vendor find_package(BLAS) actually linked against (e.g.
+  # OpenBLAS) is found ahead of an unrelated macOS framework's cblas.h —
+  # mixing one vendor's declarations with a different vendor's linked
+  # implementation is not guaranteed ABI-safe (e.g. differing CBLAS_INDEX /
+  # ILP64 widths) and has produced silently wrong GEMM results in testing.
+  set(_linalg_find_framework_save ${CMAKE_FIND_FRAMEWORK})
+  set(CMAKE_FIND_FRAMEWORK LAST)
+  find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h)
+  find_path(LINALG_LAPACKE_INCLUDE_DIR NAMES lapacke.h)
+  set(CMAKE_FIND_FRAMEWORK ${_linalg_find_framework_save})
+  unset(_linalg_find_framework_save)
+  mark_as_advanced(LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR)
+
+  set(LINALG_BLAS_USE_ACCELERATE OFF)
+  set(LINALG_BLAS_INCLUDE_DIRS "")
+  if(LINALG_CBLAS_INCLUDE_DIR)
+    list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_CBLAS_INCLUDE_DIR}")
+  elseif(APPLE)
+    include(CheckIncludeFileCXX)
+    check_include_file_cxx("Accelerate/Accelerate.h" LINALG_HAVE_ACCELERATE_H)
+    if(LINALG_HAVE_ACCELERATE_H)
+      set(LINALG_BLAS_USE_ACCELERATE ON)
+    endif()
+  endif()
+  if(NOT LINALG_CBLAS_INCLUDE_DIR AND NOT LINALG_BLAS_USE_ACCELERATE)
+    message(
+      FATAL_ERROR
+      "LINALG_ENABLE_BLAS is ON but cblas.h (or, on Apple, Accelerate/Accelerate.h) "
+      "was not found. Install a CBLAS-providing package (OpenBLAS, netlib, ...) "
+      "and/or extend CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_BLAS=OFF."
+    )
+  endif()
+
+  # Apple's Accelerate framework ships CBLAS (used for matrix_multiplication /
+  # matrix_transpose) but deliberately does not ship the LAPACKE row-major C
+  # wrapper — only the classic Fortran-mangled LAPACK entry points. The
+  # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
+  # linear_solver) are therefore only registered when real lapacke.h is found;
+  # otherwise those ops fall back to the scalar backend, which
+  # dispatch_stub::resolve() already does for any unregistered slot.
+  set(LINALG_BLAS_HAS_LAPACKE OFF)
+  if(LINALG_LAPACKE_INCLUDE_DIR)
+    list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
+    set(LINALG_BLAS_HAS_LAPACKE ON)
+  else()
+    message(
+      STATUS
+      "LinearAlgebra: lapacke.h not found — blas_lapack backend covers "
+      "matrix_multiplication/matrix_transpose only; cholesky/lu/svd/inversion/"
+      "linear_solver fall back to scalar under LINALG_ENABLE_BLAS."
+    )
+  endif()
+  list(REMOVE_DUPLICATES LINALG_BLAS_INCLUDE_DIRS)
+endif()
+
+# --- Optional cuBLAS / cuSOLVER GPU backend ---
+# cuBLAS/cuSOLVER are host-callable C APIs, so this links CUDA::cublas /
+# CUDA::cusolver / CUDA::cudart into ordinary .cxx translation units — no
+# `.cu` sources and no `enable_language(CUDA)` are needed, keeping CPU-only
+# builds free of any CUDA toolchain requirement.
+if(LINALG_ENABLE_CUBLAS)
+  find_package(CUDAToolkit REQUIRED)
+  list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
+endif()
+
 # --- Configure-time headers ---
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/include/common/configure.h.in"
@@ -212,6 +309,43 @@ if(BUILD_SHARED_LIBS)
   endif()
 else()
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_STATIC_DEFINE)
+
+  # Each compute backend (scalar/mkl/blas/cublas) registers itself into a
+  # dispatch_stub purely via a static initializer in its own .cxx (see
+  # include/common/dispatch_stub.h) — no other translation unit calls into it
+  # directly. A plain static-archive link only pulls in .o's that resolve an
+  # otherwise-unsatisfied symbol, so e.g. matrix_multiplication_scalar.o would
+  # be silently dropped and its registration would never run, failing every
+  # op at runtime with "no CPU implementation registered". Whole-archive
+  # linking this target as a usage requirement forces every object in,
+  # regardless of whether the linker thinks it's referenced.
+  #
+  # CMake's own $<LINK_LIBRARY:WHOLE_ARCHIVE,...> (3.24+) was tried first but
+  # only ships linker-flag mappings for the AppleClang compiler ID on macOS
+  # (Modules/Platform/Linker/Apple-AppleClang.cmake); it silently does nothing
+  # for plain "Clang" (e.g. a Homebrew/LLVM toolchain on macOS), which is not
+  # a safe default here — hence the explicit per-platform flags below instead.
+  if(APPLE)
+    target_link_libraries(LinearAlgebra INTERFACE "-Wl,-force_load,$<TARGET_FILE:LinearAlgebra>")
+  elseif(MSVC)
+    target_link_libraries(LinearAlgebra INTERFACE "/WHOLEARCHIVE:$<TARGET_FILE:LinearAlgebra>")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_libraries(
+      LinearAlgebra INTERFACE "-Wl,--whole-archive" "$<TARGET_FILE:LinearAlgebra>"
+                              "-Wl,--no-whole-archive"
+    )
+  else()
+    message(
+      WARNING
+      "LinearAlgebra is being built as a static library and no whole-archive "
+      "linker flag is known for this toolchain (${CMAKE_CXX_COMPILER_ID}). "
+      "Consumers must manually whole-archive-link LinearAlgebra, or the "
+      "mkl/blas/cublas/scalar backend registrations may be silently dropped by "
+      "the linker, causing every matrix_operation call to throw \"no CPU "
+      "implementation registered\" at runtime. Using the default "
+      "BUILD_SHARED_LIBS=ON avoids this."
+    )
+  endif()
 endif()
 
 add_library(LinearAlgebra::LinearAlgebra ALIAS LinearAlgebra)
@@ -242,8 +376,18 @@ target_include_directories(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+if(LINALG_BLAS_INCLUDE_DIRS)
+  target_include_directories(LinearAlgebra PRIVATE ${LINALG_BLAS_INCLUDE_DIRS})
+endif()
+
 if(LINALG_ENABLE_MKL)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_MKL)
+endif()
+if(LINALG_ENABLE_BLAS)
+  target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_BLAS)
+endif()
+if(LINALG_ENABLE_CUBLAS)
+  target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_CUBLAS)
 endif()
 if(LINALG_LU_PIVOTING)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_LU_PIVOTING)
@@ -304,6 +448,8 @@ message("  Coverage         : ${LINALG_ENABLE_COVERAGE}")
 message("  Testing          : ${LINALG_ENABLE_TESTING}")
 message("  Gtest            : ${LINALG_ENABLE_GTEST}")
 message("  MKL              : ${LINALG_ENABLE_MKL}")
+message("  BLAS/LAPACK      : ${LINALG_ENABLE_BLAS}")
+message("  cuBLAS/cuSOLVER  : ${LINALG_ENABLE_CUBLAS}")
 message("  LU pivoting      : ${LINALG_LU_PIVOTING}")
 message("  Clang-tidy       : ${LINALG_ENABLE_CLANGTIDY}")
 message("  Fix              : ${LINALG_ENABLE_FIX}")

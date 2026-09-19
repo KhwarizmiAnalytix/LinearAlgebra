@@ -1,103 +1,30 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
-#include <cmath>
-
+#include "include/matrix_operation/cholesky_decomposition_dispatch.h"
 #include "include/util/exception.h"
-
-#ifdef LINALG_ENABLE_MKL
-#include <mkl.h>
-
-#include <algorithm>
-#endif
 
 namespace linalg
 {
-enum class MatrixOrder
+namespace detail
 {
-    RowMajor,
-    ColMajor
+
+LINALG_DEFINE_DISPATCH(cholesky_f32_fn, cholesky_f32_stub);
+LINALG_DEFINE_DISPATCH(cholesky_f64_fn, cholesky_f64_stub);
+
+// Reverse-mode adjoint of cholesky_decomposition: no vendor library (LAPACK/
+// cuSOLVER) exposes this, so it is always the scalar implementation — there
+// is no dispatch_stub for it.
+enum class matrix_order
+{
+    row_major,
+    col_major
 };
 
-template <typename T, cholesky_decomposition_enum part, MatrixOrder order = MatrixOrder::RowMajor>
-quarisma_int cholesky_decomposition(quarisma_int n, T* A, quarisma_int lda)
+template <typename T, cholesky_decomposition_enum part, matrix_order order = matrix_order::row_major>
+bool cholesky_decomposition_aad_impl(
+    quarisma_int n, T* C_aad, const T* C, quarisma_long lda, T* A_aad)
 {
-    if constexpr (order == MatrixOrder::ColMajor)
-    {
-        throw std::runtime_error("Column-major order is not supported in this implementation.");
-    }
-
-    if constexpr (part == cholesky_decomposition_enum::LOWER_TRIANGULAR)  //NOLINT
-    {
-        for (quarisma_int i = 0; i < n; ++i)
-        {
-            auto* a_i = &A[i * lda];
-
-            for (quarisma_int j = 0; j < i; ++j)
-            {
-                auto* a_j = &A[j * lda];
-                T     sum = a_i[j];
-                for (quarisma_int k = 0; k < j; ++k)
-                {
-                    sum -= a_i[k] * a_j[k];
-                }
-                a_i[j] = sum / a_j[j];
-                a_j[i] = 0.;
-            }
-
-            T sum = a_i[i];
-            for (quarisma_int k = 0; k < i; ++k)
-            {
-                sum -= a_i[k] * a_i[k];
-            }
-
-            if (sum <= 0)
-            {
-                return i + 1;  // Matrix is not positive-definite
-            }
-
-            a_i[i] = std::sqrt(sum);
-        }
-    }
-    else if constexpr (part == cholesky_decomposition_enum::UPPER_TRIANGULAR)
-    {
-        for (quarisma_int i = 0; i < n; ++i)
-        {
-            for (quarisma_int j = 0; j < i; ++j)
-            {
-                T sum = A[j * lda + i];
-                for (quarisma_int k = 0; k < j; ++k)
-                {
-                    sum -= A[k * lda + i] * A[k * lda + j];
-                }
-                A[j * lda + i] = sum / A[j * lda + j];
-            }
-
-            T sum = A[i * lda + i];
-            for (quarisma_int k = 0; k < i; ++k)
-            {
-                sum -= A[k * lda + i] * A[k * lda + i];
-            }
-
-            if (sum <= 0)
-            {
-                return i + 1;  // Matrix is not positive-definite
-            }
-
-            A[i * lda + i] = std::sqrt(sum);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Invalid MatrixPart specified");
-    }
-
-    return 0;  // Success
-}
-
-template <typename T, cholesky_decomposition_enum part, MatrixOrder order = MatrixOrder::RowMajor>
-bool cholesky_decomposition_aad(quarisma_int n, T* C_aad, const T* C, quarisma_long lda, T* A_aad)
-{
-    if constexpr (order == MatrixOrder::ColMajor)
+    if constexpr (order == matrix_order::col_major)
     {
         throw std::runtime_error("Column-major order is not supported in this implementation.");
     }
@@ -207,94 +134,61 @@ bool cholesky_decomposition_aad(quarisma_int n, T* C_aad, const T* C, quarisma_l
     return true;  // Success
 }
 
+}  // namespace detail
+
 //-----------------------------------------------------------------------------
-bool cholesky_decomposition(float* C, quarisma_int lda, linalg::cholesky_decomposition_enum type)
+bool cholesky_decomposition(
+    float* C, quarisma_int lda, linalg::cholesky_decomposition_enum type, device_type device)
 {
-    quarisma_int n = lda;
+    return detail::cholesky_f32_stub.resolve(device)(C, lda, type);
+}
 
-#ifdef LINALG_ENABLE_MKL
-
-    auto info = (LAPACKE_spotrf(LAPACK_ROW_MAJOR, (char)type, n, C, n) == 0);
-    return info;
-
-#else
-    switch (type)
-    {
-    case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return cholesky_decomposition<float, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
-                   n, C, n) == 0;
-    case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        return cholesky_decomposition<float, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
-                   n, C, n) == 0;
-    default:
-        LINALG_THROW("Unsupported enum type!");
-    }
-#endif
+//-----------------------------------------------------------------------------
+bool cholesky_decomposition(
+    double* C, quarisma_int lda, linalg::cholesky_decomposition_enum type, device_type device)
+{
+    return detail::cholesky_f64_stub.resolve(device)(C, lda, type);
 }
 
 //-----------------------------------------------------------------------------
 bool cholesky_decomposition_aad(
     float*                              C_aad,
     const float*                        C,
-    quarisma_int                          lda,
+    quarisma_int                        lda,
     linalg::cholesky_decomposition_enum type,
     float*                              A_aad)
 {
     switch (type)
     {
-    case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return cholesky_decomposition_aad<float, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
-    case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        return cholesky_decomposition_aad<float, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
-    default:
-        LINALG_THROW("Unsupported enum type!");
+        case cholesky_decomposition_enum::LOWER_TRIANGULAR:
+            return detail::cholesky_decomposition_aad_impl<
+                float, cholesky_decomposition_enum::LOWER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        case cholesky_decomposition_enum::UPPER_TRIANGULAR:
+            return detail::cholesky_decomposition_aad_impl<
+                float, cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        default:
+            LINALG_THROW("Unsupported enum type!");
     }
-}
-
-//-----------------------------------------------------------------------------
-bool cholesky_decomposition(double* C, quarisma_int lda, linalg::cholesky_decomposition_enum type)
-{
-    auto n = static_cast<quarisma_int>(lda);
-#ifdef LINALG_ENABLE_MKL
-
-    bool info = (LAPACKE_dpotrf(LAPACK_ROW_MAJOR, (char)type, n, C, n) == 0);
-    return info;
-
-#else
-    switch (type)
-    {
-    case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return cholesky_decomposition<double, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
-                   n, C, n) == 0;
-    case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        return cholesky_decomposition<double, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
-                   n, C, n) == 0;
-    default:
-        LINALG_THROW("Unsupported enum type!");
-    }
-#endif
 }
 
 //-----------------------------------------------------------------------------
 bool cholesky_decomposition_aad(
     double*                             C_aad,
     const double*                       C,
-    quarisma_int                          lda,
+    quarisma_int                        lda,
     linalg::cholesky_decomposition_enum type,
     double*                             A_aad)
 {
     switch (type)
     {
-    case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return cholesky_decomposition_aad<double, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
-    case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        return cholesky_decomposition_aad<double, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
-    default:
-        LINALG_THROW("Unsupported enum type!");
+        case cholesky_decomposition_enum::LOWER_TRIANGULAR:
+            return detail::cholesky_decomposition_aad_impl<
+                double, cholesky_decomposition_enum::LOWER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        case cholesky_decomposition_enum::UPPER_TRIANGULAR:
+            return detail::cholesky_decomposition_aad_impl<
+                double, cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        default:
+            LINALG_THROW("Unsupported enum type!");
     }
 }
 }  // namespace linalg

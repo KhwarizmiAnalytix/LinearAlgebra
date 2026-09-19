@@ -10,11 +10,20 @@ package(default_visibility = ["//visibility:public"])
 # LINALG_ENABLE_MKL / LINALG_LU_PIVOTING are left undefined here: those macros
 # already reach the compiler via linear_algebra_defines()'s select() below, so
 # this file only needs to exist on the include path, not redefine them.
+# LINALG_ENABLE_BLAS / LINALG_ENABLE_CUBLAS (and their helper macros) have no
+# Bazel toggle yet — CMake is this repo's primary, exercised build system for
+# the blas_lapack/cublas backends (see include/matrix_operation/*_blas.cxx,
+# *_cublas.cxx); Bazel builds always compile the scalar backend plus mkl when
+# linalg_enable_mkl is set, matching pre-existing Bazel coverage.
 expand_template(
     name = "configure_h",
     out = "include/common/configure.h",
     substitutions = {
         "#cmakedefine LINALG_ENABLE_MKL": "/* #undef LINALG_ENABLE_MKL */",
+        "#cmakedefine LINALG_ENABLE_BLAS": "/* #undef LINALG_ENABLE_BLAS */",
+        "#cmakedefine LINALG_ENABLE_CUBLAS": "/* #undef LINALG_ENABLE_CUBLAS */",
+        "#cmakedefine LINALG_BLAS_USE_ACCELERATE": "/* #undef LINALG_BLAS_USE_ACCELERATE */",
+        "#cmakedefine LINALG_BLAS_HAS_LAPACKE": "/* #undef LINALG_BLAS_HAS_LAPACKE */",
         "#cmakedefine LINALG_LU_PIVOTING": "/* #undef LINALG_LU_PIVOTING */",
         "#cmakedefine LINALG_DISPLAY_WIN32_WARNINGS": "/* #undef LINALG_DISPLAY_WIN32_WARNINGS */",
     },
@@ -38,6 +47,7 @@ filegroup(
     name = "linear_algebra_srcs",
     srcs = glob(
         [
+            "include/common/*.cxx",
             "include/matrix_operation/*.cxx",
         ],
         allow_empty = True,
@@ -62,7 +72,17 @@ cc_library(
         "//bazel:shared_libs": False,
         "//conditions:default": True,
     }),
-    alwayslink = False,
+    # Each backend (scalar/mkl/blas/cublas) registers itself into a
+    # dispatch_stub purely via a static initializer in its own .cxx (see
+    # include/common/dispatch_stub.h) — no other translation unit calls into
+    # it directly. In a static archive, a linker only pulls in .o's that
+    # satisfy an otherwise-unresolved symbol, so e.g. matrix_multiplication_
+    # scalar.o would be silently dropped and its registration would never
+    # run, failing every op at runtime ("no CPU implementation registered").
+    # alwayslink=True forces every object from this library into any binary
+    # that depends on it, regardless of whether the linker thinks it's
+    # referenced.
+    alwayslink = True,
     visibility = ["//visibility:public"],
 )
 

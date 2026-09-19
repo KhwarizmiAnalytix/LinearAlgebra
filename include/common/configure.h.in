@@ -17,6 +17,31 @@
 // option) + find_package(MKL).
 #cmakedefine LINALG_ENABLE_MKL
 
+// Enables the vendor-neutral CBLAS/LAPACKE-backed code paths (OpenBLAS,
+// Accelerate, netlib, ...) as an alternative to LINALG_ENABLE_MKL. The two
+// may be enabled together; linalg::Context prefers MKL over blas_lapack by
+// default when both are compiled in (see include/common/context.h). Wired
+// from LINALG_ENABLE_BLAS (CMake option) + find_package(BLAS)/find_package(LAPACK).
+#cmakedefine LINALG_ENABLE_BLAS
+
+// Enables the cuBLAS (GEMM) / cuSOLVER (factorizations) GPU code paths,
+// selected at runtime via device_type::cuda rather than a CPU backend
+// preference. Wired from LINALG_ENABLE_CUBLAS (CMake option) +
+// find_package(CUDAToolkit).
+#cmakedefine LINALG_ENABLE_CUBLAS
+
+// Set alongside LINALG_ENABLE_BLAS on Apple platforms where find_package(BLAS)
+// resolved to the Accelerate framework: its CBLAS/LAPACK declarations live
+// under <Accelerate/Accelerate.h> rather than bare cblas.h/lapacke.h.
+#cmakedefine LINALG_BLAS_USE_ACCELERATE
+
+// Set alongside LINALG_ENABLE_BLAS only when a real LAPACKE (row-major LAPACK
+// C wrapper) header was found. Apple's Accelerate framework provides CBLAS
+// but not LAPACKE, so on Accelerate-only builds this stays undefined and the
+// LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
+// linear_solver) are not registered — those ops fall back to scalar.
+#cmakedefine LINALG_BLAS_HAS_LAPACKE
+
 // Enables partial pivoting in the scalar (non-MKL) LU decomposition / solve
 // / invert fallback paths. Off by default, preserving the existing
 // fallback behavior exactly (matrix_operation's non-pivoting path is what
