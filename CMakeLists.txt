@@ -344,7 +344,11 @@ set_target_properties(
 )
 
 if(MSVC)
-  target_compile_options(LinearAlgebra PRIVATE /WX)
+  # Excludes CUDA: nvcc's frontend does not recognize the bare MSVC-style
+  # /WX flag and misparses it as a second input file ("nvcc fatal: A single
+  # input file is required for a non-link phase when an outputfile is
+  # specified") when LINALG_ENABLE_CUBLAS compiles the .cu source below.
+  target_compile_options(LinearAlgebra PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/WX>)
 else()
   target_compile_options(LinearAlgebra PRIVATE -include cstdlib)
 endif()

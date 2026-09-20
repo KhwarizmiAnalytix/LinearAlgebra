@@ -28,8 +28,12 @@
 // Enables the cuBLAS (GEMM) / cuSOLVER (factorizations) GPU code paths,
 // exposed as separate linalg::gpu::* entry points (include/matrix_operation_gpu/)
 // rather than a device parameter on the CPU ops. Wired from
-// LINALG_ENABLE_CUBLAS (CMake option) + find_package(CUDAToolkit).
-#cmakedefine LINALG_ENABLE_CUBLAS
+// LINALG_ENABLE_CUBLAS (CMake option) + find_package(CUDAToolkit). Value is
+// explicit "1", matching the bare command-line -DLINALG_ENABLE_CUBLAS the
+// target's PUBLIC compile definition also adds (see CMakeLists.txt) — an
+// identical macro redefinition is not diagnosed, whereas an empty-vs-"1"
+// mismatch is (MSVC C4005, fatal under /WX).
+#cmakedefine LINALG_ENABLE_CUBLAS 1
 
 // Set alongside LINALG_ENABLE_BLAS on Apple platforms where find_package(BLAS)
 // resolved to the Accelerate framework: its CBLAS/LAPACK declarations live
