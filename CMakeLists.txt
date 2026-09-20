@@ -267,12 +267,22 @@ if(LINALG_ENABLE_BLAS)
 endif()
 
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
-# cuBLAS/cuSOLVER are host-callable C APIs, so this links CUDA::cublas /
-# CUDA::cusolver / CUDA::cudart into ordinary .cxx translation units — no
-# `.cu` sources and no `enable_language(CUDA)` are needed, keeping CPU-only
-# builds free of any CUDA toolchain requirement.
+# cuBLAS/cuSOLVER themselves are host-callable C APIs, linked into ordinary
+# .cxx translation units with no CUDA toolchain needed. One op
+# (matrix_multiplication_batched_gpu.cu, batched square-matrix multiply) is a
+# genuine hand-written CUDA kernel, so `enable_language(CUDA)` and an nvcc
+# toolchain are only required — and only enabled — when this option is ON;
+# plain CPU builds remain free of any CUDA toolchain requirement.
 if(LINALG_ENABLE_CUBLAS)
   find_package(CUDAToolkit REQUIRED)
+  enable_language(CUDA)
+  if(NOT DEFINED CMAKE_CUDA_STANDARD)
+    set(CMAKE_CUDA_STANDARD ${LINALG_CXX_STANDARD})
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  endif()
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES native)
+  endif()
   list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
 endif()
 
@@ -292,6 +302,14 @@ set(linalg_sources "")
 
 file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
 file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cxx")
+
+# .cu sources (currently just matrix_multiplication_batched_gpu.cu) need an
+# nvcc toolchain, so they are only globbed in — and only compilable — when
+# LINALG_ENABLE_CUBLAS turned on CUDA above.
+if(LINALG_ENABLE_CUBLAS)
+  file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cu")
+  list(APPEND linalg_sources ${linalg_cuda_sources})
+endif()
 
 # --- Target definition ---
 set(CMAKE_CXX_STANDARD ${LINALG_CXX_STANDARD})
