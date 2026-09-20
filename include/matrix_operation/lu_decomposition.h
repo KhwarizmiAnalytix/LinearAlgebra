@@ -2,7 +2,6 @@
 
 #include <cstddef>
 
-#include "include/common/device.h"
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
@@ -15,12 +14,15 @@
 
 namespace linalg
 {
-// `device` selects host vs. CUDA device pointers (see include/common/device.h);
-// CPU backend (scalar / blas_lapack / mkl) is chosen via linalg::globalContext().
-LINALG_API bool lu_decomposition(
-    float* m, quarisma_int lda, quarisma_int* pivot, device_type device = device_type::cpu);
+// Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapack /
+// mkl) is a compile-time choice fixed by LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS
+// (MKL takes precedence over BLAS over the scalar fallback) — there is no
+// runtime dispatch or per-call backend override. For device (CUDA) pointers,
+// see linalg::gpu::lu_decomposition in
+// include/matrix_operation_gpu/lu_decomposition_gpu.h (a different pivot
+// convention and precision — see that header).
+LINALG_API bool lu_decomposition(float* m, quarisma_int lda, quarisma_int* pivot);
 
-LINALG_API bool lu_decomposition(
-    double* m, quarisma_int lda, quarisma_int* pivot, device_type device = device_type::cpu);
+LINALG_API bool lu_decomposition(double* m, quarisma_int lda, quarisma_int* pivot);
 
 }  // namespace linalg

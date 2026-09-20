@@ -19,15 +19,16 @@
 
 // Enables the vendor-neutral CBLAS/LAPACKE-backed code paths (OpenBLAS,
 // Accelerate, netlib, ...) as an alternative to LINALG_ENABLE_MKL. The two
-// may be enabled together; linalg::Context prefers MKL over blas_lapack by
-// default when both are compiled in (see include/common/context.h). Wired
+// may be enabled together; each op's dispatcher .cxx (e.g.
+// matrix_multiplication.cxx) picks MKL over blas_lapack over the scalar
+// fallback at compile time via #if/#elif when both are compiled in. Wired
 // from LINALG_ENABLE_BLAS (CMake option) + find_package(BLAS)/find_package(LAPACK).
 #cmakedefine LINALG_ENABLE_BLAS
 
 // Enables the cuBLAS (GEMM) / cuSOLVER (factorizations) GPU code paths,
-// selected at runtime via device_type::cuda rather than a CPU backend
-// preference. Wired from LINALG_ENABLE_CUBLAS (CMake option) +
-// find_package(CUDAToolkit).
+// exposed as separate linalg::gpu::* entry points (include/matrix_operation_gpu/)
+// rather than a device parameter on the CPU ops. Wired from
+// LINALG_ENABLE_CUBLAS (CMake option) + find_package(CUDAToolkit).
 #cmakedefine LINALG_ENABLE_CUBLAS
 
 // Set alongside LINALG_ENABLE_BLAS on Apple platforms where find_package(BLAS)

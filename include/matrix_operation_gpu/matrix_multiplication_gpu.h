@@ -14,13 +14,13 @@
 
 namespace linalg
 {
+namespace gpu
+{
 
-// Host-memory-only CPU entry point. The CPU backend is a compile-time choice
-// fixed by which of LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS was set at build
-// time (MKL takes precedence over BLAS over the scalar fallback) — there is
-// no runtime dispatch or per-call backend override. For device (CUDA)
-// pointers, see linalg::gpu::matrix_multiplication in
-// include/matrix_operation_gpu/matrix_multiplication_gpu.h.
+// a/b/c are CUDA device pointers (cudaMalloc'd); only available when built
+// with LINALG_ENABLE_CUBLAS. No host memory is read or written by this call.
+// For host pointers, see linalg::matrix_multiplication in
+// include/matrix_operation/matrix_multiplication.h.
 LINALG_API void matrix_multiplication(
     bool         transpose_a,
     bool         transpose_b,
@@ -46,4 +46,6 @@ LINALG_API void matrix_multiplication(
     quarisma_int  ldb,
     double*       c,
     quarisma_int  ldc);
+
+}  // namespace gpu
 }  // namespace linalg

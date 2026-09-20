@@ -12,8 +12,10 @@ package(default_visibility = ["//visibility:public"])
 # this file only needs to exist on the include path, not redefine them.
 # LINALG_ENABLE_BLAS / LINALG_ENABLE_CUBLAS (and their helper macros) have no
 # Bazel toggle yet — CMake is this repo's primary, exercised build system for
-# the blas_lapack/cublas backends (see include/matrix_operation/*_blas.cxx,
-# *_cublas.cxx); Bazel builds always compile the scalar backend plus mkl when
+# the blas_lapack backend (compiled directly into each op's .cxx under
+# include/matrix_operation/, gated by #if LINALG_ENABLE_BLAS) and the cuBLAS/
+# cuSOLVER GPU backend (include/matrix_operation_gpu/, not part of this
+# glob); Bazel builds always compile the scalar backend plus mkl when
 # linalg_enable_mkl is set, matching pre-existing Bazel coverage.
 expand_template(
     name = "configure_h",

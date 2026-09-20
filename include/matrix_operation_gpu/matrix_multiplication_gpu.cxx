@@ -1,3 +1,5 @@
+#include "include/matrix_operation_gpu/matrix_multiplication_gpu.h"
+
 #include "include/common/configure.h"  // IWYU pragma: keep
 
 #ifdef LINALG_ENABLE_CUBLAS
@@ -5,22 +7,21 @@
 #include <cublas_v2.h>
 
 #include "include/common/cuda_handle.h"
-#include "include/matrix_operation/matrix_multiplication_dispatch.h"
 #include "include/util/exception.h"
 
 namespace linalg
 {
-namespace detail
+namespace gpu
 {
 
 // cuBLAS is column-major; a/b/c here are row-major device buffers (same
-// convention as the scalar/mkl/blas backends). Rather than transposing data
-// on the device, this uses the standard row-major-via-column-major identity:
+// convention as the CPU backends). Rather than transposing data on the
+// device, this uses the standard row-major-via-column-major identity:
 // row-major C[m,n] = op(A)[m,k]*op(B)[k,n]  <=>  column-major
 // C^T[n,m] = op(B)^T[n,k]*op(A)^T[k,m], computed by swapping the A/B
 // operands (and m/n) while keeping each operand's own transpose flag and
 // leading dimension — no extra copies or kernels needed.
-void matmul_cublas_f32(
+void matrix_multiplication(
     bool         transpose_a,
     bool         transpose_b,
     quarisma_int rows,
@@ -36,7 +37,7 @@ void matmul_cublas_f32(
     const float alpha = 1.F;
     const float beta  = 0.F;
     if (cublasSgemm(
-            cublas_handle(),
+            detail::cublas_handle(),
             transpose_b ? CUBLAS_OP_T : CUBLAS_OP_N,
             transpose_a ? CUBLAS_OP_T : CUBLAS_OP_N,
             static_cast<int>(columns),
@@ -55,7 +56,7 @@ void matmul_cublas_f32(
     }
 }
 
-void matmul_cublas_f64(
+void matrix_multiplication(
     bool          transpose_a,
     bool          transpose_b,
     quarisma_int  rows,
@@ -71,7 +72,7 @@ void matmul_cublas_f64(
     const double alpha = 1.;
     const double beta  = 0.;
     if (cublasDgemm(
-            cublas_handle(),
+            detail::cublas_handle(),
             transpose_b ? CUBLAS_OP_T : CUBLAS_OP_N,
             transpose_a ? CUBLAS_OP_T : CUBLAS_OP_N,
             static_cast<int>(columns),
@@ -90,10 +91,7 @@ void matmul_cublas_f64(
     }
 }
 
-LINALG_REGISTER_DISPATCH(matmul_f32_stub, cuda, matmul_cublas_f32);
-LINALG_REGISTER_DISPATCH(matmul_f64_stub, cuda, matmul_cublas_f64);
-
-}  // namespace detail
+}  // namespace gpu
 }  // namespace linalg
 
 #endif  // LINALG_ENABLE_CUBLAS

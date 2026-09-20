@@ -1,26 +1,28 @@
+#include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
+
 #include "include/common/configure.h"  // IWYU pragma: keep
 
 #ifdef LINALG_ENABLE_CUBLAS
 
-#include <cuda_runtime_api.h>
 #include <cublas_v2.h>
+#include <cuda_runtime_api.h>
 
 #include "include/common/cuda_handle.h"
-#include "include/matrix_operation/matrix_transpose_dispatch.h"
 #include "include/util/exception.h"
 
 namespace linalg
 {
-namespace detail
+namespace gpu
 {
 namespace
 {
 
 // cublasSgeam/Dgeam are out-of-place (C = alpha*op(A) + beta*op(B)), and this
 // API transposes `m` in place, so a scratch device buffer of the same size
-// is used as the out-of-place destination and copied back device-to-device.
+// is used as the out-of-place destination and copied back device-to-device
+// (never touching host memory).
 template <typename T, typename GeamFn>
-void transpose_cuda_impl(GeamFn geam, quarisma_long rows, quarisma_long columns, T* m)
+void transpose_impl(GeamFn geam, quarisma_long rows, quarisma_long columns, T* m)
 {
     const auto r = static_cast<int>(rows);
     const auto c = static_cast<int>(columns);
@@ -38,7 +40,7 @@ void transpose_cuda_impl(GeamFn geam, quarisma_long rows, quarisma_long columns,
     // `scratch` — which is bit-identical to the desired row-major
     // (columns x rows, ld=rows) transposed output.
     if (geam(
-            cublas_handle(),
+            detail::cublas_handle(),
             CUBLAS_OP_T,
             CUBLAS_OP_T,
             r,
@@ -63,20 +65,17 @@ void transpose_cuda_impl(GeamFn geam, quarisma_long rows, quarisma_long columns,
 
 }  // namespace
 
-void transpose_cuda_f32(quarisma_long rows, quarisma_long columns, float* m)
+void matrix_transpose(quarisma_long rows, quarisma_long columns, float* m)
 {
-    transpose_cuda_impl(cublasSgeam, rows, columns, m);
+    transpose_impl(cublasSgeam, rows, columns, m);
 }
 
-void transpose_cuda_f64(quarisma_long rows, quarisma_long columns, double* m)
+void matrix_transpose(quarisma_long rows, quarisma_long columns, double* m)
 {
-    transpose_cuda_impl(cublasDgeam, rows, columns, m);
+    transpose_impl(cublasDgeam, rows, columns, m);
 }
 
-LINALG_REGISTER_DISPATCH(transpose_f32_stub, cuda, transpose_cuda_f32);
-LINALG_REGISTER_DISPATCH(transpose_f64_stub, cuda, transpose_cuda_f64);
-
-}  // namespace detail
+}  // namespace gpu
 }  // namespace linalg
 
 #endif  // LINALG_ENABLE_CUBLAS

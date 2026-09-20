@@ -1,19 +1,62 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
-#include "include/matrix_operation/cholesky_decomposition_dispatch.h"
+#include "include/common/configure.h"  // IWYU pragma: keep
 #include "include/util/exception.h"
+
+#if defined(LINALG_ENABLE_MKL)
+#include <mkl.h>
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+// LAPACKE-dependent (see include/common/configure.h.in): Apple's Accelerate
+// framework ships CBLAS but not the LAPACKE row-major C wrapper, so this
+// branch only compiles when a real lapacke.h was found; otherwise the #else
+// below falls through to the scalar implementation at compile time.
+#include <lapacke.h>
+#else
+#include <cmath>
+#include <stdexcept>
+#endif
 
 namespace linalg
 {
 namespace detail
 {
 
-LINALG_DEFINE_DISPATCH(cholesky_f32_fn, cholesky_f32_stub);
-LINALG_DEFINE_DISPATCH(cholesky_f64_fn, cholesky_f64_stub);
+// Backend implementation is compiled directly into this translation unit,
+// gated by the same #if/#elif/#else that also picks which body the public
+// cholesky_decomposition() overloads below call — exactly one is ever built.
+#if defined(LINALG_ENABLE_MKL)
 
-// Reverse-mode adjoint of cholesky_decomposition: no vendor library (LAPACK/
-// cuSOLVER) exposes this, so it is always the scalar implementation — there
-// is no dispatch_stub for it.
+bool cholesky_mkl_f32(float* C, quarisma_int lda, cholesky_decomposition_enum type)
+{
+    quarisma_int n = lda;
+    return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
+}
+
+bool cholesky_mkl_f64(double* C, quarisma_int lda, cholesky_decomposition_enum type)
+{
+    quarisma_int n = lda;
+    return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
+}
+
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+
+bool cholesky_blas_f32(float* C, quarisma_int lda, cholesky_decomposition_enum type)
+{
+    const auto n = static_cast<int>(lda);
+    return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
+}
+
+bool cholesky_blas_f64(double* C, quarisma_int lda, cholesky_decomposition_enum type)
+{
+    const auto n = static_cast<int>(lda);
+    return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
+}
+
+#else
+
+namespace
+{
+
 enum class matrix_order
 {
     row_major,
@@ -21,10 +64,132 @@ enum class matrix_order
 };
 
 template <typename T, cholesky_decomposition_enum part, matrix_order order = matrix_order::row_major>
+quarisma_int cholesky_decomposition_scalar_impl(quarisma_int n, T* A, quarisma_int lda)
+{
+    if constexpr (order == matrix_order::col_major)
+    {
+        throw std::runtime_error("Column-major order is not supported in this implementation.");
+    }
+
+    if constexpr (part == cholesky_decomposition_enum::LOWER_TRIANGULAR)  //NOLINT
+    {
+        for (quarisma_int i = 0; i < n; ++i)
+        {
+            auto* a_i = &A[i * lda];
+
+            for (quarisma_int j = 0; j < i; ++j)
+            {
+                auto* a_j = &A[j * lda];
+                T     sum = a_i[j];
+                for (quarisma_int k = 0; k < j; ++k)
+                {
+                    sum -= a_i[k] * a_j[k];
+                }
+                a_i[j] = sum / a_j[j];
+                a_j[i] = 0.;
+            }
+
+            T sum = a_i[i];
+            for (quarisma_int k = 0; k < i; ++k)
+            {
+                sum -= a_i[k] * a_i[k];
+            }
+
+            if (sum <= 0)
+            {
+                return i + 1;  // Matrix is not positive-definite
+            }
+
+            a_i[i] = std::sqrt(sum);
+        }
+    }
+    else if constexpr (part == cholesky_decomposition_enum::UPPER_TRIANGULAR)
+    {
+        for (quarisma_int i = 0; i < n; ++i)
+        {
+            for (quarisma_int j = 0; j < i; ++j)
+            {
+                T sum = A[j * lda + i];
+                for (quarisma_int k = 0; k < j; ++k)
+                {
+                    sum -= A[k * lda + i] * A[k * lda + j];
+                }
+                A[j * lda + i] = sum / A[j * lda + j];
+            }
+
+            T sum = A[i * lda + i];
+            for (quarisma_int k = 0; k < i; ++k)
+            {
+                sum -= A[k * lda + i] * A[k * lda + i];
+            }
+
+            if (sum <= 0)
+            {
+                return i + 1;  // Matrix is not positive-definite
+            }
+
+            A[i * lda + i] = std::sqrt(sum);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("Invalid MatrixPart specified");
+    }
+
+    return 0;  // Success
+}
+
+}  // namespace
+
+bool cholesky_scalar_f32(float* C, quarisma_int lda, cholesky_decomposition_enum type)
+{
+    quarisma_int n = lda;
+    switch (type)
+    {
+        case cholesky_decomposition_enum::LOWER_TRIANGULAR:
+            return cholesky_decomposition_scalar_impl<
+                       float, cholesky_decomposition_enum::LOWER_TRIANGULAR>(n, C, n) == 0;
+        case cholesky_decomposition_enum::UPPER_TRIANGULAR:
+            return cholesky_decomposition_scalar_impl<
+                       float, cholesky_decomposition_enum::UPPER_TRIANGULAR>(n, C, n) == 0;
+        default:
+            LINALG_THROW("Unsupported enum type!");
+    }
+}
+
+bool cholesky_scalar_f64(double* C, quarisma_int lda, cholesky_decomposition_enum type)
+{
+    quarisma_int n = lda;
+    switch (type)
+    {
+        case cholesky_decomposition_enum::LOWER_TRIANGULAR:
+            return cholesky_decomposition_scalar_impl<
+                       double, cholesky_decomposition_enum::LOWER_TRIANGULAR>(n, C, n) == 0;
+        case cholesky_decomposition_enum::UPPER_TRIANGULAR:
+            return cholesky_decomposition_scalar_impl<
+                       double, cholesky_decomposition_enum::UPPER_TRIANGULAR>(n, C, n) == 0;
+        default:
+            LINALG_THROW("Unsupported enum type!");
+    }
+}
+
+#endif
+
+// Reverse-mode adjoint of cholesky_decomposition: no vendor library (LAPACK/
+// cuSOLVER) exposes this, so it always runs the scalar implementation
+// directly, regardless of which backend cholesky_decomposition itself used.
+enum class aad_matrix_order
+{
+    row_major,
+    col_major
+};
+
+template <
+    typename T, cholesky_decomposition_enum part, aad_matrix_order order = aad_matrix_order::row_major>
 bool cholesky_decomposition_aad_impl(
     quarisma_int n, T* C_aad, const T* C, quarisma_long lda, T* A_aad)
 {
-    if constexpr (order == matrix_order::col_major)
+    if constexpr (order == aad_matrix_order::col_major)
     {
         throw std::runtime_error("Column-major order is not supported in this implementation.");
     }
@@ -137,17 +302,27 @@ bool cholesky_decomposition_aad_impl(
 }  // namespace detail
 
 //-----------------------------------------------------------------------------
-bool cholesky_decomposition(
-    float* C, quarisma_int lda, linalg::cholesky_decomposition_enum type, device_type device)
+bool cholesky_decomposition(float* C, quarisma_int lda, linalg::cholesky_decomposition_enum type)
 {
-    return detail::cholesky_f32_stub.resolve(device)(C, lda, type);
+#if defined(LINALG_ENABLE_MKL)
+    return detail::cholesky_mkl_f32(C, lda, type);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::cholesky_blas_f32(C, lda, type);
+#else
+    return detail::cholesky_scalar_f32(C, lda, type);
+#endif
 }
 
 //-----------------------------------------------------------------------------
-bool cholesky_decomposition(
-    double* C, quarisma_int lda, linalg::cholesky_decomposition_enum type, device_type device)
+bool cholesky_decomposition(double* C, quarisma_int lda, linalg::cholesky_decomposition_enum type)
 {
-    return detail::cholesky_f64_stub.resolve(device)(C, lda, type);
+#if defined(LINALG_ENABLE_MKL)
+    return detail::cholesky_mkl_f64(C, lda, type);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::cholesky_blas_f64(C, lda, type);
+#else
+    return detail::cholesky_scalar_f64(C, lda, type);
+#endif
 }
 
 //-----------------------------------------------------------------------------

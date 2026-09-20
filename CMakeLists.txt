@@ -50,13 +50,16 @@ include(third_party_helpers)
 # implementations are used instead.
 option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearAlgebra" OFF)
 
-# Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...),
-# selectable at runtime alongside MKL via linalg::Context / linalg::set_backend.
+# Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...).
+# When both this and LINALG_ENABLE_MKL are ON, MKL takes precedence at
+# compile time (see e.g. matrix_multiplication.cxx's #if/#elif chain).
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
-# cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, selected at runtime
-# via device_type::cuda. Requires the CUDA toolkit; enables the CUDA language
-# only when this option is ON so plain CPU builds need no CUDA toolchain.
+# cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as separate
+# linalg::gpu::* entry points (include/matrix_operation_gpu/) rather than a
+# device parameter on the CPU ops. Requires the CUDA toolkit; enables the
+# CUDA language only when this option is ON so plain CPU builds need no CUDA
+# toolchain.
 option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
 
 # Enables partial pivoting in the scalar (non-MKL) LU decomposition / solve /
@@ -245,9 +248,9 @@ if(LINALG_ENABLE_BLAS)
   # matrix_transpose) but deliberately does not ship the LAPACKE row-major C
   # wrapper — only the classic Fortran-mangled LAPACK entry points. The
   # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
-  # linear_solver) are therefore only registered when real lapacke.h is found;
-  # otherwise those ops fall back to the scalar backend, which
-  # dispatch_stub::resolve() already does for any unregistered slot.
+  # linear_solver) are therefore only compiled when real lapacke.h is found;
+  # otherwise each op's dispatcher .cxx falls through to the scalar backend
+  # at compile time via #if LINALG_BLAS_HAS_LAPACKE.
   set(LINALG_BLAS_HAS_LAPACKE OFF)
   if(LINALG_LAPACKE_INCLUDE_DIR)
     list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
@@ -309,43 +312,6 @@ if(BUILD_SHARED_LIBS)
   endif()
 else()
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_STATIC_DEFINE)
-
-  # Each compute backend (scalar/mkl/blas/cublas) registers itself into a
-  # dispatch_stub purely via a static initializer in its own .cxx (see
-  # include/common/dispatch_stub.h) — no other translation unit calls into it
-  # directly. A plain static-archive link only pulls in .o's that resolve an
-  # otherwise-unsatisfied symbol, so e.g. matrix_multiplication_scalar.o would
-  # be silently dropped and its registration would never run, failing every
-  # op at runtime with "no CPU implementation registered". Whole-archive
-  # linking this target as a usage requirement forces every object in,
-  # regardless of whether the linker thinks it's referenced.
-  #
-  # CMake's own $<LINK_LIBRARY:WHOLE_ARCHIVE,...> (3.24+) was tried first but
-  # only ships linker-flag mappings for the AppleClang compiler ID on macOS
-  # (Modules/Platform/Linker/Apple-AppleClang.cmake); it silently does nothing
-  # for plain "Clang" (e.g. a Homebrew/LLVM toolchain on macOS), which is not
-  # a safe default here — hence the explicit per-platform flags below instead.
-  if(APPLE)
-    target_link_libraries(LinearAlgebra INTERFACE "-Wl,-force_load,$<TARGET_FILE:LinearAlgebra>")
-  elseif(MSVC)
-    target_link_libraries(LinearAlgebra INTERFACE "/WHOLEARCHIVE:$<TARGET_FILE:LinearAlgebra>")
-  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_link_libraries(
-      LinearAlgebra INTERFACE "-Wl,--whole-archive" "$<TARGET_FILE:LinearAlgebra>"
-                              "-Wl,--no-whole-archive"
-    )
-  else()
-    message(
-      WARNING
-      "LinearAlgebra is being built as a static library and no whole-archive "
-      "linker flag is known for this toolchain (${CMAKE_CXX_COMPILER_ID}). "
-      "Consumers must manually whole-archive-link LinearAlgebra, or the "
-      "mkl/blas/cublas/scalar backend registrations may be silently dropped by "
-      "the linker, causing every matrix_operation call to throw \"no CPU "
-      "implementation registered\" at runtime. Using the default "
-      "BUILD_SHARED_LIBS=ON avoids this."
-    )
-  endif()
 endif()
 
 add_library(LinearAlgebra::LinearAlgebra ALIAS LinearAlgebra)
