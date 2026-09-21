@@ -1,6 +1,6 @@
 #include "include/matrix_operation/lu_decomposition.h"
 
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl_lapacke.h>

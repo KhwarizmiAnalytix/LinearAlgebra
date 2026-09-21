@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 namespace linalg
 {

@@ -1,6 +1,6 @@
 #include "include/matrix_operation/matrix_trace.h"
 
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 namespace linalg
 {

@@ -4,7 +4,7 @@
 
 #include <cuda_runtime.h>
 
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 // One thread per output element, one z-block of the launch grid per matrix.
 // C[row][col] = sum_k A[row][k] * B[k][col], all row-major. File-scope

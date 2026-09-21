@@ -6,7 +6,7 @@
 #include <cuda_runtime_api.h>
 
 #include "include/common/cuda_handle.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 namespace linalg
 {

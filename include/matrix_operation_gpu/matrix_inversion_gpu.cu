@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 // File-scope (not namespaced) __global__ templates, matching the usual CUDA
 // idiom already used by matrix_multiplication_batched_gpu.cu for a kernel

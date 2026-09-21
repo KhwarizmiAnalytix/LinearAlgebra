@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 // R's strictly-below-diagonal entries are Householder-vector scratch left
 // over from geqrf, not zero — this clears them, matching the CPU

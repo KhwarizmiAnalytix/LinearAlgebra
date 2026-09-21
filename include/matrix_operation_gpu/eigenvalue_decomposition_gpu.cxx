@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 namespace linalg
 {
@@ -31,7 +31,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     int*                               info,
     cudaStream_t                       stream)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr && info != nullptr, 
+    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr && info != nullptr,
             "symmetric_eigenvalue_decomposition: A, eigenvalues, eigenvectors, and info must not be "
             "null");
     LOGGING_CHECK(n > 0, "symmetric_eigenvalue_decomposition: n must be positive");

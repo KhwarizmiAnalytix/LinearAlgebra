@@ -4,7 +4,7 @@
 
 #include <cuda_runtime_api.h>
 
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 // Single-thread reduction: n is one matrix dimension, not a large array, so
 // a parallel reduction buys nothing here — same rationale and shape as

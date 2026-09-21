@@ -9,7 +9,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns
 // row-major) into Ainv = V * diag(S+) * U^T (columns x rows row-major),

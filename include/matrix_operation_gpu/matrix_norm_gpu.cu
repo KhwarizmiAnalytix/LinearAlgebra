@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "ThirdParty/Logging/include/logging.h"
+#include <include/logging.h>
 
 // One thread per column/row, looping serially over the other dimension —
 // simple and obviously correct rather than a tree reduction, matching this
