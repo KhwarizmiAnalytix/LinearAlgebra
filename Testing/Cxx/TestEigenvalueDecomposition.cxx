@@ -271,5 +271,12 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     double er[2];
     double ei[2];
     double evecs[4];
+#ifdef LINALG_ENABLE_MKL
+    // MKL's LAPACKE *geev call packs complex eigenvectors natively (see
+    // eigenvalue_decomposition.h); only the portable scalar fallback, which
+    // has no complex arithmetic, throws for this case.
+    EXPECT_NO_THROW(linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, evecs, 2));
+#else
     EXPECT_THROW(linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, evecs, 2), std::exception);
+#endif
 }

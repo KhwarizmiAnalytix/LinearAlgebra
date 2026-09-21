@@ -87,9 +87,15 @@ jobs:
       - uses: bazelbuild/setup-bazelisk@v3
 
       - name: Test
-        # ThirdParty/... is excluded: those packages are vendored
-        # dependencies (Logging, googletest) built only as libraries this
-        # repo links against, not test suites this repo's CI is responsible
-        # for running (CMake's equivalent add_subdirectory(ThirdParty/Logging)
-        # likewise builds it with its own testing disabled).
-        run: bazel test -- //... -//ThirdParty/...
+        # Target only this repo's own tests, rather than a recursive //...
+        # (which loads every package it can reach, including this repo's
+        # own dependencies): a subtractive "//... -//ThirdParty/..." still
+        # fails, since Bazel loads packages under an excluded pattern before
+        # applying the exclusion — and vendored trees under ThirdParty/ (e.g.
+        # Logging's own Google Benchmark submodule) pull in tooling this
+        # workspace never registers and was never meant to build here.
+        # ThirdParty/... is built only as a library dependency (via
+        # //:LinearAlgebra), not run as a test suite — CMake's equivalent
+        # add_subdirectory(ThirdParty/Logging) likewise builds it with its
+        # own testing disabled.
+        run: bazel test //Testing/...
