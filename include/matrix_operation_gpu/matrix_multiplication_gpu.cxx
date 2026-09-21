@@ -19,23 +19,24 @@ namespace gpu
 // C^T[n,m] = op(B)^T[n,k]*op(A)^T[k,m], computed by swapping the A/B
 // operands (and m/n) while keeping each operand's own transpose flag and
 // leading dimension — no extra copies or kernels needed.
-void matrix_multiplication(
-    bool         transpose_a,
-    bool         transpose_b,
-    quarisma_int rows,
-    quarisma_int columns,
-    quarisma_int depth,
-    float const* a,
-    quarisma_int lda,
-    float const* b,
-    quarisma_int ldb,
-    float*       c,
-    quarisma_int ldc)
+void matrix_multiplication(bool transpose_a,
+    bool                        transpose_b,
+    quarisma_int                rows,
+    quarisma_int                columns,
+    quarisma_int                depth,
+    float const*                a,
+    quarisma_int                lda,
+    float const*                b,
+    quarisma_int                ldb,
+    float*                      c,
+    quarisma_int                ldc,
+    cudaStream_t                stream)
 {
-    const float alpha = 1.F;
-    const float beta  = 0.F;
-    if (cublasSgemm(
-            detail::cublas_handle(),
+    const float alpha  = 1.F;
+    const float beta   = 0.F;
+    auto        handle = detail::cublas_handle_for_current_device();
+    detail::set_stream(handle, stream);
+    if (cublasSgemm(handle,
             transpose_b ? CUBLAS_OP_T : CUBLAS_OP_N,
             transpose_a ? CUBLAS_OP_T : CUBLAS_OP_N,
             static_cast<int>(columns),
@@ -54,23 +55,24 @@ void matrix_multiplication(
     }
 }
 
-void matrix_multiplication(
-    bool          transpose_a,
-    bool          transpose_b,
-    quarisma_int  rows,
-    quarisma_int  columns,
-    quarisma_int  depth,
-    double const* a,
-    quarisma_int  lda,
-    double const* b,
-    quarisma_int  ldb,
-    double*       c,
-    quarisma_int  ldc)
+void matrix_multiplication(bool transpose_a,
+    bool                        transpose_b,
+    quarisma_int                rows,
+    quarisma_int                columns,
+    quarisma_int                depth,
+    double const*               a,
+    quarisma_int                lda,
+    double const*               b,
+    quarisma_int                ldb,
+    double*                     c,
+    quarisma_int                ldc,
+    cudaStream_t                stream)
 {
-    const double alpha = 1.;
-    const double beta  = 0.;
-    if (cublasDgemm(
-            detail::cublas_handle(),
+    const double alpha  = 1.;
+    const double beta   = 0.;
+    auto         handle = detail::cublas_handle_for_current_device();
+    detail::set_stream(handle, stream);
+    if (cublasDgemm(handle,
             transpose_b ? CUBLAS_OP_T : CUBLAS_OP_N,
             transpose_a ? CUBLAS_OP_T : CUBLAS_OP_N,
             static_cast<int>(columns),

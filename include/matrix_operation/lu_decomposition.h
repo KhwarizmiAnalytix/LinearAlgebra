@@ -19,8 +19,9 @@ namespace linalg
 // (MKL takes precedence over BLAS over the scalar fallback) — there is no
 // runtime dispatch or per-call backend override. For device (CUDA) pointers,
 // see linalg::gpu::lu_decomposition in
-// include/matrix_operation_gpu/lu_decomposition_gpu.h (a different pivot
-// convention and precision — see that header).
+// include/matrix_operation_gpu/lu_decomposition_gpu.h (same row-major
+// "P * A = L * U" packed layout and pivot convention as this CPU entry
+// point).
 LINALG_API bool lu_decomposition(float* m, quarisma_int lda, quarisma_int* pivot);
 
 LINALG_API bool lu_decomposition(double* m, quarisma_int lda, quarisma_int* pivot);

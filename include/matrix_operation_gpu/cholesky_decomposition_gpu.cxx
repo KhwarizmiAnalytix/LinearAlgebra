@@ -22,16 +22,18 @@ cublasFillMode_t to_fill_mode(cholesky_decomposition_enum type)
     // UPPER-triangular factor of the same matrix (and vice versa), so the
     // fill mode is flipped relative to the CPU (LAPACKE row-major) backend.
     return type == cholesky_decomposition_enum::LOWER_TRIANGULAR ? CUBLAS_FILL_MODE_UPPER
-                                                                  : CUBLAS_FILL_MODE_LOWER;
+                                                                 : CUBLAS_FILL_MODE_LOWER;
 }
 
 }  // namespace
 
-void cholesky_decomposition(float* C, quarisma_int lda, cholesky_decomposition_enum type, int* info)
+void cholesky_decomposition(
+    float* C, quarisma_int lda, cholesky_decomposition_enum type, int* info, cudaStream_t stream)
 {
     const auto n      = static_cast<int>(lda);
-    auto       handle = detail::cusolver_handle();
-    auto       fill   = to_fill_mode(type);
+    auto       handle = detail::cusolver_handle_for_current_device();
+    detail::set_stream(handle, stream);
+    auto fill = to_fill_mode(type);
 
     int lwork = 0;
     if (cusolverDnSpotrf_bufferSize(handle, fill, n, C, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
@@ -40,21 +42,32 @@ void cholesky_decomposition(float* C, quarisma_int lda, cholesky_decomposition_e
     }
 
     float* workspace = nullptr;
-    cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(float) * static_cast<size_t>(lwork));
-
-    if (cusolverDnSpotrf(handle, fill, n, C, n, workspace, lwork, info) != CUSOLVER_STATUS_SUCCESS)
+    if (cudaMalloc(reinterpret_cast<void**>(&workspace),
+            sizeof(float) * static_cast<size_t>(lwork)) != cudaSuccess)
     {
-        cudaFree(workspace);
+        LINALG_THROW("cudaMalloc failed");
+    }
+
+    const auto  status      = cusolverDnSpotrf(handle, fill, n, C, n, workspace, lwork, info);
+    cudaError_t sync_status = cudaSuccess;
+    detail::synchronize_and_free(workspace, stream, &sync_status);
+    if (status != CUSOLVER_STATUS_SUCCESS)
+    {
         LINALG_THROW("cusolverDnSpotrf failed");
     }
-    cudaFree(workspace);
+    if (sync_status != cudaSuccess)
+    {
+        LINALG_THROW("cudaStreamSynchronize failed");
+    }
 }
 
-void cholesky_decomposition(double* C, quarisma_int lda, cholesky_decomposition_enum type, int* info)
+void cholesky_decomposition(
+    double* C, quarisma_int lda, cholesky_decomposition_enum type, int* info, cudaStream_t stream)
 {
     const auto n      = static_cast<int>(lda);
-    auto       handle = detail::cusolver_handle();
-    auto       fill   = to_fill_mode(type);
+    auto       handle = detail::cusolver_handle_for_current_device();
+    detail::set_stream(handle, stream);
+    auto fill = to_fill_mode(type);
 
     int lwork = 0;
     if (cusolverDnDpotrf_bufferSize(handle, fill, n, C, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
@@ -63,14 +76,23 @@ void cholesky_decomposition(double* C, quarisma_int lda, cholesky_decomposition_
     }
 
     double* workspace = nullptr;
-    cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(double) * static_cast<size_t>(lwork));
-
-    if (cusolverDnDpotrf(handle, fill, n, C, n, workspace, lwork, info) != CUSOLVER_STATUS_SUCCESS)
+    if (cudaMalloc(reinterpret_cast<void**>(&workspace),
+            sizeof(double) * static_cast<size_t>(lwork)) != cudaSuccess)
     {
-        cudaFree(workspace);
+        LINALG_THROW("cudaMalloc failed");
+    }
+
+    const auto  status      = cusolverDnDpotrf(handle, fill, n, C, n, workspace, lwork, info);
+    cudaError_t sync_status = cudaSuccess;
+    detail::synchronize_and_free(workspace, stream, &sync_status);
+    if (status != CUSOLVER_STATUS_SUCCESS)
+    {
         LINALG_THROW("cusolverDnDpotrf failed");
     }
-    cudaFree(workspace);
+    if (sync_status != cudaSuccess)
+    {
+        LINALG_THROW("cudaStreamSynchronize failed");
+    }
 }
 
 }  // namespace gpu

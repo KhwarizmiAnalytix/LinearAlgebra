@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "include/common/cuda_fwd.h"
 #include "include/common/linear_algebra_export.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 
@@ -25,12 +26,19 @@ namespace gpu
 // never copies to or from host memory, so it never blocks on a device
 // synchronization. Inspect `info` explicitly (e.g. cudaMemcpyAsync on your
 // own stream) only when/if you need the result, rather than paying that
-// latency on every call.
-LINALG_API void cholesky_decomposition(
-    float* C, quarisma_int lda, linalg::cholesky_decomposition_enum type, int* info);
+// latency on every call. `stream` (default: the legacy default stream) is
+// the CUDA stream the underlying cuSOLVER call is issued on.
+LINALG_API void cholesky_decomposition(float* C,
+    quarisma_int                              lda,
+    linalg::cholesky_decomposition_enum       type,
+    int*                                      info,
+    cudaStream_t                              stream = nullptr);
 
-LINALG_API void cholesky_decomposition(
-    double* C, quarisma_int lda, linalg::cholesky_decomposition_enum type, int* info);
+LINALG_API void cholesky_decomposition(double* C,
+    quarisma_int                               lda,
+    linalg::cholesky_decomposition_enum        type,
+    int*                                       info,
+    cudaStream_t                               stream = nullptr);
 
 }  // namespace gpu
 }  // namespace linalg

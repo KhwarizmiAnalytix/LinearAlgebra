@@ -48,7 +48,12 @@ namespace
 {
 
 template <typename scalar_t>
-void launch(quarisma_int dim, quarisma_int count, const scalar_t* a, const scalar_t* b, scalar_t* c)
+void launch(quarisma_int dim,
+    quarisma_int         count,
+    const scalar_t*      a,
+    const scalar_t*      b,
+    scalar_t*            c,
+    cudaStream_t         stream)
 {
     const auto d = static_cast<int>(dim);
     const auto n = static_cast<int>(count);
@@ -56,7 +61,7 @@ void launch(quarisma_int dim, quarisma_int count, const scalar_t* a, const scala
     const dim3 block(16, 16);
     const dim3 grid((d + block.x - 1) / block.x, (d + block.y - 1) / block.y, n);
 
-    batched_matmul_kernel<scalar_t><<<grid, block>>>(d, n, a, b, c);
+    batched_matmul_kernel<scalar_t><<<grid, block, 0, stream>>>(d, n, a, b, c);
 
     if (cudaGetLastError() != cudaSuccess)
     {
@@ -66,16 +71,24 @@ void launch(quarisma_int dim, quarisma_int count, const scalar_t* a, const scala
 
 }  // namespace
 
-void batched_matrix_multiplication(
-    quarisma_int dim, quarisma_int count, const float* a, const float* b, float* c)
+void batched_matrix_multiplication(quarisma_int dim,
+    quarisma_int                                count,
+    const float*                                a,
+    const float*                                b,
+    float*                                      c,
+    cudaStream_t                                stream)
 {
-    launch(dim, count, a, b, c);
+    launch(dim, count, a, b, c, stream);
 }
 
-void batched_matrix_multiplication(
-    quarisma_int dim, quarisma_int count, const double* a, const double* b, double* c)
+void batched_matrix_multiplication(quarisma_int dim,
+    quarisma_int                                count,
+    const double*                               a,
+    const double*                               b,
+    double*                                     c,
+    cudaStream_t                                stream)
 {
-    launch(dim, count, a, b, c);
+    launch(dim, count, a, b, c, stream);
 }
 
 }  // namespace gpu

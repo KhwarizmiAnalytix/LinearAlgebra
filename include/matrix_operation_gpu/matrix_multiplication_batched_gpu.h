@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "include/common/cuda_fwd.h"
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
@@ -29,12 +30,21 @@ namespace gpu
 //
 // This is a different operation from linalg::gpu::matrix_multiplication
 // (single matrix, cuBLAS gemm, arbitrary shape/transpose): use this one only
-// for many same-size square matrices at once.
-LINALG_API void batched_matrix_multiplication(
-    quarisma_int dim, quarisma_int count, const float* a, const float* b, float* c);
+// for many same-size square matrices at once. `stream` (default: the legacy
+// default stream) is the CUDA stream the kernel is launched on.
+LINALG_API void batched_matrix_multiplication(quarisma_int dim,
+    quarisma_int                                           count,
+    const float*                                           a,
+    const float*                                           b,
+    float*                                                 c,
+    cudaStream_t                                           stream = nullptr);
 
-LINALG_API void batched_matrix_multiplication(
-    quarisma_int dim, quarisma_int count, const double* a, const double* b, double* c);
+LINALG_API void batched_matrix_multiplication(quarisma_int dim,
+    quarisma_int                                           count,
+    const double*                                          a,
+    const double*                                          b,
+    double*                                                c,
+    cudaStream_t                                           stream = nullptr);
 
 }  // namespace gpu
 }  // namespace linalg
