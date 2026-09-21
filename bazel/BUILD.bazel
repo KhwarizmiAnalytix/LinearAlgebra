@@ -3,6 +3,14 @@
 # =============================================================================
 # Starlark --define keys mirror this repo's CMake cache names: linalg_enable_mkl,
 # linalg_lu_pivoting, build_shared_libs.
+#
+# The logging_* / disable_* settings below exist only so that
+# ThirdParty/Logging/bazel/logging.bzl's own select({"//bazel:...": ...})
+# calls — absolute labels, always anchored to this (the only) workspace's
+# root //bazel package, see logging.bzl in this directory — have a target to
+# resolve to; they mirror ThirdParty/Logging/bazel/BUILD.bazel's own
+# (unused, since that file is never loaded standalone here) config_settings
+# and must not be renamed independently of it.
 # =============================================================================
 
 package(default_visibility = ["//visibility:public"])
@@ -10,6 +18,7 @@ package(default_visibility = ["//visibility:public"])
 exports_files([
     "xsigma.bzl",
     "linear_algebra.bzl",
+    "logging.bzl",
 ])
 
 config_setting(
@@ -25,4 +34,51 @@ config_setting(
 config_setting(
     name = "linalg_lu_pivoting",
     define_values = {"linalg_lu_pivoting": "true"},
+)
+
+# --- ThirdParty/Logging compatibility (see logging.bzl in this directory) ---
+
+config_setting(
+    name = "logging_glog",
+    define_values = {"logging_backend": "glog"},
+)
+
+config_setting(
+    name = "logging_loguru",
+    define_values = {"logging_backend": "loguru"},
+)
+
+config_setting(
+    name = "logging_native",
+    define_values = {"logging_backend": "native"},
+)
+
+config_setting(
+    name = "logging_spdlog",
+    define_values = {"logging_backend": "spdlog"},
+)
+
+config_setting(
+    name = "disable_magic_enum",
+    define_values = {"logging_enable_magic_enum": "false"},
+)
+
+config_setting(
+    name = "disable_logging_cxa_demangle",
+    define_values = {"logging_enable_cxa_demangle": "false"},
+)
+
+config_setting(
+    name = "logging_portable_float_format",
+    define_values = {"logging_enable_portable_float_format": "true"},
+)
+
+config_setting(
+    name = "logging_std_format",
+    define_values = {"logging_format_use_std": "true"},
+)
+
+config_setting(
+    name = "logging_default_log_fatal",
+    define_values = {"logging_default_exception_mode": "log_fatal"},
 )

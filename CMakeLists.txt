@@ -184,7 +184,22 @@ if(LINALG_ENABLE_MKL)
     )
   endif()
   if(TARGET MKL::MKL)
+    # GNU ld's default --as-needed can drop libmkl_core.so (and the
+    # threading library) from DT_NEEDED: the interface library
+    # (libmkl_intel_ilp64.so) calls into them through an internal ABI
+    # rather than a linker-visible undefined symbol, so --as-needed sees no
+    # reason to keep the dependency and the loader later fails with
+    # "undefined symbol: mkl_blas_dgemm" the first time MKL is actually
+    # called. Intel's own linking guidance is to force --no-as-needed
+    # around the MKL libraries on ELF/GNU-ld platforms; MSVC has no such
+    # flag and Apple's ld doesn't prune unresolved lazy symbols this way.
+    if(NOT MSVC AND NOT APPLE)
+      list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--no-as-needed)
+    endif()
     list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
+    if(NOT MSVC AND NOT APPLE)
+      list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--as-needed)
+    endif()
   endif()
 endif()
 

@@ -32,3 +32,28 @@ local_repository(
     name = "com_google_googletest",
     path = "ThirdParty/googletest",
 )
+
+# =============================================================================
+# ThirdParty/Logging's own backend deps — nested submodules under
+# ThirdParty/Logging/ThirdParty/, using Logging's own BUILD overlay files.
+# Logging's default backend (LOGURU) plus its always-on deps (fmt,
+# magic_enum) are wired here; glog/spdlog are omitted since nothing in this
+# workspace selects logging_backend=glog|spdlog (see bazel/logging.bzl).
+# =============================================================================
+new_local_repository(
+    name = "fmt",
+    build_file = "//ThirdParty/Logging/ThirdParty:fmt.BUILD",
+    path = "ThirdParty/Logging/ThirdParty/fmt",
+)
+
+new_local_repository(
+    name = "magic_enum",
+    build_file = "//ThirdParty/Logging/ThirdParty:magic_enum.BUILD",
+    path = "ThirdParty/Logging/ThirdParty/magic_enum",
+)
+
+new_local_repository(
+    name = "loguru",
+    build_file = "//ThirdParty/Logging/ThirdParty:loguru.BUILD",
+    path = "ThirdParty/Logging/ThirdParty/loguru",
+)
