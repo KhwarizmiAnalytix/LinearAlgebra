@@ -28,8 +28,16 @@ cublasFillMode_t to_fill_mode(cholesky_decomposition_enum type)
 }  // namespace
 
 void cholesky_decomposition(
-    float* C, quarisma_int lda, cholesky_decomposition_enum type, int* info, cudaStream_t stream)
+    float* C, linalg_int lda, cholesky_decomposition_enum type, int* info, cudaStream_t stream)
 {
+    if (C == nullptr || info == nullptr)
+    {
+        LINALG_THROW("cholesky_decomposition: C and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("cholesky_decomposition: lda must be positive", lda);
+    }
     const auto n      = static_cast<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
@@ -62,8 +70,16 @@ void cholesky_decomposition(
 }
 
 void cholesky_decomposition(
-    double* C, quarisma_int lda, cholesky_decomposition_enum type, int* info, cudaStream_t stream)
+    double* C, linalg_int lda, cholesky_decomposition_enum type, int* info, cudaStream_t stream)
 {
+    if (C == nullptr || info == nullptr)
+    {
+        LINALG_THROW("cholesky_decomposition: C and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("cholesky_decomposition: lda must be positive", lda);
+    }
     const auto n      = static_cast<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);

@@ -14,8 +14,16 @@ namespace linalg
 namespace gpu
 {
 
-void lu_decomposition(float* m, quarisma_int lda, int* pivot, int* info, cudaStream_t stream)
+void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, cudaStream_t stream)
 {
+    if (m == nullptr || pivot == nullptr || info == nullptr)
+    {
+        LINALG_THROW("lu_decomposition: m, pivot, and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("lu_decomposition: lda must be positive", lda);
+    }
     const auto n      = static_cast<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
@@ -58,8 +66,16 @@ void lu_decomposition(float* m, quarisma_int lda, int* pivot, int* info, cudaStr
     matrix_transpose(lda, lda, m, stream);
 }
 
-void lu_decomposition(double* m, quarisma_int lda, int* pivot, int* info, cudaStream_t stream)
+void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, cudaStream_t stream)
 {
+    if (m == nullptr || pivot == nullptr || info == nullptr)
+    {
+        LINALG_THROW("lu_decomposition: m, pivot, and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("lu_decomposition: lda must be positive", lda);
+    }
     const auto n      = static_cast<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);

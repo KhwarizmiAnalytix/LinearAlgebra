@@ -48,13 +48,21 @@ namespace
 {
 
 template <typename scalar_t>
-void launch(quarisma_int dim,
-    quarisma_int         count,
+void launch(linalg_int dim,
+    linalg_int         count,
     const scalar_t*      a,
     const scalar_t*      b,
     scalar_t*            c,
     cudaStream_t         stream)
 {
+    if (a == nullptr || b == nullptr || c == nullptr)
+    {
+        LINALG_THROW("batched_matrix_multiplication: a, b, and c must not be null");
+    }
+    if (dim <= 0 || count <= 0)
+    {
+        LINALG_THROW("batched_matrix_multiplication: dim and count must be positive");
+    }
     const auto d = static_cast<int>(dim);
     const auto n = static_cast<int>(count);
 
@@ -71,8 +79,8 @@ void launch(quarisma_int dim,
 
 }  // namespace
 
-void batched_matrix_multiplication(quarisma_int dim,
-    quarisma_int                                count,
+void batched_matrix_multiplication(linalg_int dim,
+    linalg_int                                count,
     const float*                                a,
     const float*                                b,
     float*                                      c,
@@ -81,8 +89,8 @@ void batched_matrix_multiplication(quarisma_int dim,
     launch(dim, count, a, b, c, stream);
 }
 
-void batched_matrix_multiplication(quarisma_int dim,
-    quarisma_int                                count,
+void batched_matrix_multiplication(linalg_int dim,
+    linalg_int                                count,
     const double*                               a,
     const double*                               b,
     double*                                     c,

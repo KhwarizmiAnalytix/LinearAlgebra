@@ -1,15 +1,15 @@
 #pragma once
 
-#include <cstddef>  // for quarisma_long
+#include <cstddef>  // for linalg_long
 
 #include "include/common/linear_algebra_export.h"  // for LINALG_API
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 
@@ -23,25 +23,25 @@ namespace linalg
 // over the scalar fallback) — there is no runtime dispatch or per-call
 // backend override.
 LINALG_API void svd_decomposition(
-    quarisma_long rows,
-    quarisma_long columns,
+    linalg_long rows,
+    linalg_long columns,
     float*      A,
-    quarisma_long lda,
+    linalg_long lda,
     float*      S,
     float*      U,
-    quarisma_long ldu,
+    linalg_long ldu,
     float*      VT,
-    quarisma_long ldv);
+    linalg_long ldv);
 
 LINALG_API void svd_decomposition(
-    quarisma_long rows,
-    quarisma_long columns,
+    linalg_long rows,
+    linalg_long columns,
     double*     A,
-    quarisma_long lda,
+    linalg_long lda,
     double*     S,
     double*     U,
-    quarisma_long ldu,
+    linalg_long ldu,
     double*     VT,
-    quarisma_long ldv);
+    linalg_long ldv);
 
 }  // namespace linalg

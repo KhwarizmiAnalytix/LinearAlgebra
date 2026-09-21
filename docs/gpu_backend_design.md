@@ -5,6 +5,19 @@ Status: §8 phases 1–3 implemented and verified against real CUDA hardware
 `matrix_inversion_gpu`, `svd_decomposition_gpu`). Phase 4 (multi-RHS and
 batched extensions) is not yet started.
 
+Beyond the original seven ops this plan scoped, the CPU-side additions
+(QR, least-squares, pseudo-inverse, rank/condition-number/norm/trace,
+eigenvalue decomposition — see the top-level README's CPU module table)
+now also have GPU counterparts (`qr_decomposition_gpu`,
+`pseudo_inverse_gpu`, `matrix_rank_gpu`, `matrix_norm_gpu`,
+`matrix_trace_gpu`, `least_squares_gpu`, and
+`symmetric_eigenvalue_decomposition_gpu`), verified against real CUDA
+hardware the same way. The one CPU op with no GPU counterpart at all is
+general (non-symmetric) eigenvalue decomposition: cuSOLVER's dense API
+(`cusolverDn`) has no `geev`-equivalent routine, so there is nothing to
+call into — `eigenvalue_decomposition_gpu.h` documents this gap rather than
+declaring a function with nowhere to route to.
+
 **Standing principle: `LinearAlgebra` does not manage memory.** It is a
 kernel library — factorizations, solves, products, transposes — not an
 allocator. Every entry point, CPU and GPU alike, takes and returns bare
@@ -102,8 +115,16 @@ by §2.
 | `cholesky_decomposition` | yes | yes |
 | `lu_decomposition` | yes | yes, but returns a **different factorization** than the CPU op (see §4.2) |
 | `linear_solver` | yes, single RHS vector | yes, single RHS vector only |
-| `matrix_invert` / `matrix_determinant` | yes | **missing** |
-| `svd_decomposition` | yes | **missing** |
+| `matrix_invert` / `matrix_determinant` | yes | yes |
+| `svd_decomposition` | yes | yes (economy only, tightly packed leading dimensions only) |
+| `qr_decomposition` | yes | yes (economy only, tightly packed leading dimensions only) |
+| `pseudo_inverse` | yes | yes |
+| `matrix_rank` / `matrix_condition_number` | yes | yes |
+| `matrix_norm` | yes | yes |
+| `matrix_trace` | yes | yes |
+| `least_squares_solve` | yes | yes |
+| `symmetric_eigenvalue_decomposition` | yes | yes |
+| `eigenvalue_decomposition` (general/non-symmetric) | yes | **missing — no cuSOLVER dense `geev`-equivalent to call into** |
 
 ### 4.2 Known correctness caveat: `lu_decomposition_gpu`
 

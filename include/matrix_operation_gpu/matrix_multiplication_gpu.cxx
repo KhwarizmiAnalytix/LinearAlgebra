@@ -21,17 +21,25 @@ namespace gpu
 // leading dimension — no extra copies or kernels needed.
 void matrix_multiplication(bool transpose_a,
     bool                        transpose_b,
-    quarisma_int                rows,
-    quarisma_int                columns,
-    quarisma_int                depth,
+    linalg_int                rows,
+    linalg_int                columns,
+    linalg_int                depth,
     float const*                a,
-    quarisma_int                lda,
+    linalg_int                lda,
     float const*                b,
-    quarisma_int                ldb,
+    linalg_int                ldb,
     float*                      c,
-    quarisma_int                ldc,
+    linalg_int                ldc,
     cudaStream_t                stream)
 {
+    if (a == nullptr || b == nullptr || c == nullptr)
+    {
+        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
+    }
+    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
+    {
+        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
+    }
     const float alpha  = 1.F;
     const float beta   = 0.F;
     auto        handle = detail::cublas_handle_for_current_device();
@@ -57,17 +65,25 @@ void matrix_multiplication(bool transpose_a,
 
 void matrix_multiplication(bool transpose_a,
     bool                        transpose_b,
-    quarisma_int                rows,
-    quarisma_int                columns,
-    quarisma_int                depth,
+    linalg_int                rows,
+    linalg_int                columns,
+    linalg_int                depth,
     double const*               a,
-    quarisma_int                lda,
+    linalg_int                lda,
     double const*               b,
-    quarisma_int                ldb,
+    linalg_int                ldb,
     double*                     c,
-    quarisma_int                ldc,
+    linalg_int                ldc,
     cudaStream_t                stream)
 {
+    if (a == nullptr || b == nullptr || c == nullptr)
+    {
+        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
+    }
+    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
+    {
+        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
+    }
     const double alpha  = 1.;
     const double beta   = 0.;
     auto         handle = detail::cublas_handle_for_current_device();

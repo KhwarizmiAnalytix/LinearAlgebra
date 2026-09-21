@@ -5,11 +5,11 @@
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -22,8 +22,8 @@ namespace linalg
 // include/matrix_operation_gpu/lu_decomposition_gpu.h (same row-major
 // "P * A = L * U" packed layout and pivot convention as this CPU entry
 // point).
-LINALG_API bool lu_decomposition(float* m, quarisma_int lda, quarisma_int* pivot);
+LINALG_API bool lu_decomposition(float* m, linalg_int lda, linalg_int* pivot);
 
-LINALG_API bool lu_decomposition(double* m, quarisma_int lda, quarisma_int* pivot);
+LINALG_API bool lu_decomposition(double* m, linalg_int lda, linalg_int* pivot);
 
 }  // namespace linalg

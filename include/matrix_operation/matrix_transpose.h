@@ -5,11 +5,11 @@
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -23,8 +23,8 @@ namespace linalg
 // out-of-place transpose via cblas_?copy strided row/column copies. For
 // device (CUDA) pointers, see linalg::gpu::matrix_transpose in
 // include/matrix_operation_gpu/matrix_transpose_gpu.h.
-LINALG_API void matrix_transpose(quarisma_long rows, quarisma_long columns, float* m);
+LINALG_API void matrix_transpose(linalg_long rows, linalg_long columns, float* m);
 
-LINALG_API void matrix_transpose(quarisma_long rows, quarisma_long columns, double* m);
+LINALG_API void matrix_transpose(linalg_long rows, linalg_long columns, double* m);
 
 }  // namespace linalg

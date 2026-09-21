@@ -7,11 +7,11 @@
 #include "include/matrix_operation/linear_solver.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -37,13 +37,13 @@ namespace gpu
 // stream) is the CUDA stream every underlying cuSOLVER/cuBLAS call and
 // device-to-device copy is issued on.
 LINALG_API void matrix_invert(float* m,
-    quarisma_int                     lda,
+    linalg_int                     lda,
     int*                             info,
     linear_solver_type               type   = linear_solver_type::LU_LINEAR_SOLVER,
     cudaStream_t                     stream = nullptr);
 
 LINALG_API void matrix_invert(double* m,
-    quarisma_int                      lda,
+    linalg_int                      lda,
     int*                              info,
     linear_solver_type                type   = linear_solver_type::LU_LINEAR_SOLVER,
     cudaStream_t                      stream = nullptr);
@@ -61,12 +61,12 @@ LINALG_API void matrix_invert(double* m,
 // not deferred to a caller-side synchronization the way `info` is
 // elsewhere in this API.
 LINALG_API float matrix_determinant(float* m,
-    quarisma_int                           lda,
+    linalg_int                           lda,
     linear_solver_type                     type   = linear_solver_type::LU_LINEAR_SOLVER,
     cudaStream_t                           stream = nullptr);
 
 LINALG_API double matrix_determinant(double* m,
-    quarisma_int                             lda,
+    linalg_int                             lda,
     linear_solver_type                       type   = linear_solver_type::LU_LINEAR_SOLVER,
     cudaStream_t                             stream = nullptr);
 

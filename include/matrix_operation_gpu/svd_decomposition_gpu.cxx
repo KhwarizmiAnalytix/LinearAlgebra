@@ -35,8 +35,8 @@ namespace
 template <typename T, typename BufferSizeFn, typename GesvdFn>
 void svd_core(BufferSizeFn buffer_size,
     GesvdFn                gesvd,
-    quarisma_long          rows,
-    quarisma_long          columns,
+    linalg_long          rows,
+    linalg_long          columns,
     const T*               A,
     T*                     S,
     T*                     U,
@@ -137,7 +137,7 @@ void svd_core(BufferSizeFn buffer_size,
         cudaFree(vt_work);
         LINALG_THROW("cudaMemcpyAsync failed");
     }
-    matrix_transpose(static_cast<quarisma_long>(k), rows, U, stream);
+    matrix_transpose(static_cast<linalg_long>(k), rows, U, stream);
 
     const auto vt_copy_status =
         cudaMemcpyAsync(VT, vt_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream);
@@ -146,7 +146,7 @@ void svd_core(BufferSizeFn buffer_size,
     {
         LINALG_THROW("cudaMemcpyAsync failed");
     }
-    matrix_transpose(columns, static_cast<quarisma_long>(k), VT, stream);
+    matrix_transpose(columns, static_cast<linalg_long>(k), VT, stream);
 }
 
 // See svd_decomposition_gpu.h's RESTRICTION note: every caller-visible
@@ -154,18 +154,27 @@ void svd_core(BufferSizeFn buffer_size,
 template <typename T, typename BufferSizeFn, typename GesvdFn>
 void svd_impl(BufferSizeFn buffer_size,
     GesvdFn                gesvd,
-    quarisma_long          rows,
-    quarisma_long          columns,
+    linalg_long          rows,
+    linalg_long          columns,
     const T*               A,
-    quarisma_long          lda,
+    linalg_long          lda,
     T*                     S,
     T*                     U,
-    quarisma_long          ldu,
+    linalg_long          ldu,
     T*                     VT,
-    quarisma_long          ldv,
+    linalg_long          ldv,
     int*                   info,
     cudaStream_t           stream)
 {
+    if (A == nullptr || S == nullptr || U == nullptr || VT == nullptr || info == nullptr)
+    {
+        LINALG_THROW("svd_decomposition: A, S, U, VT, and info must not be null");
+    }
+    if (rows == 0 || columns == 0)
+    {
+        LINALG_THROW("svd_decomposition: rows and columns must be positive");
+    }
+
     const auto r = static_cast<int>(rows);
     const auto c = static_cast<int>(columns);
     const auto k = std::min(r, c);
@@ -234,7 +243,7 @@ void svd_impl(BufferSizeFn buffer_size,
         cudaFree(vt_prime);
         LINALG_THROW("cudaMemcpyAsync failed");
     }
-    matrix_transpose(columns, static_cast<quarisma_long>(k), VT, stream);
+    matrix_transpose(columns, static_cast<linalg_long>(k), VT, stream);
 
     // Caller's U (rows x k) = transpose(vt_prime (k x rows)).
     const auto u_copy_status =
@@ -244,20 +253,20 @@ void svd_impl(BufferSizeFn buffer_size,
     {
         LINALG_THROW("cudaMemcpyAsync failed");
     }
-    matrix_transpose(static_cast<quarisma_long>(k), rows, U, stream);
+    matrix_transpose(static_cast<linalg_long>(k), rows, U, stream);
 }
 
 }  // namespace
 
-void svd_decomposition(quarisma_long rows,
-    quarisma_long                    columns,
+void svd_decomposition(linalg_long rows,
+    linalg_long                    columns,
     const float*                     A,
-    quarisma_long                    lda,
+    linalg_long                    lda,
     float*                           S,
     float*                           U,
-    quarisma_long                    ldu,
+    linalg_long                    ldu,
     float*                           VT,
-    quarisma_long                    ldv,
+    linalg_long                    ldv,
     int*                             info,
     cudaStream_t                     stream)
 {
@@ -276,15 +285,15 @@ void svd_decomposition(quarisma_long rows,
         stream);
 }
 
-void svd_decomposition(quarisma_long rows,
-    quarisma_long                    columns,
+void svd_decomposition(linalg_long rows,
+    linalg_long                    columns,
     const double*                    A,
-    quarisma_long                    lda,
+    linalg_long                    lda,
     double*                          S,
     double*                          U,
-    quarisma_long                    ldu,
+    linalg_long                    ldu,
     double*                          VT,
-    quarisma_long                    ldv,
+    linalg_long                    ldv,
     int*                             info,
     cudaStream_t                     stream)
 {

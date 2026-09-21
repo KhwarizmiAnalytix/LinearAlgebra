@@ -1,5 +1,7 @@
 #include "include/matrix_operation/matrix_transpose.h"
 
+#include "include/util/exception.h"
+
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
 #elif defined(LINALG_ENABLE_BLAS)
@@ -26,12 +28,12 @@ namespace detail
 // matrix_transpose() overloads below call — exactly one is ever built.
 #if defined(LINALG_ENABLE_MKL)
 
-void transpose_mkl_f32(quarisma_long rows, quarisma_long columns, float* m)
+void transpose_mkl_f32(linalg_long rows, linalg_long columns, float* m)
 {
     mkl_simatcopy('R', 'T', rows, columns, 1.F, m, columns, rows);
 }
 
-void transpose_mkl_f64(quarisma_long rows, quarisma_long columns, double* m)
+void transpose_mkl_f64(linalg_long rows, linalg_long columns, double* m)
 {
     mkl_dimatcopy('R', 'T', rows, columns, 1., m, columns, rows);
 }
@@ -46,10 +48,10 @@ void transpose_mkl_f64(quarisma_long rows, quarisma_long columns, double* m)
 // point, so this runs on vendor-optimized copy kernels (OpenBLAS/Accelerate/
 // netlib) rather than the scalar backend's cache-oblivious cycle-following
 // in-place algorithm.
-void transpose_blas_f32(quarisma_long rows, quarisma_long columns, float* m)
+void transpose_blas_f32(linalg_long rows, linalg_long columns, float* m)
 {
     auto* scratch = allocator<float>::allocate(rows * columns);
-    for (quarisma_long i = 0; i < rows; ++i)
+    for (linalg_long i = 0; i < rows; ++i)
     {
         cblas_scopy(
             static_cast<int>(columns), m + i * columns, 1, scratch + i, static_cast<int>(rows));
@@ -58,10 +60,10 @@ void transpose_blas_f32(quarisma_long rows, quarisma_long columns, float* m)
     allocator<float>::free(scratch);
 }
 
-void transpose_blas_f64(quarisma_long rows, quarisma_long columns, double* m)
+void transpose_blas_f64(linalg_long rows, linalg_long columns, double* m)
 {
     auto* scratch = allocator<double>::allocate(rows * columns);
-    for (quarisma_long i = 0; i < rows; ++i)
+    for (linalg_long i = 0; i < rows; ++i)
     {
         cblas_dcopy(
             static_cast<int>(columns), m + i * columns, 1, scratch + i, static_cast<int>(rows));
@@ -98,20 +100,19 @@ void transpose_cycles(RandomIterator first, RandomIterator last, int m)
     }
 }
 
-template <typename T>
-void transpose_scalar_impl(quarisma_long rows, quarisma_long columns, T* m)
+template <typename T> void transpose_scalar_impl(linalg_long rows, linalg_long columns, T* m)
 {
-    transpose_cycles<T*>(m, m + rows * columns, static_cast<quarisma_int>(columns));
+    transpose_cycles<T*>(m, m + rows * columns, static_cast<linalg_int>(columns));
 }
 
 }  // namespace
 
-void transpose_scalar_f32(quarisma_long rows, quarisma_long columns, float* m)
+void transpose_scalar_f32(linalg_long rows, linalg_long columns, float* m)
 {
     transpose_scalar_impl(rows, columns, m);
 }
 
-void transpose_scalar_f64(quarisma_long rows, quarisma_long columns, double* m)
+void transpose_scalar_f64(linalg_long rows, linalg_long columns, double* m)
 {
     transpose_scalar_impl(rows, columns, m);
 }
@@ -120,8 +121,16 @@ void transpose_scalar_f64(quarisma_long rows, quarisma_long columns, double* m)
 
 }  // namespace detail
 
-void matrix_transpose(quarisma_long rows, quarisma_long columns, float* m)
+void matrix_transpose(linalg_long rows, linalg_long columns, float* m)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_transpose: m must not be null");
+    }
+    if (rows == 0 || columns == 0)
+    {
+        LINALG_THROW("matrix_transpose: rows and columns must be positive");
+    }
 #if defined(LINALG_ENABLE_MKL)
     detail::transpose_mkl_f32(rows, columns, m);
 #elif defined(LINALG_ENABLE_BLAS)
@@ -131,8 +140,16 @@ void matrix_transpose(quarisma_long rows, quarisma_long columns, float* m)
 #endif
 }
 
-void matrix_transpose(quarisma_long rows, quarisma_long columns, double* m)
+void matrix_transpose(linalg_long rows, linalg_long columns, double* m)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_transpose: m must not be null");
+    }
+    if (rows == 0 || columns == 0)
+    {
+        LINALG_THROW("matrix_transpose: rows and columns must be positive");
+    }
 #if defined(LINALG_ENABLE_MKL)
     detail::transpose_mkl_f64(rows, columns, m);
 #elif defined(LINALG_ENABLE_BLAS)

@@ -54,15 +54,15 @@ void test_svd(std::size_t rows, std::size_t columns)
     const auto ldm = columns;
     const auto ldv = columns;
     linalg::svd_decomposition(
-        static_cast<quarisma_long>(rows),
-        static_cast<quarisma_long>(columns),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
         M.begin(),
-        static_cast<quarisma_long>(ldm),
+        static_cast<linalg_long>(ldm),
         D.data(),
         U.begin(),
-        static_cast<quarisma_long>(ldu),
+        static_cast<linalg_long>(ldu),
         tV.begin(),
-        static_cast<quarisma_long>(ldv));
+        static_cast<linalg_long>(ldv));
 
     value_t max_error = 0;
     for (std::size_t i = 0; i < rows; i++)

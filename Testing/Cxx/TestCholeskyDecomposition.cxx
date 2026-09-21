@@ -120,7 +120,7 @@ void build_cholesky_matrix(
     }
 
     dense_matrix<value_t> R = A;
-    linalg::cholesky_decomposition(R.begin(), static_cast<quarisma_int>(dim), type);
+    linalg::cholesky_decomposition(R.begin(), static_cast<linalg_int>(dim), type);
     for (std::size_t i = 0; i < dim; ++i)
     {
         for (std::size_t j = i + 1; j < dim; ++j)
@@ -163,7 +163,7 @@ void build_cholesky_matrix(
 
     if (type == linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)
     {
-        std::vector<quarisma_int> pivot(dim);
+        std::vector<linalg_int> pivot(dim);
 
         dense_matrix<value_t> IA(dim, dim);
         dense_matrix<value_t> Id(dim, dim);
@@ -176,7 +176,7 @@ void build_cholesky_matrix(
         linalg::matrix_invert(
             IA.data(),
             pivot.data(),
-            static_cast<quarisma_int>(dim),
+            static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
 
         for (std::size_t i = 0; i < dim; i++)
@@ -195,7 +195,7 @@ void build_cholesky_matrix(
         linalg::matrix_determinant(
             IA.data(),
             pivot.data(),
-            static_cast<quarisma_int>(dim),
+            static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
 
         std::vector<value_t> x(dim);
@@ -207,7 +207,7 @@ void build_cholesky_matrix(
         linalg::linear_solver(
             R.begin(),
             pivot.data(),
-            static_cast<quarisma_int>(dim),
+            static_cast<linalg_int>(dim),
             x.data(),
             linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
 

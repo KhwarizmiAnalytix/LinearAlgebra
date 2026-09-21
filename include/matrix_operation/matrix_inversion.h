@@ -14,26 +14,26 @@ namespace linalg
 // backend override.
 LINALG_API void matrix_invert(
     float*                     m,
-    quarisma_int*                pivot,
-    quarisma_int                 lda,
+    linalg_int*                pivot,
+    linalg_int                 lda,
     linalg::linear_solver_type type = linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
 LINALG_API void matrix_invert(
     double*                    m,
-    quarisma_int*                pivot,
-    quarisma_int                 lda,
+    linalg_int*                pivot,
+    linalg_int                 lda,
     linalg::linear_solver_type type = linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
 LINALG_API float matrix_determinant(
     float*                     m,
-    quarisma_int*                pivot,
-    quarisma_int                 lda,
+    linalg_int*                pivot,
+    linalg_int                 lda,
     linalg::linear_solver_type type = linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
 LINALG_API double matrix_determinant(
     double*                    m,
-    quarisma_int*                pivot,
-    quarisma_int                 lda,
+    linalg_int*                pivot,
+    linalg_int                 lda,
     linalg::linear_solver_type type = linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
 }  // namespace linalg

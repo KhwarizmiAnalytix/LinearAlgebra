@@ -1,5 +1,7 @@
 #include "include/matrix_operation/matrix_multiplication.h"
 
+#include "include/util/exception.h"
+
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
 #elif defined(LINALG_ENABLE_BLAS)
@@ -33,21 +35,19 @@ namespace detail
 // gated by the same #if/#elif/#else that also picks which body the public
 // matrix_multiplication() overloads below call — exactly one is ever built.
 #if defined(LINALG_ENABLE_MKL)
-void matmul_mkl_f32(
-    bool         transpose_a,
-    bool         transpose_b,
-    quarisma_int rows,
-    quarisma_int columns,
-    quarisma_int depth,
-    float const* a,
-    quarisma_int lda,
-    float const* b,
-    quarisma_int ldb,
-    float*       c,
-    quarisma_int ldc)
+void matmul_mkl_f32(bool transpose_a,
+    bool                 transpose_b,
+    linalg_int         rows,
+    linalg_int         columns,
+    linalg_int         depth,
+    float const*         a,
+    linalg_int         lda,
+    float const*         b,
+    linalg_int         ldb,
+    float*               c,
+    linalg_int         ldc)
 {
-    cblas_sgemm(
-        CblasRowMajor,
+    cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
         rows,
@@ -63,21 +63,19 @@ void matmul_mkl_f32(
         ldc);
 }
 
-void matmul_mkl_f64(
-    bool          transpose_a,
-    bool          transpose_b,
-    quarisma_int  rows,
-    quarisma_int  columns,
-    quarisma_int  depth,
-    double const* a,
-    quarisma_int  lda,
-    double const* b,
-    quarisma_int  ldb,
-    double*       c,
-    quarisma_int  ldc)
+void matmul_mkl_f64(bool transpose_a,
+    bool                 transpose_b,
+    linalg_int         rows,
+    linalg_int         columns,
+    linalg_int         depth,
+    double const*        a,
+    linalg_int         lda,
+    double const*        b,
+    linalg_int         ldb,
+    double*              c,
+    linalg_int         ldc)
 {
-    cblas_dgemm(
-        CblasRowMajor,
+    cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
         rows,
@@ -93,21 +91,19 @@ void matmul_mkl_f64(
         ldc);
 }
 #elif defined(LINALG_ENABLE_BLAS)
-void matmul_blas_f32(
-    bool         transpose_a,
-    bool         transpose_b,
-    quarisma_int rows,
-    quarisma_int columns,
-    quarisma_int depth,
-    float const* a,
-    quarisma_int lda,
-    float const* b,
-    quarisma_int ldb,
-    float*       c,
-    quarisma_int ldc)
+void matmul_blas_f32(bool transpose_a,
+    bool                  transpose_b,
+    linalg_int          rows,
+    linalg_int          columns,
+    linalg_int          depth,
+    float const*          a,
+    linalg_int          lda,
+    float const*          b,
+    linalg_int          ldb,
+    float*                c,
+    linalg_int          ldc)
 {
-    cblas_sgemm(
-        CblasRowMajor,
+    cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
         static_cast<int>(rows),
@@ -123,21 +119,19 @@ void matmul_blas_f32(
         static_cast<int>(ldc));
 }
 
-void matmul_blas_f64(
-    bool          transpose_a,
-    bool          transpose_b,
-    quarisma_int  rows,
-    quarisma_int  columns,
-    quarisma_int  depth,
-    double const* a,
-    quarisma_int  lda,
-    double const* b,
-    quarisma_int  ldb,
-    double*       c,
-    quarisma_int  ldc)
+void matmul_blas_f64(bool transpose_a,
+    bool                  transpose_b,
+    linalg_int          rows,
+    linalg_int          columns,
+    linalg_int          depth,
+    double const*         a,
+    linalg_int          lda,
+    double const*         b,
+    linalg_int          ldb,
+    double*               c,
+    linalg_int          ldc)
 {
-    cblas_dgemm(
-        CblasRowMajor,
+    cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
         static_cast<int>(rows),
@@ -161,7 +155,8 @@ void matmul_blas_f64(
 namespace
 {
 template <typename value_t, bool ColMajor = true>
-constexpr const value_t& element(value_t const* data, quarisma_int i, quarisma_int j, quarisma_int ld)
+constexpr const value_t& element(
+    value_t const* data, linalg_int i, linalg_int j, linalg_int ld)
 {
     if constexpr (ColMajor)
     {
@@ -174,7 +169,7 @@ constexpr const value_t& element(value_t const* data, quarisma_int i, quarisma_i
 }
 
 template <typename value_t, bool ColMajor = true>
-constexpr value_t& element(value_t* data, quarisma_int i, quarisma_int j, quarisma_int ld)
+constexpr value_t& element(value_t* data, linalg_int i, linalg_int j, linalg_int ld)
 {
     if constexpr (ColMajor)
     {
@@ -189,28 +184,27 @@ constexpr value_t& element(value_t* data, quarisma_int i, quarisma_int j, quaris
 #ifdef LINALG_VECTORIZED
 std::ptrdiff_t l1 = 0, l2 = 0, l3 = 0, l3_count = 0;
 
-template <typename value_t, bool vectorizable = true>
-struct gemm_traits
+template <typename value_t, bool vectorizable = true> struct gemm_traits
 {
-    static constexpr quarisma_int size = simd<value_t>::size;
+    static constexpr linalg_int size = simd<value_t>::size;
     // vectorizable ? simd<value_t>::size : 1;
 
-    static constexpr quarisma_int number_of_registers = (2 * sizeof(void*));
+    static constexpr linalg_int number_of_registers = (2 * sizeof(void*));
 
     // register block size along the N direction must be 1 or 4
-    static constexpr quarisma_int nr = 4;
+    static constexpr linalg_int nr = 4;
 
     // register block size along the M direction (currently, this one cannot be modified)
-    static constexpr quarisma_int mr = 3 * size;
+    static constexpr linalg_int mr = 3 * size;
     // vectorizable ? 3 * size : (plain_min<16, number_of_registers>() / 2 / nr) * size;
 
-    static constexpr quarisma_int LhsProgress = size;
-    static constexpr quarisma_int RhsProgress = 1;
+    static constexpr linalg_int LhsProgress = size;
+    static constexpr linalg_int RhsProgress = 1;
 };
 
-template <typename value_t, quarisma_int KcFactor = 1>
-quarisma_int blocking_sizes(
-    quarisma_int& k, quarisma_int& m, quarisma_int& n, LINALG_UNUSED quarisma_int num_threads = 1)
+template <typename value_t, linalg_int KcFactor = 1>
+linalg_int blocking_sizes(
+    linalg_int& k, linalg_int& m, linalg_int& n, LINALG_UNUSED linalg_int num_threads = 1)
 {
     using Traits = gemm_traits<value_t>;
 
@@ -231,9 +225,9 @@ quarisma_int blocking_sizes(
         // small problems. Perhaps it would make more sense to consider k*n*m?? Note that for very
         // tiny problem, this function should be bypassed anyway because we use the
         // coefficient-based implementation for them.
-        if (std::max<quarisma_int>({k, m, n}) < 48)
+        if (std::max<linalg_int>({k, m, n}) < 48)
         {
-            return static_cast<quarisma_int>(l1);
+            return static_cast<linalg_int>(l1);
         }
 
         enum
@@ -250,9 +244,9 @@ quarisma_int blocking_sizes(
         // L1 cache. We also include a register-level block of the result (mx x nr). (In an ideal
         // world only the lhs panel would stay in L1) Moreover, kc has to be a multiple of 8 to be
         // compatible with loop peeling, leading to a maximum blocking size of:
-        const quarisma_int max_kc =
-            std::max<quarisma_int>(((l1 - k_sub) / k_div) & (~(k_peeling - 1)), 1);
-        const quarisma_int old_k = k;
+        const linalg_int max_kc =
+            std::max<linalg_int>(((l1 - k_sub) / k_div) & (~(k_peeling - 1)), 1);
+        const linalg_int old_k = k;
         if (k > max_kc)
         {
             // We are really blocking on the third dimension:
@@ -260,15 +254,15 @@ quarisma_int blocking_sizes(
             //    while keeping the same number of sweeps over the result.
             k = (k % max_kc) == 0 ? max_kc
                                   : max_kc - k_peeling * ((max_kc - 1 - (k % max_kc)) /
-                                                          (k_peeling * (k / max_kc + 1)));
+                                                             (k_peeling * (k / max_kc + 1)));
 
             // eigen_internal_assert(((old_k / k) == (old_k / max_kc)) && "the number of sweeps has
             // to remain the same");
         }
 
         // ---- 2nd level of blocking on max(L2,L3), yields nc ----
-        const quarisma_int actual_l2 =
-            std::max<quarisma_int>(l2, l3 / l3_count);  // NOLINT // == 1.5 MB
+        const linalg_int actual_l2 =
+            std::max<linalg_int>(l2, l3 / l3_count);  // NOLINT // == 1.5 MB
 
         // Here, nc is chosen such that a block of kc x nc of the rhs fit within half of L2.
         // The second half is implicitly reserved to access the result and lhs coefficients.
@@ -277,10 +271,10 @@ quarisma_int blocking_sizes(
         // However, if the entire lhs block fit within L1, then we are not going to block on the
         // rows at all, and it becomes fruitful to keep the packed rhs blocks in L1 if there is
         // enough remaining space.
-        quarisma_int       max_nc;
-        const quarisma_int lhs_bytes    = m * k * sizeof(value_t);  // NOLINT
-        const quarisma_int remaining_l1 = l1 - k_sub - lhs_bytes;
-        if (remaining_l1 >= (quarisma_int)(Traits::nr * sizeof(value_t)) * k)
+        linalg_int       max_nc;
+        const linalg_int lhs_bytes    = m * k * sizeof(value_t);  // NOLINT
+        const linalg_int remaining_l1 = l1 - k_sub - lhs_bytes;
+        if (remaining_l1 >= (linalg_int)(Traits::nr * sizeof(value_t)) * k)
         {
             // L1 blocking
             max_nc = remaining_l1 / (k * sizeof(value_t));
@@ -291,7 +285,7 @@ quarisma_int blocking_sizes(
             max_nc = (3 * actual_l2) / (2 * 2 * max_kc * sizeof(value_t));  // NOLINT
         }
         // WARNING Below, we assume that Traits::nr is a power of two.
-        const auto nc = std::max<quarisma_int>(
+        const auto nc = std::max<linalg_int>(
                             actual_l2 / (static_cast<long long>(2) * k * sizeof(value_t)), max_nc) &
                         (~(Traits::nr - 1));  // NOLINT
         if (n > nc)
@@ -312,9 +306,9 @@ quarisma_int blocking_sizes(
             // kept in cache L1/L2
             // TODO: part of this blocking strategy is now implemented within the kernel itself, so
             // the L1-based heuristic here should be obsolete.
-            quarisma_int problem_size = k * n * sizeof(value_t);  // NOLINT
-            quarisma_int actual_lm    = actual_l2;
-            quarisma_int max_mc       = m;
+            linalg_int problem_size = k * n * sizeof(value_t);  // NOLINT
+            linalg_int actual_lm    = actual_l2;
+            linalg_int max_mc       = m;
             if (problem_size <= 1024)
             {
                 // problem is small enough to keep in L1
@@ -326,11 +320,11 @@ quarisma_int blocking_sizes(
                 // we have both L2 and L3, and problem is small enough to be kept in L2
                 // Let's choose m such that lhs's block fit in 1/3 of L2
                 actual_lm = l2;  // NOLINT
-                max_mc    = std::min<quarisma_int>(576, max_mc);
+                max_mc    = std::min<linalg_int>(576, max_mc);
             }
-            quarisma_int mc =
-                std::min<quarisma_int>(actual_lm / (3 * k * sizeof(value_t)), max_mc);  // NOLINT
-            if (mc > static_cast<quarisma_int>(Traits::mr))
+            linalg_int mc =
+                std::min<linalg_int>(actual_lm / (3 * k * sizeof(value_t)), max_mc);  // NOLINT
+            if (mc > static_cast<linalg_int>(Traits::mr))
             {
                 mc -= mc % Traits::mr;
             }
@@ -345,44 +339,43 @@ quarisma_int blocking_sizes(
         }
     }  // namespace details
 
-    return static_cast<quarisma_int>(l1);
+    return static_cast<linalg_int>(l1);
 }
 
-template <
-    typename value_t,
-    quarisma_int Pack1,
-    quarisma_int Pack2,
-    bool       ColMajor,
-    bool       PanelMode = false>
-void pack_lhs(  //NOLINT
+template <typename value_t,
+    linalg_int Pack1,
+    linalg_int Pack2,
+    bool         ColMajor,
+    bool         PanelMode = false>
+void pack_lhs(  // NOLINT
     value_t*       block_A,
     const value_t* data,
-    quarisma_int     lda,
-    quarisma_int     depth,
-    quarisma_int     rows,
-    quarisma_int     stride = 0,
-    quarisma_int     offset = 0)
+    linalg_int   lda,
+    linalg_int   depth,
+    linalg_int   rows,
+    linalg_int   stride = 0,
+    linalg_int   offset = 0)
 {
-    using simd_t                           = typename simd<value_t>::simd_t;
-    static constexpr quarisma_int PacketSize = simd<value_t>::size;
+    using simd_t                             = typename simd<value_t>::simd_t;
+    static constexpr linalg_int PacketSize = simd<value_t>::size;
 
-    quarisma_int count = 0;
+    linalg_int count = 0;
 
     if constexpr (ColMajor)
     {
-        const quarisma_int peeled_mc3 =
+        const linalg_int peeled_mc3 =
             Pack1 >= 3 * PacketSize ? (rows / (3 * PacketSize)) * (3 * PacketSize) : 0;
-        const quarisma_int peeled_mc2 =
+        const linalg_int peeled_mc2 =
             Pack1 >= 2 * PacketSize
                 ? peeled_mc3 + ((rows - peeled_mc3) / (2 * PacketSize)) * (2 * PacketSize)
                 : 0;
-        const quarisma_int peeled_mc1 =
+        const linalg_int peeled_mc1 =
             Pack1 >= 1 * PacketSize ? (rows / (1 * PacketSize)) * (1 * PacketSize) : 0;
-        const quarisma_int peeled_mc0 = Pack2 >= 1 * PacketSize ? peeled_mc1
-                                      : Pack2 > 1             ? (rows / Pack2) * Pack2
-                                                              : 0;
+        const linalg_int peeled_mc0 = Pack2 >= 1 * PacketSize ? peeled_mc1
+                                        : Pack2 > 1             ? (rows / Pack2) * Pack2
+                                                                : 0;
 
-        quarisma_int i = 0;
+        linalg_int i = 0;
 
         // Pack 3 packets
         if constexpr (Pack1 >= 3 * PacketSize)
@@ -394,7 +387,7 @@ void pack_lhs(  //NOLINT
                     count += (3 * PacketSize) * offset;
                 }
 
-                for (quarisma_int k = 0; k < depth; k++)
+                for (linalg_int k = 0; k < depth; k++)
                 {
                     simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 0 * PacketSize, k, lda),
@@ -427,7 +420,7 @@ void pack_lhs(  //NOLINT
                     count += (2 * PacketSize) * offset;
                 }
 
-                for (quarisma_int k = 0; k < depth; k++)
+                for (linalg_int k = 0; k < depth; k++)
                 {
                     simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 0 * PacketSize, k, lda),
@@ -455,7 +448,7 @@ void pack_lhs(  //NOLINT
                     count += (1 * PacketSize) * offset;
                 }
 
-                for (quarisma_int k = 0; k < depth; k++)
+                for (linalg_int k = 0; k < depth; k++)
                 {
                     simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i, k, lda), block_A + count);
@@ -477,9 +470,9 @@ void pack_lhs(  //NOLINT
                     count += Pack2 * offset;
                 }
 
-                for (quarisma_int k = 0; k < depth; k++)
+                for (linalg_int k = 0; k < depth; k++)
                 {
-                    for (quarisma_int w = 0; w < Pack2; w++)
+                    for (linalg_int w = 0; w < Pack2; w++)
                     {
                         block_A[count++] = element<value_t, ColMajor>(data, i + w, k, lda);
                     }
@@ -498,7 +491,7 @@ void pack_lhs(  //NOLINT
             {
                 count += offset;
             }
-            for (quarisma_int k = 0; k < depth; k++)
+            for (linalg_int k = 0; k < depth; k++)
             {
                 block_A[count++] = element<value_t, ColMajor>(data, i, k, lda);
             }
@@ -510,8 +503,8 @@ void pack_lhs(  //NOLINT
     }
     else
     {
-        quarisma_int pack = Pack1;
-        quarisma_int i    = 0;
+        linalg_int pack = Pack1;
+        linalg_int i    = 0;
         while (pack > 0)
         {
             const auto remaining_rows = rows - i;
@@ -523,16 +516,16 @@ void pack_lhs(  //NOLINT
                     count += pack * offset;
                 }
 
-                const quarisma_int peeled_k = (depth / PacketSize) * PacketSize;
-                quarisma_int       k        = 0;
+                const linalg_int peeled_k = (depth / PacketSize) * PacketSize;
+                linalg_int       k        = 0;
                 if (pack >= PacketSize)
                 {
                     for (; k < peeled_k; k += PacketSize)
                     {
-                        for (quarisma_int m = 0; m < pack; m += PacketSize)
+                        for (linalg_int m = 0; m < pack; m += PacketSize)
                         {
                             simd_t tmp[PacketSize];  // NOLINT
-                            for (quarisma_int p = 0; p < PacketSize; ++p)
+                            for (linalg_int p = 0; p < PacketSize; ++p)
                             {
                                 simd<value_t>::loadu(
                                     &element<value_t, ColMajor>(data, i + p + m, k, lda), tmp[p]);
@@ -540,7 +533,7 @@ void pack_lhs(  //NOLINT
 
                             simd<value_t>::template ptranspose<PacketSize>(tmp);
 
-                            for (quarisma_int p = 0; p < PacketSize; ++p)
+                            for (linalg_int p = 0; p < PacketSize; ++p)
                             {
                                 simd<value_t>::store(tmp[p], block_A + count + m + (pack)*p);
                             }
@@ -550,7 +543,7 @@ void pack_lhs(  //NOLINT
                 }
                 for (; k < depth; k++)
                 {
-                    quarisma_int w = 0;
+                    linalg_int w = 0;
                     for (; w < pack - 3; w += 4)
                     {
                         block_A[count++] = element<value_t, ColMajor>(data, i + w, k, lda);
@@ -586,7 +579,7 @@ void pack_lhs(  //NOLINT
             {
                 count += offset;
             }
-            for (quarisma_int k = 0; k < depth; k++)
+            for (linalg_int k = 0; k < depth; k++)
             {
                 block_A[count++] = element<value_t, ColMajor>(data, i, k, lda);
             }
@@ -598,27 +591,27 @@ void pack_lhs(  //NOLINT
     }
 }
 
-template <typename value_t, quarisma_int nr, quarisma_int PacketSize, bool ColMajor, bool PanelMode>
-void pack_rhs(  //NOLINT
+template <typename value_t, linalg_int nr, linalg_int PacketSize, bool ColMajor, bool PanelMode>
+void pack_rhs(  // NOLINT
     value_t*       blockB,
     const value_t* data,
-    quarisma_int     ldb,
-    quarisma_int     depth,
-    quarisma_int     cols,
-    quarisma_int     stride = 0,
-    quarisma_int     offset = 0)
+    linalg_int   ldb,
+    linalg_int   depth,
+    linalg_int   cols,
+    linalg_int   stride = 0,
+    linalg_int   offset = 0)
 {
     using simd_t = typename simd<value_t>::simd_t;
 
-    const quarisma_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
-    const quarisma_int peeled_k     = (depth / PacketSize) * PacketSize;
+    const linalg_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
+    const linalg_int peeled_k     = (depth / PacketSize) * PacketSize;
 
-    quarisma_int count = 0;
+    linalg_int count = 0;
     if constexpr (ColMajor)
     {
         if constexpr (nr >= 4)
         {
-            for (quarisma_int j2 = 0; j2 < packet_cols4; j2 += 4)
+            for (linalg_int j2 = 0; j2 < packet_cols4; j2 += 4)
             {
                 // skip what we have before
                 if (PanelMode)
@@ -630,7 +623,7 @@ void pack_rhs(  //NOLINT
                 const auto* const dm1 = &element<value_t, ColMajor>(data, 0, j2 + 1, ldb);
                 const auto* const dm2 = &element<value_t, ColMajor>(data, 0, j2 + 2, ldb);
                 const auto* const dm3 = &element<value_t, ColMajor>(data, 0, j2 + 3, ldb);
-                quarisma_int        k   = 0;
+                linalg_int      k   = 0;
                 if constexpr ((PacketSize % 4) == 0)
                 {
                     for (; k < peeled_k; k += PacketSize)
@@ -642,7 +635,8 @@ void pack_rhs(  //NOLINT
                         simd<value_t>::loadu(dm2 + k, tmp[2]);
                         simd<value_t>::loadu(dm3 + k, tmp[3]);
 
-                        constexpr quarisma_int Np = (PacketSize % 4) == 0 ? 4 : PacketSize;  // NOLINT
+                        constexpr linalg_int Np =
+                            (PacketSize % 4) == 0 ? 4 : PacketSize;  // NOLINT
 
                         simd<value_t>::template ptranspose<Np>(tmp);
                         simd<value_t>::storeu(tmp[0], blockB + count);
@@ -669,14 +663,14 @@ void pack_rhs(  //NOLINT
         }
 
         // copy the remaining columns one at a time (nr==1)
-        for (quarisma_int j2 = packet_cols4; j2 < cols; ++j2)
+        for (linalg_int j2 = packet_cols4; j2 < cols; ++j2)
         {
             if (PanelMode)
             {
                 count += offset;
             }
             const auto* const dm0 = &element<value_t, ColMajor>(data, 0, j2, ldb);
-            for (quarisma_int k = 0; k < depth; k++)
+            for (linalg_int k = 0; k < depth; k++)
             {
                 blockB[count] = dm0[k];
                 count += 1;
@@ -691,14 +685,14 @@ void pack_rhs(  //NOLINT
     {
         if constexpr (nr >= 4)
         {
-            for (quarisma_int j2 = 0; j2 < packet_cols4; j2 += 4)
+            for (linalg_int j2 = 0; j2 < packet_cols4; j2 += 4)
             {
                 // skip what we have before
                 if (PanelMode)
                 {
                     count += 4 * offset;
                 }
-                for (quarisma_int k = 0; k < depth; k++)
+                for (linalg_int k = 0; k < depth; k++)
                 {
                     if constexpr (PacketSize == 4)
                     {
@@ -726,13 +720,13 @@ void pack_rhs(  //NOLINT
             }
         }
         // copy the remaining columns one at a time (nr==1)
-        for (quarisma_int j2 = packet_cols4; j2 < cols; ++j2)
+        for (linalg_int j2 = packet_cols4; j2 < cols; ++j2)
         {
             if (PanelMode)
             {
                 count += offset;
             }
-            for (quarisma_int k = 0; k < depth; k++)
+            for (linalg_int k = 0; k < depth; k++)
             {
                 blockB[count] = element<value_t, ColMajor>(data, k, j2, ldb);
                 count += 1;
@@ -745,20 +739,20 @@ void pack_rhs(  //NOLINT
     }
 }
 
-template <typename value_t, quarisma_int mr, quarisma_int nr>
+template <typename value_t, linalg_int mr, linalg_int nr>
 void gemm(  // NOLINT
-    value_t*         res,
-    const value_t*   blockA,
-    const value_t*   blockB,
-    quarisma_int       ldc,
-    quarisma_int       rows,
-    quarisma_int       depth,
-    quarisma_int       cols,
-    const quarisma_int l1_cache,
-    quarisma_int       strideA = -1,
-    quarisma_int       strideB = -1,
-    quarisma_int       offsetA = 0,
-    quarisma_int       offsetB = 0)  // NOLINT
+    value_t*           res,
+    const value_t*     blockA,
+    const value_t*     blockB,
+    linalg_int       ldc,
+    linalg_int       rows,
+    linalg_int       depth,
+    linalg_int       cols,
+    const linalg_int l1_cache,
+    linalg_int       strideA = -1,
+    linalg_int       strideB = -1,
+    linalg_int       offsetA = 0,
+    linalg_int       offsetB = 0)  // NOLINT
 {
     using Traits = gemm_traits<value_t>;
     using simd_t = typename simd<value_t>::simd_t;
@@ -771,41 +765,40 @@ void gemm(  // NOLINT
         strideB = depth;
     }
 
-    static constexpr quarisma_int prefetch_res_offset = 32 / sizeof(value_t);
-    static constexpr quarisma_int lhs_3offset         = 3 * Traits::LhsProgress;
-    static constexpr quarisma_int lhs_2offset         = 2 * Traits::LhsProgress;
+    static constexpr linalg_int prefetch_res_offset = 32 / sizeof(value_t);
+    static constexpr linalg_int lhs_3offset         = 3 * Traits::LhsProgress;
+    static constexpr linalg_int lhs_2offset         = 2 * Traits::LhsProgress;
 
-    const quarisma_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
-    const quarisma_int peeled_mc3   = mr >= lhs_3offset ? (rows / (lhs_3offset)) * (lhs_3offset) : 0;
-    const quarisma_int peeled_mc2 =
+    const linalg_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
+    const linalg_int peeled_mc3 = mr >= lhs_3offset ? (rows / (lhs_3offset)) * (lhs_3offset) : 0;
+    const linalg_int peeled_mc2 =
         mr >= lhs_2offset ? peeled_mc3 + ((rows - peeled_mc3) / (lhs_2offset)) * (lhs_2offset) : 0;
-    const quarisma_int peeled_mc1 =
+    const linalg_int peeled_mc1 =
         mr >= 1 * Traits::LhsProgress ? (rows / Traits::LhsProgress) * (Traits::LhsProgress) : 0;
     enum
     {
         pk = 8
     };  // NOTE Such a large peeling factor is important for large matrices (~ +5% when >1000 on
     // Haswell)
-    const quarisma_int peeled_kc = depth & ~(pk - 1);
+    const linalg_int peeled_kc = depth & ~(pk - 1);
 
     //---------- Process 3 * LhsProgress rows at once ----------
     // This corresponds to 3*LhsProgress x nr register blocks.
     // Usually, make sense only with FMA
     if constexpr (mr >= lhs_3offset)
     {
-        const quarisma_int actual_panel_rows = (lhs_3offset)*std::max<quarisma_int>(
-            1,
+        const linalg_int actual_panel_rows = (lhs_3offset)*std::max<linalg_int>(1,
             ((l1_cache - sizeof(value_t) * mr * nr -
-              static_cast<long long>(depth) * nr * sizeof(value_t)) /
-             (depth * sizeof(value_t) * lhs_3offset)));
+                 static_cast<long long>(depth) * nr * sizeof(value_t)) /
+                (depth * sizeof(value_t) * lhs_3offset)));
 
-        for (quarisma_int i1 = 0; i1 < peeled_mc3; i1 += actual_panel_rows)
+        for (linalg_int i1 = 0; i1 < peeled_mc3; i1 += actual_panel_rows)
         {
-            const quarisma_int actual_panel_end =
-                std::min<quarisma_int>(i1 + actual_panel_rows, peeled_mc3);
-            for (quarisma_int j2 = 0; j2 < packet_cols4; j2 += nr)
+            const linalg_int actual_panel_end =
+                std::min<linalg_int>(i1 + actual_panel_rows, peeled_mc3);
+            for (linalg_int j2 = 0; j2 < packet_cols4; j2 += nr)
             {
-                for (quarisma_int i = i1; i < actual_panel_end; i += lhs_3offset)
+                for (linalg_int i = i1; i < actual_panel_end; i += lhs_3offset)
                 {
                     // We selected a 3*Traits::LhsProgress x nr micro block of res which is entirely
                     // stored into 3 x nr registers.
@@ -844,34 +837,34 @@ void gemm(  // NOLINT
                     simd_t A0;
                     simd_t A1;
 
-                    for (quarisma_int k = 0; k < peeled_kc; k += pk)
+                    for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
                         simd_t B_0;
                         simd_t A2;
 
-#define EIGEN_GEBP_ONESTEP(K)                                                  \
-    do                                                                         \
-    {                                                                          \
-        simd<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);   \
-        simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);    \
-        simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);    \
-        simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);    \
-        simd<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress), B_0); \
-        simd<value_t>::fma(A0, B_0, C0, C0);                                   \
-        simd<value_t>::fma(A1, B_0, C4, C4);                                   \
-        simd<value_t>::fma(A2, B_0, C8, C8);                                   \
-        simd<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress), B_0); \
-        simd<value_t>::fma(A0, B_0, C1, C1);                                   \
-        simd<value_t>::fma(A1, B_0, C5, C5);                                   \
-        simd<value_t>::fma(A2, B_0, C9, C9);                                   \
-        simd<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress), B_0); \
-        simd<value_t>::fma(A0, B_0, C2, C2);                                   \
-        simd<value_t>::fma(A1, B_0, C6, C6);                                   \
-        simd<value_t>::fma(A2, B_0, C10, C10);                                 \
-        simd<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress), B_0); \
-        simd<value_t>::fma(A0, B_0, C3, C3);                                   \
-        simd<value_t>::fma(A1, B_0, C7, C7);                                   \
-        simd<value_t>::fma(A2, B_0, C11, C11);                                 \
+#define EIGEN_GEBP_ONESTEP(K)                                                                      \
+    do                                                                                             \
+    {                                                                                              \
+        simd<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                       \
+        simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                        \
+        simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                        \
+        simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                        \
+        simd<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
+        simd<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        simd<value_t>::fma(A1, B_0, C4, C4);                                                       \
+        simd<value_t>::fma(A2, B_0, C8, C8);                                                       \
+        simd<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
+        simd<value_t>::fma(A0, B_0, C1, C1);                                                       \
+        simd<value_t>::fma(A1, B_0, C5, C5);                                                       \
+        simd<value_t>::fma(A2, B_0, C9, C9);                                                       \
+        simd<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
+        simd<value_t>::fma(A0, B_0, C2, C2);                                                       \
+        simd<value_t>::fma(A1, B_0, C6, C6);                                                       \
+        simd<value_t>::fma(A2, B_0, C10, C10);                                                     \
+        simd<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
+        simd<value_t>::fma(A0, B_0, C3, C3);                                                       \
+        simd<value_t>::fma(A1, B_0, C7, C7);                                                       \
+        simd<value_t>::fma(A2, B_0, C11, C11);                                                     \
     } while (false)
 
                         simd<value_t>::prefetch(blB);
@@ -888,7 +881,7 @@ void gemm(  // NOLINT
                         blA += pk * lhs_3offset;
                     }
                     // process remaining peeled loop
-                    for (quarisma_int k = peeled_kc; k < depth; k++)
+                    for (linalg_int k = peeled_kc; k < depth; k++)
                     {
                         simd_t B_0;
                         simd_t A2;
@@ -950,9 +943,9 @@ void gemm(  // NOLINT
             }
 
             // Deal with remaining columns of the rhs
-            for (quarisma_int j2 = packet_cols4; j2 < cols; j2++)
+            for (linalg_int j2 = packet_cols4; j2 < cols; j2++)
             {
-                for (quarisma_int i = i1; i < actual_panel_end; i += lhs_3offset)
+                for (linalg_int i = i1; i < actual_panel_end; i += lhs_3offset)
                 {
                     // One column at a time
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_3offset)];
@@ -971,19 +964,19 @@ void gemm(  // NOLINT
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
                     simd_t         A0, A1, A2;  // NOLINT
 
-                    for (quarisma_int k = 0; k < peeled_kc; k += pk)
+                    for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
                         simd_t B_0;
-#define LINALG_GEMM_ONESTEP(K)                                              \
-    do                                                                      \
-    {                                                                       \
-        simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0); \
-        simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1); \
-        simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2); \
-        simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);      \
-        simd<value_t>::fma(A0, B_0, C0, C0);                                \
-        simd<value_t>::fma(A1, B_0, C4, C4);                                \
-        simd<value_t>::fma(A2, B_0, C8, C8);                                \
+#define LINALG_GEMM_ONESTEP(K)                                                                     \
+    do                                                                                             \
+    {                                                                                              \
+        simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                        \
+        simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                        \
+        simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                        \
+        simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                             \
+        simd<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        simd<value_t>::fma(A1, B_0, C4, C4);                                                       \
+        simd<value_t>::fma(A2, B_0, C8, C8);                                                       \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -1000,7 +993,7 @@ void gemm(  // NOLINT
                     }
 
                     // process remaining peeled loop
-                    for (quarisma_int k = peeled_kc; k < depth; k++)
+                    for (linalg_int k = peeled_kc; k < depth; k++)
                     {
                         simd_t B_0;
                         LINALG_GEMM_ONESTEP(0);
@@ -1028,18 +1021,18 @@ void gemm(  // NOLINT
     //---------- Process 2 * LhsProgress rows at once ----------
     if constexpr (mr >= lhs_2offset)
     {
-        const auto actual_panel_rows = (lhs_2offset)*std::max<quarisma_int>(
-            1,
+        const auto actual_panel_rows = (lhs_2offset)*std::max<linalg_int>(1,
             ((l1_cache - sizeof(value_t) * mr * nr -
-              static_cast<long long>(depth) * nr * sizeof(value_t)) /
-             (depth * sizeof(value_t) * lhs_2offset)));
+                 static_cast<long long>(depth) * nr * sizeof(value_t)) /
+                (depth * sizeof(value_t) * lhs_2offset)));
 
-        for (quarisma_int i1 = peeled_mc3; i1 < peeled_mc2; i1 += actual_panel_rows)
+        for (linalg_int i1 = peeled_mc3; i1 < peeled_mc2; i1 += actual_panel_rows)
         {
-            const auto actual_panel_end = std::min<quarisma_int>(i1 + actual_panel_rows, peeled_mc2);
-            for (quarisma_int j2 = 0; j2 < packet_cols4; j2 += nr)
+            const auto actual_panel_end =
+                std::min<linalg_int>(i1 + actual_panel_rows, peeled_mc2);
+            for (linalg_int j2 = 0; j2 < packet_cols4; j2 += nr)
             {
-                for (quarisma_int i = i1; i < actual_panel_end; i += lhs_2offset)
+                for (linalg_int i = i1; i < actual_panel_end; i += lhs_2offset)
                 {
                     // We selected a 2*Traits::LhsProgress x nr micro block of res which is entirely
                     // stored into 2 x nr registers.
@@ -1074,28 +1067,28 @@ void gemm(  // NOLINT
                     simd_t A0;
                     simd_t A1;
 
-                    for (quarisma_int k = 0; k < peeled_kc; k += pk)
+                    for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
                         simd_t B_0;
                         simd_t B1;
                         simd_t B2;
                         simd_t B3;
 
-#define LINALG_GEMM_ONESTEP(K)                                              \
-    do                                                                      \
-    {                                                                       \
-        simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0); \
-        simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1); \
-        const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];       \
-        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                   \
-        simd<value_t>::fma(A0, B_0, C0, C0);                                \
-        simd<value_t>::fma(A1, B_0, C4, C4);                                \
-        simd<value_t>::fma(A0, B1, C1, C1);                                 \
-        simd<value_t>::fma(A1, B1, C5, C5);                                 \
-        simd<value_t>::fma(A0, B2, C2, C2);                                 \
-        simd<value_t>::fma(A1, B2, C6, C6);                                 \
-        simd<value_t>::fma(A0, B3, C3, C3);                                 \
-        simd<value_t>::fma(A1, B3, C7, C7);                                 \
+#define LINALG_GEMM_ONESTEP(K)                                                                     \
+    do                                                                                             \
+    {                                                                                              \
+        simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                        \
+        simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                        \
+        const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
+        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
+        simd<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        simd<value_t>::fma(A1, B_0, C4, C4);                                                       \
+        simd<value_t>::fma(A0, B1, C1, C1);                                                        \
+        simd<value_t>::fma(A1, B1, C5, C5);                                                        \
+        simd<value_t>::fma(A0, B2, C2, C2);                                                        \
+        simd<value_t>::fma(A1, B2, C6, C6);                                                        \
+        simd<value_t>::fma(A0, B3, C3, C3);                                                        \
+        simd<value_t>::fma(A1, B3, C7, C7);                                                        \
     } while (false)
 
                         simd<value_t>::prefetch(blB + (48 + 0));
@@ -1113,7 +1106,7 @@ void gemm(  // NOLINT
                         blA += pk * (lhs_2offset);
                     }
                     // process remaining peeled loop
-                    for (quarisma_int k = peeled_kc; k < depth; k++)
+                    for (linalg_int k = peeled_kc; k < depth; k++)
                     {
                         simd_t B_0;
                         simd_t B1;
@@ -1161,9 +1154,9 @@ void gemm(  // NOLINT
             }
 
             // Deal with remaining columns of the rhs
-            for (quarisma_int j2 = packet_cols4; j2 < cols; j2++)
+            for (linalg_int j2 = packet_cols4; j2 < cols; j2++)
             {
-                for (quarisma_int i = i1; i < actual_panel_end; i += lhs_2offset)
+                for (linalg_int i = i1; i < actual_panel_end; i += lhs_2offset)
                 {
                     // One column at a time
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_2offset)];
@@ -1183,19 +1176,19 @@ void gemm(  // NOLINT
                     simd_t         A0;
                     simd_t         A1;
 
-                    for (quarisma_int k = 0; k < peeled_kc; k += pk)
+                    for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
                         LINALG_ASM_COMMENT("begin gebp micro kernel 2pX1");
                         simd_t B_0;
 
-#define LINALG_GEMM_ONESTEP(K)                                              \
-    do                                                                      \
-    {                                                                       \
-        simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0); \
-        simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1); \
-        simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);      \
-        simd<value_t>::fma(A0, B_0, C0, C0);                                \
-        simd<value_t>::fma(A1, B_0, C4, C4);                                \
+#define LINALG_GEMM_ONESTEP(K)                                                                     \
+    do                                                                                             \
+    {                                                                                              \
+        simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                        \
+        simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                        \
+        simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                             \
+        simd<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        simd<value_t>::fma(A1, B_0, C4, C4);                                                       \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -1212,7 +1205,7 @@ void gemm(  // NOLINT
                     }
 
                     // process remaining peeled loop
-                    for (quarisma_int k = peeled_kc; k < depth; k++)
+                    for (linalg_int k = peeled_kc; k < depth; k++)
                     {
                         simd_t B_0;
                         LINALG_GEMM_ONESTEP(0);
@@ -1237,10 +1230,10 @@ void gemm(  // NOLINT
     if constexpr (mr >= 1 * Traits::LhsProgress)
     {
         // loops on each largest micro horizontal panel of lhs (1*LhsProgress x depth)
-        for (quarisma_int i = peeled_mc2; i < peeled_mc1; i += Traits::LhsProgress)
+        for (linalg_int i = peeled_mc2; i < peeled_mc1; i += Traits::LhsProgress)
         {
             // loops on each largest micro vertical panel of rhs (depth * nr)
-            for (quarisma_int j2 = 0; j2 < packet_cols4; j2 += nr)
+            for (linalg_int j2 = 0; j2 < packet_cols4; j2 += nr)
             {
                 // We select a 1*Traits::LhsProgress x nr micro block of res which is entirely
                 // stored into 1 x nr registers.
@@ -1273,7 +1266,7 @@ void gemm(  // NOLINT
                 simd<value_t>::prefetch(&blB[0]);
                 simd_t A0;
 
-                for (quarisma_int k = 0; k < peeled_kc; k += pk)
+                for (linalg_int k = 0; k < peeled_kc; k += pk)
                 {
                     LINALG_ASM_COMMENT("begin gebp micro kernel 1pX4");
                     simd_t B_0;
@@ -1281,19 +1274,19 @@ void gemm(  // NOLINT
                     simd_t B2;
                     simd_t B3;
 
-#define LINALG_GEMM_ONESTEP(K)                                               \
-    do                                                                       \
-    {                                                                        \
-        LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX4");          \
-        LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!"); \
-        simd<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress], A0);  \
-        const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];        \
-        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                    \
-        simd<value_t>::fma(A0, B_0, C0, C0);                                 \
-        simd<value_t>::fma(A0, B1, C1, C1);                                  \
-        simd<value_t>::fma(A0, B2, C2, C2);                                  \
-        simd<value_t>::fma(A0, B3, C3, C3);                                  \
-        LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX4");            \
+#define LINALG_GEMM_ONESTEP(K)                                                                     \
+    do                                                                                             \
+    {                                                                                              \
+        LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX4");                                \
+        LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!");                       \
+        simd<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress], A0);                        \
+        const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
+        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
+        simd<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        simd<value_t>::fma(A0, B1, C1, C1);                                                        \
+        simd<value_t>::fma(A0, B2, C2, C2);                                                        \
+        simd<value_t>::fma(A0, B3, C3, C3);                                                        \
+        LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX4");                                  \
     } while (false)
 
                     simd<value_t>::prefetch(blB + (48 + 0));
@@ -1314,7 +1307,7 @@ void gemm(  // NOLINT
                     LINALG_ASM_COMMENT("end gebp micro kernel 1pX4");
                 }
                 // process remaining peeled loop
-                for (quarisma_int k = peeled_kc; k < depth; k++)
+                for (linalg_int k = peeled_kc; k < depth; k++)
                 {
                     simd_t B_0;
                     simd_t B1;
@@ -1345,7 +1338,7 @@ void gemm(  // NOLINT
             }
 
             // Deal with remaining columns of the rhs
-            for (quarisma_int j2 = packet_cols4; j2 < cols; j2++)
+            for (linalg_int j2 = packet_cols4; j2 < cols; j2++)
             {
                 // One column at a time
                 const value_t* blA = &blockA[i * strideA + offsetA * (1 * Traits::LhsProgress)];
@@ -1360,20 +1353,20 @@ void gemm(  // NOLINT
                 const value_t* blB = &blockB[j2 * strideB + offsetB];
                 simd_t         A0;
 
-                for (quarisma_int k = 0; k < peeled_kc; k += pk)
+                for (linalg_int k = 0; k < peeled_kc; k += pk)
                 {
                     LINALG_ASM_COMMENT("begin gebp micro kernel 1pX1");
                     simd_t B_0;
 
-#define LINALG_GEMM_ONESTEP(K)                                               \
-    do                                                                       \
-    {                                                                        \
-        LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX1");          \
-        LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!"); \
-        simd<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress], A0);      \
-        simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);       \
-        simd<value_t>::fma(A0, B_0, C0, C0);                                 \
-        LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX1");            \
+#define LINALG_GEMM_ONESTEP(K)                                                                     \
+    do                                                                                             \
+    {                                                                                              \
+        LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX1");                                \
+        LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!");                       \
+        simd<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress], A0);                            \
+        simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                             \
+        simd<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX1");                                  \
     } while (false);
 
                     LINALG_GEMM_ONESTEP(0);
@@ -1392,7 +1385,7 @@ void gemm(  // NOLINT
                 }
 
                 // process remaining peeled loop
-                for (quarisma_int k = peeled_kc; k < depth; k++)
+                for (linalg_int k = peeled_kc; k < depth; k++)
                 {
                     simd_t B_0;
                     LINALG_GEMM_ONESTEP(0);
@@ -1411,10 +1404,10 @@ void gemm(  // NOLINT
     if (peeled_mc1 < rows)
     {
         // loop on each panel of the rhs
-        for (quarisma_int j2 = 0; j2 < packet_cols4; j2 += nr)
+        for (linalg_int j2 = 0; j2 < packet_cols4; j2 += nr)
         {
             // loop on each row of the lhs (1*LhsProgress x depth)
-            for (quarisma_int i = peeled_mc1; i < rows; i += 1)
+            for (linalg_int i = peeled_mc1; i < rows; i += 1)
             {
                 const value_t* blA = &blockA[i * strideA + offsetA];
                 simd<value_t>::prefetch(&blA[0]);
@@ -1423,10 +1416,9 @@ void gemm(  // NOLINT
                 // The following piece of code wont work for 512 bit registers
                 // Moreover, if LhsProgress==8 it assumes that there is a half tmp of the
                 // same size as nr (which is currently 4) for the return type.
-                static constexpr quarisma_int packet_half_size = simd<value_t>::half_size;
-                if constexpr (
-                    (Traits::LhsProgress % 4) == 0 && (Traits::LhsProgress <= 8) &&
-                    (Traits::LhsProgress != 8 || packet_half_size == nr))
+                static constexpr linalg_int packet_half_size = simd<value_t>::half_size;
+                if constexpr ((Traits::LhsProgress % 4) == 0 && (Traits::LhsProgress <= 8) &&
+                              (Traits::LhsProgress != 8 || packet_half_size == nr))
                 {
                     simd_t C0;
                     simd_t C1;
@@ -1437,11 +1429,11 @@ void gemm(  // NOLINT
                     simd<value_t>::set(static_cast<value_t>(0.), C2);
                     simd<value_t>::set(static_cast<value_t>(0.), C3);
 
-                    const quarisma_int spk   = std::max<quarisma_int>(1, Traits::LhsProgress / 4);
-                    const quarisma_int endk  = (depth / spk) * spk;
-                    const quarisma_int endk4 = (depth / (spk * 4)) * (spk * 4);
+                    const linalg_int spk   = std::max<linalg_int>(1, Traits::LhsProgress / 4);
+                    const linalg_int endk  = (depth / spk) * spk;
+                    const linalg_int endk4 = (depth / (spk * 4)) * (spk * 4);
 
-                    quarisma_int k = 0;
+                    linalg_int k = 0;
                     for (; k < endk4; k += 4 * spk)
                     {
                         simd_t A0;
@@ -1526,7 +1518,7 @@ void gemm(  // NOLINT
                     value_t C2 = 0.;
                     value_t C3 = 0.;
 
-                    for (quarisma_int k = 0; k < depth; k++)
+                    for (linalg_int k = 0; k < depth; k++)
                     {
                         const auto& A0 = blA[k];
                         {
@@ -1552,17 +1544,17 @@ void gemm(  // NOLINT
             }
         }
         // remaining columns
-        for (quarisma_int j2 = packet_cols4; j2 < cols; j2++)
+        for (linalg_int j2 = packet_cols4; j2 < cols; j2++)
         {
             // loop on each row of the lhs (1*LhsProgress x depth)
-            for (quarisma_int i = peeled_mc1; i < rows; i++)
+            for (linalg_int i = peeled_mc1; i < rows; i++)
             {
                 const value_t* blA = &blockA[i * strideA + offsetA];
                 simd<value_t>::prefetch(&blA[0]);
                 // gets a 1 x 1 res block as registers
                 value_t        C0  = 0.;
                 const value_t* blB = &blockB[j2 * strideB + offsetB];
-                for (quarisma_int k = 0; k < depth; k++)
+                for (linalg_int k = 0; k < depth; k++)
                 {
                     const auto& A0  = blA[k];
                     const auto& B_0 = blB[k];
@@ -1576,16 +1568,16 @@ void gemm(  // NOLINT
 #endif
 
 template <typename value_t, bool transpose_a, bool transpose_b>
-void matrix_multiplication_seq(  //NOLINT
-    quarisma_int     rows,
-    quarisma_int     columns,
-    quarisma_int     depth,
+void matrix_multiplication_seq(  // NOLINT
+    linalg_int   rows,
+    linalg_int   columns,
+    linalg_int   depth,
     value_t const* a,
-    quarisma_int     lda,
+    linalg_int   lda,
     value_t const* b,
-    quarisma_int     ldb,
+    linalg_int   ldb,
     value_t*       c,
-    quarisma_int     ldc)
+    linalg_int   ldc)
 {
 #if defined(LINALG_VECTORIZED)
     if (rows + columns + depth > 20)
@@ -1597,11 +1589,11 @@ void matrix_multiplication_seq(  //NOLINT
         auto       nc       = columns;
         const auto l1_cache = blocking_sizes<value_t>(kc, mc, nc, 1);
 
-        mc = std::min<quarisma_int>(rows, mc);     // cache block size along the M direction
-        nc = std::min<quarisma_int>(columns, nc);  // cache block size along the N direction
+        mc = std::min<linalg_int>(rows, mc);     // cache block size along the M direction
+        nc = std::min<linalg_int>(columns, nc);  // cache block size along the N direction
 
-        quarisma_int sizeA = mc * kc;  // NOLINT
-        quarisma_int sizeB = kc * nc;  // NOLINT
+        linalg_int sizeA = mc * kc;  // NOLINT
+        linalg_int sizeB = kc * nc;  // NOLINT
 
         using allocator_t = allocator<value_t>;
 
@@ -1614,34 +1606,32 @@ void matrix_multiplication_seq(  //NOLINT
         const bool pack_rhs_once = mc != rows && kc == depth && nc == columns;
 
         // For each horizontal panel of the rhs, and corresponding panel of the lhs...
-        for (quarisma_int i = 0; i < rows; i += mc)
+        for (linalg_int i = 0; i < rows; i += mc)
         {
-            const quarisma_int actual_mc = std::min<quarisma_int>(i + mc, rows) - i;
+            const linalg_int actual_mc = std::min<linalg_int>(i + mc, rows) - i;
 
-            for (quarisma_int k = 0; k < depth; k += kc)
+            for (linalg_int k = 0; k < depth; k += kc)
             {
-                const quarisma_int actual_kc = std::min<quarisma_int>(k + kc, depth) - k;
+                const linalg_int actual_kc = std::min<linalg_int>(k + kc, depth) - k;
 
                 // OK, here we have selected one horizontal panel of rhs and one vertical panel
                 // of lhs.
                 // => Pack lhs's panel into a sequential chunk of memory (L2/L3 caching)
                 // Note that this panel will be read as many times as the number of blocks in
                 // the rhs's horizontal panel which is, in practice, a very low number.
-                pack_lhs<
-                    value_t,
+                pack_lhs<value_t,
                     gemm_traits<value_t>::mr,
                     gemm_traits<value_t>::LhsProgress,
-                    transpose_a>(
-                    block_A,
+                    transpose_a>(block_A,
                     &element<value_t, transpose_a>(a, i, k, lda),
                     lda,
                     actual_kc,
                     actual_mc);
 
                 // For each kc x nc block of the rhs's horizontal panel...
-                for (quarisma_int j = 0; j < columns; j += nc)
+                for (linalg_int j = 0; j < columns; j += nc)
                 {
-                    const quarisma_int actual_nc = std::min<quarisma_int>(j + nc, columns) - j;
+                    const linalg_int actual_nc = std::min<linalg_int>(j + nc, columns) - j;
 
                     // We pack the rhs's block into a sequential chunk of memory (L2 caching)
                     // Note that this block will be read a very high number of times, which is
@@ -1649,13 +1639,11 @@ void matrix_multiplication_seq(  //NOLINT
                     // (e.g., rows/12 times).
                     if ((!pack_rhs_once) || i == 0)
                     {
-                        pack_rhs<
-                            value_t,
+                        pack_rhs<value_t,
                             gemm_traits<value_t>::nr,
                             simd<value_t>::size,
                             transpose_b,
-                            false>(
-                            block_B,
+                            false>(block_B,
                             &element<value_t, transpose_b>(b, k, j, ldb),
                             ldb,
                             actual_kc,
@@ -1677,9 +1665,9 @@ void matrix_multiplication_seq(  //NOLINT
         }
         if (columns != rows)
         {
-            for (quarisma_int i = 0; i < rows; i++)
+            for (linalg_int i = 0; i < rows; i++)
             {
-                for (quarisma_int j = 0; j < columns; j++)
+                for (linalg_int j = 0; j < columns; j++)
                 {
                     element<value_t, false>(c, i, j, columns) = element<value_t>(result, i, j, ldc);
                 }
@@ -1690,9 +1678,9 @@ void matrix_multiplication_seq(  //NOLINT
         else
         {
             auto n = rows;
-            for (quarisma_int i = 0; i < n; i++)
+            for (linalg_int i = 0; i < n; i++)
             {
-                for (quarisma_int j = i; j < n; j++)
+                for (linalg_int j = i; j < n; j++)
                 {
                     auto& alpha = element<value_t>(c, i, j, n);
                     auto& beta  = element<value_t>(c, j, i, n);
@@ -1707,7 +1695,7 @@ void matrix_multiplication_seq(  //NOLINT
     else
 #endif
     {
-        using size_type = quarisma_int;
+        using size_type = linalg_int;
         if constexpr (!transpose_a && !transpose_b)
         {
             for (size_type i = 0; i < rows; ++i)
@@ -1785,193 +1773,179 @@ void matrix_multiplication_seq(  //NOLINT
 }
 }  // namespace
 // C(i,j) =C[i*ldc + j] j belong to [0,columns] and i to [0,rows]
-void matmul_scalar_f32(
-    bool         transpose_a,
-    bool         transpose_b,
-    quarisma_int   rows,
-    quarisma_int   columns,
-    quarisma_int   depth,
-    float const* a,
-    quarisma_int   lda,
-    float const* b,
-    quarisma_int   ldb,
-    float*       c,
-    quarisma_int   ldc)
+void matmul_scalar_f32(bool transpose_a,
+    bool                    transpose_b,
+    linalg_int            rows,
+    linalg_int            columns,
+    linalg_int            depth,
+    float const*            a,
+    linalg_int            lda,
+    float const*            b,
+    linalg_int            ldb,
+    float*                  c,
+    linalg_int            ldc)
 {
 #if defined(LINALG_VECTORIZED)
 
     if (transpose_a && transpose_b)
     {
-        matrix_multiplication_seq<float, true, true>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, true, true>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (transpose_a && !transpose_b)
     {
-        matrix_multiplication_seq<float, true, false>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, true, false>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (!transpose_a && transpose_b)
     {
-        matrix_multiplication_seq<float, false, true>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, false, true>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (!transpose_a && !transpose_b)
     {
-        matrix_multiplication_seq<float, false, false>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, false, false>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
 #else
     if (transpose_a && transpose_b)
     {
-        matrix_multiplication_seq<float, true, true>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, true, true>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (transpose_a && !transpose_b)
     {
-        matrix_multiplication_seq<float, true, false>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, true, false>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (!transpose_a && transpose_b)
     {
-        matrix_multiplication_seq<float, false, true>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, false, true>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (!transpose_a && !transpose_b)
     {
-        matrix_multiplication_seq<float, false, false>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<float, false, false>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
 #endif
 }
 
-void matmul_scalar_f64(
-    bool          transpose_a,
-    bool          transpose_b,
-    quarisma_int    rows,
-    quarisma_int    columns,
-    quarisma_int    depth,
-    double const* a,
-    quarisma_int    lda,
-    double const* b,
-    quarisma_int    ldb,
-    double*       c,
-    quarisma_int    ldc)
+void matmul_scalar_f64(bool transpose_a,
+    bool                    transpose_b,
+    linalg_int            rows,
+    linalg_int            columns,
+    linalg_int            depth,
+    double const*           a,
+    linalg_int            lda,
+    double const*           b,
+    linalg_int            ldb,
+    double*                 c,
+    linalg_int            ldc)
 {
     if (transpose_a && transpose_b)
     {
-        matrix_multiplication_seq<double, true, true>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<double, true, true>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (transpose_a && !transpose_b)
     {
-        matrix_multiplication_seq<double, true, false>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<double, true, false>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (!transpose_a && transpose_b)
     {
-        matrix_multiplication_seq<double, false, true>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<double, false, true>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
     if (!transpose_a && !transpose_b)
     {
-        matrix_multiplication_seq<double, false, false>(
-            static_cast<quarisma_int>(rows),
-            static_cast<quarisma_int>(columns),
-            static_cast<quarisma_int>(depth),
+        matrix_multiplication_seq<double, false, false>(static_cast<linalg_int>(rows),
+            static_cast<linalg_int>(columns),
+            static_cast<linalg_int>(depth),
             a,
-            static_cast<quarisma_int>(lda),
+            static_cast<linalg_int>(lda),
             b,
-            static_cast<quarisma_int>(ldb),
+            static_cast<linalg_int>(ldb),
             c,
-            static_cast<quarisma_int>(ldc));
+            static_cast<linalg_int>(ldc));
     }
 }
 
@@ -1983,47 +1957,63 @@ void matmul_scalar_f64(
 
 }  // namespace detail
 
-void matrix_multiplication(
-    bool         transpose_a,
-    bool         transpose_b,
-    quarisma_int rows,
-    quarisma_int columns,
-    quarisma_int depth,
-    float const* a,
-    quarisma_int lda,
-    float const* b,
-    quarisma_int ldb,
-    float*       c,
-    quarisma_int ldc)
+void matrix_multiplication(bool transpose_a,
+    bool                        transpose_b,
+    linalg_int                rows,
+    linalg_int                columns,
+    linalg_int                depth,
+    float const*                a,
+    linalg_int                lda,
+    float const*                b,
+    linalg_int                ldb,
+    float*                      c,
+    linalg_int                ldc)
 {
+    if (a == nullptr || b == nullptr || c == nullptr)
+    {
+        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
+    }
+    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
+    {
+        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
+    }
 #if defined(LINALG_ENABLE_MKL)
     detail::matmul_mkl_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #elif defined(LINALG_ENABLE_BLAS)
     detail::matmul_blas_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #else
-    detail::matmul_scalar_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
+    detail::matmul_scalar_f32(
+        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #endif
 }
 
-void matrix_multiplication(
-    bool          transpose_a,
-    bool          transpose_b,
-    quarisma_int  rows,
-    quarisma_int  columns,
-    quarisma_int  depth,
-    double const* a,
-    quarisma_int  lda,
-    double const* b,
-    quarisma_int  ldb,
-    double*       c,
-    quarisma_int  ldc)
+void matrix_multiplication(bool transpose_a,
+    bool                        transpose_b,
+    linalg_int                rows,
+    linalg_int                columns,
+    linalg_int                depth,
+    double const*               a,
+    linalg_int                lda,
+    double const*               b,
+    linalg_int                ldb,
+    double*                     c,
+    linalg_int                ldc)
 {
+    if (a == nullptr || b == nullptr || c == nullptr)
+    {
+        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
+    }
+    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
+    {
+        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
+    }
 #if defined(LINALG_ENABLE_MKL)
     detail::matmul_mkl_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #elif defined(LINALG_ENABLE_BLAS)
     detail::matmul_blas_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #else
-    detail::matmul_scalar_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
+    detail::matmul_scalar_f64(
+        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #endif
 }
 

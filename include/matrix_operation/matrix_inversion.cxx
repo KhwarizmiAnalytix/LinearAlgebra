@@ -28,57 +28,57 @@ namespace detail
 // implementation exists for this op.
 #if defined(LINALG_ENABLE_MKL)
 
-void invert_mkl_f32(float* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void invert_mkl_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
-        case linear_solver_type::LU_LINEAR_SOLVER:
-            if (lu_decomposition(m, lda, pivot))
-            {
-                LAPACKE_sgetri(LAPACK_ROW_MAJOR, lda, m, lda, pivot);
-            }
-            break;
-        case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-            if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-            {
-                LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
-            }
-            break;
-        case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+    case linear_solver_type::LU_LINEAR_SOLVER:
+        if (lu_decomposition(m, lda, pivot))
+        {
             LAPACKE_sgetri(LAPACK_ROW_MAJOR, lda, m, lda, pivot);
-            break;
-        case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        }
+        break;
+    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        {
             LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
-            break;
-        default:
-            LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        }
+        break;
+    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+        LAPACKE_sgetri(LAPACK_ROW_MAJOR, lda, m, lda, pivot);
+        break;
+    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
+        break;
+    default:
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
-void invert_mkl_f64(double* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
-        case linear_solver_type::LU_LINEAR_SOLVER:
-            if (lu_decomposition(m, lda, pivot))
-            {
-                LAPACKE_dgetri(LAPACK_ROW_MAJOR, lda, m, lda, pivot);
-            }
-            break;
-        case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-            if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-            {
-                LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
-            }
-            break;
-        case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+    case linear_solver_type::LU_LINEAR_SOLVER:
+        if (lu_decomposition(m, lda, pivot))
+        {
             LAPACKE_dgetri(LAPACK_ROW_MAJOR, lda, m, lda, pivot);
-            break;
-        case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        }
+        break;
+    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        {
             LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
-            break;
-        default:
-            LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        }
+        break;
+    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+        LAPACKE_dgetri(LAPACK_ROW_MAJOR, lda, m, lda, pivot);
+        break;
+    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
+        break;
+    default:
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -87,10 +87,10 @@ void invert_mkl_f64(double* m, quarisma_int* pivot, quarisma_int lda, linear_sol
 namespace
 {
 // See lu_decomposition.cxx's blas_lapack branch.
-std::vector<lapack_int> to_lapack_pivots(const quarisma_int* pivot, quarisma_int n)
+std::vector<lapack_int> to_lapack_pivots(const linalg_int* pivot, linalg_int n)
 {
     std::vector<lapack_int> ipiv(static_cast<size_t>(n));
-    for (quarisma_int i = 0; i < n; ++i)
+    for (linalg_int i = 0; i < n; ++i)
     {
         ipiv[static_cast<size_t>(i)] = static_cast<lapack_int>(pivot[i]);
     }
@@ -98,67 +98,67 @@ std::vector<lapack_int> to_lapack_pivots(const quarisma_int* pivot, quarisma_int
 }
 }  // namespace
 
-void invert_blas_f32(float* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void invert_blas_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     const auto n = static_cast<lapack_int>(lda);
     switch (type)
     {
-        case linear_solver_type::LU_LINEAR_SOLVER:
-            if (lu_decomposition(m, lda, pivot))
-            {
-                auto ipiv = to_lapack_pivots(pivot, lda);
-                LAPACKE_sgetri(LAPACK_ROW_MAJOR, n, m, n, ipiv.data());
-            }
-            break;
-        case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-            if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-            {
-                LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
-            }
-            break;
-        case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+    case linear_solver_type::LU_LINEAR_SOLVER:
+        if (lu_decomposition(m, lda, pivot))
         {
             auto ipiv = to_lapack_pivots(pivot, lda);
             LAPACKE_sgetri(LAPACK_ROW_MAJOR, n, m, n, ipiv.data());
-            break;
         }
-        case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        break;
+    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        {
             LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
-            break;
-        default:
-            LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        }
+        break;
+    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+    {
+        auto ipiv = to_lapack_pivots(pivot, lda);
+        LAPACKE_sgetri(LAPACK_ROW_MAJOR, n, m, n, ipiv.data());
+        break;
+    }
+    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
+        break;
+    default:
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
-void invert_blas_f64(double* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void invert_blas_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     const auto n = static_cast<lapack_int>(lda);
     switch (type)
     {
-        case linear_solver_type::LU_LINEAR_SOLVER:
-            if (lu_decomposition(m, lda, pivot))
-            {
-                auto ipiv = to_lapack_pivots(pivot, lda);
-                LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, m, n, ipiv.data());
-            }
-            break;
-        case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-            if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-            {
-                LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
-            }
-            break;
-        case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+    case linear_solver_type::LU_LINEAR_SOLVER:
+        if (lu_decomposition(m, lda, pivot))
         {
             auto ipiv = to_lapack_pivots(pivot, lda);
             LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, m, n, ipiv.data());
-            break;
         }
-        case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        break;
+    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        {
             LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
-            break;
-        default:
-            LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        }
+        break;
+    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+    {
+        auto ipiv = to_lapack_pivots(pivot, lda);
+        LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, m, n, ipiv.data());
+        break;
+    }
+    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
+        break;
+    default:
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -171,9 +171,9 @@ namespace
 #define IA(i, j) inv_m[(i) * lda + (j)]
 
 template <typename T>
-void lu_invert(T* m, LINALG_UNUSED const quarisma_int* pivot, quarisma_int lda)
+void lu_invert(T* m, LINALG_UNUSED const linalg_int* pivot, linalg_int lda)
 {
-    using size_type = quarisma_int;
+    using size_type = linalg_int;
     using value_t   = T;
     std::vector<double> inv_m(lda * lda);
     std::vector<double> work(lda);
@@ -232,11 +232,10 @@ void lu_invert(T* m, LINALG_UNUSED const quarisma_int* pivot, quarisma_int lda)
 #endif
 }
 
-template <typename T>
-void cholesky_invert(T* m, quarisma_int lda)
+template <typename T> void cholesky_invert(T* m, linalg_int lda)
 {
     using value_t   = T;
-    using size_type = quarisma_int;
+    using size_type = linalg_int;
 
     std::vector<T> work(lda);
 
@@ -285,48 +284,48 @@ void cholesky_invert(T* m, quarisma_int lda)
 #undef IA
 
 template <typename T>
-void matrix_invert_scalar_impl(T* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void matrix_invert_scalar_impl(T* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
-        case linear_solver_type::LU_LINEAR_SOLVER:
+    case linear_solver_type::LU_LINEAR_SOLVER:
+    {
+        if (lu_decomposition(m, lda, pivot))
         {
-            if (lu_decomposition(m, lda, pivot))
-            {
-                lu_invert(m, pivot, lda);
-            }
-        }
-        break;
-
-        case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
             lu_invert(m, pivot, lda);
-            break;
-
-        case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        {
-            if (cholesky_decomposition(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
-            {
-                cholesky_invert(m, lda);
-            }
         }
+    }
+    break;
+
+    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+        lu_invert(m, pivot, lda);
         break;
 
-        case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+    {
+        if (cholesky_decomposition(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        {
             cholesky_invert(m, lda);
-            break;
-        default:
-            LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        }
+    }
+    break;
+
+    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        cholesky_invert(m, lda);
+        break;
+    default:
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
 }  // namespace
 
-void invert_scalar_f32(float* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void invert_scalar_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     matrix_invert_scalar_impl(m, pivot, lda, type);
 }
 
-void invert_scalar_f64(double* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void invert_scalar_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     matrix_invert_scalar_impl(m, pivot, lda, type);
 }
@@ -339,22 +338,20 @@ void invert_scalar_f64(double* m, quarisma_int* pivot, quarisma_int lda, linear_
 // cholesky_decomposition already wrote into `m`.
 #define A(i, j) m[(i) * lda + (j)]
 
-template <typename T>
-T lu_determinant(T* m, quarisma_int lda)
+template <typename T> T lu_determinant(T* m, linalg_int lda)
 {
     T det = m[0];
-    for (quarisma_int i = 1; i < lda; ++i)
+    for (linalg_int i = 1; i < lda; ++i)
     {
         det *= A(i, i);
     }
     return det;
 }
 
-template <typename T>
-T cholesky_determinant(T* m, quarisma_int lda)
+template <typename T> T cholesky_determinant(T* m, linalg_int lda)
 {
     T det = m[0];
-    for (quarisma_int i = 1; i < lda; ++i)
+    for (linalg_int i = 1; i < lda; ++i)
     {
         det *= A(i, i);
     }
@@ -364,44 +361,52 @@ T cholesky_determinant(T* m, quarisma_int lda)
 #undef A
 
 template <typename T>
-T matrix_determinant_helper(T* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+T matrix_determinant_helper(T* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
     T ret = 0.;
     switch (type)
     {
-        case linear_solver_type::LU_LINEAR_SOLVER:
+    case linear_solver_type::LU_LINEAR_SOLVER:
+    {
+        if (lu_decomposition(m, lda, pivot))
         {
-            if (lu_decomposition(m, lda, pivot))
-            {
-                ret = lu_determinant(m, lda);
-            }
+            ret = lu_determinant(m, lda);
         }
-            return ret;
+    }
+        return ret;
 
-        case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-            return lu_determinant(m, lda);
+    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
+        return lu_determinant(m, lda);
 
-        case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
+    {
+        if (cholesky_decomposition(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
-            if (cholesky_decomposition(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
-            {
-                ret = cholesky_determinant(m, lda);
-            }
+            ret = cholesky_determinant(m, lda);
         }
-            return ret;
+    }
+        return ret;
 
-        case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-            return cholesky_determinant(m, lda);
-        default:
-            LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
+        return cholesky_determinant(m, lda);
+    default:
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
 }  // namespace detail
 
 //-----------------------------------------------------------------------------
-void matrix_invert(float* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void matrix_invert(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_invert: m must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_invert: lda must be positive", lda);
+    }
 #if defined(LINALG_ENABLE_MKL)
     detail::invert_mkl_f32(m, pivot, lda, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -412,8 +417,16 @@ void matrix_invert(float* m, quarisma_int* pivot, quarisma_int lda, linear_solve
 }
 
 //-----------------------------------------------------------------------------
-void matrix_invert(double* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+void matrix_invert(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_invert: m must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_invert: lda must be positive", lda);
+    }
 #if defined(LINALG_ENABLE_MKL)
     detail::invert_mkl_f64(m, pivot, lda, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -424,14 +437,30 @@ void matrix_invert(double* m, quarisma_int* pivot, quarisma_int lda, linear_solv
 }
 
 //-----------------------------------------------------------------------------
-float matrix_determinant(float* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+float matrix_determinant(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_determinant: m must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_determinant: lda must be positive", lda);
+    }
     return detail::matrix_determinant_helper(m, pivot, lda, type);
 }
 
 //-----------------------------------------------------------------------------
-double matrix_determinant(double* m, quarisma_int* pivot, quarisma_int lda, linear_solver_type type)
+double matrix_determinant(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_determinant: m must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_determinant: lda must be positive", lda);
+    }
     return detail::matrix_determinant_helper(m, pivot, lda, type);
 }
 }  // namespace linalg

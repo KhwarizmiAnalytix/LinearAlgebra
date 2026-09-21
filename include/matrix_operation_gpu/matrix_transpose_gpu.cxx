@@ -22,8 +22,16 @@ namespace
 // `stream`, so a caller-supplied non-default stream is honored end to end.
 template <typename T, typename GeamFn>
 void transpose_impl(
-    GeamFn geam, quarisma_long rows, quarisma_long columns, T* m, cudaStream_t stream)
+    GeamFn geam, linalg_long rows, linalg_long columns, T* m, cudaStream_t stream)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_transpose: m must not be null");
+    }
+    if (rows == 0 || columns == 0)
+    {
+        LINALG_THROW("matrix_transpose: rows and columns must be positive");
+    }
     const auto r = static_cast<int>(rows);
     const auto c = static_cast<int>(columns);
 
@@ -78,12 +86,12 @@ void transpose_impl(
 
 }  // namespace
 
-void matrix_transpose(quarisma_long rows, quarisma_long columns, float* m, cudaStream_t stream)
+void matrix_transpose(linalg_long rows, linalg_long columns, float* m, cudaStream_t stream)
 {
     transpose_impl(cublasSgeam, rows, columns, m, stream);
 }
 
-void matrix_transpose(quarisma_long rows, quarisma_long columns, double* m, cudaStream_t stream)
+void matrix_transpose(linalg_long rows, linalg_long columns, double* m, cudaStream_t stream)
 {
     transpose_impl(cublasDgeam, rows, columns, m, stream);
 }

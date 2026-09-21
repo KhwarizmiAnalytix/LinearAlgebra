@@ -29,7 +29,7 @@ void lu_solve(BufferSizeFn buffer_size,
     GetrfFn                getrf,
     GetrsFn                getrs,
     T*                     m,
-    quarisma_int           lda,
+    linalg_int           lda,
     T*                     x,
     int*                   info,
     cudaStream_t           stream)
@@ -85,7 +85,7 @@ void cholesky_solve(BufferSizeFn buffer_size,
     PotrfFn                      potrf,
     PotrsFn                      potrs,
     T*                           m,
-    quarisma_int                 lda,
+    linalg_int                 lda,
     T*                           x,
     int*                         info,
     cudaStream_t                 stream)
@@ -132,8 +132,16 @@ void cholesky_solve(BufferSizeFn buffer_size,
 }  // namespace
 
 void linear_solver(
-    float* m, quarisma_int lda, float* x, linear_solver_type type, int* info, cudaStream_t stream)
+    float* m, linalg_int lda, float* x, linear_solver_type type, int* info, cudaStream_t stream)
 {
+    if (m == nullptr || x == nullptr || info == nullptr)
+    {
+        LINALG_THROW("linear_solver: m, x, and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("linear_solver: lda must be positive", lda);
+    }
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
@@ -162,8 +170,16 @@ void linear_solver(
 }
 
 void linear_solver(
-    double* m, quarisma_int lda, double* x, linear_solver_type type, int* info, cudaStream_t stream)
+    double* m, linalg_int lda, double* x, linear_solver_type type, int* info, cudaStream_t stream)
 {
+    if (m == nullptr || x == nullptr || info == nullptr)
+    {
+        LINALG_THROW("linear_solver: m, x, and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("linear_solver: lda must be positive", lda);
+    }
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:

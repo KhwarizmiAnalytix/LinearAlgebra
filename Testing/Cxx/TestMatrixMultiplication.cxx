@@ -241,11 +241,11 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
         columns,
         depth,
         A.data(),
-        static_cast<quarisma_int>(a_columns),
+        static_cast<linalg_int>(a_columns),
         B.data(),
-        static_cast<quarisma_int>(b_columns),
+        static_cast<linalg_int>(b_columns),
         C.data(),
-        static_cast<quarisma_int>(columns));
+        static_cast<linalg_int>(columns));
 
     value_t max_error = 0;
     for (int i = 0; i < rows; ++i)

@@ -6,11 +6,11 @@
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -26,28 +26,28 @@ namespace gpu
 // include/matrix_operation/matrix_multiplication.h.
 LINALG_API void matrix_multiplication(bool transpose_a,
     bool                                   transpose_b,
-    quarisma_int                           rows,
-    quarisma_int                           columns,
-    quarisma_int                           depth,
+    linalg_int                           rows,
+    linalg_int                           columns,
+    linalg_int                           depth,
     const float*                           a,
-    quarisma_int                           lda,
+    linalg_int                           lda,
     const float*                           b,
-    quarisma_int                           ldb,
+    linalg_int                           ldb,
     float*                                 c,
-    quarisma_int                           ldc,
+    linalg_int                           ldc,
     cudaStream_t                           stream = nullptr);
 
 LINALG_API void matrix_multiplication(bool transpose_a,
     bool                                   transpose_b,
-    quarisma_int                           rows,
-    quarisma_int                           columns,
-    quarisma_int                           depth,
+    linalg_int                           rows,
+    linalg_int                           columns,
+    linalg_int                           depth,
     const double*                          a,
-    quarisma_int                           lda,
+    linalg_int                           lda,
     const double*                          b,
-    quarisma_int                           ldb,
+    linalg_int                           ldb,
     double*                                c,
-    quarisma_int                           ldc,
+    linalg_int                           ldc,
     cudaStream_t                           stream = nullptr);
 
 }  // namespace gpu

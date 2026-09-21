@@ -1,16 +1,16 @@
 #pragma once
 
-#include <cstddef>  // for quarisma_long
+#include <cstddef>  // for linalg_long
 
 #include "include/common/cuda_fwd.h"
 #include "include/common/linear_algebra_export.h"  // for LINALG_API
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -40,27 +40,27 @@ namespace gpu
 // memory, so it never blocks on a device synchronization. `stream`
 // (default: the legacy default stream) is the CUDA stream every underlying
 // cuSOLVER call and device-to-device copy is issued on.
-LINALG_API void svd_decomposition(quarisma_long rows,
-    quarisma_long                               columns,
+LINALG_API void svd_decomposition(linalg_long rows,
+    linalg_long                               columns,
     const float*                                A,
-    quarisma_long                               lda,
+    linalg_long                               lda,
     float*                                      S,
     float*                                      U,
-    quarisma_long                               ldu,
+    linalg_long                               ldu,
     float*                                      VT,
-    quarisma_long                               ldv,
+    linalg_long                               ldv,
     int*                                        info,
     cudaStream_t                                stream = nullptr);
 
-LINALG_API void svd_decomposition(quarisma_long rows,
-    quarisma_long                               columns,
+LINALG_API void svd_decomposition(linalg_long rows,
+    linalg_long                               columns,
     const double*                               A,
-    quarisma_long                               lda,
+    linalg_long                               lda,
     double*                                     S,
     double*                                     U,
-    quarisma_long                               ldu,
+    linalg_long                               ldu,
     double*                                     VT,
-    quarisma_long                               ldv,
+    linalg_long                               ldv,
     int*                                        info,
     cudaStream_t                                stream = nullptr);
 

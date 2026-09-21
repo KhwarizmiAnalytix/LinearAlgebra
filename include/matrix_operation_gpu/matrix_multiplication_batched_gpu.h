@@ -6,11 +6,11 @@
 #include "include/common/linear_algebra_export.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -32,15 +32,15 @@ namespace gpu
 // (single matrix, cuBLAS gemm, arbitrary shape/transpose): use this one only
 // for many same-size square matrices at once. `stream` (default: the legacy
 // default stream) is the CUDA stream the kernel is launched on.
-LINALG_API void batched_matrix_multiplication(quarisma_int dim,
-    quarisma_int                                           count,
+LINALG_API void batched_matrix_multiplication(linalg_int dim,
+    linalg_int                                           count,
     const float*                                           a,
     const float*                                           b,
     float*                                                 c,
     cudaStream_t                                           stream = nullptr);
 
-LINALG_API void batched_matrix_multiplication(quarisma_int dim,
-    quarisma_int                                           count,
+LINALG_API void batched_matrix_multiplication(linalg_int dim,
+    linalg_int                                           count,
     const double*                                          a,
     const double*                                          b,
     double*                                                c,

@@ -91,7 +91,7 @@ void test_inversion(std::size_t dim)
         }
     }
 
-    std::vector<quarisma_int> pivot(dim + 1);
+    std::vector<linalg_int> pivot(dim + 1);
 
     dense_matrix<value_t> A(dim, dim);
     {
@@ -100,7 +100,7 @@ void test_inversion(std::size_t dim)
     }
     dense_matrix<value_t> IA = A;
     linalg::matrix_invert(
-        IA.data(), pivot.data(), static_cast<quarisma_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        IA.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
 
     for (std::size_t i = 0; i < dim; i++)
     {
@@ -116,26 +116,26 @@ void test_inversion(std::size_t dim)
 
     IA = A;
     linalg::matrix_invert(
-        IA.data(), pivot.data(), static_cast<quarisma_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        IA.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
     R         = matmul(IA, A);
     max_error = hmax_abs_diff(R, Id);
     EXPECT_LE(max_error, Tolerance<value_t>::value);
 
     linalg::matrix_determinant(
-        A.data(), pivot.data(), static_cast<quarisma_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        A.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
 
     linalg::matrix_determinant(
-        A.data(), pivot.data(), static_cast<quarisma_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        A.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
     EXPECT_ANY_THROW({
         linalg::matrix_invert(
-            IA.data(), pivot.data(), static_cast<quarisma_int>(dim), (linalg::linear_solver_type)5);
+            IA.data(), pivot.data(), static_cast<linalg_int>(dim), (linalg::linear_solver_type)5);
     });
 
     EXPECT_ANY_THROW({
         linalg::matrix_determinant(
-            IA.data(), pivot.data(), static_cast<quarisma_int>(dim), (linalg::linear_solver_type)5);
+            IA.data(), pivot.data(), static_cast<linalg_int>(dim), (linalg::linear_solver_type)5);
     });
 }
 }  // namespace

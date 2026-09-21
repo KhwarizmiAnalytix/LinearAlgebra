@@ -16,12 +16,19 @@
 
 #include "dense_matrix_test_helper.h"
 #include "include/matrix_operation_gpu/cholesky_decomposition_gpu.h"
+#include "include/matrix_operation_gpu/eigenvalue_decomposition_gpu.h"
+#include "include/matrix_operation_gpu/least_squares_gpu.h"
 #include "include/matrix_operation_gpu/linear_solver_gpu.h"
 #include "include/matrix_operation_gpu/lu_decomposition_gpu.h"
 #include "include/matrix_operation_gpu/matrix_inversion_gpu.h"
 #include "include/matrix_operation_gpu/matrix_multiplication_batched_gpu.h"
 #include "include/matrix_operation_gpu/matrix_multiplication_gpu.h"
+#include "include/matrix_operation_gpu/matrix_norm_gpu.h"
+#include "include/matrix_operation_gpu/matrix_rank_gpu.h"
+#include "include/matrix_operation_gpu/matrix_trace_gpu.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
+#include "include/matrix_operation_gpu/pseudo_inverse_gpu.h"
+#include "include/matrix_operation_gpu/qr_decomposition_gpu.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include "gtest/gtest.h"
 
@@ -576,6 +583,528 @@ TEST(MathGpu, SVDDecomposition)
 
     svd_decomposition_gpu_test<float>(11, 23);
     svd_decomposition_gpu_test<double>(11, 23);
+}
+
+// A == Q*R reconstruction plus Q^T*Q == I, mirroring TestQRDecomposition.cxx's
+// CPU test_qr<T> and svd_decomposition_gpu_test's device-buffer plumbing.
+template <typename value_t> void qr_decomposition_gpu_test(std::size_t rows, std::size_t columns)
+{
+    constexpr auto tol = GpuTolerance<value_t>::value;
+    const auto     k   = std::min(rows, columns);
+
+    std::default_random_engine generator;
+    auto                       A = random_matrix<value_t>(rows, columns, generator);
+
+    device_buffer<value_t> dA(rows * columns);
+    device_buffer<value_t> dQ(rows * k);
+    device_buffer<value_t> dR(k * columns);
+    device_buffer<int>     dinfo(1);
+    ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
+
+    linalg::gpu::qr_decomposition((long long)rows,
+        (long long)columns,
+        dA.get(),
+        (long long)columns,
+        dQ.get(),
+        (long long)k,
+        dR.get(),
+        (long long)columns,
+        dinfo.get());
+    ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
+
+    int info = -1;
+    ASSERT_EQ(dinfo.download(&info), cudaSuccess);
+    ASSERT_EQ(info, 0);
+
+    dense_matrix<value_t> Q(rows, k);
+    dense_matrix<value_t> R(k, columns);
+    ASSERT_EQ(dQ.download(Q.begin()), cudaSuccess);
+    ASSERT_EQ(dR.download(R.begin()), cudaSuccess);
+
+    value_t max_error = 0;
+    for (std::size_t i = 0; i < rows; ++i)
+    {
+        for (std::size_t j = 0; j < columns; ++j)
+        {
+            value_t sum = 0;
+            for (std::size_t c = 0; c < k; ++c)
+            {
+                sum += Q(i, c) * R(c, j);
+            }
+            max_error = std::fmax(max_error, std::fabs(static_cast<double>(A(i, j) - sum)));
+        }
+    }
+    EXPECT_LE(max_error, tol * (value_t)k);
+
+    value_t max_orth_error = 0;
+    for (std::size_t i = 0; i < k; ++i)
+    {
+        for (std::size_t j = 0; j < k; ++j)
+        {
+            value_t sum = 0;
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                sum += Q(r, i) * Q(r, j);
+            }
+            const value_t expected = (i == j) ? value_t(1) : value_t(0);
+            max_orth_error          = std::fmax(max_orth_error, std::fabs(static_cast<double>(sum - expected)));
+        }
+    }
+    EXPECT_LE(max_orth_error, tol * (value_t)k);
+}
+
+TEST(MathGpu, QRDecomposition)
+{
+    qr_decomposition_gpu_test<float>(23, 11);
+    qr_decomposition_gpu_test<double>(23, 11);
+
+    qr_decomposition_gpu_test<float>(11, 23);
+    qr_decomposition_gpu_test<double>(11, 23);
+}
+
+// A = Q * diag(known) * Q^T for a random orthogonal Q built from the GPU QR
+// above; eigenvalues must come back ascending and reconstruct A.
+template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
+{
+    constexpr auto tol = GpuTolerance<value_t>::value;
+
+    std::default_random_engine generator;
+    auto                       R0 = random_matrix<value_t>(n, n, generator);
+
+    device_buffer<value_t> dR0(n * n);
+    device_buffer<value_t> dQ(n * n);
+    device_buffer<value_t> dR(n * n);
+    device_buffer<int>     dinfo(1);
+    ASSERT_EQ(dR0.upload(R0.begin()), cudaSuccess);
+    linalg::gpu::qr_decomposition(
+        (long long)n, (long long)n, dR0.get(), (long long)n, dQ.get(), (long long)n, dR.get(), (long long)n, dinfo.get());
+    ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
+
+    dense_matrix<value_t> Q(n, n);
+    ASSERT_EQ(dQ.download(Q.begin()), cudaSuccess);
+
+    std::vector<value_t> known(n);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        known[i] = (value_t)(i + 1);
+    }
+
+    dense_matrix<value_t> A(n, n);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        for (std::size_t j = 0; j < n; ++j)
+        {
+            value_t sum = 0;
+            for (std::size_t k = 0; k < n; ++k)
+            {
+                sum += Q(i, k) * known[k] * Q(j, k);
+            }
+            A(i, j) = sum;
+        }
+    }
+
+    device_buffer<value_t> dA(n * n);
+    device_buffer<value_t> devals(n);
+    device_buffer<value_t> devecs(n * n);
+    ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
+
+    linalg::gpu::symmetric_eigenvalue_decomposition(
+        dA.get(), (linalg_int)n, (linalg_int)n, devals.get(), devecs.get(), (linalg_int)n, dinfo.get());
+    ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
+
+    int info = -1;
+    ASSERT_EQ(dinfo.download(&info), cudaSuccess);
+    ASSERT_EQ(info, 0);
+
+    std::vector<value_t>  evals(n);
+    dense_matrix<value_t> evecs(n, n);
+    ASSERT_EQ(devals.download(evals.data()), cudaSuccess);
+    ASSERT_EQ(devecs.download(evecs.begin()), cudaSuccess);
+
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        EXPECT_NEAR((double)evals[i], (double)known[i], tol * (double)n);
+    }
+
+    // AV = A * evecs, then evecs^T * AV should reconstruct diag(evals) (two
+    // matmul passes rather than one quad-nested loop, matching this
+    // repository's CPU TestEigenvalueDecomposition.cxx workaround for a
+    // clang-cl optimizer crash on that pattern).
+    dense_matrix<value_t> AV(n, n);
+    for (std::size_t p = 0; p < n; ++p)
+    {
+        for (std::size_t j = 0; j < n; ++j)
+        {
+            value_t sum = 0;
+            for (std::size_t q = 0; q < n; ++q)
+            {
+                sum += A(p, q) * evecs(q, j);
+            }
+            AV(p, j) = sum;
+        }
+    }
+    value_t max_error = 0;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        for (std::size_t j = 0; j < n; ++j)
+        {
+            value_t sum = 0;
+            for (std::size_t p = 0; p < n; ++p)
+            {
+                sum += evecs(p, i) * AV(p, j);
+            }
+            const value_t expected = (i == j) ? evals[i] : value_t(0);
+            max_error                = std::fmax(max_error, std::fabs(static_cast<double>(sum - expected)));
+        }
+    }
+    EXPECT_LE(max_error, tol * (value_t)n);
+}
+
+TEST(MathGpu, SymmetricEigenvalueDecomposition)
+{
+    symmetric_eigen_gpu_test<float>(6);
+    symmetric_eigen_gpu_test<double>(6);
+}
+
+// Full column-rank tall matrix: pinv(A) is a left inverse.
+template <typename value_t> void pseudo_inverse_gpu_test(std::size_t rows, std::size_t columns)
+{
+    constexpr auto tol = GpuTolerance<value_t>::value;
+
+    std::default_random_engine generator;
+    auto                       A = random_matrix<value_t>(rows, columns, generator);
+
+    device_buffer<value_t> dA(rows * columns);
+    device_buffer<value_t> dAinv(columns * rows);
+    ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
+
+    linalg::gpu::pseudo_inverse(
+        (long long)rows, (long long)columns, dA.get(), (long long)columns, dAinv.get(), (long long)rows);
+    ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
+
+    dense_matrix<value_t> Ainv(columns, rows);
+    ASSERT_EQ(dAinv.download(Ainv.begin()), cudaSuccess);
+
+    value_t max_error = 0;
+    for (std::size_t i = 0; i < columns; ++i)
+    {
+        for (std::size_t j = 0; j < columns; ++j)
+        {
+            value_t sum = 0;
+            for (std::size_t k = 0; k < rows; ++k)
+            {
+                sum += Ainv(i, k) * A(k, j);
+            }
+            const value_t expected = (i == j) ? value_t(1) : value_t(0);
+            max_error               = std::fmax(max_error, std::fabs(static_cast<double>(sum - expected)));
+        }
+    }
+    EXPECT_LE(max_error, tol * (value_t)rows);
+}
+
+TEST(MathGpu, PseudoInverse)
+{
+    pseudo_inverse_gpu_test<float>(9, 5);
+    pseudo_inverse_gpu_test<double>(9, 5);
+}
+
+TEST(MathGpu, MatrixRankAndConditionNumber)
+{
+    const std::size_t n = 6;
+    dense_matrix<double> I(n, n);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        I(i, i) = 1.0;
+    }
+    device_buffer<double> dI(n * n);
+    ASSERT_EQ(dI.upload(I.begin()), cudaSuccess);
+
+    const auto rank = linalg::gpu::matrix_rank(dI.get(), (long long)n, (long long)n, (long long)n);
+    const auto cond = linalg::gpu::matrix_condition_number(dI.get(), (long long)n, (long long)n, (long long)n);
+    EXPECT_EQ(rank, (linalg_long)n);
+    EXPECT_NEAR(cond, 1.0, 1e-6);
+
+    // Rank-1 outer product.
+    std::default_random_engine generator;
+    std::uniform_real_distribution<double> dist(1., 2.);
+    dense_matrix<double>                   A(n, n);
+    std::vector<double>                    u(n), v(n);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        u[i] = dist(generator);
+        v[i] = dist(generator);
+    }
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        for (std::size_t j = 0; j < n; ++j)
+        {
+            A(i, j) = u[i] * v[j];
+        }
+    }
+    device_buffer<double> dA(n * n);
+    ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
+    const auto rank1 = linalg::gpu::matrix_rank(dA.get(), (long long)n, (long long)n, (long long)n);
+    EXPECT_EQ(rank1, (linalg_long)1);
+}
+
+TEST(MathGpu, MatrixNorm)
+{
+    const std::size_t rows = 6, columns = 5;
+    std::default_random_engine generator;
+    auto                       A = random_matrix<double>(rows, columns, generator);
+
+    device_buffer<double> dA(rows * columns);
+    ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
+
+    double frob_expected = 0;
+    for (std::size_t i = 0; i < rows; ++i)
+    {
+        for (std::size_t j = 0; j < columns; ++j)
+        {
+            frob_expected += A(i, j) * A(i, j);
+        }
+    }
+    frob_expected = std::sqrt(frob_expected);
+
+    double one_expected = 0;
+    for (std::size_t j = 0; j < columns; ++j)
+    {
+        double s = 0;
+        for (std::size_t i = 0; i < rows; ++i)
+        {
+            s += std::fabs(A(i, j));
+        }
+        one_expected = std::max(one_expected, s);
+    }
+
+    double inf_expected = 0;
+    for (std::size_t i = 0; i < rows; ++i)
+    {
+        double s = 0;
+        for (std::size_t j = 0; j < columns; ++j)
+        {
+            s += std::fabs(A(i, j));
+        }
+        inf_expected = std::max(inf_expected, s);
+    }
+
+    const auto frob = linalg::gpu::matrix_norm(
+        dA.get(), (long long)rows, (long long)columns, (long long)columns, linalg::matrix_norm_type::FROBENIUS);
+    const auto one = linalg::gpu::matrix_norm(
+        dA.get(), (long long)rows, (long long)columns, (long long)columns, linalg::matrix_norm_type::ONE);
+    const auto inf_norm = linalg::gpu::matrix_norm(
+        dA.get(), (long long)rows, (long long)columns, (long long)columns, linalg::matrix_norm_type::INFINITY_NORM);
+
+    EXPECT_NEAR(frob, frob_expected, 1e-6);
+    EXPECT_NEAR(one, one_expected, 1e-6);
+    EXPECT_NEAR(inf_norm, inf_expected, 1e-6);
+}
+
+TEST(MathGpu, MatrixTrace)
+{
+    const std::size_t n = 5;
+    std::default_random_engine generator;
+    auto                       A = random_matrix<double>(n, n, generator);
+
+    double expected = 0;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        expected += A(i, i);
+    }
+
+    device_buffer<double> dA(n * n);
+    ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
+    const auto trace = linalg::gpu::matrix_trace(dA.get(), (linalg_int)n, (linalg_int)n);
+    EXPECT_NEAR(trace, expected, 1e-9);
+}
+
+// Overdetermined, consistent system: the least-squares solution should
+// recover the exact generating X (residual is zero).
+TEST(MathGpu, LeastSquares)
+{
+    const std::size_t rows = 6, columns = 3, nrhs = 2;
+
+    dense_matrix<double> A(rows, columns);
+    for (std::size_t i = 0; i < rows; ++i)
+    {
+        for (std::size_t j = 0; j < columns; ++j)
+        {
+            A(i, j) = (double)(1 + (i * 3 + j * 7) % 11);
+        }
+    }
+    dense_matrix<double> X_true(columns, nrhs);
+    for (std::size_t i = 0; i < columns; ++i)
+    {
+        for (std::size_t j = 0; j < nrhs; ++j)
+        {
+            X_true(i, j) = (double)(1 + i + 2 * j);
+        }
+    }
+    dense_matrix<double> B(rows, nrhs);
+    for (std::size_t i = 0; i < rows; ++i)
+    {
+        for (std::size_t j = 0; j < nrhs; ++j)
+        {
+            double sum = 0;
+            for (std::size_t k = 0; k < columns; ++k)
+            {
+                sum += A(i, k) * X_true(k, j);
+            }
+            B(i, j) = sum;
+        }
+    }
+
+    device_buffer<double> dA(rows * columns);
+    device_buffer<double> dB(rows * nrhs);
+    device_buffer<double> dX(columns * nrhs);
+    ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
+    ASSERT_EQ(dB.upload(B.begin()), cudaSuccess);
+
+    linalg::gpu::least_squares_solve((long long)rows,
+        (long long)columns,
+        (long long)nrhs,
+        dA.get(),
+        (long long)columns,
+        dB.get(),
+        (long long)nrhs,
+        dX.get(),
+        (long long)nrhs);
+    ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
+
+    dense_matrix<double> X(columns, nrhs);
+    ASSERT_EQ(dX.download(X.begin()), cudaSuccess);
+
+    double max_error = 0;
+    for (std::size_t i = 0; i < columns; ++i)
+    {
+        for (std::size_t j = 0; j < nrhs; ++j)
+        {
+            max_error = std::fmax(max_error, std::fabs(X(i, j) - X_true(i, j)));
+        }
+    }
+    EXPECT_LT(max_error, 1e-6);
+}
+
+// Every public linalg::gpu::* entry point throws (rather than exhibiting
+// undefined behavior) on a null required device pointer or a non-positive
+// dimension — mirrors Math.InputValidation's CPU coverage in
+// TestInputValidation.cxx. One representative case per op is enough here;
+// this is a regression guard for that contract, not an exhaustive sweep.
+TEST(MathGpu, InputValidation)
+{
+    const int n = 3;
+
+    device_buffer<double> dA((std::size_t)(n * n));
+    device_buffer<double> dx((std::size_t)n);
+    device_buffer<double> dS((std::size_t)n);
+    device_buffer<int>    dpivot((std::size_t)n);
+    device_buffer<int>    dinfo(1);
+
+    EXPECT_ANY_THROW(linalg::gpu::cholesky_decomposition(static_cast<double*>(nullptr),
+        n,
+        linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR,
+        dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::cholesky_decomposition(
+        dA.get(), 0, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, dinfo.get()));
+
+    EXPECT_ANY_THROW(
+        linalg::gpu::lu_decomposition(static_cast<double*>(nullptr), n, dpivot.get(), dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::lu_decomposition(dA.get(), 0, dpivot.get(), dinfo.get()));
+
+    EXPECT_ANY_THROW(linalg::gpu::linear_solver(static_cast<double*>(nullptr),
+        n,
+        dx.get(),
+        linalg::linear_solver_type::LU_LINEAR_SOLVER,
+        dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::linear_solver(
+        dA.get(), 0, dx.get(), linalg::linear_solver_type::LU_LINEAR_SOLVER, dinfo.get()));
+
+    EXPECT_ANY_THROW(linalg::gpu::matrix_invert(static_cast<double*>(nullptr), n, dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_invert(dA.get(), 0, dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_determinant(static_cast<double*>(nullptr), n));
+
+    EXPECT_ANY_THROW(linalg::gpu::matrix_multiplication(
+        false, false, n, n, n, static_cast<const double*>(nullptr), n, dA.get(), n, dA.get(), n));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_multiplication(
+        false, false, 0, n, n, dA.get(), n, dA.get(), n, dA.get(), n));
+
+    EXPECT_ANY_THROW(
+        linalg::gpu::matrix_transpose((long long)n, (long long)n, static_cast<double*>(nullptr)));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_transpose(0LL, (long long)n, dA.get()));
+
+    EXPECT_ANY_THROW(linalg::gpu::svd_decomposition((long long)n,
+        (long long)n,
+        static_cast<const double*>(nullptr),
+        (long long)n,
+        dS.get(),
+        dA.get(),
+        (long long)n,
+        dA.get(),
+        (long long)n,
+        dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::svd_decomposition(0LL,
+        (long long)n,
+        dA.get(),
+        (long long)n,
+        dS.get(),
+        dA.get(),
+        (long long)n,
+        dA.get(),
+        (long long)n,
+        dinfo.get()));
+
+    EXPECT_ANY_THROW(linalg::gpu::qr_decomposition((long long)n,
+        (long long)n,
+        static_cast<const double*>(nullptr),
+        (long long)n,
+        dA.get(),
+        (long long)n,
+        dA.get(),
+        (long long)n,
+        dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::qr_decomposition(
+        0LL, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, dinfo.get()));
+
+    EXPECT_ANY_THROW(linalg::gpu::symmetric_eigenvalue_decomposition(
+        static_cast<const double*>(nullptr), n, n, dS.get(), dA.get(), n, dinfo.get()));
+    EXPECT_ANY_THROW(
+        linalg::gpu::symmetric_eigenvalue_decomposition(dA.get(), 0, 0, dS.get(), dA.get(), 0, dinfo.get()));
+
+    EXPECT_ANY_THROW(linalg::gpu::pseudo_inverse(
+        (long long)n, (long long)n, static_cast<const double*>(nullptr), (long long)n, dA.get(), (long long)n));
+    EXPECT_ANY_THROW(
+        linalg::gpu::pseudo_inverse(0LL, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n));
+
+    EXPECT_ANY_THROW(linalg::gpu::matrix_rank(
+        static_cast<const double*>(nullptr), (long long)n, (long long)n, (long long)n));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_rank(dA.get(), 0LL, (long long)n, (long long)n));
+
+    EXPECT_ANY_THROW(linalg::gpu::matrix_condition_number(
+        static_cast<const double*>(nullptr), (long long)n, (long long)n, (long long)n));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_condition_number(dA.get(), 0LL, (long long)n, (long long)n));
+
+    EXPECT_ANY_THROW(linalg::gpu::matrix_norm(static_cast<const double*>(nullptr),
+        (long long)n,
+        (long long)n,
+        (long long)n,
+        linalg::matrix_norm_type::FROBENIUS));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_norm(
+        dA.get(), 0LL, (long long)n, (long long)n, linalg::matrix_norm_type::FROBENIUS));
+
+    EXPECT_ANY_THROW(linalg::gpu::matrix_trace(static_cast<const double*>(nullptr), n, n));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_trace(dA.get(), 0, n));
+
+    EXPECT_ANY_THROW(linalg::gpu::least_squares_solve((long long)n,
+        (long long)n,
+        (long long)n,
+        static_cast<const double*>(nullptr),
+        (long long)n,
+        dA.get(),
+        (long long)n,
+        dA.get(),
+        (long long)n));
+    EXPECT_ANY_THROW(linalg::gpu::least_squares_solve(
+        0LL, (long long)n, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, dA.get(), (long long)n));
 }
 
 // Two independent Cholesky solves issued on two distinct caller-created

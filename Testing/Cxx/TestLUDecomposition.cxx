@@ -91,7 +91,7 @@ void test_lu(double tolerance)
 {
     const std::size_t n = 11;
 
-    std::vector<quarisma_int> pivot(n + 1);
+    std::vector<linalg_int> pivot(n + 1);
 
     std::vector<value_t> b(n);
 
@@ -109,7 +109,7 @@ void test_lu(double tolerance)
     }
 
     a1 = A;
-    linalg::lu_decomposition(a1.data(), static_cast<quarisma_int>(n), pivot.data());
+    linalg::lu_decomposition(a1.data(), static_cast<linalg_int>(n), pivot.data());
 
     dense_matrix<value_t> L(n, n);
     dense_matrix<value_t> U(n, n);
@@ -127,12 +127,12 @@ void test_lu(double tolerance)
     dense_matrix<value_t> result = matmul(L, U);
 
 #if defined(LINALG_LU_PIVOTING) || defined(LINALG_ENABLE_MKL)
-    for (quarisma_int i = static_cast<quarisma_int>(n) - 1; i >= 0; --i)
+    for (linalg_int i = static_cast<linalg_int>(n) - 1; i >= 0; --i)
     {
         auto p = pivot[i] - 1;
         if (p != i)
         {
-            for (quarisma_int j = 0; j < static_cast<quarisma_int>(n); ++j)
+            for (linalg_int j = 0; j < static_cast<linalg_int>(n); ++j)
             {
                 auto ii    = static_cast<std::size_t>(i);
                 auto pp    = static_cast<std::size_t>(p);
@@ -151,9 +151,9 @@ void test_lu(double tolerance)
     dense_matrix<value_t> IA = a1;
 
     linalg::matrix_invert(
-        IA.data(), pivot.data(), static_cast<quarisma_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+        IA.data(), pivot.data(), static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     linalg::matrix_determinant(
-        a1.data(), pivot.data(), static_cast<quarisma_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+        a1.data(), pivot.data(), static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
 
     dense_matrix<value_t> Id(n, n);
     for (std::size_t i = 0; i < n; i++)
@@ -177,7 +177,7 @@ void test_lu(double tolerance)
     linalg::linear_solver(
         a1.data(),
         pivot.data(),
-        static_cast<quarisma_int>(n),
+        static_cast<linalg_int>(n),
         x.data(),
         linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
 

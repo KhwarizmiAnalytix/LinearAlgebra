@@ -7,11 +7,11 @@
 #include "include/matrix_operation/linear_solver.h"
 
 #if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define quarisma_int __int64
-#define quarisma_long unsigned __int64
+#define linalg_int __int64
+#define linalg_long unsigned __int64
 #else
-#define quarisma_int long long int
-#define quarisma_long unsigned long long int
+#define linalg_int long long int
+#define linalg_long unsigned long long int
 #endif
 
 namespace linalg
@@ -29,14 +29,14 @@ namespace gpu
 // you need the result. `stream` (default: the legacy default stream) is the
 // CUDA stream the underlying cuSOLVER call is issued on.
 LINALG_API void linear_solver(float* m,
-    quarisma_int                     lda,
+    linalg_int                     lda,
     float*                           x,
     linear_solver_type               type,
     int*                             info,
     cudaStream_t                     stream = nullptr);
 
 LINALG_API void linear_solver(double* m,
-    quarisma_int                      lda,
+    linalg_int                      lda,
     double*                           x,
     linear_solver_type                type,
     int*                              info,

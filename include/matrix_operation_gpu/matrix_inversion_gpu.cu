@@ -98,7 +98,7 @@ void lu_invert(BufferSizeFn buffer_size,
     GetrfFn                 getrf,
     GetrsFn                 getrs,
     T*                      m,
-    quarisma_int            lda,
+    linalg_int            lda,
     int*                    info,
     cudaStream_t            stream)
 {
@@ -197,7 +197,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
     PotrfFn                       potrf,
     PotrsFn                       potrs,
     T*                            m,
-    quarisma_int                  lda,
+    linalg_int                  lda,
     int*                          info,
     cudaStream_t                  stream)
 {
@@ -283,7 +283,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
 // bookkeeping.
 template <typename T, typename BufferSizeFn, typename GetrfFn>
 T lu_determinant(
-    BufferSizeFn buffer_size, GetrfFn getrf, T* m, quarisma_int lda, cudaStream_t stream)
+    BufferSizeFn buffer_size, GetrfFn getrf, T* m, linalg_int lda, cudaStream_t stream)
 {
     const auto n      = static_cast<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
@@ -362,7 +362,7 @@ T lu_determinant(
 
 template <typename T, typename BufferSizeFn, typename PotrfFn>
 T cholesky_determinant(
-    BufferSizeFn buffer_size, PotrfFn potrf, T* m, quarisma_int lda, cudaStream_t stream)
+    BufferSizeFn buffer_size, PotrfFn potrf, T* m, linalg_int lda, cudaStream_t stream)
 {
     const auto n      = static_cast<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
@@ -430,8 +430,16 @@ T cholesky_determinant(
 }  // namespace
 
 void matrix_invert(
-    float* m, quarisma_int lda, int* info, linear_solver_type type, cudaStream_t stream)
+    float* m, linalg_int lda, int* info, linear_solver_type type, cudaStream_t stream)
 {
+    if (m == nullptr || info == nullptr)
+    {
+        LINALG_THROW("matrix_invert: m and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_invert: lda must be positive", lda);
+    }
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
@@ -445,13 +453,21 @@ void matrix_invert(
             cusolverDnSpotrf_bufferSize, cusolverDnSpotrf, cusolverDnSpotrs, m, lda, info, stream);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
 void matrix_invert(
-    double* m, quarisma_int lda, int* info, linear_solver_type type, cudaStream_t stream)
+    double* m, linalg_int lda, int* info, linear_solver_type type, cudaStream_t stream)
 {
+    if (m == nullptr || info == nullptr)
+    {
+        LINALG_THROW("matrix_invert: m and info must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_invert: lda must be positive", lda);
+    }
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
@@ -465,12 +481,20 @@ void matrix_invert(
             cusolverDnDpotrf_bufferSize, cusolverDnDpotrf, cusolverDnDpotrs, m, lda, info, stream);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
-float matrix_determinant(float* m, quarisma_int lda, linear_solver_type type, cudaStream_t stream)
+float matrix_determinant(float* m, linalg_int lda, linear_solver_type type, cudaStream_t stream)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_determinant: m must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_determinant: lda must be positive", lda);
+    }
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
@@ -480,11 +504,19 @@ float matrix_determinant(float* m, quarisma_int lda, linear_solver_type type, cu
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(cusolverDnSpotrf_bufferSize, cusolverDnSpotrf, m, lda, stream);
     }
-    LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
-double matrix_determinant(double* m, quarisma_int lda, linear_solver_type type, cudaStream_t stream)
+double matrix_determinant(double* m, linalg_int lda, linear_solver_type type, cudaStream_t stream)
 {
+    if (m == nullptr)
+    {
+        LINALG_THROW("matrix_determinant: m must not be null");
+    }
+    if (lda <= 0)
+    {
+        LINALG_THROW("matrix_determinant: lda must be positive", lda);
+    }
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
@@ -494,7 +526,7 @@ double matrix_determinant(double* m, quarisma_int lda, linear_solver_type type, 
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(cusolverDnDpotrf_bufferSize, cusolverDnDpotrf, m, lda, stream);
     }
-    LINALG_THROW("unsupported linear_solver_type", static_cast<quarisma_int>(type));
+    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 }  // namespace gpu

@@ -86,7 +86,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
     }
 
     std::vector<value_t>      x_ref(dim);
-    std::vector<quarisma_int> pivot(dim + 1);
+    std::vector<linalg_int> pivot(dim + 1);
 
     for (std::size_t i = 0; i < dim; i++)
     {
@@ -105,7 +105,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
     linalg::linear_solver(
         R.begin(),
         pivot.data(),
-        static_cast<quarisma_int>(dim),
+        static_cast<linalg_int>(dim),
         x.data(),
         linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
 
@@ -117,7 +117,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
     linalg::linear_solver(
         R2.begin(),
         pivot.data(),
-        static_cast<quarisma_int>(dim),
+        static_cast<linalg_int>(dim),
         x.data(),
         linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
 
@@ -129,7 +129,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
     linalg::linear_solver(
         R3.begin(),
         pivot.data(),
-        static_cast<quarisma_int>(dim),
+        static_cast<linalg_int>(dim),
         x.data(),
         linalg::linear_solver_type::LU_LINEAR_SOLVER);
 
