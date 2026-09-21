@@ -145,7 +145,7 @@ to be compared against the CPU convention." §5.2 fixes this.
   `linear_solver_gpu.cxx`) calls `cudaMalloc`/`cudaFree` for its workspace
   (and, for LU, its pivot array) on every single invocation, and does not
   check `cudaMalloc`'s return value. Per §2, the per-call allocation pattern
-  itself is unchanged by this plan — only the missing `LINALG_THROW` on a
+  itself is unchanged by this plan — only the missing `LOGGING_THROW` on a
   failed `cudaMalloc` is added, at each existing call site, the same way
   every other failure in these files is already reported.
 - `detail::cublas_handle()` / `detail::cusolver_handle()`
@@ -380,7 +380,7 @@ Ordered by dependency, each phase independently buildable/testable:
 1. **DONE** — **§5.1 handle pool + stream parameter** — pure infrastructure,
    no public API change beyond the additive trailing `stream` default,
    fixes the multi-GPU-handle correctness gap immediately. Bundled in the
-   §4.3 unchecked-`cudaMalloc` fix at the same time (a `LINALG_THROW` added
+   §4.3 unchecked-`cudaMalloc` fix at the same time (a `LOGGING_THROW` added
    at each existing call site) since both touched the same three files
    (`cholesky_decomposition_gpu.cxx`, `lu_decomposition_gpu.cxx`,
    `linear_solver_gpu.cxx`). Verified: `MathGpu.StreamParameter` (two

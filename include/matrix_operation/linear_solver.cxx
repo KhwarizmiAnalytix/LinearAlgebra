@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -283,14 +283,8 @@ void solver_scalar_f64(
 void linear_solver(
     float* m, linalg_int* pivot, linalg_int lda, float* x, linear_solver_type type)
 {
-    if (m == nullptr || x == nullptr)
-    {
-        LINALG_THROW("linear_solver: m and x must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("linear_solver: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver: m and x must not be null");
+    LOGGING_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     detail::solver_mkl_f32(m, pivot, lda, x, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -304,14 +298,8 @@ void linear_solver(
 void linear_solver(
     double* m, linalg_int* pivot, linalg_int lda, double* x, linear_solver_type type)
 {
-    if (m == nullptr || x == nullptr)
-    {
-        LINALG_THROW("linear_solver: m and x must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("linear_solver: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver: m and x must not be null");
+    LOGGING_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     detail::solver_mkl_f64(m, pivot, lda, x, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -21,18 +21,9 @@ namespace
 template <typename T> std::vector<T> download_singular_values(
     const T* A, linalg_long rows, linalg_long columns, linalg_long lda, cudaStream_t stream)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("A must not be null");
-    }
-    if (rows == 0 || columns == 0)
-    {
-        LINALG_THROW("rows and columns must be positive");
-    }
-    if (static_cast<linalg_long>(lda) != columns)
-    {
-        LINALG_THROW("requires tightly packed lda (lda == columns)");
-    }
+    LOGGING_CHECK(A != nullptr, "A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "rows and columns must be positive");
+    LOGGING_CHECK(!(static_cast<linalg_long>(lda) != columns), "requires tightly packed lda (lda == columns)");
 
     const auto k = std::min(rows, columns);
 
@@ -40,29 +31,26 @@ template <typename T> std::vector<T> download_singular_values(
     T*  U    = nullptr;
     T*  VT   = nullptr;
     int* info = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&S), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess)
-    {
-        LINALG_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(!(cudaMalloc(reinterpret_cast<void**>(&S), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess), "cudaMalloc failed");
     if (cudaMalloc(reinterpret_cast<void**>(&U),
             sizeof(T) * static_cast<size_t>(rows) * static_cast<size_t>(k)) != cudaSuccess)
     {
         cudaFree(S);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&VT),
             sizeof(T) * static_cast<size_t>(k) * static_cast<size_t>(columns)) != cudaSuccess)
     {
         cudaFree(S);
         cudaFree(U);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&info), sizeof(int)) != cudaSuccess)
     {
         cudaFree(S);
         cudaFree(U);
         cudaFree(VT);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     svd_decomposition(rows, columns, A, columns, S, U, k, VT, columns, info, stream);
@@ -81,14 +69,8 @@ template <typename T> std::vector<T> download_singular_values(
     cudaFree(S);
     cudaFree(info);
 
-    if (info_copy_status != cudaSuccess || s_copy_status != cudaSuccess || sync_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
-    }
-    if (svd_status != 0)
-    {
-        LINALG_THROW("linalg::gpu::svd_decomposition failed", svd_status);
-    }
+    LOGGING_CHECK(!(info_copy_status != cudaSuccess) && !(s_copy_status != cudaSuccess) && !(sync_status != cudaSuccess), "cudaMemcpyAsync/cudaStreamSynchronize failed");
+    LOGGING_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed", svd_status);
     return host_s;
 }
 

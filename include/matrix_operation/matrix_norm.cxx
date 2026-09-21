@@ -6,7 +6,7 @@
 
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/memory/allocator.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -102,7 +102,7 @@ template <typename T> T matrix_norm_impl(const T* A, linalg_long rows, linalg_lo
     case matrix_norm_type::TWO:
         return norm_two(A, rows, columns, lda);
     default:
-        LINALG_THROW("unsupported matrix_norm_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported matrix_norm_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -111,28 +111,16 @@ template <typename T> T matrix_norm_impl(const T* A, linalg_long rows, linalg_lo
 //-----------------------------------------------------------------------------
 float matrix_norm(const float* A, linalg_long rows, linalg_long columns, linalg_long lda, matrix_norm_type type)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_norm: A must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0)
-    {
-        LINALG_THROW("matrix_norm: rows/columns/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_norm: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_norm: rows/columns/lda must be positive");
     return detail::matrix_norm_impl(A, rows, columns, lda, type);
 }
 
 //-----------------------------------------------------------------------------
 double matrix_norm(const double* A, linalg_long rows, linalg_long columns, linalg_long lda, matrix_norm_type type)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_norm: A must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0)
-    {
-        LINALG_THROW("matrix_norm: rows/columns/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_norm: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_norm: rows/columns/lda must be positive");
     return detail::matrix_norm_impl(A, rows, columns, lda, type);
 }
 

@@ -4,9 +4,12 @@ Standalone C++ dense linear algebra library: Cholesky/LU/SVD decompositions,
 linear solve, matrix inversion/multiplication/transpose, with a portable
 scalar fallback and an optional Intel MKL backend. Source lives in
 `include/`; tests live in `Testing/Cxx/`. Use namespace `linalg` and
-the existing `LINALG_*` export/feature macros. Preserve the exception
-reporting in `include/util/exception.h` (`LINALG_THROW`). Dependencies
-are under `ThirdParty/`.
+the existing `LINALG_*` export/feature macros. Exception reporting uses
+`KhwarizmiAnalytix/Logging` (vendored at `ThirdParty/Logging`, a required
+dependency) directly: throw via `LOGGING_THROW`/`LOGGING_CHECK`
+(fmt-style `{}` placeholders, not stream concatenation) and catch
+`logging::exception`; there is no `include/util/exception.h` or
+`LINALG_THROW` wrapper in this repo. Dependencies are under `ThirdParty/`.
 
 ## Shared agent guidance
 

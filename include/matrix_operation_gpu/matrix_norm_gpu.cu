@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 // One thread per column/row, looping serially over the other dimension —
 // simple and obviously correct rather than a tree reduction, matching this
@@ -66,7 +66,7 @@ T norm_frobenius(Nrm2Fn nrm2, const T* A, linalg_long rows, linalg_long columns,
     const auto n       = static_cast<int>(rows) * static_cast<int>(columns);
     if (nrm2(handle, n, A, 1, &result) != CUBLAS_STATUS_SUCCESS)
     {
-        LINALG_THROW("cublasX?nrm2 failed");
+        LOGGING_THROW("cublasX?nrm2 failed");
     }
     return result;
 }
@@ -82,14 +82,14 @@ T reduce_max(AmaxFn amax, const T* values, int n, cudaStream_t stream)
     int idx_1based = 1;
     if (amax(handle, n, values, 1, &idx_1based) != CUBLAS_STATUS_SUCCESS)
     {
-        LINALG_THROW("cublasI*amax failed");
+        LOGGING_THROW("cublasI*amax failed");
     }
     T result = T(0);
     if (cudaMemcpyAsync(&result, values + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost, stream) !=
             cudaSuccess ||
         cudaStreamSynchronize(stream) != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return result;
 }
@@ -103,7 +103,7 @@ T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaS
     T* col_sums = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&col_sums), sizeof(T) * static_cast<size_t>(c)) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     const dim3 block(256);
     const dim3 grid((static_cast<unsigned>(c) + block.x - 1) / block.x);
@@ -111,7 +111,7 @@ T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaS
     if (cudaGetLastError() != cudaSuccess)
     {
         cudaFree(col_sums);
-        LINALG_THROW("abs_col_sum_kernel launch failed");
+        LOGGING_THROW("abs_col_sum_kernel launch failed");
     }
     const T result = reduce_max(amax, col_sums, c, stream);
     cudaFree(col_sums);
@@ -127,7 +127,7 @@ T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, 
     T* row_sums = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&row_sums), sizeof(T) * static_cast<size_t>(r)) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     const dim3 block(256);
     const dim3 grid((static_cast<unsigned>(r) + block.x - 1) / block.x);
@@ -135,7 +135,7 @@ T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, 
     if (cudaGetLastError() != cudaSuccess)
     {
         cudaFree(row_sums);
-        LINALG_THROW("abs_row_sum_kernel launch failed");
+        LOGGING_THROW("abs_row_sum_kernel launch failed");
     }
     const T result = reduce_max(amax, row_sums, r, stream);
     cudaFree(row_sums);
@@ -153,27 +153,27 @@ T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaS
     int* info = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&S), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&U),
             sizeof(T) * static_cast<size_t>(rows) * static_cast<size_t>(k)) != cudaSuccess)
     {
         cudaFree(S);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&VT),
             sizeof(T) * static_cast<size_t>(k) * static_cast<size_t>(columns)) != cudaSuccess)
     {
         cudaFree(S);
         cudaFree(U);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&info), sizeof(int)) != cudaSuccess)
     {
         cudaFree(S);
         cudaFree(U);
         cudaFree(VT);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     svd_decomposition(rows, columns, A, columns, S, U, k, VT, columns, info, stream);
@@ -191,12 +191,12 @@ T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaS
     if (info_copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
         cudaFree(S);
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     if (svd_status != 0)
     {
         cudaFree(S);
-        LINALG_THROW("linalg::gpu::svd_decomposition failed", svd_status);
+        LOGGING_THROW("linalg::gpu::svd_decomposition failed", svd_status);
     }
 
     const T result = reduce_max(amax, S, static_cast<int>(k), stream);
@@ -216,15 +216,15 @@ T matrix_norm_impl(Nrm2Fn nrm2,
 {
     if (A == nullptr)
     {
-        LINALG_THROW("matrix_norm: A must not be null");
+        LOGGING_THROW("matrix_norm: A must not be null");
     }
     if (rows == 0 || columns == 0)
     {
-        LINALG_THROW("matrix_norm: rows and columns must be positive");
+        LOGGING_THROW("matrix_norm: rows and columns must be positive");
     }
     if (static_cast<linalg_long>(lda) != columns)
     {
-        LINALG_THROW("linalg::gpu::matrix_norm requires tightly packed lda (lda == columns)");
+        LOGGING_THROW("linalg::gpu::matrix_norm requires tightly packed lda (lda == columns)");
     }
 
     switch (type)
@@ -238,7 +238,7 @@ T matrix_norm_impl(Nrm2Fn nrm2,
     case matrix_norm_type::TWO:
         return norm_two(amax, A, rows, columns, stream);
     default:
-        LINALG_THROW("unsupported matrix_norm_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported matrix_norm_type", static_cast<linalg_int>(type));
     }
 }
 

@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -39,23 +39,20 @@ void lu_solve(BufferSizeFn buffer_size,
     detail::set_stream(handle, stream);
 
     int lwork = 0;
-    if (buffer_size(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
-    {
-        LINALG_THROW("cusolverDn*getrf_bufferSize failed");
-    }
+    LOGGING_CHECK(!(buffer_size(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDn*getrf_bufferSize failed");
 
     T*   workspace = nullptr;
     int* dev_ipiv  = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(T) * static_cast<size_t>(lwork)) !=
         cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_ipiv), sizeof(int) * static_cast<size_t>(n)) !=
         cudaSuccess)
     {
         cudaFree(workspace);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     matrix_transpose(lda, lda, m, stream);
@@ -70,14 +67,8 @@ void lu_solve(BufferSizeFn buffer_size,
     detail::synchronize_and_free(workspace, stream, &sync_status);
     cudaFree(dev_ipiv);
 
-    if (status != CUSOLVER_STATUS_SUCCESS)
-    {
-        LINALG_THROW("cusolverDn*getrf/getrs failed");
-    }
-    if (sync_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaStreamSynchronize failed");
-    }
+    LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDn*getrf/getrs failed");
+    LOGGING_CHECK(!(sync_status != cudaSuccess), "cudaStreamSynchronize failed");
 }
 
 template <typename T, typename BufferSizeFn, typename PotrfFn, typename PotrsFn>
@@ -98,16 +89,13 @@ void cholesky_solve(BufferSizeFn buffer_size,
     const auto fill = CUBLAS_FILL_MODE_UPPER;
 
     int lwork = 0;
-    if (buffer_size(handle, fill, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
-    {
-        LINALG_THROW("cusolverDn*potrf_bufferSize failed");
-    }
+    LOGGING_CHECK(!(buffer_size(handle, fill, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDn*potrf_bufferSize failed");
 
     T* workspace = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(T) * static_cast<size_t>(lwork)) !=
         cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     auto status = potrf(handle, fill, n, m, n, workspace, lwork, info);
@@ -119,14 +107,8 @@ void cholesky_solve(BufferSizeFn buffer_size,
     cudaError_t sync_status = cudaSuccess;
     detail::synchronize_and_free(workspace, stream, &sync_status);
 
-    if (status != CUSOLVER_STATUS_SUCCESS)
-    {
-        LINALG_THROW("cusolverDn*potrf/potrs failed");
-    }
-    if (sync_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaStreamSynchronize failed");
-    }
+    LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDn*potrf/potrs failed");
+    LOGGING_CHECK(!(sync_status != cudaSuccess), "cudaStreamSynchronize failed");
 }
 
 }  // namespace
@@ -134,14 +116,8 @@ void cholesky_solve(BufferSizeFn buffer_size,
 void linear_solver(
     float* m, linalg_int lda, float* x, linear_solver_type type, int* info, cudaStream_t stream)
 {
-    if (m == nullptr || x == nullptr || info == nullptr)
-    {
-        LINALG_THROW("linear_solver: m, x, and info must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("linear_solver: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr && x != nullptr && info != nullptr, "linear_solver: m, x, and info must not be null");
+    LOGGING_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
@@ -172,14 +148,8 @@ void linear_solver(
 void linear_solver(
     double* m, linalg_int lda, double* x, linear_solver_type type, int* info, cudaStream_t stream)
 {
-    if (m == nullptr || x == nullptr || info == nullptr)
-    {
-        LINALG_THROW("linear_solver: m, x, and info must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("linear_solver: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr && x != nullptr && info != nullptr, "linear_solver: m, x, and info must not be null");
+    LOGGING_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:

@@ -4,7 +4,7 @@
 
 #include <cuda_runtime.h>
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 // One thread per output element, one z-block of the launch grid per matrix.
 // C[row][col] = sum_k A[row][k] * B[k][col], all row-major. File-scope
@@ -57,11 +57,11 @@ void launch(linalg_int dim,
 {
     if (a == nullptr || b == nullptr || c == nullptr)
     {
-        LINALG_THROW("batched_matrix_multiplication: a, b, and c must not be null");
+        LOGGING_THROW("batched_matrix_multiplication: a, b, and c must not be null");
     }
     if (dim <= 0 || count <= 0)
     {
-        LINALG_THROW("batched_matrix_multiplication: dim and count must be positive");
+        LOGGING_THROW("batched_matrix_multiplication: dim and count must be positive");
     }
     const auto d = static_cast<int>(dim);
     const auto n = static_cast<int>(count);
@@ -73,7 +73,7 @@ void launch(linalg_int dim,
 
     if (cudaGetLastError() != cudaSuccess)
     {
-        LINALG_THROW("batched_matrix_multiplication kernel launch failed");
+        LOGGING_THROW("batched_matrix_multiplication kernel launch failed");
     }
 }
 

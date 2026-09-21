@@ -1,6 +1,6 @@
 #include "include/matrix_operation/matrix_multiplication.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -1969,14 +1969,8 @@ void matrix_multiplication(bool transpose_a,
     float*                      c,
     linalg_int                ldc)
 {
-    if (a == nullptr || b == nullptr || c == nullptr)
-    {
-        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
-    }
-    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
-    {
-        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-    }
+    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
+    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::matmul_mkl_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #elif defined(LINALG_ENABLE_BLAS)
@@ -1999,14 +1993,8 @@ void matrix_multiplication(bool transpose_a,
     double*                     c,
     linalg_int                ldc)
 {
-    if (a == nullptr || b == nullptr || c == nullptr)
-    {
-        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
-    }
-    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
-    {
-        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-    }
+    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
+    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::matmul_mkl_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #elif defined(LINALG_ENABLE_BLAS)

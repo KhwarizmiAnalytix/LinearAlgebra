@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/pseudo_inverse.h"
 #include "include/memory/allocator.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -56,14 +56,8 @@ void least_squares_solve(linalg_long rows,
     float*                             X,
     linalg_long                      ldx)
 {
-    if (A == nullptr || B == nullptr || X == nullptr)
-    {
-        LINALG_THROW("least_squares_solve: A, B, and X must not be null");
-    }
-    if (rows == 0 || columns == 0 || nrhs == 0 || lda == 0 || ldb == 0 || ldx == 0)
-    {
-        LINALG_THROW("least_squares_solve: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && B != nullptr && X != nullptr, "least_squares_solve: A, B, and X must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0, "least_squares_solve: rows/columns/nrhs/lda/ldb/ldx must be positive");
     detail::least_squares_solve_impl(rows, columns, nrhs, A, lda, B, ldb, X, ldx);
 }
 
@@ -78,14 +72,8 @@ void least_squares_solve(linalg_long rows,
     double*                            X,
     linalg_long                      ldx)
 {
-    if (A == nullptr || B == nullptr || X == nullptr)
-    {
-        LINALG_THROW("least_squares_solve: A, B, and X must not be null");
-    }
-    if (rows == 0 || columns == 0 || nrhs == 0 || lda == 0 || ldb == 0 || ldx == 0)
-    {
-        LINALG_THROW("least_squares_solve: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && B != nullptr && X != nullptr, "least_squares_solve: A, B, and X must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0, "least_squares_solve: rows/columns/nrhs/lda/ldb/ldx must be positive");
     detail::least_squares_solve_impl(rows, columns, nrhs, A, lda, B, ldb, X, ldx);
 }
 

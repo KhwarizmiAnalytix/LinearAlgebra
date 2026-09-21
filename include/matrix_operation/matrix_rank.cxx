@@ -6,7 +6,7 @@
 
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/memory/allocator.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -88,56 +88,32 @@ template <typename T> T matrix_condition_number_impl(const T* A, linalg_long row
 //-----------------------------------------------------------------------------
 linalg_long matrix_rank(const float* A, linalg_long rows, linalg_long columns, linalg_long lda, float tol)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_rank: A must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0)
-    {
-        LINALG_THROW("matrix_rank: rows/columns/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_rank: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_rank: rows/columns/lda must be positive");
     return detail::matrix_rank_impl(A, rows, columns, lda, tol);
 }
 
 //-----------------------------------------------------------------------------
 linalg_long matrix_rank(const double* A, linalg_long rows, linalg_long columns, linalg_long lda, double tol)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_rank: A must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0)
-    {
-        LINALG_THROW("matrix_rank: rows/columns/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_rank: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_rank: rows/columns/lda must be positive");
     return detail::matrix_rank_impl(A, rows, columns, lda, tol);
 }
 
 //-----------------------------------------------------------------------------
 float matrix_condition_number(const float* A, linalg_long rows, linalg_long columns, linalg_long lda)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_condition_number: A must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0)
-    {
-        LINALG_THROW("matrix_condition_number: rows/columns/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_condition_number: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_condition_number: rows/columns/lda must be positive");
     return detail::matrix_condition_number_impl(A, rows, columns, lda);
 }
 
 //-----------------------------------------------------------------------------
 double matrix_condition_number(const double* A, linalg_long rows, linalg_long columns, linalg_long lda)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_condition_number: A must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0)
-    {
-        LINALG_THROW("matrix_condition_number: rows/columns/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_condition_number: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_condition_number: rows/columns/lda must be positive");
     return detail::matrix_condition_number_impl(A, rows, columns, lda);
 }
 

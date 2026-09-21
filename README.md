@@ -13,9 +13,11 @@ estimation, with a portable scalar fallback, an optional **Intel MKL**
 (`linalg::gpu::*`, device pointers only, no implicit host transfers)
 covering every CPU op except general (non-symmetric) eigenvalue
 decomposition, for which cuSOLVER's dense API has no `geev`-equivalent
-routine to call into. See
-[`docs/gpu_backend_design.md`](docs/gpu_backend_design.md) for the GPU
-backend's design and current status.
+routine to call into. Error reporting always goes through
+[KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)
+(vendored at `ThirdParty/Logging`, a required dependency, not an optional
+backend). See [`docs/gpu_backend_design.md`](docs/gpu_backend_design.md)
+for the GPU backend's design and current status.
 
 Standalone CMake package — any C++ project can consume it via
 `add_subdirectory`; [XSigma](https://github.com/KhwarizmiAnalytix/Hisab) is
@@ -30,15 +32,21 @@ one consumer, not a required host.
 - `include/common/` — export macro, feature macros, cuBLAS/cuSOLVER handle
   pool (`cuda_handle.h`).
 - `include/memory/` — minimal scratch-buffer allocator.
-- `include/util/` — exception helper, conservative CPU cache-size defaults.
+- `include/util/` — conservative CPU cache-size defaults (`cpu_info.h`); the
+  exception helper that used to live here is gone — error reporting goes
+  straight through Logging's `LOGGING_THROW`/`logging::exception` now.
 - `include/matrix_operation/` — the public CPU modules (below).
 - `include/matrix_operation_gpu/` — the `linalg::gpu::*` counterparts
   (below), built when `LINALG_ENABLE_CUBLAS=ON`.
 - `Testing/Cxx/` — GoogleTest unit tests.
-- `ThirdParty/` — vendored `googletest` submodule.
+- `ThirdParty/` — vendored `googletest` submodule, plus `Logging`
+  ([KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)),
+  a required dependency (always built, not gated by an option).
 - `docs/` — design docs (GPU backend design and status).
 
-Public C++ namespace: `linalg`. Macros: `LINALG_API`, `LINALG_THROW`, `LINALG_UNUSED`.
+Public C++ namespace: `linalg`. Macros: `LINALG_API`, `LINALG_UNUSED`; error
+reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
+`{}` placeholders) and throws/catches `logging::exception`.
 
 ## Modules
 

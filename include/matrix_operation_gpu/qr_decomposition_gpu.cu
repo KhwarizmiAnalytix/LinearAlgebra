@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 // R's strictly-below-diagonal entries are Householder-vector scratch left
 // over from geqrf, not zero — this clears them, matching the CPU
@@ -61,11 +61,11 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
 {
     if (A == nullptr || Q == nullptr || R == nullptr || info == nullptr)
     {
-        LINALG_THROW("qr_decomposition: A, Q, R, and info must not be null");
+        LOGGING_THROW("qr_decomposition: A, Q, R, and info must not be null");
     }
     if (rows == 0 || columns == 0)
     {
-        LINALG_THROW("qr_decomposition: rows and columns must be positive");
+        LOGGING_THROW("qr_decomposition: rows and columns must be positive");
     }
 
     const auto r = static_cast<int>(rows);
@@ -74,7 +74,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
 
     if (static_cast<int>(lda) != c || static_cast<int>(ldq) != k || static_cast<int>(ldr) != c)
     {
-        LINALG_THROW("linalg::gpu::qr_decomposition requires tightly packed lda/ldq/ldr "
+        LOGGING_THROW("linalg::gpu::qr_decomposition requires tightly packed lda/ldq/ldr "
                      "(lda == columns, ldq == min(rows, columns), ldr == columns)");
     }
 
@@ -88,12 +88,12 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     T* a_work = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&a_work), sizeof(T) * rc) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMemcpyAsync(a_work, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) != cudaSuccess)
     {
         cudaFree(a_work);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
     // Same identity svd_decomposition_gpu.cxx relies on: transposing the
     // row-major buffer first makes cuSOLVER's column-major (m=rows,
@@ -104,7 +104,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     if (cudaMalloc(reinterpret_cast<void**>(&tau), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess)
     {
         cudaFree(a_work);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     int lwork_geqrf = 0;
@@ -112,7 +112,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cusolverDn*geqrf_bufferSize failed");
+        LOGGING_THROW("cusolverDn*geqrf_bufferSize failed");
     }
     T* work_geqrf = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&work_geqrf),
@@ -120,7 +120,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const auto geqrf_status = geqrf(handle, r, c, a_work, r, tau, work_geqrf, lwork_geqrf, info);
@@ -129,7 +129,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cusolverDn*geqrf failed");
+        LOGGING_THROW("cusolverDn*geqrf failed");
     }
 
     // Extract R: the top k rows of a_work (column-major, r x c, lda = r),
@@ -142,7 +142,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMemcpy2DAsync(r_work,
             sizeof(T) * static_cast<size_t>(k),
@@ -156,7 +156,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
         cudaFree(a_work);
         cudaFree(tau);
         cudaFree(r_work);
-        LINALG_THROW("cudaMemcpy2DAsync failed");
+        LOGGING_THROW("cudaMemcpy2DAsync failed");
     }
     // r_work's bytes, column-major (k x c), equal row-major (c x k) of the
     // same logical matrix transposed (the usual identity) — reinterpreting
@@ -171,7 +171,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
         cudaFree(a_work);
         cudaFree(tau);
         cudaFree(r_work);
-        LINALG_THROW("zero_qr_lower_triangle_kernel launch failed");
+        LOGGING_THROW("zero_qr_lower_triangle_kernel launch failed");
     }
 
     const auto r_copy_status =
@@ -181,7 +181,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
 
     // Extract Q: orgqr(m=r, n=k, k_reflectors=k) overwrites a_work's first
@@ -193,7 +193,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cusolverDn*orgqr_bufferSize failed");
+        LOGGING_THROW("cusolverDn*orgqr_bufferSize failed");
     }
     T* work_orgqr = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&work_orgqr),
@@ -201,7 +201,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     {
         cudaFree(a_work);
         cudaFree(tau);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const auto orgqr_status = orgqr(handle, r, k, k, a_work, r, tau, work_orgqr, lwork_orgqr, info);
@@ -210,14 +210,14 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     if (orgqr_status != CUSOLVER_STATUS_SUCCESS)
     {
         cudaFree(a_work);
-        LINALG_THROW("cusolverDn*orgqr failed");
+        LOGGING_THROW("cusolverDn*orgqr failed");
     }
 
     T* q_work = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&q_work), sizeof(T) * rk) != cudaSuccess)
     {
         cudaFree(a_work);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     const auto q_copy_status =
         cudaMemcpyAsync(q_work, a_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice, stream);
@@ -225,7 +225,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     if (q_copy_status != cudaSuccess)
     {
         cudaFree(q_work);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
     // Same reinterpret-then-transpose identity used for R above.
     matrix_transpose(static_cast<linalg_long>(k), rows, q_work, stream);
@@ -235,7 +235,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     cudaFree(q_work);
     if (q_final_copy_status != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
 }
 

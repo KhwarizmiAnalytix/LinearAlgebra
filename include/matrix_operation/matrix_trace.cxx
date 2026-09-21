@@ -1,6 +1,6 @@
 #include "include/matrix_operation/matrix_trace.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -22,28 +22,16 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 //-----------------------------------------------------------------------------
 float matrix_trace(const float* A, linalg_int n, linalg_int lda)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_trace: A must not be null");
-    }
-    if (n <= 0 || lda <= 0)
-    {
-        LINALG_THROW("matrix_trace: n/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_trace: A must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0, "matrix_trace: n/lda must be positive");
     return detail::matrix_trace_impl(A, n, lda);
 }
 
 //-----------------------------------------------------------------------------
 double matrix_trace(const double* A, linalg_int n, linalg_int lda)
 {
-    if (A == nullptr)
-    {
-        LINALG_THROW("matrix_trace: A must not be null");
-    }
-    if (n <= 0 || lda <= 0)
-    {
-        LINALG_THROW("matrix_trace: n/lda must be positive");
-    }
+    LOGGING_CHECK(A != nullptr, "matrix_trace: A must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0, "matrix_trace: n/lda must be positive");
     return detail::matrix_trace_impl(A, n, lda);
 }
 

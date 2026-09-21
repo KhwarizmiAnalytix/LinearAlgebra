@@ -286,6 +286,24 @@ if(LINALG_ENABLE_CUBLAS)
   list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
 endif()
 
+# --- Logging (required) ---
+# KhwarizmiAnalytix/Logging (ThirdParty/Logging, a nested submodule with its
+# own fmt/loguru/glog/spdlog/magic_enum submodules) provides logging::
+# exception, the type every LOGGING_THROW call site in this library throws
+# (include/matrix_operation/, include/matrix_operation_gpu/) — there is no
+# std::runtime_error fallback, so this is unconditional, not gated behind an
+# option. Logging is a full standalone CMake package (same
+# add_subdirectory-embeddable shape as this repo itself); disable its own
+# test/benchmark subtrees when embedded here — LinearAlgebra has its own
+# GoogleTest wiring and no use for Logging's benchmark_logging_logger target.
+set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
+set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
+                 "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
+)
+list(APPEND LINALG_DEPENDENCY_LIBS Logging::Logging)
+
 # --- Configure-time headers ---
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/Testing/LinearAlgebraTest.h.in"
@@ -350,7 +368,7 @@ else()
 endif()
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
-#                             "include/util/exception.h", ...
+#                             "include/util/cpu_info.h", ...
 target_include_directories(
   LinearAlgebra
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

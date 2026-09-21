@@ -1,6 +1,6 @@
 #include "include/matrix_operation/svd_decomposition.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -52,10 +52,7 @@ void svd_mkl_f32(linalg_long rows,
         std::copy_n(A, rows * columns, U);
         auto info = LAPACKE_sgesvd(
             LAPACK_ROW_MAJOR, 'O', 'S', rows, columns, U, ldu, S, U, ldu, VT, ldv, temp);  // NOLINT
-        if (info != 0)
-        {
-            LINALG_THROW("mkl SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
     }
     else
     {
@@ -73,10 +70,7 @@ void svd_mkl_f32(linalg_long rows,
             VT,
             ldv,
             temp);  // NOLINT
-        if (info != 0)
-        {
-            LINALG_THROW("mkl SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
     }
     Allocator::free(temp);
 }
@@ -98,10 +92,7 @@ void svd_mkl_f64(linalg_long rows,
         std::copy_n(A, rows * columns, U);
         auto info = LAPACKE_dgesvd(
             LAPACK_ROW_MAJOR, 'O', 'S', rows, columns, U, ldu, S, U, ldu, VT, ldv, temp);  // NOLINT
-        if (info != 0)
-        {
-            LINALG_THROW("mkl SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
     }
     else
     {
@@ -119,10 +110,7 @@ void svd_mkl_f64(linalg_long rows,
             VT,
             ldv,
             temp);  // NOLINT
-        if (info != 0)
-        {
-            LINALG_THROW("mkl SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
     }
     Allocator::free(temp);
 }
@@ -159,10 +147,7 @@ void svd_blas_f32(linalg_long rows,
             VT,
             static_cast<lapack_int>(ldv),
             temp);
-        if (info != 0)
-        {
-            LINALG_THROW("blas_lapack SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
     else
     {
@@ -180,10 +165,7 @@ void svd_blas_f32(linalg_long rows,
             VT,
             static_cast<lapack_int>(ldv),
             temp);
-        if (info != 0)
-        {
-            LINALG_THROW("blas_lapack SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
     Allocator::free(temp);
 }
@@ -218,10 +200,7 @@ void svd_blas_f64(linalg_long rows,
             VT,
             static_cast<lapack_int>(ldv),
             temp);
-        if (info != 0)
-        {
-            LINALG_THROW("blas_lapack SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
     else
     {
@@ -239,10 +218,7 @@ void svd_blas_f64(linalg_long rows,
             VT,
             static_cast<lapack_int>(ldv),
             temp);
-        if (info != 0)
-        {
-            LINALG_THROW("blas_lapack SVD was unsuccessful");
-        }
+        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
     Allocator::free(temp);
 }
@@ -728,14 +704,8 @@ void svd_decomposition(linalg_long rows,
     float*                           VT,
     linalg_long                    ldv)
 {
-    if (A == nullptr || S == nullptr || U == nullptr || VT == nullptr)
-    {
-        LINALG_THROW("svd_decomposition: A, S, U, and VT must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0 || ldu == 0 || ldv == 0)
-    {
-        LINALG_THROW("svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_decomposition: A, S, U, and VT must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0, "svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::svd_mkl_f32(rows, columns, A, lda, S, U, ldu, VT, ldv);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -756,14 +726,8 @@ void svd_decomposition(linalg_long rows,
     double*                          VT,
     linalg_long                    ldv)
 {
-    if (A == nullptr || S == nullptr || U == nullptr || VT == nullptr)
-    {
-        LINALG_THROW("svd_decomposition: A, S, U, and VT must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0 || ldu == 0 || ldv == 0)
-    {
-        LINALG_THROW("svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_decomposition: A, S, U, and VT must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0, "svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::svd_mkl_f64(rows, columns, A, lda, S, U, ldu, VT, ldv);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)

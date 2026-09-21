@@ -9,7 +9,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns
 // row-major) into Ainv = V * diag(S+) * U^T (columns x rows row-major),
@@ -70,17 +70,17 @@ void pseudo_inverse_impl(AmaxFn amax,
 {
     if (A == nullptr || Ainv == nullptr)
     {
-        LINALG_THROW("pseudo_inverse: A and Ainv must not be null");
+        LOGGING_THROW("pseudo_inverse: A and Ainv must not be null");
     }
     if (rows == 0 || columns == 0)
     {
-        LINALG_THROW("pseudo_inverse: rows and columns must be positive");
+        LOGGING_THROW("pseudo_inverse: rows and columns must be positive");
     }
     const auto r = static_cast<int>(rows);
     const auto c = static_cast<int>(columns);
     if (static_cast<int>(lda) != c || static_cast<int>(ldai) != r)
     {
-        LINALG_THROW(
+        LOGGING_THROW(
             "linalg::gpu::pseudo_inverse requires tightly packed lda/ldai (lda == columns, ldai == "
             "rows)");
     }
@@ -93,27 +93,27 @@ void pseudo_inverse_impl(AmaxFn amax,
     int* svd_info = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&S), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&U),
             sizeof(T) * static_cast<size_t>(r) * static_cast<size_t>(k)) != cudaSuccess)
     {
         cudaFree(S);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&VT),
             sizeof(T) * static_cast<size_t>(k) * static_cast<size_t>(c)) != cudaSuccess)
     {
         cudaFree(S);
         cudaFree(U);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&svd_info), sizeof(int)) != cudaSuccess)
     {
         cudaFree(S);
         cudaFree(U);
         cudaFree(VT);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     svd_decomposition(rows, columns, A, columns, S, U, static_cast<linalg_long>(k), VT, columns,
@@ -128,7 +128,7 @@ void pseudo_inverse_impl(AmaxFn amax,
         cudaFree(U);
         cudaFree(VT);
         cudaFree(svd_info);
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     cudaFree(svd_info);
     if (svd_status != 0)
@@ -136,7 +136,7 @@ void pseudo_inverse_impl(AmaxFn amax,
         cudaFree(S);
         cudaFree(U);
         cudaFree(VT);
-        LINALG_THROW("linalg::gpu::svd_decomposition failed inside pseudo_inverse", svd_status);
+        LOGGING_THROW("linalg::gpu::svd_decomposition failed inside pseudo_inverse", svd_status);
     }
 
     auto cublas_handle = detail::cublas_handle_for_current_device();
@@ -147,7 +147,7 @@ void pseudo_inverse_impl(AmaxFn amax,
         cudaFree(S);
         cudaFree(U);
         cudaFree(VT);
-        LINALG_THROW("cublasI*amax failed");
+        LOGGING_THROW("cublasI*amax failed");
     }
 
     T smax = T(0);
@@ -158,7 +158,7 @@ void pseudo_inverse_impl(AmaxFn amax,
         cudaFree(S);
         cudaFree(U);
         cudaFree(VT);
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     smax = std::fabs(smax);
 
@@ -183,11 +183,11 @@ void pseudo_inverse_impl(AmaxFn amax,
 
     if (launch_err != cudaSuccess)
     {
-        LINALG_THROW("pinv_combine_kernel launch failed");
+        LOGGING_THROW("pinv_combine_kernel launch failed");
     }
     if (sync_status != cudaSuccess)
     {
-        LINALG_THROW("cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaStreamSynchronize failed");
     }
 }
 

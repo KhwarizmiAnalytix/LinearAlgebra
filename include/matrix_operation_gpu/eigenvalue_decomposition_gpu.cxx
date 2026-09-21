@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -31,21 +31,12 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     int*                               info,
     cudaStream_t                       stream)
 {
-    if (A == nullptr || eigenvalues == nullptr || eigenvectors == nullptr || info == nullptr)
-    {
-        LINALG_THROW(
+    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr && info != nullptr, 
             "symmetric_eigenvalue_decomposition: A, eigenvalues, eigenvectors, and info must not be "
             "null");
-    }
-    if (n <= 0)
-    {
-        LINALG_THROW("symmetric_eigenvalue_decomposition: n must be positive");
-    }
-    if (lda != n || ldv != n)
-    {
-        LINALG_THROW("linalg::gpu::symmetric_eigenvalue_decomposition requires tightly packed "
+    LOGGING_CHECK(n > 0, "symmetric_eigenvalue_decomposition: n must be positive");
+    LOGGING_CHECK(!(lda != n) && !(ldv != n), "linalg::gpu::symmetric_eigenvalue_decomposition requires tightly packed "
                      "lda/ldv (both == n)");
-    }
 
     const auto nn      = static_cast<int>(n);
     auto       handle  = detail::cusolver_handle_for_current_device();
@@ -60,14 +51,11 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
 
     const auto n2 = static_cast<size_t>(nn) * static_cast<size_t>(nn);
     T*         work_a = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&work_a), sizeof(T) * n2) != cudaSuccess)
-    {
-        LINALG_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(!(cudaMalloc(reinterpret_cast<void**>(&work_a), sizeof(T) * n2) != cudaSuccess), "cudaMalloc failed");
     if (cudaMemcpyAsync(work_a, A, sizeof(T) * n2, cudaMemcpyDeviceToDevice, stream) != cudaSuccess)
     {
         cudaFree(work_a);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
 
     int lwork = 0;
@@ -75,7 +63,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
         CUSOLVER_STATUS_SUCCESS)
     {
         cudaFree(work_a);
-        LINALG_THROW("cusolverDn*syevd_bufferSize failed");
+        LOGGING_THROW("cusolverDn*syevd_bufferSize failed");
     }
 
     T* workspace = nullptr;
@@ -83,7 +71,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
         cudaSuccess)
     {
         cudaFree(work_a);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const auto status = syevd(
@@ -92,7 +80,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     if (status != CUSOLVER_STATUS_SUCCESS)
     {
         cudaFree(work_a);
-        LINALG_THROW("cusolverDn*syevd failed");
+        LOGGING_THROW("cusolverDn*syevd failed");
     }
 
     // work_a now holds the eigenvectors column-major (n x n); the CPU
@@ -101,10 +89,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     const auto copy_status =
         cudaMemcpyAsync(eigenvectors, work_a, sizeof(T) * n2, cudaMemcpyDeviceToDevice, stream);
     cudaFree(work_a);
-    if (copy_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaMemcpyAsync failed");
-    }
+    LOGGING_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
 }
 
 }  // namespace

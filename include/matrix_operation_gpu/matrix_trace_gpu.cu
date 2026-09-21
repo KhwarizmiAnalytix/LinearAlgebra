@@ -4,7 +4,7 @@
 
 #include <cuda_runtime_api.h>
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 // Single-thread reduction: n is one matrix dimension, not a large array, so
 // a parallel reduction buys nothing here — same rationale and shape as
@@ -36,21 +36,21 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 {
     if (A == nullptr)
     {
-        LINALG_THROW("matrix_trace: A must not be null");
+        LOGGING_THROW("matrix_trace: A must not be null");
     }
     if (n <= 0)
     {
-        LINALG_THROW("matrix_trace: n must be positive");
+        LOGGING_THROW("matrix_trace: n must be positive");
     }
     if (lda != n)
     {
-        LINALG_THROW("linalg::gpu::matrix_trace requires tightly packed lda (lda == n)");
+        LOGGING_THROW("linalg::gpu::matrix_trace requires tightly packed lda (lda == n)");
     }
 
     T* dev_sum = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&dev_sum), sizeof(T)) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     trace_kernel<T><<<1, 1, 0, stream>>>(A, static_cast<int>(n), dev_sum);
@@ -63,11 +63,11 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 
     if (launch_err != cudaSuccess)
     {
-        LINALG_THROW("trace_kernel launch failed");
+        LOGGING_THROW("trace_kernel launch failed");
     }
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return sum;
 }

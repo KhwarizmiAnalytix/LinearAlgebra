@@ -5,7 +5,7 @@
 #include <cublas_v2.h>
 
 #include "include/common/cuda_handle.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -32,14 +32,8 @@ void matrix_multiplication(bool transpose_a,
     linalg_int                ldc,
     cudaStream_t                stream)
 {
-    if (a == nullptr || b == nullptr || c == nullptr)
-    {
-        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
-    }
-    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
-    {
-        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-    }
+    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
+    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     const float alpha  = 1.F;
     const float beta   = 0.F;
     auto        handle = detail::cublas_handle_for_current_device();
@@ -59,7 +53,7 @@ void matrix_multiplication(bool transpose_a,
             c,
             static_cast<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
     {
-        LINALG_THROW("cublasSgemm failed");
+        LOGGING_THROW("cublasSgemm failed");
     }
 }
 
@@ -76,14 +70,8 @@ void matrix_multiplication(bool transpose_a,
     linalg_int                ldc,
     cudaStream_t                stream)
 {
-    if (a == nullptr || b == nullptr || c == nullptr)
-    {
-        LINALG_THROW("matrix_multiplication: a, b, and c must not be null");
-    }
-    if (rows <= 0 || columns <= 0 || depth <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0)
-    {
-        LINALG_THROW("matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-    }
+    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
+    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     const double alpha  = 1.;
     const double beta   = 0.;
     auto         handle = detail::cublas_handle_for_current_device();
@@ -103,7 +91,7 @@ void matrix_multiplication(bool transpose_a,
             c,
             static_cast<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
     {
-        LINALG_THROW("cublasDgemm failed");
+        LOGGING_THROW("cublasDgemm failed");
     }
 }
 

@@ -11,7 +11,7 @@
 
 // Every public matrix_operation entry point throws (rather than exhibiting
 // undefined behavior) on a null required pointer or a non-positive
-// dimension/leading-dimension — see the LINALG_THROW checks added at the
+// dimension/leading-dimension — see the LOGGING_THROW checks added at the
 // top of each op's .cxx. One representative case per op is enough here;
 // this is a regression guard for that contract, not an exhaustive sweep.
 TEST(Math, InputValidation)

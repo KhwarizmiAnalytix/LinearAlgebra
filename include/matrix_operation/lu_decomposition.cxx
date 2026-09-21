@@ -1,6 +1,6 @@
 #include "include/matrix_operation/lu_decomposition.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl_lapacke.h>
@@ -176,14 +176,8 @@ bool lu_scalar_f64(double* m, linalg_int lda, linalg_int* pivot)
 
 bool lu_decomposition(float* m, linalg_int lda, linalg_int* pivot)
 {
-    if (m == nullptr || pivot == nullptr)
-    {
-        LINALG_THROW("lu_decomposition: m and pivot must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("lu_decomposition: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
+    LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     return detail::lu_mkl_f32(m, lda, pivot);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -195,14 +189,8 @@ bool lu_decomposition(float* m, linalg_int lda, linalg_int* pivot)
 
 bool lu_decomposition(double* m, linalg_int lda, linalg_int* pivot)
 {
-    if (m == nullptr || pivot == nullptr)
-    {
-        LINALG_THROW("lu_decomposition: m and pivot must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("lu_decomposition: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
+    LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     return detail::lu_mkl_f64(m, lda, pivot);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)

@@ -1,6 +1,6 @@
 #include "include/matrix_operation/matrix_transpose.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -123,14 +123,8 @@ void transpose_scalar_f64(linalg_long rows, linalg_long columns, double* m)
 
 void matrix_transpose(linalg_long rows, linalg_long columns, float* m)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_transpose: m must not be null");
-    }
-    if (rows == 0 || columns == 0)
-    {
-        LINALG_THROW("matrix_transpose: rows and columns must be positive");
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::transpose_mkl_f32(rows, columns, m);
 #elif defined(LINALG_ENABLE_BLAS)
@@ -142,14 +136,8 @@ void matrix_transpose(linalg_long rows, linalg_long columns, float* m)
 
 void matrix_transpose(linalg_long rows, linalg_long columns, double* m)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_transpose: m must not be null");
-    }
-    if (rows == 0 || columns == 0)
-    {
-        LINALG_THROW("matrix_transpose: rows and columns must be positive");
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::transpose_mkl_f64(rows, columns, m);
 #elif defined(LINALG_ENABLE_BLAS)

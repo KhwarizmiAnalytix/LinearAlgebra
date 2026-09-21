@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -51,7 +51,7 @@ void invert_mkl_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_t
         LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -78,7 +78,7 @@ void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_
         LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -126,7 +126,7 @@ void invert_blas_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_
         LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -158,7 +158,7 @@ void invert_blas_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver
         LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -314,7 +314,7 @@ void matrix_invert_scalar_impl(T* m, linalg_int* pivot, linalg_int lda, linear_s
         cholesky_invert(m, lda);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -390,7 +390,7 @@ T matrix_determinant_helper(T* m, linalg_int* pivot, linalg_int lda, linear_solv
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(m, lda);
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -399,14 +399,8 @@ T matrix_determinant_helper(T* m, linalg_int* pivot, linalg_int lda, linear_solv
 //-----------------------------------------------------------------------------
 void matrix_invert(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_invert: m must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("matrix_invert: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_invert: m must not be null");
+    LOGGING_CHECK(lda > 0, "matrix_invert: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     detail::invert_mkl_f32(m, pivot, lda, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -419,14 +413,8 @@ void matrix_invert(float* m, linalg_int* pivot, linalg_int lda, linear_solver_ty
 //-----------------------------------------------------------------------------
 void matrix_invert(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_invert: m must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("matrix_invert: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_invert: m must not be null");
+    LOGGING_CHECK(lda > 0, "matrix_invert: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     detail::invert_mkl_f64(m, pivot, lda, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -439,28 +427,16 @@ void matrix_invert(double* m, linalg_int* pivot, linalg_int lda, linear_solver_t
 //-----------------------------------------------------------------------------
 float matrix_determinant(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_determinant: m must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("matrix_determinant: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_determinant: m must not be null");
+    LOGGING_CHECK(lda > 0, "matrix_determinant: lda must be positive", lda);
     return detail::matrix_determinant_helper(m, pivot, lda, type);
 }
 
 //-----------------------------------------------------------------------------
 double matrix_determinant(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_determinant: m must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("matrix_determinant: lda must be positive", lda);
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_determinant: m must not be null");
+    LOGGING_CHECK(lda > 0, "matrix_determinant: lda must be positive", lda);
     return detail::matrix_determinant_helper(m, pivot, lda, type);
 }
 }  // namespace linalg

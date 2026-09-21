@@ -1,6 +1,6 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -154,7 +154,7 @@ bool cholesky_scalar_f32(float* C, linalg_int lda, cholesky_decomposition_enum t
         return cholesky_decomposition_scalar_impl<float,
                    cholesky_decomposition_enum::UPPER_TRIANGULAR>(n, C, n) == 0;
     default:
-        LINALG_THROW("Unsupported enum type!");
+        LOGGING_THROW("Unsupported enum type!");
     }
 }
 
@@ -170,7 +170,7 @@ bool cholesky_scalar_f64(double* C, linalg_int lda, cholesky_decomposition_enum 
         return cholesky_decomposition_scalar_impl<double,
                    cholesky_decomposition_enum::UPPER_TRIANGULAR>(n, C, n) == 0;
     default:
-        LINALG_THROW("Unsupported enum type!");
+        LOGGING_THROW("Unsupported enum type!");
     }
 }
 
@@ -306,14 +306,8 @@ bool cholesky_decomposition_aad_impl(
 //-----------------------------------------------------------------------------
 bool cholesky_decomposition(float* C, linalg_int lda, linalg::cholesky_decomposition_enum type)
 {
-    if (C == nullptr)
-    {
-        LINALG_THROW("cholesky_decomposition: C must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("cholesky_decomposition: lda must be positive", lda);
-    }
+    LOGGING_CHECK(C != nullptr, "cholesky_decomposition: C must not be null");
+    LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     return detail::cholesky_mkl_f32(C, lda, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -326,14 +320,8 @@ bool cholesky_decomposition(float* C, linalg_int lda, linalg::cholesky_decomposi
 //-----------------------------------------------------------------------------
 bool cholesky_decomposition(double* C, linalg_int lda, linalg::cholesky_decomposition_enum type)
 {
-    if (C == nullptr)
-    {
-        LINALG_THROW("cholesky_decomposition: C must not be null");
-    }
-    if (lda <= 0)
-    {
-        LINALG_THROW("cholesky_decomposition: lda must be positive", lda);
-    }
+    LOGGING_CHECK(C != nullptr, "cholesky_decomposition: C must not be null");
+    LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
 #if defined(LINALG_ENABLE_MKL)
     return detail::cholesky_mkl_f64(C, lda, type);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -359,7 +347,7 @@ bool cholesky_decomposition_aad(float*  C_aad,
         return detail::cholesky_decomposition_aad_impl<float,
             cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
     default:
-        LINALG_THROW("Unsupported enum type!");
+        LOGGING_THROW("Unsupported enum type!");
     }
 }
 
@@ -379,7 +367,7 @@ bool cholesky_decomposition_aad(double* C_aad,
         return detail::cholesky_decomposition_aad_impl<double,
             cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
     default:
-        LINALG_THROW("Unsupported enum type!");
+        LOGGING_THROW("Unsupported enum type!");
     }
 }
 }  // namespace linalg

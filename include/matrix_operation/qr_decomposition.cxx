@@ -1,6 +1,6 @@
 #include "include/matrix_operation/qr_decomposition.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -57,7 +57,7 @@ void qr_mkl_f32(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("mkl QR (geqrf) was unsuccessful");
+        LOGGING_THROW("mkl QR (geqrf) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < k; ++i)
@@ -72,7 +72,7 @@ void qr_mkl_f32(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("mkl QR (orgqr) was unsuccessful");
+        LOGGING_THROW("mkl QR (orgqr) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < rows; ++i)
@@ -105,7 +105,7 @@ void qr_mkl_f64(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("mkl QR (geqrf) was unsuccessful");
+        LOGGING_THROW("mkl QR (geqrf) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < k; ++i)
@@ -120,7 +120,7 @@ void qr_mkl_f64(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("mkl QR (orgqr) was unsuccessful");
+        LOGGING_THROW("mkl QR (orgqr) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < rows; ++i)
@@ -159,7 +159,7 @@ void qr_blas_f32(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("blas_lapack QR (geqrf) was unsuccessful");
+        LOGGING_THROW("blas_lapack QR (geqrf) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < k; ++i)
@@ -174,7 +174,7 @@ void qr_blas_f32(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("blas_lapack QR (orgqr) was unsuccessful");
+        LOGGING_THROW("blas_lapack QR (orgqr) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < rows; ++i)
@@ -211,7 +211,7 @@ void qr_blas_f64(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("blas_lapack QR (geqrf) was unsuccessful");
+        LOGGING_THROW("blas_lapack QR (geqrf) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < k; ++i)
@@ -226,7 +226,7 @@ void qr_blas_f64(linalg_long rows,
     if (info != 0)
     {
         Allocator::free(buf);
-        LINALG_THROW("blas_lapack QR (orgqr) was unsuccessful");
+        LOGGING_THROW("blas_lapack QR (orgqr) was unsuccessful");
     }
 
     for (linalg_long i = 0; i < rows; ++i)
@@ -402,14 +402,8 @@ void qr_decomposition(linalg_long rows,
     float*                          R,
     linalg_long                   ldr)
 {
-    if (A == nullptr || Q == nullptr || R == nullptr)
-    {
-        LINALG_THROW("qr_decomposition: A, Q, and R must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0 || ldq == 0 || ldr == 0)
-    {
-        LINALG_THROW("qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_decomposition: A, Q, and R must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0, "qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::qr_mkl_f32(rows, columns, A, lda, Q, ldq, R, ldr);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -429,14 +423,8 @@ void qr_decomposition(linalg_long rows,
     double*                         R,
     linalg_long                   ldr)
 {
-    if (A == nullptr || Q == nullptr || R == nullptr)
-    {
-        LINALG_THROW("qr_decomposition: A, Q, and R must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0 || ldq == 0 || ldr == 0)
-    {
-        LINALG_THROW("qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_decomposition: A, Q, and R must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0, "qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
 #if defined(LINALG_ENABLE_MKL)
     detail::qr_mkl_f64(rows, columns, A, lda, Q, ldq, R, ldr);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)

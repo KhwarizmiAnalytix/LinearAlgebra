@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 // File-scope (not namespaced) __global__ templates, matching the usual CUDA
 // idiom already used by matrix_multiplication_batched_gpu.cu for a kernel
@@ -109,7 +109,7 @@ void lu_invert(BufferSizeFn buffer_size,
     int lwork = 0;
     if (buffer_size(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LINALG_THROW("cusolverDn*getrf_bufferSize failed");
+        LOGGING_THROW("cusolverDn*getrf_bufferSize failed");
     }
 
     T*   workspace = nullptr;
@@ -118,20 +118,20 @@ void lu_invert(BufferSizeFn buffer_size,
     if (cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(T) * static_cast<size_t>(lwork)) !=
         cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_ipiv), sizeof(int) * static_cast<size_t>(n)) !=
         cudaSuccess)
     {
         cudaFree(workspace);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     const auto nn = static_cast<size_t>(n) * static_cast<size_t>(n);
     if (cudaMalloc(reinterpret_cast<void**>(&identity), sizeof(T) * nn) != cudaSuccess)
     {
         cudaFree(workspace);
         cudaFree(dev_ipiv);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const dim3 block(16, 16);
@@ -141,7 +141,7 @@ void lu_invert(BufferSizeFn buffer_size,
         cudaFree(workspace);
         cudaFree(dev_ipiv);
         cudaFree(identity);
-        LINALG_THROW("fill_identity_kernel launch failed");
+        LOGGING_THROW("fill_identity_kernel launch failed");
     }
 
     // See lu_decomposition_gpu.cxx: transpose first so getrf factors A, not
@@ -155,7 +155,7 @@ void lu_invert(BufferSizeFn buffer_size,
         cudaFree(workspace);
         cudaFree(dev_ipiv);
         cudaFree(identity);
-        LINALG_THROW("cusolverDn*getrf failed");
+        LOGGING_THROW("cusolverDn*getrf failed");
     }
 
     const auto solve_status = getrs(handle, CUBLAS_OP_N, n, n, m, n, dev_ipiv, identity, n, info);
@@ -164,7 +164,7 @@ void lu_invert(BufferSizeFn buffer_size,
         cudaFree(workspace);
         cudaFree(dev_ipiv);
         cudaFree(identity);
-        LINALG_THROW("cusolverDn*getrs failed");
+        LOGGING_THROW("cusolverDn*getrs failed");
     }
 
     // `identity` now holds A^-1 column-major; transpose to row-major, then
@@ -184,7 +184,7 @@ void lu_invert(BufferSizeFn buffer_size,
 
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
 }
 
@@ -211,7 +211,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
     int lwork = 0;
     if (buffer_size(handle, fill, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LINALG_THROW("cusolverDn*potrf_bufferSize failed");
+        LOGGING_THROW("cusolverDn*potrf_bufferSize failed");
     }
 
     T* workspace = nullptr;
@@ -219,13 +219,13 @@ void cholesky_invert(BufferSizeFn buffer_size,
     if (cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(T) * static_cast<size_t>(lwork)) !=
         cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     const auto nn = static_cast<size_t>(n) * static_cast<size_t>(n);
     if (cudaMalloc(reinterpret_cast<void**>(&identity), sizeof(T) * nn) != cudaSuccess)
     {
         cudaFree(workspace);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const dim3 block(16, 16);
@@ -234,7 +234,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
     {
         cudaFree(workspace);
         cudaFree(identity);
-        LINALG_THROW("fill_identity_kernel launch failed");
+        LOGGING_THROW("fill_identity_kernel launch failed");
     }
 
     const auto status = potrf(handle, fill, n, m, n, workspace, lwork, info);
@@ -242,7 +242,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
     {
         cudaFree(workspace);
         cudaFree(identity);
-        LINALG_THROW("cusolverDn*potrf failed");
+        LOGGING_THROW("cusolverDn*potrf failed");
     }
 
     const auto solve_status = potrs(handle, fill, n, n, m, n, identity, n, info);
@@ -250,7 +250,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
     {
         cudaFree(workspace);
         cudaFree(identity);
-        LINALG_THROW("cusolverDn*potrs failed");
+        LOGGING_THROW("cusolverDn*potrs failed");
     }
 
     matrix_transpose(lda, lda, identity, stream);
@@ -267,7 +267,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
 
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
 }
 
@@ -292,7 +292,7 @@ T lu_determinant(
     int lwork = 0;
     if (buffer_size(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LINALG_THROW("cusolverDn*getrf_bufferSize failed");
+        LOGGING_THROW("cusolverDn*getrf_bufferSize failed");
     }
 
     T*   workspace = nullptr;
@@ -302,26 +302,26 @@ T lu_determinant(
     if (cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(T) * static_cast<size_t>(lwork)) !=
         cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_ipiv), sizeof(int) * static_cast<size_t>(n)) !=
         cudaSuccess)
     {
         cudaFree(workspace);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_info), sizeof(int)) != cudaSuccess)
     {
         cudaFree(workspace);
         cudaFree(dev_ipiv);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_det), sizeof(T)) != cudaSuccess)
     {
         cudaFree(workspace);
         cudaFree(dev_ipiv);
         cudaFree(dev_info);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     matrix_transpose(lda, lda, m, stream);
@@ -333,7 +333,7 @@ T lu_determinant(
         cudaFree(dev_ipiv);
         cudaFree(dev_info);
         cudaFree(dev_det);
-        LINALG_THROW("cusolverDn*getrf failed");
+        LOGGING_THROW("cusolverDn*getrf failed");
     }
 
     lu_determinant_kernel<T><<<1, 1, 0, stream>>>(m, dev_ipiv, n, dev_det);
@@ -351,11 +351,11 @@ T lu_determinant(
 
     if (launch_err != cudaSuccess)
     {
-        LINALG_THROW("lu_determinant_kernel launch failed");
+        LOGGING_THROW("lu_determinant_kernel launch failed");
     }
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return det;
 }
@@ -372,7 +372,7 @@ T cholesky_determinant(
     int lwork = 0;
     if (buffer_size(handle, fill, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LINALG_THROW("cusolverDn*potrf_bufferSize failed");
+        LOGGING_THROW("cusolverDn*potrf_bufferSize failed");
     }
 
     T*   workspace = nullptr;
@@ -381,18 +381,18 @@ T cholesky_determinant(
     if (cudaMalloc(reinterpret_cast<void**>(&workspace), sizeof(T) * static_cast<size_t>(lwork)) !=
         cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_info), sizeof(int)) != cudaSuccess)
     {
         cudaFree(workspace);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&dev_det), sizeof(T)) != cudaSuccess)
     {
         cudaFree(workspace);
         cudaFree(dev_info);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const auto status = potrf(handle, fill, n, m, n, workspace, lwork, dev_info);
@@ -401,7 +401,7 @@ T cholesky_determinant(
         cudaFree(workspace);
         cudaFree(dev_info);
         cudaFree(dev_det);
-        LINALG_THROW("cusolverDn*potrf failed");
+        LOGGING_THROW("cusolverDn*potrf failed");
     }
 
     cholesky_determinant_kernel<T><<<1, 1, 0, stream>>>(m, n, dev_det);
@@ -418,11 +418,11 @@ T cholesky_determinant(
 
     if (launch_err != cudaSuccess)
     {
-        LINALG_THROW("cholesky_determinant_kernel launch failed");
+        LOGGING_THROW("cholesky_determinant_kernel launch failed");
     }
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return det;
 }
@@ -434,11 +434,11 @@ void matrix_invert(
 {
     if (m == nullptr || info == nullptr)
     {
-        LINALG_THROW("matrix_invert: m and info must not be null");
+        LOGGING_THROW("matrix_invert: m and info must not be null");
     }
     if (lda <= 0)
     {
-        LINALG_THROW("matrix_invert: lda must be positive", lda);
+        LOGGING_THROW("matrix_invert: lda must be positive", lda);
     }
     switch (type)
     {
@@ -453,7 +453,7 @@ void matrix_invert(
             cusolverDnSpotrf_bufferSize, cusolverDnSpotrf, cusolverDnSpotrs, m, lda, info, stream);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -462,11 +462,11 @@ void matrix_invert(
 {
     if (m == nullptr || info == nullptr)
     {
-        LINALG_THROW("matrix_invert: m and info must not be null");
+        LOGGING_THROW("matrix_invert: m and info must not be null");
     }
     if (lda <= 0)
     {
-        LINALG_THROW("matrix_invert: lda must be positive", lda);
+        LOGGING_THROW("matrix_invert: lda must be positive", lda);
     }
     switch (type)
     {
@@ -481,7 +481,7 @@ void matrix_invert(
             cusolverDnDpotrf_bufferSize, cusolverDnDpotrf, cusolverDnDpotrs, m, lda, info, stream);
         break;
     default:
-        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -489,11 +489,11 @@ float matrix_determinant(float* m, linalg_int lda, linear_solver_type type, cuda
 {
     if (m == nullptr)
     {
-        LINALG_THROW("matrix_determinant: m must not be null");
+        LOGGING_THROW("matrix_determinant: m must not be null");
     }
     if (lda <= 0)
     {
-        LINALG_THROW("matrix_determinant: lda must be positive", lda);
+        LOGGING_THROW("matrix_determinant: lda must be positive", lda);
     }
     switch (type)
     {
@@ -504,18 +504,18 @@ float matrix_determinant(float* m, linalg_int lda, linear_solver_type type, cuda
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(cusolverDnSpotrf_bufferSize, cusolverDnSpotrf, m, lda, stream);
     }
-    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+    LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 double matrix_determinant(double* m, linalg_int lda, linear_solver_type type, cudaStream_t stream)
 {
     if (m == nullptr)
     {
-        LINALG_THROW("matrix_determinant: m must not be null");
+        LOGGING_THROW("matrix_determinant: m must not be null");
     }
     if (lda <= 0)
     {
-        LINALG_THROW("matrix_determinant: lda must be positive", lda);
+        LOGGING_THROW("matrix_determinant: lda must be positive", lda);
     }
     switch (type)
     {
@@ -526,7 +526,7 @@ double matrix_determinant(double* m, linalg_int lda, linear_solver_type type, cu
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(cusolverDnDpotrf_bufferSize, cusolverDnDpotrf, m, lda, stream);
     }
-    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+    LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 }  // namespace gpu

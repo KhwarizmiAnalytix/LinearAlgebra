@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -56,14 +56,11 @@ void svd_core(BufferSizeFn buffer_size,
     const auto kc = static_cast<size_t>(k) * static_cast<size_t>(c);
 
     T* a_work = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&a_work), sizeof(T) * rc) != cudaSuccess)
-    {
-        LINALG_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(!(cudaMalloc(reinterpret_cast<void**>(&a_work), sizeof(T) * rc) != cudaSuccess), "cudaMalloc failed");
     if (cudaMemcpyAsync(a_work, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) != cudaSuccess)
     {
         cudaFree(a_work);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
     // See lu_decomposition_gpu.cxx: transposing the row-major buffer first
     // makes cuSOLVER's column-major (m=rows, n=columns, lda=rows) reading
@@ -75,13 +72,13 @@ void svd_core(BufferSizeFn buffer_size,
     if (cudaMalloc(reinterpret_cast<void**>(&u_work), sizeof(T) * rk) != cudaSuccess)
     {
         cudaFree(a_work);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&vt_work), sizeof(T) * kc) != cudaSuccess)
     {
         cudaFree(a_work);
         cudaFree(u_work);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     int lwork = 0;
@@ -90,7 +87,7 @@ void svd_core(BufferSizeFn buffer_size,
         cudaFree(a_work);
         cudaFree(u_work);
         cudaFree(vt_work);
-        LINALG_THROW("cusolverDn*gesvd_bufferSize failed");
+        LOGGING_THROW("cusolverDn*gesvd_bufferSize failed");
     }
 
     T* work = nullptr;
@@ -100,7 +97,7 @@ void svd_core(BufferSizeFn buffer_size,
         cudaFree(a_work);
         cudaFree(u_work);
         cudaFree(vt_work);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     // Real-valued gesvd's rwork (superdiagonal scratch): dimension
     // min(m,n) - 1, but never zero-sized even when k == 1.
@@ -112,7 +109,7 @@ void svd_core(BufferSizeFn buffer_size,
         cudaFree(u_work);
         cudaFree(vt_work);
         cudaFree(work);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     const auto status = gesvd(
@@ -126,7 +123,7 @@ void svd_core(BufferSizeFn buffer_size,
     {
         cudaFree(u_work);
         cudaFree(vt_work);
-        LINALG_THROW("cusolverDn*gesvd failed", static_cast<int>(status));
+        LOGGING_THROW("cusolverDn*gesvd failed", static_cast<int>(status));
     }
 
     const auto u_copy_status =
@@ -135,17 +132,14 @@ void svd_core(BufferSizeFn buffer_size,
     if (u_copy_status != cudaSuccess)
     {
         cudaFree(vt_work);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
     matrix_transpose(static_cast<linalg_long>(k), rows, U, stream);
 
     const auto vt_copy_status =
         cudaMemcpyAsync(VT, vt_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream);
     cudaFree(vt_work);
-    if (vt_copy_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaMemcpyAsync failed");
-    }
+    LOGGING_CHECK(!(vt_copy_status != cudaSuccess), "cudaMemcpyAsync failed");
     matrix_transpose(columns, static_cast<linalg_long>(k), VT, stream);
 }
 
@@ -166,24 +160,15 @@ void svd_impl(BufferSizeFn buffer_size,
     int*                   info,
     cudaStream_t           stream)
 {
-    if (A == nullptr || S == nullptr || U == nullptr || VT == nullptr || info == nullptr)
-    {
-        LINALG_THROW("svd_decomposition: A, S, U, VT, and info must not be null");
-    }
-    if (rows == 0 || columns == 0)
-    {
-        LINALG_THROW("svd_decomposition: rows and columns must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr && info != nullptr, "svd_decomposition: A, S, U, VT, and info must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "svd_decomposition: rows and columns must be positive");
 
     const auto r = static_cast<int>(rows);
     const auto c = static_cast<int>(columns);
     const auto k = std::min(r, c);
 
-    if (static_cast<int>(lda) != c || static_cast<int>(ldu) != k || static_cast<int>(ldv) != c)
-    {
-        LINALG_THROW("linalg::gpu::svd_decomposition requires tightly packed lda/ldu/ldv "
+    LOGGING_CHECK(!(static_cast<int>(lda) != c) && !(static_cast<int>(ldu) != k) && !(static_cast<int>(ldv) != c), "linalg::gpu::svd_decomposition requires tightly packed lda/ldu/ldv "
                      "(lda == columns, ldu == min(rows, columns), ldv == columns)");
-    }
 
     if (r >= c)
     {
@@ -200,14 +185,11 @@ void svd_impl(BufferSizeFn buffer_size,
     const auto rc = static_cast<size_t>(r) * static_cast<size_t>(c);
 
     T* at = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&at), sizeof(T) * rc) != cudaSuccess)
-    {
-        LINALG_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(!(cudaMalloc(reinterpret_cast<void**>(&at), sizeof(T) * rc) != cudaSuccess), "cudaMalloc failed");
     if (cudaMemcpyAsync(at, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) != cudaSuccess)
     {
         cudaFree(at);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
     matrix_transpose(rows, columns, at, stream);  // at becomes row-major (columns x rows) = A^T
 
@@ -219,13 +201,13 @@ void svd_impl(BufferSizeFn buffer_size,
     if (cudaMalloc(reinterpret_cast<void**>(&u_prime), sizeof(T) * ck) != cudaSuccess)
     {
         cudaFree(at);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
     if (cudaMalloc(reinterpret_cast<void**>(&vt_prime), sizeof(T) * kr) != cudaSuccess)
     {
         cudaFree(at);
         cudaFree(u_prime);
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     svd_core(buffer_size, gesvd, columns, rows, at, S, u_prime, vt_prime, info, stream);
@@ -241,7 +223,7 @@ void svd_impl(BufferSizeFn buffer_size,
     if (vt_copy_status != cudaSuccess)
     {
         cudaFree(vt_prime);
-        LINALG_THROW("cudaMemcpyAsync failed");
+        LOGGING_THROW("cudaMemcpyAsync failed");
     }
     matrix_transpose(columns, static_cast<linalg_long>(k), VT, stream);
 
@@ -249,10 +231,7 @@ void svd_impl(BufferSizeFn buffer_size,
     const auto u_copy_status =
         cudaMemcpyAsync(U, vt_prime, sizeof(T) * kr, cudaMemcpyDeviceToDevice, stream);
     cudaFree(vt_prime);
-    if (u_copy_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaMemcpyAsync failed");
-    }
+    LOGGING_CHECK(!(u_copy_status != cudaSuccess), "cudaMemcpyAsync failed");
     matrix_transpose(static_cast<linalg_long>(k), rows, U, stream);
 }
 

@@ -1,6 +1,6 @@
 #include "include/matrix_operation/eigenvalue_decomposition.h"
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -817,14 +817,10 @@ bool general_eigen_scalar_impl(const T* A,
     const T eps = std::numeric_limits<T>::epsilon();
     for (linalg_int i = 0; i < n; ++i)
     {
-        if (std::fabs(eigenvalues_imag[i]) > eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10))
-        {
-            LINALG_THROW(
-                "eigenvalue_decomposition: scalar fallback cannot compute eigenvectors for a complex "
+        LOGGING_CHECK(!(std::fabs(eigenvalues_imag[i]) > eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10)), "eigenvalue_decomposition: scalar fallback cannot compute eigenvectors for a complex "
                 "eigenvalue (index",
                 i,
-                "); rebuild with LINALG_ENABLE_MKL or LINALG_ENABLE_BLAS for that case");
-        }
+                ");
         std::vector<T> v(static_cast<std::size_t>(n));
         if (!inverse_iteration<T, linalg::allocator<T>>(n, A, lda, eigenvalues_real[i], v.data()))
         {
@@ -868,14 +864,8 @@ bool general_eigen_scalar_f64(const double* A,
 bool symmetric_eigenvalue_decomposition(
     const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv)
 {
-    if (A == nullptr || eigenvalues == nullptr || eigenvectors == nullptr)
-    {
-        LINALG_THROW("symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
-    }
-    if (n <= 0 || lda <= 0 || ldv <= 0)
-    {
-        LINALG_THROW("symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr, "symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldv > 0, "symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
     return detail::symmetric_eigen_mkl_f32(A, n, lda, eigenvalues, eigenvectors, ldv);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -889,14 +879,8 @@ bool symmetric_eigenvalue_decomposition(
 bool symmetric_eigenvalue_decomposition(
     const double* A, linalg_int n, linalg_int lda, double* eigenvalues, double* eigenvectors, linalg_int ldv)
 {
-    if (A == nullptr || eigenvalues == nullptr || eigenvectors == nullptr)
-    {
-        LINALG_THROW("symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
-    }
-    if (n <= 0 || lda <= 0 || ldv <= 0)
-    {
-        LINALG_THROW("symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr, "symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldv > 0, "symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
     return detail::symmetric_eigen_mkl_f64(A, n, lda, eigenvalues, eigenvectors, ldv);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -915,14 +899,8 @@ bool eigenvalue_decomposition(const float* A,
     float*                                eigenvectors,
     linalg_int                          ldv)
 {
-    if (A == nullptr || eigenvalues_real == nullptr || eigenvalues_imag == nullptr)
-    {
-        LINALG_THROW("eigenvalue_decomposition: A, eigenvalues_real, and eigenvalues_imag must not be null");
-    }
-    if (n <= 0 || lda <= 0 || (eigenvectors != nullptr && ldv <= 0))
-    {
-        LINALG_THROW("eigenvalue_decomposition: n/lda/ldv must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr, "eigenvalue_decomposition: A, eigenvalues_real, and eigenvalues_imag must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0), "eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
     return detail::general_eigen_mkl_f32(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
@@ -941,14 +919,8 @@ bool eigenvalue_decomposition(const double* A,
     double*                                eigenvectors,
     linalg_int                           ldv)
 {
-    if (A == nullptr || eigenvalues_real == nullptr || eigenvalues_imag == nullptr)
-    {
-        LINALG_THROW("eigenvalue_decomposition: A, eigenvalues_real, and eigenvalues_imag must not be null");
-    }
-    if (n <= 0 || lda <= 0 || (eigenvectors != nullptr && ldv <= 0))
-    {
-        LINALG_THROW("eigenvalue_decomposition: n/lda/ldv must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr, "eigenvalue_decomposition: A, eigenvalues_real, and eigenvalues_imag must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0), "eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
     return detail::general_eigen_mkl_f64(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)

@@ -6,7 +6,7 @@
 
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/memory/allocator.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -73,14 +73,8 @@ void pseudo_inverse_impl(
 void pseudo_inverse(
     linalg_long rows, linalg_long columns, const float* A, linalg_long lda, float* Ainv, linalg_long ldai, float tol)
 {
-    if (A == nullptr || Ainv == nullptr)
-    {
-        LINALG_THROW("pseudo_inverse: A and Ainv must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0 || ldai == 0)
-    {
-        LINALG_THROW("pseudo_inverse: rows/columns/lda/ldai must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && Ainv != nullptr, "pseudo_inverse: A and Ainv must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0, "pseudo_inverse: rows/columns/lda/ldai must be positive");
     detail::pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol);
 }
 
@@ -88,14 +82,8 @@ void pseudo_inverse(
 void pseudo_inverse(
     linalg_long rows, linalg_long columns, const double* A, linalg_long lda, double* Ainv, linalg_long ldai, double tol)
 {
-    if (A == nullptr || Ainv == nullptr)
-    {
-        LINALG_THROW("pseudo_inverse: A and Ainv must not be null");
-    }
-    if (rows == 0 || columns == 0 || lda == 0 || ldai == 0)
-    {
-        LINALG_THROW("pseudo_inverse: rows/columns/lda/ldai must be positive");
-    }
+    LOGGING_CHECK(A != nullptr && Ainv != nullptr, "pseudo_inverse: A and Ainv must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0, "pseudo_inverse: rows/columns/lda/ldai must be positive");
     detail::pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol);
 }
 

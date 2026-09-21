@@ -6,7 +6,7 @@
 #include <cuda_runtime_api.h>
 
 #include "include/common/cuda_handle.h"
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -24,14 +24,8 @@ template <typename T, typename GeamFn>
 void transpose_impl(
     GeamFn geam, linalg_long rows, linalg_long columns, T* m, cudaStream_t stream)
 {
-    if (m == nullptr)
-    {
-        LINALG_THROW("matrix_transpose: m must not be null");
-    }
-    if (rows == 0 || columns == 0)
-    {
-        LINALG_THROW("matrix_transpose: rows and columns must be positive");
-    }
+    LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
     const auto r = static_cast<int>(rows);
     const auto c = static_cast<int>(columns);
 
@@ -39,7 +33,7 @@ void transpose_impl(
     if (cudaMalloc(reinterpret_cast<void**>(&scratch),
             sizeof(T) * static_cast<size_t>(r) * static_cast<size_t>(c)) != cudaSuccess)
     {
-        LINALG_THROW("cudaMalloc failed");
+        LOGGING_THROW("cudaMalloc failed");
     }
 
     auto handle = detail::cublas_handle_for_current_device();
@@ -58,7 +52,7 @@ void transpose_impl(
         CUBLAS_STATUS_SUCCESS)
     {
         cudaFree(scratch);
-        LINALG_THROW("cublasSgeam/Dgeam failed");
+        LOGGING_THROW("cublasSgeam/Dgeam failed");
     }
 
     const auto copy_status = cudaMemcpyAsync(m,
@@ -74,14 +68,8 @@ void transpose_impl(
     // use of `stream`.
     cudaError_t sync_status = cudaSuccess;
     detail::synchronize_and_free(scratch, stream, &sync_status);
-    if (copy_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaMemcpyAsync failed");
-    }
-    if (sync_status != cudaSuccess)
-    {
-        LINALG_THROW("cudaStreamSynchronize failed");
-    }
+    LOGGING_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
+    LOGGING_CHECK(!(sync_status != cudaSuccess), "cudaStreamSynchronize failed");
 }
 
 }  // namespace
