@@ -15,7 +15,7 @@ one consumer, not a required host.
 
 - `CMakeLists.txt` — `LINALG_ENABLE_MKL`, `LINALG_LU_PIVOTING`, `LINALG_ENABLE_*`.
 - `BUILD.bazel` — `//:LinearAlgebra`.
-- `include/common/` — export macro, feature macros, generated `configure.h`.
+- `include/common/` — export macro, feature macros.
 - `include/memory/` — minimal scratch-buffer allocator.
 - `include/util/` — exception helper, conservative CPU cache-size defaults.
 - `include/matrix_operation/` — the seven public modules (below).

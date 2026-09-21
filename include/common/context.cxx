@@ -1,7 +1,5 @@
 #include "include/common/context.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
-
 #ifdef LINALG_ENABLE_CUBLAS
 #include <cuda_runtime_api.h>
 #endif

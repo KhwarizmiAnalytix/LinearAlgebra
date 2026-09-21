@@ -1,6 +1,5 @@
 #include "include/matrix_operation/svd_decomposition.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
 #include "include/util/exception.h"
 
 #if defined(LINALG_ENABLE_MKL)

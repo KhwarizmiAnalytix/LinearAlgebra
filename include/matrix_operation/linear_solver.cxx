@@ -1,13 +1,12 @@
 #include "include/matrix_operation/linear_solver.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-// LAPACKE-dependent — see include/common/configure.h.in and
+// LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cxx.
 #include <lapacke.h>
 

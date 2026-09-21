@@ -1,12 +1,11 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
 #include "include/util/exception.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-// LAPACKE-dependent (see include/common/configure.h.in): Apple's Accelerate
+// LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate
 // framework ships CBLAS but not the LAPACKE row-major C wrapper, so this
 // branch only compiles when a real lapacke.h was found; otherwise the #else
 // below falls through to the scalar implementation at compile time.

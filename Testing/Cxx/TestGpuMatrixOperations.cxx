@@ -1,5 +1,3 @@
-#include "include/common/configure.h"  // IWYU pragma: keep
-
 // The linalg::gpu::* entry points under test only exist when the library was
 // configured with LINALG_ENABLE_CUBLAS (see include/matrix_operation_gpu/);
 // on a scalar-fallback build this file contributes no TEST cases, matching

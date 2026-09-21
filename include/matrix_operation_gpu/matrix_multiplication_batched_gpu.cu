@@ -1,7 +1,5 @@
 #include "include/matrix_operation_gpu/matrix_multiplication_batched_gpu.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
-
 #ifdef LINALG_ENABLE_CUBLAS
 
 #include <cuda_runtime.h>

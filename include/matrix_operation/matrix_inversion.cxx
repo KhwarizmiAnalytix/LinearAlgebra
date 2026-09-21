@@ -1,6 +1,5 @@
 #include "include/matrix_operation/matrix_inversion.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/util/exception.h"

@@ -1,7 +1,5 @@
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
-
 #ifdef LINALG_ENABLE_CUBLAS
 
 #include <cublas_v2.h>

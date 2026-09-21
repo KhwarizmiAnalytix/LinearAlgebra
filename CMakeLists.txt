@@ -288,10 +288,6 @@ endif()
 
 # --- Configure-time headers ---
 configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/common/configure.h.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/include/common/configure.h" @ONLY
-)
-configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/Testing/LinearAlgebraTest.h.in"
   "${CMAKE_CURRENT_BINARY_DIR}/Testing/LinearAlgebraTest.h" @ONLY
 )
@@ -355,7 +351,6 @@ endif()
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
 #                             "include/util/exception.h", ...
-# Build tree     → generated "include/common/configure.h"
 target_include_directories(
   LinearAlgebra
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -373,12 +368,21 @@ if(LINALG_ENABLE_MKL)
 endif()
 if(LINALG_ENABLE_BLAS)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_BLAS)
+  if(LINALG_BLAS_USE_ACCELERATE)
+    target_compile_definitions(LinearAlgebra PUBLIC LINALG_BLAS_USE_ACCELERATE)
+  endif()
+  if(LINALG_BLAS_HAS_LAPACKE)
+    target_compile_definitions(LinearAlgebra PUBLIC LINALG_BLAS_HAS_LAPACKE)
+  endif()
 endif()
 if(LINALG_ENABLE_CUBLAS)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_CUBLAS)
 endif()
 if(LINALG_LU_PIVOTING)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_LU_PIVOTING)
+endif()
+if(LINALG_DISPLAY_WIN32_WARNINGS)
+  target_compile_definitions(LinearAlgebra PUBLIC LINALG_DISPLAY_WIN32_WARNINGS)
 endif()
 
 if(LINALG_ENABLE_CLANGTIDY)
@@ -410,10 +414,6 @@ install(
   DESTINATION include/LinearAlgebra
   FILES_MATCHING
   PATTERN "*.h"
-)
-install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/include/common/configure.h"
-  DESTINATION include/LinearAlgebra/include/common
 )
 
 # --- Testing ---

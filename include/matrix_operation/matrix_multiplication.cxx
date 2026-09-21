@@ -1,7 +1,5 @@
 #include "include/matrix_operation/matrix_multiplication.h"
 
-#include "include/common/configure.h"  // IWYU pragma: keep
-
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
 #elif defined(LINALG_ENABLE_BLAS)

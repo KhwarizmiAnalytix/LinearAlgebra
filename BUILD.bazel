@@ -1,36 +1,19 @@
 # Standalone LinearAlgebra library. Include root is the repository root; public headers live
 # under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h").
-load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
 
 package(default_visibility = ["//visibility:public"])
 
-# Bazel equivalent of CMake's configure_file() for include/common/configure.h.in.
-# LINALG_ENABLE_MKL / LINALG_LU_PIVOTING are left undefined here: those macros
-# already reach the compiler via linear_algebra_defines()'s select() below, so
-# this file only needs to exist on the include path, not redefine them.
-# LINALG_ENABLE_BLAS / LINALG_ENABLE_CUBLAS (and their helper macros) have no
-# Bazel toggle yet — CMake is this repo's primary, exercised build system for
-# the blas_lapack backend (compiled directly into each op's .cxx under
+# LINALG_ENABLE_MKL / LINALG_LU_PIVOTING reach the compiler via
+# linear_algebra_defines()'s select() below. LINALG_ENABLE_BLAS /
+# LINALG_ENABLE_CUBLAS (and their helper macros) have no Bazel toggle yet —
+# CMake is this repo's primary, exercised build system for the blas_lapack
+# backend (compiled directly into each op's .cxx under
 # include/matrix_operation/, gated by #if LINALG_ENABLE_BLAS) and the cuBLAS/
 # cuSOLVER GPU backend (include/matrix_operation_gpu/, not part of this
 # glob); Bazel builds always compile the scalar backend plus mkl when
 # linalg_enable_mkl is set, matching pre-existing Bazel coverage.
-expand_template(
-    name = "configure_h",
-    out = "include/common/configure.h",
-    substitutions = {
-        "#cmakedefine LINALG_ENABLE_MKL": "/* #undef LINALG_ENABLE_MKL */",
-        "#cmakedefine LINALG_ENABLE_BLAS": "/* #undef LINALG_ENABLE_BLAS */",
-        "#cmakedefine LINALG_ENABLE_CUBLAS": "/* #undef LINALG_ENABLE_CUBLAS */",
-        "#cmakedefine LINALG_BLAS_USE_ACCELERATE": "/* #undef LINALG_BLAS_USE_ACCELERATE */",
-        "#cmakedefine LINALG_BLAS_HAS_LAPACKE": "/* #undef LINALG_BLAS_HAS_LAPACKE */",
-        "#cmakedefine LINALG_LU_PIVOTING": "/* #undef LINALG_LU_PIVOTING */",
-        "#cmakedefine LINALG_DISPLAY_WIN32_WARNINGS": "/* #undef LINALG_DISPLAY_WIN32_WARNINGS */",
-    },
-    template = "include/common/configure.h.in",
-)
 
 filegroup(
     name = "linear_algebra_hdrs",
@@ -59,7 +42,7 @@ filegroup(
 cc_library(
     name = "linear_algebra_lib",
     srcs = [":linear_algebra_srcs"],
-    hdrs = [":linear_algebra_hdrs", ":configure_h"],
+    hdrs = [":linear_algebra_hdrs"],
     copts = linear_algebra_copts(),
     defines = linear_algebra_defines() + select({
         "//bazel:shared_libs": ["LINALG_SHARED_DEFINE"],
