@@ -87,4 +87,9 @@ jobs:
       - uses: bazelbuild/setup-bazelisk@v3
 
       - name: Test
-        run: bazel test //... --test_output=errors
+        # ThirdParty/... is excluded: those packages are vendored
+        # dependencies (Logging, googletest) built only as libraries this
+        # repo links against, not test suites this repo's CI is responsible
+        # for running (CMake's equivalent add_subdirectory(ThirdParty/Logging)
+        # likewise builds it with its own testing disabled).
+        run: bazel test -- //... -//ThirdParty/...

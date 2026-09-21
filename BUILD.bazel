@@ -57,6 +57,13 @@ cc_library(
         "//bazel:shared_libs": False,
         "//conditions:default": True,
     }),
+    # Exception reporting (LOGGING_CHECK/LOGGING_THROW, see CLAUDE.md) is
+    # implemented in ThirdParty/Logging, included from every op as
+    # "ThirdParty/Logging/include/logging.h" (a path relative to this
+    # workspace's root, since Logging is vendored as a plain subdirectory
+    # here rather than a separate Bazel repository — see bazel/logging.bzl
+    # for why its own BUILD files still resolve correctly).
+    deps = ["//ThirdParty/Logging:Logging"],
     # Each backend (scalar/mkl/blas/cublas) registers itself into a
     # dispatch_stub purely via a static initializer in its own .cxx (see
     # include/common/dispatch_stub.h) — no other translation unit calls into
