@@ -17,6 +17,18 @@ build:linux --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
 build:macos --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
 build:windows --cxxopt=/std:c++20 --host_cxxopt=/std:c++20
 
+# ThirdParty/Logging is vendored as a plain subdirectory of this workspace,
+# not its own Bazel repository (see bazel/logging.bzl), so its headers'
+# quote-includes like "include/logger/logger.h" — written assuming Logging
+# itself is the workspace root, true only in its standalone repo — need an
+# extra include root at its vendored path. This has to be a global flag
+# (applies to Logging's own sources too, which this repo can't add
+# target-level `includes` to without editing the vendored BUILD.bazel; see
+# .augment/rules/ThirdParty.md), same reasoning as the C++20 block above.
+build:linux --copt=-IThirdParty/Logging
+build:macos --copt=-IThirdParty/Logging
+build:windows --copt=/IThirdParty/Logging
+
 # Backend selection examples:
 #   bazel build //:Logging --define=logging_backend=spdlog
 #   bazel build //:Logging --define=logging_backend=glog
