@@ -1,6 +1,7 @@
 #include "include/matrix_operation/matrix_rank.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <vector>
 

@@ -19,7 +19,7 @@
 
 #include <unordered_map>
 
-#include "include/util/exception.h"
+#include "ThirdParty/Logging/include/logging.h"
 
 namespace linalg
 {
@@ -31,7 +31,7 @@ inline int current_cuda_device()
     int device = 0;
     if (cudaGetDevice(&device) != cudaSuccess)
     {
-        LINALG_THROW("cudaGetDevice failed");
+        LOGGING_THROW("cudaGetDevice failed");
     }
     return device;
 }
@@ -48,7 +48,7 @@ inline cublasHandle_t cublas_handle_for_current_device()
     cublasHandle_t handle{};
     if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS)
     {
-        LINALG_THROW("cublasCreate failed");
+        LOGGING_THROW("cublasCreate failed");
     }
     handles.emplace(device, handle);
     return handle;
@@ -66,7 +66,7 @@ inline cusolverDnHandle_t cusolver_handle_for_current_device()
     cusolverDnHandle_t handle{};
     if (cusolverDnCreate(&handle) != CUSOLVER_STATUS_SUCCESS)
     {
-        LINALG_THROW("cusolverDnCreate failed");
+        LOGGING_THROW("cusolverDnCreate failed");
     }
     handles.emplace(device, handle);
     return handle;
@@ -79,7 +79,7 @@ inline void set_stream(cublasHandle_t handle, cudaStream_t stream)
 {
     if (cublasSetStream(handle, stream) != CUBLAS_STATUS_SUCCESS)
     {
-        LINALG_THROW("cublasSetStream failed");
+        LOGGING_THROW("cublasSetStream failed");
     }
 }
 
@@ -87,7 +87,7 @@ inline void set_stream(cusolverDnHandle_t handle, cudaStream_t stream)
 {
     if (cusolverDnSetStream(handle, stream) != CUSOLVER_STATUS_SUCCESS)
     {
-        LINALG_THROW("cusolverDnSetStream failed");
+        LOGGING_THROW("cusolverDnSetStream failed");
     }
 }
 

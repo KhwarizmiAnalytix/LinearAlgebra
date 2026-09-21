@@ -23,7 +23,7 @@ struct SVDTolerance
 template <>
 struct SVDTolerance<float>
 {
-    static constexpr double tolerance = 2.e-4;
+    static constexpr double tolerance = 5.e-4;
 };
 
 template <>

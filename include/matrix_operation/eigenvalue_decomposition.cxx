@@ -375,7 +375,7 @@ bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V
     }
 
     std::vector<linalg_int> idx(static_cast<std::size_t>(n));
-    std::iota(idx.begin(), idx.end(), linalg_int(0));
+    std::iota(idx.begin(), idx.end(), static_cast<linalg_int>(0));
     std::sort(idx.begin(), idx.end(), [&](linalg_int lhs, linalg_int rhs)
         { return evals[static_cast<std::size_t>(lhs)] < evals[static_cast<std::size_t>(rhs)]; });
 
@@ -704,7 +704,7 @@ bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* ei
         std::copy_n(M, static_cast<std::size_t>(n * n), LU);
         std::vector<T>            b(x.begin(), x.end());
         std::vector<linalg_int> piv(static_cast<std::size_t>(n));
-        std::iota(piv.begin(), piv.end(), linalg_int(0));
+        std::iota(piv.begin(), piv.end(), static_cast<linalg_int>(0));
 
         for (linalg_int k = 0; k < n && ok; ++k)
         {
@@ -817,10 +817,10 @@ bool general_eigen_scalar_impl(const T* A,
     const T eps = std::numeric_limits<T>::epsilon();
     for (linalg_int i = 0; i < n; ++i)
     {
-        LOGGING_CHECK(!(std::fabs(eigenvalues_imag[i]) > eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10)), "eigenvalue_decomposition: scalar fallback cannot compute eigenvectors for a complex "
-                "eigenvalue (index",
-                i,
-                ");
+        LOGGING_CHECK(!(std::fabs(eigenvalues_imag[i]) > eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10)),
+            "eigenvalue_decomposition: scalar fallback cannot compute eigenvectors for a complex eigenvalue (index "
+            "{})",
+            i);
         std::vector<T> v(static_cast<std::size_t>(n));
         if (!inverse_iteration<T, linalg::allocator<T>>(n, A, lda, eigenvalues_real[i], v.data()))
         {

@@ -1,6 +1,7 @@
 #include "include/matrix_operation/pseudo_inverse.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <vector>
 
