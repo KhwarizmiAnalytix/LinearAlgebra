@@ -220,8 +220,7 @@ void multiply(std::vector<double>& result,
         }
 
         itr0 += two_inner_dim;
-        for (; i < n - two_inner_dim;
-            ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3, ++itr4)
+        for (; i < n - two_inner_dim; ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3, ++itr4)
         {
             const auto a0 = *itr0;
             const auto a1 = *itr1;

@@ -396,8 +396,8 @@ void multiply(std::vector<double>& result,
             const auto b = *itr1;
             const auto c = *itr2;
 
-            *itr += time_multiplier * (a * (*(itr_tmp - inner_dim)) + b * (*itr_tmp) +
-                                          c * (*(itr_tmp + inner_dim)));
+            *itr += time_multiplier *
+                    (a * (*(itr_tmp - inner_dim)) + b * (*itr_tmp) + c * (*(itr_tmp + inner_dim)));
         }
 
         for (; i < n; ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
