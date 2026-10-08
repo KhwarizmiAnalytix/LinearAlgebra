@@ -1,0 +1,57 @@
+@PACKAGE_INIT@
+
+# LinearAlgebra CMake configuration file
+# Enables: find_package(LinearAlgebra CONFIG REQUIRED)
+
+include(CMakeFindDependencyMacro)
+
+# --- Logging (required) ---
+# LinearAlgebra links Logging::Logging PUBLIC (every LOGGING_THROW/LOGGING_CHECK
+# call site in include/matrix_operation* throws logging::exception), so
+# Logging::Logging is part of LinearAlgebraTargets.cmake's link interface and
+# must resolve wherever LinearAlgebra is consumed. LinearAlgebra's own build
+# embeds Logging via add_subdirectory(ThirdParty/Logging EXCLUDE_FROM_ALL),
+# which does not run Logging's own install() rules, so a consumer of this
+# installed package must make Logging discoverable separately (e.g. build
+# and install KhwarizmiAnalytix/Logging to a prefix on CMAKE_PREFIX_PATH).
+find_dependency(Logging)
+
+# --- Optional Intel MKL backend (LINALG_ENABLE_MKL) ---
+# Only part of this package's link interface when the installed LinearAlgebra
+# was itself configured with LINALG_ENABLE_MKL=ON.
+set(LinearAlgebra_HAS_MKL @LINALG_ENABLE_MKL@)
+if(LinearAlgebra_HAS_MKL)
+  find_package(MKL CONFIG QUIET)
+  if(NOT MKL_FOUND)
+    # Mirror the classic (non-CONFIG) FindMKL-style fallback used by
+    # LinearAlgebra's own CMakeLists.txt.
+    find_package(MKL QUIET)
+  endif()
+  if(NOT MKL_FOUND)
+    set(${CMAKE_FIND_PACKAGE_NAME}_NOT_FOUND_MESSAGE
+        "LinearAlgebra was built with LINALG_ENABLE_MKL=ON but MKL could not be found. "
+        "Install Intel oneMKL or set MKLROOT / CMAKE_PREFIX_PATH."
+    )
+    set(${CMAKE_FIND_PACKAGE_NAME}_FOUND FALSE)
+    return()
+  endif()
+endif()
+
+# --- Optional vendor-neutral BLAS/LAPACK backend (LINALG_ENABLE_BLAS) ---
+set(LinearAlgebra_HAS_BLAS @LINALG_ENABLE_BLAS@)
+if(LinearAlgebra_HAS_BLAS)
+  find_dependency(BLAS)
+  find_dependency(LAPACK)
+endif()
+
+# --- Optional cuBLAS/cuSOLVER GPU backend (LINALG_ENABLE_CUBLAS) ---
+set(LinearAlgebra_HAS_CUBLAS @LINALG_ENABLE_CUBLAS@)
+if(LinearAlgebra_HAS_CUBLAS)
+  find_dependency(CUDAToolkit)
+endif()
+
+if(NOT TARGET LinearAlgebra::LinearAlgebra)
+  include("${CMAKE_CURRENT_LIST_DIR}/LinearAlgebraTargets.cmake")
+endif()
+
+check_required_components(LinearAlgebra)

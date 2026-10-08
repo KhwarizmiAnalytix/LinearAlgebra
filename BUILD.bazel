@@ -1,6 +1,9 @@
 # Standalone LinearAlgebra library. Include root is the repository root; public headers live
 # under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h").
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_pkg//pkg:install.bzl", "pkg_install")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
+load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
 load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
 
 package(default_visibility = ["//visibility:public"])
@@ -82,4 +85,44 @@ cc_library(
     name = "LinearAlgebra",
     deps = [":linear_algebra_lib"],
     visibility = ["//visibility:public"],
+)
+
+# =============================================================================
+# Install / export (bazel-side analogue of CMake's `install(TARGETS ...)` /
+# `install(DIRECTORY include/ DESTINATION include/LinearAlgebra ...)`).
+# `bazel build //:linear_algebra_pkg_tar` produces a relocatable tarball;
+# `bazel run //:install -- --destdir=/some/prefix` stages the same tree
+# directly on disk.
+# =============================================================================
+
+pkg_files(
+    name = "linear_algebra_installed_hdrs",
+    srcs = glob(
+        ["include/**/*.h", "include/**/*.hxx", "include/**/*.hpp"],
+        allow_empty = True,
+    ),
+    prefix = "include/LinearAlgebra/include",
+    strip_prefix = strip_prefix.from_pkg("include"),
+)
+
+pkg_files(
+    name = "linear_algebra_installed_libs",
+    srcs = [":linear_algebra_lib"],
+    prefix = "lib",
+)
+
+pkg_tar(
+    name = "linear_algebra_pkg_tar",
+    srcs = [
+        ":linear_algebra_installed_hdrs",
+        ":linear_algebra_installed_libs",
+    ],
+)
+
+pkg_install(
+    name = "install",
+    srcs = [
+        ":linear_algebra_installed_hdrs",
+        ":linear_algebra_installed_libs",
+    ],
 )

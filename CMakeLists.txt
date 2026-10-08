@@ -317,7 +317,22 @@ set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
                  "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
 )
-list(APPEND LINALG_DEPENDENCY_LIBS Logging::Logging)
+# $<BUILD_INTERFACE:> here mirrors Profiler's install(EXPORT) fix
+# (Profiler/CMakeLists.txt's PROFILER_DEPENDENCY_LIBS handling, ~line 310):
+# "Logging" is a plain in-tree target pulled in via add_subdirectory(...
+# EXCLUDE_FROM_ALL) above, not an IMPORTED target from find_package(), and
+# EXCLUDE_FROM_ALL means Logging's own install()/install(EXPORT) calls never
+# run as part of this build. Without this wrapper,
+# install(EXPORT LinearAlgebraTargets ...) fails with "requires target
+# Logging that is not in any export set" because a non-imported target must
+# either be part of an export set or excluded from the installed
+# usage-requirements. $<BUILD_INTERFACE:> keeps Logging::Logging linked for
+# in-tree builds (this library itself and its tests) while leaving it out of
+# LinearAlgebraTargets.cmake's INSTALL_INTERFACE; for a SHARED build (the
+# default), libLogging's symbols are already resolved into/alongside
+# libLinearAlgebra, and an installed consumer separately resolves the actual
+# Logging package via find_dependency(Logging) in LinearAlgebraConfig.cmake.in.
+list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>)
 
 # --- Configure-time headers ---
 configure_file(
@@ -447,6 +462,39 @@ install(
   DESTINATION include/LinearAlgebra
   FILES_MATCHING
   PATTERN "*.h"
+)
+
+# --- CMake Package Configuration Files (find_package(LinearAlgebra) support) ---
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/Cmake/LinearAlgebraConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
+  INSTALL_DESTINATION lib/cmake/LinearAlgebra
+)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
+  # Hardcoded rather than ${PROJECT_VERSION}: when embedded via
+  # add_subdirectory (LINALG_STANDALONE OFF), PROJECT_VERSION belongs to
+  # whichever project() call is nearest/outermost, not this one's
+  # project(LinearAlgebra VERSION 1.0.0 ...), which only runs in the
+  # standalone branch above. Keep in sync with that VERSION.
+  VERSION 1.0.0
+  COMPATIBILITY SameMajorVersion
+)
+
+install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
+  DESTINATION lib/cmake/LinearAlgebra
+)
+
+install(
+  EXPORT LinearAlgebraTargets
+  NAMESPACE LinearAlgebra::
+  FILE LinearAlgebraTargets.cmake
+  DESTINATION lib/cmake/LinearAlgebra
 )
 
 # --- Testing ---
