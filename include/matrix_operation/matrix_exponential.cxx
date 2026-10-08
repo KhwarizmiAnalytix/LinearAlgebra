@@ -269,18 +269,18 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
         n, degree, U.data(), V.data());
 
     std::vector<T> denom(static_cast<std::size_t>(nn));
-    std::vector<T> numer(static_cast<std::size_t>(nn));
+    std::vector<T> numerator(static_cast<std::size_t>(nn));
     for (linalg_int i = 0; i < nn; ++i)
     {
         denom[static_cast<std::size_t>(i)] = V[static_cast<std::size_t>(i)] - U[static_cast<std::size_t>(i)];
-        numer[static_cast<std::size_t>(i)] = V[static_cast<std::size_t>(i)] + U[static_cast<std::size_t>(i)];
+        numerator[static_cast<std::size_t>(i)] = V[static_cast<std::size_t>(i)] + U[static_cast<std::size_t>(i)];
     }
 
     std::vector<linalg_int> pivot(static_cast<std::size_t>(n));
     linalg::matrix_invert(denom.data(), pivot.data(), n);
 
     std::vector<T> R(static_cast<std::size_t>(nn));
-    mat_mul(denom.data(), numer.data(), n, R.data());
+    mat_mul(denom.data(), numerator.data(), n, R.data());
 
     std::vector<T> tmp(static_cast<std::size_t>(nn));
     for (int k = 0; k < s; ++k)

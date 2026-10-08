@@ -1,5 +1,7 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
+#include <cstdint>
+
 #include <include/logging.h>
 
 #if defined(LINALG_ENABLE_MKL)
@@ -56,7 +58,7 @@ bool cholesky_blas_f64(double* C, linalg_int lda, cholesky_decomposition_enum ty
 namespace
 {
 
-enum class matrix_order
+enum class matrix_order : std::uint8_t
 {
     row_major,
     col_major
@@ -179,7 +181,7 @@ bool cholesky_scalar_f64(double* C, linalg_int lda, cholesky_decomposition_enum 
 // Reverse-mode adjoint of cholesky_decomposition: no vendor library (LAPACK/
 // cuSOLVER) exposes this, so it always runs the scalar implementation
 // directly, regardless of which backend cholesky_decomposition itself used.
-enum class aad_matrix_order
+enum class aad_matrix_order : std::uint8_t
 {
     row_major,
     col_major

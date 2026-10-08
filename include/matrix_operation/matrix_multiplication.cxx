@@ -214,7 +214,7 @@ linalg_int blocking_sizes(
     // per mr x kc horizontal small panels where mr is the blocking size along the m dimension
     // at the register level. This small horizontal panel has to stay within L1 cache.
 
-    // get the cach size L1, L2 and L3
+    // get the cache size L1, L2 and L3
     if (l1 == 0)
     {
         cpu_info::cpuinfo_cach(l1, l2, l3, l3_count);
@@ -1413,7 +1413,7 @@ void gemm(  // NOLINT
                 simd<value_t>::prefetch(&blA[0]);
                 const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
 
-                // The following piece of code wont work for 512 bit registers
+                // The following piece of code won't work for 512 bit registers
                 // Moreover, if LhsProgress==8 it assumes that there is a half tmp of the
                 // same size as nr (which is currently 4) for the return type.
                 static constexpr linalg_int packet_half_size = simd<value_t>::half_size;
