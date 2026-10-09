@@ -1,15 +1,6 @@
 # LinearAlgebra
 
-Standalone C++ dense linear algebra library: Cholesky/LU/SVD decompositions,
-linear solve, matrix inversion/multiplication/transpose, with a portable
-scalar fallback and an optional Intel MKL backend. Source lives in
-`include/`; tests live in `Testing/Cxx/`. Use namespace `linalg` and
-the existing `LINALG_*` export/feature macros. Exception reporting uses
-`KhwarizmiAnalytix/Logging` (vendored at `ThirdParty/Logging`, a required
-dependency) directly: throw via `LOGGING_THROW`/`LOGGING_CHECK`
-(fmt-style `{}` placeholders, not stream concatenation) and catch
-`logging::exception`; there is no `include/util/exception.h` or
-`LINALG_THROW` wrapper in this repo. Dependencies are under `ThirdParty/`.
+Standalone C++ dense linear algebra library. Source lives in `include/`; tests live in `Testing/Cxx/`. Use namespace `linalg` and `LINALG_*` macros. Dependencies are under `ThirdParty/`.
 
 ## Shared agent guidance
 
@@ -53,18 +44,12 @@ For Bazel, also run from `Scripts/`:
 python3 setup_bazel.py config.build.test
 ```
 
-The scalar fallback paths are the default (`LINALG_ENABLE_MKL=OFF`); pass
-`--linalg=MKL`-style flags (see `Scripts/setup.py --help`) or
-`-DLINALG_ENABLE_MKL=ON` directly to exercise the MKL-backed paths.
-
 ## Test conventions
 
-Follow neighboring Google Test cases and `LinearAlgebraTest.h`. Tests use
-`Test*.cxx` under `Testing/Cxx/`; CMake uses a recursive glob while Bazel
-uses a package-local glob. Check exclusions and register new subdirectories
-in both systems. `Testing/Cxx/dense_matrix_test_helper.h` is a test-only
-row-major dense matrix used to build fixtures — it is not part of the public
-library and must not be included from `include/`.
+Match adjacent test cases and testing framework conventions in the repository.
+Tests use `Test*.cpp` or `Test*.cxx` under `Testing/Cxx/`; CMake uses a recursive glob
+while Bazel uses a package-local glob. Check exclusions and register new subdirectories
+in both systems when adding tests.
 
 ## Verification and scope
 
@@ -77,3 +62,21 @@ changes need frontmatter/link/whitespace validation, not compilation.
 Keep unrelated user edits and dependency sources intact. Share review
 findings in the response or pull request; do not create unsolicited status
 documents. Follow this repository's existing license and contribution policy.
+
+## CMake Configuration Message Alignment
+
+All `message("  LABEL : value")` configuration summary messages in CMakeLists.txt
+and `Cmake/lto.cmake` must align colons at exactly **24 characters from the opening
+quote** (inclusive).
+
+Format: `message("  LABEL{PADDING}: VALUE")`
+- Opening `"`: position 1
+- Two spaces + label + padding: positions 2-23 (22 chars total)
+- Colon `:`: position 24
+
+Example:
+```cmake
+message("  Icecc               : ${LINALG}_ENABLE_ICECC}")
+```
+
+This ensures all colons in configuration output form a vertical line for readability.
