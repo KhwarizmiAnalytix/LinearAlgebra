@@ -168,11 +168,12 @@ wires `ThirdParty/googletest` in via `local_repository`.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
 PR to `main`: CMake scalar-fallback build+test on Linux and macOS, a CMake
-build+test with `-DLINALG_ENABLE_MKL=ON` (Linux, Intel oneMKL via apt), and
-`bazel test //...` on Linux and macOS. `LINALG_ENABLE_BLAS` and
-`LINALG_ENABLE_CUBLAS` are **not** covered by CI (no BLAS/LAPACKE job; no
-GPU runner) — both are exercised only by local, manual builds; see
-[`docs/gpu_backend_design.md`](docs/gpu_backend_design.md) §7 for how the
-GPU backend is verified today. See [CONTRIBUTING.md](CONTRIBUTING.md) for
-running the same checks locally, plus sanitizers, coverage, and lintrunner
-(not yet wired into CI).
+build+test with `-DLINALG_ENABLE_MKL=ON` (Linux, Intel oneMKL via apt),
+`bazel test //...` on Linux and macOS, and a `Coverage` job (Linux/macOS/Windows,
+`-DLINALG_ENABLE_COVERAGE=ON` via `coverage-tool`, Codecov upload on Linux).
+`LINALG_ENABLE_BLAS` and `LINALG_ENABLE_CUBLAS` are **not** covered by CI (no
+BLAS/LAPACKE job; no GPU runner) — both are exercised only by local, manual
+builds; see [`docs/gpu_backend_design.md`](docs/gpu_backend_design.md) §7 for
+how the GPU backend is verified today. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for running the same checks locally, plus sanitizers and lintrunner (not yet
+wired into CI).
