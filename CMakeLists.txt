@@ -75,6 +75,33 @@ option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlge
 # ships).
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
+# Enables the scalar (non-MKL/BLAS) matrix_multiplication backend's blocked,
+# SIMD-vectorized GEMM (include/common/packet.h; matrix_multiplication.cxx's
+# LINALG_VECTORIZED block) in place of its plain triple-loop fallback.
+option(LINALG_ENABLE_VECTORIZATION
+       "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
+)
+
+# Which linalg::packet<T> specialization backs LINALG_ENABLE_VECTORIZATION:
+#   auto   - let include/common/packet.h pick the widest ISA the compiler's
+#            own predefined macros say is already enabled (its -march/
+#            -mavx.../-mfpu flags), falling back to the scalar packet<T>
+#            primary template if none apply. Does not add any compiler flag
+#            itself.
+#   scalar - force linalg::packet<T>'s scalar (width-1) primary template
+#            even if the compiler has a wider ISA enabled.
+#   sse2/avx/avx2/avx512/neon - force that specialization and (x86 targets
+#            only) add the matching -m<isa> compiler flag so it is actually
+#            enabled; a target that cannot assemble the requested ISA fails
+#            to build rather than silently falling back to a narrower one.
+set(LINALG_VECTORIZATION_ISA "auto" CACHE STRING
+    "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: auto, scalar, sse2, avx, avx2, avx512, neon"
+)
+set_property(CACHE LINALG_VECTORIZATION_ISA PROPERTY STRINGS
+             auto scalar sse2 avx avx2 avx512 neon
+)
+mark_as_advanced(LINALG_VECTORIZATION_ISA)
+
 # On MSVC, matrix_multiplication.cxx normally suppresses narrowing-conversion
 # warnings (C4244) around its non-MKL fallback; this re-enables them.
 option(LINALG_DISPLAY_WIN32_WARNINGS "Do not suppress MSVC narrowing-conversion warnings" OFF)
@@ -437,6 +464,34 @@ endif ()
 if (LINALG_LU_PIVOTING)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_LU_PIVOTING)
 endif ()
+if (LINALG_ENABLE_VECTORIZATION)
+  target_compile_definitions(LinearAlgebra PUBLIC LINALG_VECTORIZED)
+
+  if (NOT LINALG_VECTORIZATION_ISA STREQUAL "auto")
+    string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
+    target_compile_definitions(LinearAlgebra PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
+    unset(_linalg_simd_isa_upper)
+
+    # x86 ISAs need the matching -m<isa> flag to actually be assembled;
+    # NEON is the aarch64 baseline (and has no single standard x86-style
+    # flag on the compilers this repository targets), so "neon" adds none.
+    # MSVC has no per-ISA -mXXX flags of its own — /arch:AVX[2|512] is the
+    # closest equivalent but covers the whole TU like GCC/Clang's -m flags
+    # do, and this repository's MSVC support does not target AVX-512 at
+    # all, so it is left for whoever first needs it to wire up.
+    if (NOT MSVC)
+      if (LINALG_VECTORIZATION_ISA STREQUAL "sse2")
+        target_compile_options(LinearAlgebra PUBLIC -msse2)
+      elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx")
+        target_compile_options(LinearAlgebra PUBLIC -mavx)
+      elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx2")
+        target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
+      elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx512")
+        target_compile_options(LinearAlgebra PUBLIC -mavx512f)
+      endif ()
+    endif ()
+  endif ()
+endif ()
 if (LINALG_DISPLAY_WIN32_WARNINGS)
   target_compile_definitions(LinearAlgebra PUBLIC LINALG_DISPLAY_WIN32_WARNINGS)
 endif ()
@@ -524,6 +579,8 @@ if(LINALG_STANDALONE)
   message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
   message("  cuBLAS               : ${LINALG_ENABLE_CUBLAS}")
   message("  LU pivoting          : ${LINALG_LU_PIVOTING}")
+  message("  Vectorization        : ${LINALG_ENABLE_VECTORIZATION}")
+  message("  Vectorization ISA    : ${LINALG_VECTORIZATION_ISA}")
   message("  Clang-tidy           : ${LINALG_ENABLE_CLANGTIDY}")
   message("  Fix                  : ${LINALG_ENABLE_FIX}")
   message("  Iwyu                 : ${LINALG_ENABLE_IWYU}")

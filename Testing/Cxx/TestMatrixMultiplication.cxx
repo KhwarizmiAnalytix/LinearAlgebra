@@ -298,3 +298,33 @@ TEST(Math, MatrixMultiplication)
     matrix_multiplication_test<double>(rows, lda, columns, false, true);
     matrix_multiplication_test<double>(rows, lda, columns, true, true);
 }
+
+// The scalar backend's LINALG_VECTORIZED path (matrix_multiplication.cxx)
+// packs operands into mr/nr-sized register blocks (mr = 3 * linalg::simd<
+// value_t>::size, i.e. 12 for float, 6 for double; nr = 4) and only
+// activates once rows + columns + depth > 20 — below that it falls through
+// to the same plain scalar loop as the non-vectorized build. This sweeps
+// depth/columns from 1 to 16 so every case lands on both sides of that
+// threshold and at every remainder relative to the packet width (4 for
+// float, 2 for double) and the mr/nr block sizes above, on every pack_lhs/
+// pack_rhs/gemm peeling branch.
+TEST(Math, MatrixMultiplicationVectorizedBoundary)
+{
+    constexpr int rows = 5;
+
+    for (int columns = 1; columns <= 16; ++columns)
+    {
+        for (int depth = 1; depth <= 16; ++depth)
+        {
+            matrix_multiplication_test<float>(rows, depth, columns, false, false);
+            matrix_multiplication_test<float>(rows, depth, columns, true, false);
+            matrix_multiplication_test<float>(rows, depth, columns, false, true);
+            matrix_multiplication_test<float>(rows, depth, columns, true, true);
+
+            matrix_multiplication_test<double>(rows, depth, columns, false, false);
+            matrix_multiplication_test<double>(rows, depth, columns, true, false);
+            matrix_multiplication_test<double>(rows, depth, columns, false, true);
+            matrix_multiplication_test<double>(rows, depth, columns, true, true);
+        }
+    }
+}
