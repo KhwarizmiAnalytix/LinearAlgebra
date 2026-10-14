@@ -3,14 +3,7 @@
 #include <cstddef>
 
 #include "include/common/linear_algebra_export.h"
-
-#if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define linalg_int __int64
-#define linalg_long unsigned __int64
-#else
-#define linalg_int long long int
-#define linalg_long unsigned long long int
-#endif
+#include "include/common/types.h"
 
 namespace linalg
 {
@@ -23,8 +16,10 @@ namespace linalg
 // backend (scalar / blas_lapack / mkl) is a compile-time choice fixed by
 // LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS (MKL takes precedence over BLAS
 // over the scalar fallback) — there is no runtime dispatch or per-call
-// backend override. No GPU implementation exists for this op. Returns false
-// if the algorithm failed to converge.
+// backend override. Returns false if the algorithm failed to converge. For
+// device (CUDA) pointers, see linalg::gpu::symmetric_eigenvalue_decomposition
+// in include/matrix_operation_gpu/eigenvalue_decomposition_gpu.h — the
+// general (non-symmetric) overload below has no GPU counterpart.
 LINALG_API bool symmetric_eigenvalue_decomposition(
     const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv);
 

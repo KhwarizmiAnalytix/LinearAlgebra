@@ -3,14 +3,7 @@
 #include <cstddef>
 
 #include "include/common/linear_algebra_export.h"
-
-#if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define linalg_int __int64
-#define linalg_long unsigned __int64
-#else
-#define linalg_int long long int
-#define linalg_long unsigned long long int
-#endif
+#include "include/common/types.h"
 
 namespace linalg
 {
@@ -25,8 +18,9 @@ namespace linalg
 //
 // Always routes through linalg::pseudo_inverse (X = A+ * B), which is
 // itself backend-dispatched via linalg::svd_decomposition — there is no
-// separate backend selection here. No GPU implementation exists for this
-// op.
+// separate backend selection here. For device (CUDA) pointers, see
+// linalg::gpu::least_squares_solve in
+// include/matrix_operation_gpu/least_squares_gpu.h.
 LINALG_API void least_squares_solve(
     linalg_long rows,
     linalg_long columns,

@@ -5,6 +5,7 @@
 #include <cuda_runtime_api.h>
 
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 // Single-thread reduction: n is one matrix dimension, not a large array, so
 // a parallel reduction buys nothing here — same rationale and shape as
@@ -53,7 +54,7 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
         LOGGING_THROW("cudaMalloc failed");
     }
 
-    trace_kernel<T><<<1, 1, 0, stream>>>(A, static_cast<int>(n), dev_sum);
+    trace_kernel<T><<<1, 1, 0, stream>>>(A, detail::checked_narrow<int>(n), dev_sum);
     const auto launch_err = cudaGetLastError();
 
     T          sum = T(0);

@@ -185,6 +185,50 @@ void multiply(std::vector<double>& result,
     const auto two_inner_dim = 2 * inner_dim;
     const auto stride        = outer_dim * n;
 
+    // The unrolled block loop below assumes 5 distinct band-position
+    // regions (first/second/middle/second-to-last/last block, each
+    // `inner_dim` wide), which only partitions a row of `n = dim *
+    // inner_dim` elements correctly when dim >= 4: for dim < 4, e.g. the
+    // "second" and "second-to-last" blocks (loop 2 and loop 4 below) are
+    // actually the same or overlapping block rows, so applying both
+    // unconditionally double-counts or reads/writes up to one inner_dim
+    // block past the end of the row. Guard with a direct, bounds-checked
+    // per-block-row fallback for small dim instead.
+    if (dim < 4)
+    {
+        for (size_t l = 0; l < outer_dim; ++l)
+        {
+            const auto offset = l * n;
+            for (size_t b = 0; b < dim; ++b)
+            {
+                for (size_t p = 0; p < inner_dim; ++p)
+                {
+                    const size_t i    = b * inner_dim + p;
+                    double       acc  = 0.0;
+                    if (b >= 2)
+                    {
+                        acc += mat[0 * stride + offset + i] * in[offset + i - two_inner_dim];
+                    }
+                    if (b >= 1)
+                    {
+                        acc += mat[1 * stride + offset + i] * in[offset + i - inner_dim];
+                    }
+                    acc += mat[2 * stride + offset + i] * in[offset + i];
+                    if (b + 1 < dim)
+                    {
+                        acc += mat[3 * stride + offset + i] * in[offset + i + inner_dim];
+                    }
+                    if (b + 2 < dim)
+                    {
+                        acc += mat[4 * stride + offset + i] * in[offset + i + two_inner_dim];
+                    }
+                    result[offset + i] += time_multiplier * acc;
+                }
+            }
+        }
+        return;
+    }
+
     for (size_t l = 0; l < outer_dim; ++l)
     {
         const auto offset = l * n;

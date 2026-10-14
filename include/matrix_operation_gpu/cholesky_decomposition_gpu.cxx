@@ -7,6 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -32,7 +33,7 @@ void cholesky_decomposition(
 {
     LOGGING_CHECK(C != nullptr && info != nullptr, "cholesky_decomposition: C and info must not be null");
     LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     auto fill = to_fill_mode(type);
@@ -59,7 +60,7 @@ void cholesky_decomposition(
 {
     LOGGING_CHECK(C != nullptr && info != nullptr, "cholesky_decomposition: C and info must not be null");
     LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     auto fill = to_fill_mode(type);

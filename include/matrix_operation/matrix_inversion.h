@@ -7,11 +7,12 @@
 
 namespace linalg
 {
-// Host-memory-only CPU entry point (no GPU implementation exists for this
-// op). The CPU backend (scalar / blas_lapack / mkl) is a compile-time choice
-// fixed by LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS (MKL takes precedence over
-// BLAS over the scalar fallback) — there is no runtime dispatch or per-call
-// backend override.
+// Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapack /
+// mkl) is a compile-time choice fixed by LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS
+// (MKL takes precedence over BLAS over the scalar fallback) — there is no
+// runtime dispatch or per-call backend override. For device (CUDA) pointers,
+// see linalg::gpu::matrix_invert in
+// include/matrix_operation_gpu/matrix_inversion_gpu.h.
 LINALG_API void matrix_invert(
     float*                     m,
     linalg_int*                pivot,

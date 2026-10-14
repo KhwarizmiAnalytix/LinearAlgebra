@@ -9,6 +9,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 // R's strictly-below-diagonal entries are Householder-vector scratch left
 // over from geqrf, not zero — this clears them, matching the CPU
@@ -68,11 +69,11 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
         LOGGING_THROW("qr_decomposition: rows and columns must be positive");
     }
 
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
     const auto k = std::min(r, c);
 
-    if (static_cast<int>(lda) != c || static_cast<int>(ldq) != k || static_cast<int>(ldr) != c)
+    if (detail::checked_narrow<int>(lda) != c || detail::checked_narrow<int>(ldq) != k || detail::checked_narrow<int>(ldr) != c)
     {
         LOGGING_THROW("linalg::gpu::qr_decomposition requires tightly packed lda/ldq/ldr "
                      "(lda == columns, ldq == min(rows, columns), ldr == columns)");

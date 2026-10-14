@@ -32,6 +32,11 @@ config_setting(
 )
 
 config_setting(
+    name = "linalg_enable_blas",
+    define_values = {"linalg_enable_blas": "true"},
+)
+
+config_setting(
     name = "linalg_lu_pivoting",
     define_values = {"linalg_lu_pivoting": "true"},
 )

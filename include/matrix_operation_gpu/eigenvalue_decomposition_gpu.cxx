@@ -8,6 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -38,7 +39,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     LOGGING_CHECK(!(lda != n) && !(ldv != n), "linalg::gpu::symmetric_eigenvalue_decomposition requires tightly packed "
                      "lda/ldv (both == n)");
 
-    const auto nn      = static_cast<int>(n);
+    const auto nn      = detail::checked_narrow<int>(n);
     auto       handle  = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     // Symmetric matrix: A == A^T, so (unlike qr/svd) no transpose is needed

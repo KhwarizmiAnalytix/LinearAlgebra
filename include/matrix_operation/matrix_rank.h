@@ -3,14 +3,7 @@
 #include <cstddef>
 
 #include "include/common/linear_algebra_export.h"
-
-#if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define linalg_int __int64
-#define linalg_long unsigned __int64
-#else
-#define linalg_int long long int
-#define linalg_long unsigned long long int
-#endif
+#include "include/common/types.h"
 
 namespace linalg
 {

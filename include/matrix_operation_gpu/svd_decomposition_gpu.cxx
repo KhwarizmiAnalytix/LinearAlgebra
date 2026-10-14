@@ -9,6 +9,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -44,8 +45,8 @@ void svd_core(BufferSizeFn buffer_size,
     int*                   info,
     cudaStream_t           stream)
 {
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
     const auto k = std::min(r, c);  // == c, since the caller guarantees rows >= columns
 
     auto handle = detail::cusolver_handle_for_current_device();
@@ -163,11 +164,11 @@ void svd_impl(BufferSizeFn buffer_size,
     LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr && info != nullptr, "svd_decomposition: A, S, U, VT, and info must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0, "svd_decomposition: rows and columns must be positive");
 
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
     const auto k = std::min(r, c);
 
-    LOGGING_CHECK(!(static_cast<int>(lda) != c) && !(static_cast<int>(ldu) != k) && !(static_cast<int>(ldv) != c), "linalg::gpu::svd_decomposition requires tightly packed lda/ldu/ldv "
+    LOGGING_CHECK(!(detail::checked_narrow<int>(lda) != c) && !(detail::checked_narrow<int>(ldu) != k) && !(detail::checked_narrow<int>(ldv) != c), "linalg::gpu::svd_decomposition requires tightly packed lda/ldu/ldv "
                      "(lda == columns, ldu == min(rows, columns), ldv == columns)");
 
     if (r >= c)

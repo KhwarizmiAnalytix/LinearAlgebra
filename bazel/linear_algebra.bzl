@@ -9,12 +9,23 @@ def linear_algebra_copts():
 def linear_algebra_defines():
     """Returns compile definitions for linear_algebra.
 
-    Mirrors CMakeLists.txt: LINALG_ENABLE_MKL / LINALG_LU_PIVOTING toggles.
+    Mirrors CMakeLists.txt: LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS /
+    LINALG_LU_PIVOTING toggles. Like linalg_enable_mkl, linalg_enable_blas
+    only threads the compile define through — it does not resolve cblas.h/
+    lapacke.h or link a BLAS/LAPACK library the way CMakeLists.txt's
+    find_package(BLAS)/find_path() do, so a build with it set still depends
+    on those headers/libs already being on the toolchain's default search
+    paths. CMake remains this repo's primary, exercised build system for the
+    blas_lapack backend (see BUILD.bazel).
     """
     defines = xsigma_defines()
 
     defines += select({
         "//bazel:linalg_enable_mkl": ["LINALG_ENABLE_MKL=1"],
+        "//conditions:default": [],
+    })
+    defines += select({
+        "//bazel:linalg_enable_blas": ["LINALG_ENABLE_BLAS=1"],
         "//conditions:default": [],
     })
     defines += select({

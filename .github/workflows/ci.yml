@@ -72,6 +72,132 @@ jobs:
       - name: Test
         run: ctest --test-dir build-mkl --output-on-failure
 
+  cmake-blas:
+    name: CMake (${{ matrix.os }}, OpenBLAS/LAPACKE backend)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja + Clang + OpenBLAS/LAPACKE (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libopenblas-dev liblapacke-dev
+
+      - name: Install Ninja + OpenBLAS (macOS)
+        if: runner.os == 'macOS'
+        # Homebrew's OpenBLAS is keg-only (not symlinked into the default
+        # prefix, to avoid shadowing Apple's Accelerate), so its cblas.h/
+        # lapacke.h need CMAKE_PREFIX_PATH pointed at the keg explicitly —
+        # see CMakeLists.txt's find_path(LINALG_CBLAS_INCLUDE_DIR ...).
+        # Without this, LINALG_ENABLE_BLAS would silently fall back to
+        # Accelerate (GEMM/transpose only, no LAPACKE) instead.
+        run: |
+          brew install ninja openblas
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix openblas)" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -S . -B build-blas -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINALG_ENABLE_BLAS=ON
+
+      - name: Build
+        run: cmake --build build-blas -j
+
+      - name: Test
+        run: ctest --test-dir build-blas --output-on-failure
+
+  cmake-lu-pivoting:
+    name: CMake (${{ matrix.os }}, LU pivoting)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja + Clang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure
+        run: cmake -S . -B build-lupivot -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINALG_LU_PIVOTING=ON
+
+      - name: Build
+        run: cmake --build build-lupivot -j
+
+      - name: Test
+        run: ctest --test-dir build-lupivot --output-on-failure
+
+  sanitizer:
+    name: Sanitizer (${{ matrix.os }}, ASan+UBSan)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja + Clang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-san -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DLINALG_ENABLE_SANITIZER=ON
+          -DLINALG_SANITIZER_TYPE=address,undefined
+
+      - name: Build
+        run: cmake --build build-san -j
+
+      - name: Test
+        run: ctest --test-dir build-san --output-on-failure
+
+  cuda-compile:
+    name: CUDA (compile-only, no GPU runner)
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.6.2-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: apt-get update && apt-get install -y ninja-build cmake git
+
+      - name: Configure
+        # CMAKE_CUDA_ARCHITECTURES defaults to "native", which queries an
+        # actual GPU at configure time — unavailable in this GPU-less
+        # container, so a fixed architecture list is required here. This
+        # job only compiles the GPU tree (no `ctest`): it catches build
+        # breaks in include/matrix_operation_gpu/, not GPU correctness —
+        # see docs/backend_roadmap.md §7 on that remaining manual,
+        # on-hardware check.
+        run: >
+          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DLINALG_ENABLE_CUBLAS=ON
+          -DCMAKE_CUDA_ARCHITECTURES=75
+
+      - name: Build
+        run: cmake --build build-cuda -j
+
   bazel:
     name: Bazel (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

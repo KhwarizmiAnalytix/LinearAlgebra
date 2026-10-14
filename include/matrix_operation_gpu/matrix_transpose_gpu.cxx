@@ -7,6 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -26,8 +27,8 @@ void transpose_impl(
 {
     LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
 
     T* scratch = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&scratch),

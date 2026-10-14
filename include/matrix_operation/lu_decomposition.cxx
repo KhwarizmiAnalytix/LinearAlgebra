@@ -100,12 +100,17 @@ bool lu_decomposition_scalar_impl(
     using size_type = linalg_long;
 
 #ifdef LINALG_LU_PIVOTING
-    // Initialize pivot array
-    for (size_type i = 0; i <= lda; ++i)
+    // Initialize pivot array. `pivot` holds exactly `lda` entries (LAPACK's
+    // ipiv convention: pivot[i] is the 1-based row swapped with row i) —
+    // pivotCount (the swap count, used only to flip the determinant's sign
+    // under odd permutations) is tracked locally rather than as a trailing
+    // pivot[lda], which used to overflow the caller's n-sized buffer by one
+    // element (see docs/backend_roadmap.md §2.1 item 1).
+    for (size_type i = 0; i < lda; ++i)
     {
         pivot[i] = static_cast<linalg_int>(i + 1);
     }
-    linalg_int& pivotCount = pivot[lda];
+    linalg_int pivotCount = 0;
 #endif
     for (size_type i = 0; i < lda; ++i)
     {

@@ -8,6 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -34,7 +35,7 @@ void lu_solve(BufferSizeFn buffer_size,
     int*                   info,
     cudaStream_t           stream)
 {
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 
@@ -81,7 +82,7 @@ void cholesky_solve(BufferSizeFn buffer_size,
     int*                         info,
     cudaStream_t                 stream)
 {
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     // Row-major LOWER factor <-> column-major UPPER fill, see

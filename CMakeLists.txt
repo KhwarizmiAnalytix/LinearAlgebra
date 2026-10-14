@@ -2,11 +2,18 @@
 # LinearAlgebra —
 # CMakeLists.txt
 #
-# Dense matrix decompositions (Cholesky, LU, SVD), linear solve, and matrix
-# inversion/multiplication/transpose, with an optional Intel MKL backend.
+# Dense matrix decompositions (Cholesky, LU, QR, SVD, symmetric/general
+# eigenvalue), linear solve, matrix inversion/multiplication/transpose/norm/
+# rank/trace, least squares, pseudo-inverse, matrix exponential, and
+# tri-/pentadiagonal operations, with optional Intel MKL, vendor-neutral
+# CBLAS/LAPACKE, and cuBLAS/cuSOLVER GPU backends.
 #
 # Public compile definitions: LINALG_ENABLE_MKL — MKL-backed LAPACKE code
-# paths active in cholesky/LU/SVD/inversion/multiplication/transpose.
+# paths; LINALG_ENABLE_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
+# LINALG_ENABLE_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
+# include/matrix_operation_gpu/. Active for every CPU op except
+# matrix_exponential and the tri-/pentadiagonal operations (scalar only),
+# and every GPU op except general (non-symmetric) eigenvalue decomposition.
 # =============================================================================
 cmake_minimum_required(VERSION 3.16)
 
@@ -170,6 +177,12 @@ endif ()
 # --- Optional Intel MKL backend ---
 set(LINALG_DEPENDENCY_LIBS "")
 if (LINALG_ENABLE_MKL)
+  # MKL call sites pass linalg_int/linalg_long (64-bit) straight through as
+  # MKL_INT* with no narrowing, so the oneMKL CMake config package must
+  # select its ilp64 (64-bit MKL_INT) interface, not the lp64 default.
+  # Must be set before find_package(MKL CONFIG) — it selects which
+  # MKL::MKL interface target that package defines.
+  set(MKL_INTERFACE "ilp64")
   find_package(MKL CONFIG QUIET)
 if (NOT MKL_FOUND)
     # Fall back to the classic (non-CONFIG) FindMKL-style search some

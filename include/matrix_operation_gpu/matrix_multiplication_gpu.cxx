@@ -6,6 +6,7 @@
 
 #include "include/common/cuda_handle.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -41,17 +42,17 @@ void matrix_multiplication(bool transpose_a,
     if (cublasSgemm(handle,
             transpose_b ? CUBLAS_OP_T : CUBLAS_OP_N,
             transpose_a ? CUBLAS_OP_T : CUBLAS_OP_N,
-            static_cast<int>(columns),
-            static_cast<int>(rows),
-            static_cast<int>(depth),
+            detail::checked_narrow<int>(columns),
+            detail::checked_narrow<int>(rows),
+            detail::checked_narrow<int>(depth),
             &alpha,
             b,
-            static_cast<int>(ldb),
+            detail::checked_narrow<int>(ldb),
             a,
-            static_cast<int>(lda),
+            detail::checked_narrow<int>(lda),
             &beta,
             c,
-            static_cast<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
+            detail::checked_narrow<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
     {
         LOGGING_THROW("cublasSgemm failed");
     }
@@ -79,17 +80,17 @@ void matrix_multiplication(bool transpose_a,
     if (cublasDgemm(handle,
             transpose_b ? CUBLAS_OP_T : CUBLAS_OP_N,
             transpose_a ? CUBLAS_OP_T : CUBLAS_OP_N,
-            static_cast<int>(columns),
-            static_cast<int>(rows),
-            static_cast<int>(depth),
+            detail::checked_narrow<int>(columns),
+            detail::checked_narrow<int>(rows),
+            detail::checked_narrow<int>(depth),
             &alpha,
             b,
-            static_cast<int>(ldb),
+            detail::checked_narrow<int>(ldb),
             a,
-            static_cast<int>(lda),
+            detail::checked_narrow<int>(lda),
             &beta,
             c,
-            static_cast<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
+            detail::checked_narrow<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
     {
         LOGGING_THROW("cublasDgemm failed");
     }

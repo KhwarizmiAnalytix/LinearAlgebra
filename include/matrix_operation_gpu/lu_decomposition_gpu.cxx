@@ -8,6 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 namespace linalg
 {
@@ -18,7 +19,7 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, cudaStrea
 {
     LOGGING_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
     LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 
@@ -55,7 +56,7 @@ void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, cudaStre
 {
     LOGGING_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
     LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 

@@ -9,6 +9,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 // One thread per column/row, looping serially over the other dimension —
 // simple and obviously correct rather than a tree reduction, matching this
@@ -63,7 +64,7 @@ T norm_frobenius(Nrm2Fn nrm2, const T* A, linalg_long rows, linalg_long columns,
     auto handle = detail::cublas_handle_for_current_device();
     detail::set_stream(handle, stream);
     T          result = T(0);
-    const auto n       = static_cast<int>(rows) * static_cast<int>(columns);
+    const auto n       = detail::checked_narrow<int>(rows) * detail::checked_narrow<int>(columns);
     if (nrm2(handle, n, A, 1, &result) != CUBLAS_STATUS_SUCCESS)
     {
         LOGGING_THROW("cublasX?nrm2 failed");
@@ -97,8 +98,8 @@ T reduce_max(AmaxFn amax, const T* values, int n, cudaStream_t stream)
 template <typename T, typename AmaxFn>
 T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaStream_t stream)
 {
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
 
     T* col_sums = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&col_sums), sizeof(T) * static_cast<size_t>(c)) != cudaSuccess)
@@ -121,8 +122,8 @@ T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaS
 template <typename T, typename AmaxFn>
 T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaStream_t stream)
 {
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
 
     T* row_sums = nullptr;
     if (cudaMalloc(reinterpret_cast<void**>(&row_sums), sizeof(T) * static_cast<size_t>(r)) != cudaSuccess)
@@ -199,7 +200,7 @@ T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaS
         LOGGING_THROW("linalg::gpu::svd_decomposition failed", svd_status);
     }
 
-    const T result = reduce_max(amax, S, static_cast<int>(k), stream);
+    const T result = reduce_max(amax, S, detail::checked_narrow<int>(k), stream);
     cudaFree(S);
     return (result < T(0)) ? -result : result;
 }

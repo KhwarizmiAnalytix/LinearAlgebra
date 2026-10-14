@@ -67,6 +67,9 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 | `matrix_operation/matrix_norm.h` | Frobenius / 1 / infinity / 2 (spectral) matrix norms |
 | `matrix_operation/matrix_trace.h` | `matrix_trace` |
 | `matrix_operation/eigenvalue_decomposition.h` | Symmetric (Jacobi) and general (real Schur QR) eigenvalue/eigenvector decomposition |
+| `matrix_operation/matrix_exponential.h` | `matrix_exponential` via scaling and squaring with a Padé approximant, composed on `matrix_multiplication`/`matrix_invert`/`matrix_norm` (inherits their backend transitively) |
+| `matrix_operation/tridiagonal_operations.h` | Tridiagonal solve/multiply/decompose — scalar only, `std::vector`-based API outside the backend model |
+| `matrix_operation/pentadiagonal_operations.h` | Pentadiagonal solve/multiply — scalar only, `std::vector`-based API outside the backend model |
 
 All entry points are plain row-major raw-pointer C++ (`T* data, lda`) — no
 matrix class is part of the public API; callers own their own storage.

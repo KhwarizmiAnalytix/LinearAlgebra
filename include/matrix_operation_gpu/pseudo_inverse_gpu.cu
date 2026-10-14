@@ -10,6 +10,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns
 // row-major) into Ainv = V * diag(S+) * U^T (columns x rows row-major),
@@ -76,9 +77,9 @@ void pseudo_inverse_impl(AmaxFn amax,
     {
         LOGGING_THROW("pseudo_inverse: rows and columns must be positive");
     }
-    const auto r = static_cast<int>(rows);
-    const auto c = static_cast<int>(columns);
-    if (static_cast<int>(lda) != c || static_cast<int>(ldai) != r)
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
+    if (detail::checked_narrow<int>(lda) != c || detail::checked_narrow<int>(ldai) != r)
     {
         LOGGING_THROW(
             "linalg::gpu::pseudo_inverse requires tightly packed lda/ldai (lda == columns, ldai == "

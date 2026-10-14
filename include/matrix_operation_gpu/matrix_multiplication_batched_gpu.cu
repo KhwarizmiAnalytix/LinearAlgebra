@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 // One thread per output element, one z-block of the launch grid per matrix.
 // C[row][col] = sum_k A[row][k] * B[k][col], all row-major. File-scope
@@ -63,8 +64,8 @@ void launch(linalg_int dim,
     {
         LOGGING_THROW("batched_matrix_multiplication: dim and count must be positive");
     }
-    const auto d = static_cast<int>(dim);
-    const auto n = static_cast<int>(count);
+    const auto d = detail::checked_narrow<int>(dim);
+    const auto n = detail::checked_narrow<int>(count);
 
     const dim3 block(16, 16);
     const dim3 grid((d + block.x - 1) / block.x, (d + block.y - 1) / block.y, n);

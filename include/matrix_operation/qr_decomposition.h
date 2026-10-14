@@ -3,14 +3,7 @@
 #include <cstddef>
 
 #include "include/common/linear_algebra_export.h"
-
-#if (!defined(__INTEL_COMPILER)) & defined(_MSC_VER)
-#define linalg_int __int64
-#define linalg_long unsigned __int64
-#else
-#define linalg_int long long int
-#define linalg_long unsigned long long int
-#endif
+#include "include/common/types.h"
 
 namespace linalg
 {
@@ -23,7 +16,9 @@ namespace linalg
 // CPU backend (scalar / blas_lapack / mkl) is a compile-time choice fixed by
 // LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS (MKL takes precedence over BLAS
 // over the scalar fallback) — there is no runtime dispatch or per-call
-// backend override. No GPU implementation exists for this op.
+// backend override. For device (CUDA) pointers, see
+// linalg::gpu::qr_decomposition in
+// include/matrix_operation_gpu/qr_decomposition_gpu.h.
 LINALG_API void qr_decomposition(
     linalg_long rows,
     linalg_long columns,

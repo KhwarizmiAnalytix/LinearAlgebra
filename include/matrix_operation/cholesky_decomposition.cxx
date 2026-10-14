@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -43,13 +44,13 @@ bool cholesky_mkl_f64(double* C, linalg_int lda, cholesky_decomposition_enum typ
 
 bool cholesky_blas_f32(float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
-    const auto n = static_cast<int>(lda);
+    const auto n = detail::checked_narrow<int>(lda);
     return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
 bool cholesky_blas_f64(double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
-    const auto n = static_cast<int>(lda);
+    const auto n = detail::checked_narrow<int>(lda);
     return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 

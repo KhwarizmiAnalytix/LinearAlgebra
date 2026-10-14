@@ -8,6 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 // File-scope (not namespaced) __global__ templates, matching the usual CUDA
 // idiom already used by matrix_multiplication_batched_gpu.cu for a kernel
@@ -102,7 +103,7 @@ void lu_invert(BufferSizeFn buffer_size,
     int*                    info,
     cudaStream_t            stream)
 {
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 
@@ -201,7 +202,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
     int*                          info,
     cudaStream_t                  stream)
 {
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     // Row-major LOWER factor <-> column-major UPPER fill, see
@@ -285,7 +286,7 @@ template <typename T, typename BufferSizeFn, typename GetrfFn>
 T lu_determinant(
     BufferSizeFn buffer_size, GetrfFn getrf, T* m, linalg_int lda, cudaStream_t stream)
 {
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 
@@ -364,7 +365,7 @@ template <typename T, typename BufferSizeFn, typename PotrfFn>
 T cholesky_determinant(
     BufferSizeFn buffer_size, PotrfFn potrf, T* m, linalg_int lda, cudaStream_t stream)
 {
-    const auto n      = static_cast<int>(lda);
+    const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     const auto fill = CUBLAS_FILL_MODE_UPPER;

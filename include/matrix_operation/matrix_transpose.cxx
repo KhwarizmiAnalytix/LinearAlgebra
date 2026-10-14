@@ -1,6 +1,7 @@
 #include "include/matrix_operation/matrix_transpose.h"
 
 #include <include/logging.h>
+#include "include/common/narrow.h"
 
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
@@ -54,7 +55,7 @@ void transpose_blas_f32(linalg_long rows, linalg_long columns, float* m)
     for (linalg_long i = 0; i < rows; ++i)
     {
         cblas_scopy(
-            static_cast<int>(columns), m + i * columns, 1, scratch + i, static_cast<int>(rows));
+            detail::checked_narrow<int>(columns), m + i * columns, 1, scratch + i, detail::checked_narrow<int>(rows));
     }
     std::copy(scratch, scratch + rows * columns, m);
     allocator<float>::free(scratch);
@@ -66,7 +67,7 @@ void transpose_blas_f64(linalg_long rows, linalg_long columns, double* m)
     for (linalg_long i = 0; i < rows; ++i)
     {
         cblas_dcopy(
-            static_cast<int>(columns), m + i * columns, 1, scratch + i, static_cast<int>(rows));
+            detail::checked_narrow<int>(columns), m + i * columns, 1, scratch + i, detail::checked_narrow<int>(rows));
     }
     std::copy(scratch, scratch + rows * columns, m);
     allocator<double>::free(scratch);
