@@ -105,6 +105,12 @@ def build_cppcheck_command(
         *scan_dirs,
         "--platform=unspecified",
         "--enable=all",
+        # Every scanned file is C++ (this project has no .c sources); without
+        # this, cppcheck's extension-based guess still probes a C-language
+        # parse of some headers as one of its multi-config passes, and
+        # `namespace linalg { ... }` is invalid C — a spurious syntaxError
+        # on every header with a top-level namespace, not a real defect.
+        "--language=c++",
         "--inline-suppr",
         "-q",
         "--library=posix",
@@ -117,6 +123,18 @@ def build_cppcheck_command(
         "--suppress=toomanyconfigs",
         "--suppress=unmatchedSuppression",
         "--suppress=checkersReport",
+        # include/common/types.h defines linalg_int/linalg_long only inside
+        # `#if !defined(linalg_int)` guards (so an out-of-tree consumer can
+        # predefine them first). Cppcheck's config-space exploration tries a
+        # configuration where it treats linalg_int as externally predefined
+        # with no value at all, which skips that #define and leaves the bare
+        # macro token sitting where a type belongs (e.g. `enum class X :
+        # linalg_int`) — a spurious syntaxError, not a real defect. Fixing
+        # their value up front removes that configuration's ambiguity.
+        "-D",
+        "linalg_int=long long int",
+        "-D",
+        "linalg_long=unsigned long long int",
         # Note: -j (parallel) is intentionally omitted — cppcheck does not support
         # --output-file when -j > 1 (output goes to stdout only in parallel mode).
         "-I",

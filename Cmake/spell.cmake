@@ -63,8 +63,15 @@ else()
   # Always skip vendored trees. `ThirdParty` alone only matches a directory
   # *entry* during os.walk; `*ThirdParty*` also matches full paths if codespell
   # is pointed at a ThirdParty file or the walk starts inside that tree.
+  #
+  # Also skip generated Python tool caches (.mypy_cache, __pycache__,
+  # .pytest_cache, .ruff_cache): any local run of mypy/pytest/ruff against
+  # Scripts/ repopulates these at the repo root, and their JSON/pickle data
+  # routinely trips codespell on tokens that are not misspellings in any
+  # source file (e.g. "asend", "NotIn") — a build-breaking false positive
+  # unrelated to anything this repository's own code or docs contain.
   set(_spell_skip
-      ".git,.augment,.github,.vscode,build,Build,Cmake,ThirdParty,third_party,3rdparty,*ThirdParty*,*third_party*,*3rdparty*"
+      ".git,.augment,.github,.vscode,build,Build,Cmake,ThirdParty,third_party,3rdparty,*ThirdParty*,*third_party*,*3rdparty*,.mypy_cache,__pycache__,.pytest_cache,.ruff_cache,*.mypy_cache*,*__pycache__*,*.pytest_cache*,*.ruff_cache*"
   )
   list(APPEND _spell_args "--skip=${_spell_skip}")
 

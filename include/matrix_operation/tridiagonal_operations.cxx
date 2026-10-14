@@ -298,15 +298,13 @@ void solve_decomposed_aad(std::vector<double>& decomposed_aad,
     }
 
     // x = decomposed[0] * x;
-    std::vector<double> tmp_aad(
-        decomposed_aad.begin() + 0 * stride, decomposed_aad.begin() + 1 * stride);
     for (size_t i = 0; i < stride; ++i)
     {
         x[i] /= decomposed[0 * stride + i];
     }
     for (size_t i = 0; i < stride; ++i)
     {
-        tmp_aad[i] += x_aad[i] * x[i];
+        decomposed_aad[0 * stride + i] += x_aad[i] * x[i];
     }
     for (size_t i = 0; i < stride; ++i)
     {

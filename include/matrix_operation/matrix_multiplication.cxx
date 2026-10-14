@@ -232,12 +232,10 @@ linalg_int blocking_sizes(
             return static_cast<linalg_int>(l1);
         }
 
-        enum
-        {
-            k_peeling = 8,
-            k_div     = KcFactor * (Traits::mr * sizeof(value_t) + Traits::nr * sizeof(value_t)),
-            k_sub     = Traits::mr * Traits::nr * sizeof(value_t)
-        };
+        static constexpr linalg_int k_peeling = 8;
+        static constexpr linalg_int k_div =
+            KcFactor * (Traits::mr * sizeof(value_t) + Traits::nr * sizeof(value_t));
+        static constexpr linalg_int k_sub = Traits::mr * Traits::nr * sizeof(value_t);
 
         // ---- 1st level of blocking on L1, yields kc ----
 
@@ -777,11 +775,9 @@ void gemm(  // NOLINT
         mr >= lhs_2offset ? peeled_mc3 + ((rows - peeled_mc3) / (lhs_2offset)) * (lhs_2offset) : 0;
     const linalg_int peeled_mc1 =
         mr >= 1 * Traits::LhsProgress ? (rows / Traits::LhsProgress) * (Traits::LhsProgress) : 0;
-    enum
-    {
-        pk = 8
-    };  // NOTE Such a large peeling factor is important for large matrices (~ +5% when >1000 on
+    // NOTE Such a large peeling factor is important for large matrices (~ +5% when >1000 on
     // Haswell)
+    static constexpr linalg_int pk = 8;
     const linalg_int peeled_kc = depth & ~(pk - 1);
 
     //---------- Process 3 * LhsProgress rows at once ----------

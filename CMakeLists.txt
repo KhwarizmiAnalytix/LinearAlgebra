@@ -100,7 +100,6 @@ set(LINALG_VECTORIZATION_ISA "auto" CACHE STRING
 set_property(CACHE LINALG_VECTORIZATION_ISA PROPERTY STRINGS
              auto scalar sse2 avx avx2 avx512 neon
 )
-mark_as_advanced(LINALG_VECTORIZATION_ISA)
 
 # On MSVC, matrix_multiplication.cxx normally suppresses narrowing-conversion
 # warnings (C4244) around its non-MKL fallback; this re-enables them.

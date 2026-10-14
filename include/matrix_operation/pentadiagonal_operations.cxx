@@ -278,7 +278,6 @@ void multiply(std::vector<double>& result,
                         a4 * (*(itr_tmp + two_inner_dim)));
         }
 
-        itr4 += two_inner_dim;
         for (size_t k = 0; k < inner_dim; ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3)
         {
             const auto a0 = *itr0;
@@ -291,7 +290,6 @@ void multiply(std::vector<double>& result,
                         a2 * (*itr_tmp) + a3 * (*(itr_tmp + inner_dim)));
         }
 
-        itr3 += inner_dim;
         for (size_t k = 0; k < inner_dim; ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
         {
             const auto a0 = *itr0;
