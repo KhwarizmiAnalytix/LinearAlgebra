@@ -190,7 +190,7 @@ void matrix_vector_multiplication(int rows, int columns)
 // A's storage shape is (rows x depth) when !transpose_a, else (depth x rows);
 // B's storage shape is (depth x columns) when !transpose_b, else
 // (columns x depth) — matching linalg::matrix_multiplication's row-major
-// convention (see include/matrix_operation/matrix_multiplication.cxx).
+// convention (see src/matrix_operation/matrix_multiplication.cpp).
 template <typename value_t>
 void matrix_multiplication_test(int rows, int columns, int depth, bool transpose_a, bool transpose_b)
 {
@@ -299,7 +299,7 @@ TEST(Math, MatrixMultiplication)
     matrix_multiplication_test<double>(rows, lda, columns, true, true);
 }
 
-// The scalar backend's LINALG_VECTORIZED path (matrix_multiplication.cxx)
+// The scalar backend's LINALG_VECTORIZED path (matrix_multiplication.cpp)
 // packs operands into mr/nr-sized register blocks (mr = 3 * linalg::simd<
 // value_t>::size, i.e. 12 for float, 6 for double; nr = 4) and only
 // activates once rows + columns + depth > 20 — below that it falls through

@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "include/common/linear_algebra_export.h"
 #include "include/common/types.h"
 
 namespace linalg
 {
-enum class linear_solver_type : linalg_int
+enum class linear_solver_type : std::uint8_t
 {
     LU_LINEAR_SOLVER               = 1,
     LU_UPFRONT_LINEAR_SOLVER       = 2,

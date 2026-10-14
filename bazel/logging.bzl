@@ -3,7 +3,7 @@
 # =============================================================================
 # ThirdParty/Logging is vendored as a plain subdirectory of this workspace
 # (matching the #include "ThirdParty/Logging/..." paths baked into
-# include/matrix_operation/*.cxx), not a separate Bazel repository. Its own
+# src/matrix_operation/*.cpp), not a separate Bazel repository. Its own
 # BUILD.bazel files load their compile-option helpers via the absolute label
 # "//bazel:logging.bzl" — evaluated inside this (the only) workspace, that
 # label resolves to this file rather than Logging's own bazel/logging.bzl.

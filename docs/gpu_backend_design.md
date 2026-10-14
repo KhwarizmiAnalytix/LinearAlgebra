@@ -62,15 +62,15 @@ with no implicit host round-trip. Concretely:
   external memory library (XSigma's `Library/Memory` or otherwise). Where a
   GPU op needs internal scratch (factorization workspace, a pivot array),
   it keeps allocating that scratch itself with plain `cudaMalloc`/`cudaFree`
-  around the call, the same way `cholesky_decomposition_gpu.cxx` and
-  `linear_solver_gpu.cxx` already do — the only change there is adding the
+  around the call, the same way `cholesky_decomposition_gpu.cpp` and
+  `linear_solver_gpu.cpp` already do — the only change there is adding the
   error check that call already lacks (§4.3).
 - No autograd, no dtype-erasure/boxed dispatch, no `Tensor` type. This stays
   a plain, explicit, `T*`-and-dimensions C++ library.
 - No reintroduction of a runtime backend registry for the CPU path. Commit
   `b09f66e` deliberately replaced a PyTorch-style `dispatch_stub`
   function-pointer registry with a single `#if LINALG_ENABLE_MKL / #elif
-  LINALG_ENABLE_BLAS / #else` chain compiled directly into each op's `.cxx`,
+  LINALG_ENABLE_BLAS / #else` chain compiled directly into each op's `.cpp`,
   to remove per-call atomic loads and the whole-archive linker workaround
   the registrars needed. That decision stands; nothing here touches CPU
   dispatch.
@@ -79,8 +79,8 @@ with no implicit host round-trip. Concretely:
   primary, exercised build system for ... the cuBLAS/cuSOLVER GPU
   backend"); this plan does not change that split. CMake already wires
   `CUDA::cudart`, `CUDA::cublas`, and `CUDA::cusolver` and globs
-  `include/*.cxx`/`include/*.cu` when `LINALG_ENABLE_CUBLAS` is `ON`, so new
-  GPU `.cxx`/`.cu` files need no `CMakeLists.txt` change to be picked up.
+  `src/*.cpp`/`include/*.cu` when `LINALG_ENABLE_CUBLAS` is `ON`, so new
+  GPU `.cpp`/`.cu` files need no `CMakeLists.txt` change to be picked up.
 - No MAGMA, no multi-node, no half/complex types. Stay with `float`/`double`
   and single-GPU, matching the existing scope.
 
@@ -131,7 +131,7 @@ by §2.
 `include/matrix_operation_gpu/lu_decomposition_gpu.h` documents that
 `cusolverDnXgetrf` factors the column-major reading of the row-major buffer
 — i.e. `A^T`, not `A` — so it returns `P · A^T = L' · U'`, not the CPU's
-row-major `P · A = L · U`. `linear_solver_gpu.cxx` works around this
+row-major `P · A = L · U`. `linear_solver_gpu.cpp` works around this
 internally for its own `lu_solve()` by passing `CUBLAS_OP_T` to
 `cusolverDnXgetrs`, but the standalone `linalg::gpu::lu_decomposition` entry
 point has no such correction, and `TestGpuMatrixOperations.cxx`'s
@@ -141,8 +141,8 @@ to be compared against the CPU convention." §5.2 fixes this.
 
 ### 4.3 Other gaps
 
-- Every GPU factorization (`cholesky_decomposition_gpu.cxx`,
-  `linear_solver_gpu.cxx`) calls `cudaMalloc`/`cudaFree` for its workspace
+- Every GPU factorization (`cholesky_decomposition_gpu.cpp`,
+  `linear_solver_gpu.cpp`) calls `cudaMalloc`/`cudaFree` for its workspace
   (and, for LU, its pivot array) on every single invocation, and does not
   check `cudaMalloc`'s return value. Per §2, the per-call allocation pattern
   itself is unchanged by this plan — only the missing `LOGGING_THROW` on a
@@ -190,7 +190,7 @@ Add stream binding as an explicit, opt-in overload rather than a hidden
 global — every `linalg::gpu::*` function gains a
 `cudaStream_t stream = nullptr` trailing default parameter (`nullptr` =
 legacy default stream, preserving today's behavior exactly for existing
-callers), and each op's `.cxx` calls `cublasSetStream`/
+callers), and each op's `.cpp` calls `cublasSetStream`/
 `cusolverDnSetStream` on the pooled handle before issuing work. This keeps
 the change additive (no signature breaks for `stream = nullptr` callers)
 while letting a caller pipeline several `linalg::gpu::*` calls on their own
@@ -218,7 +218,7 @@ leaving `A^T`'s factorization as a documented-but-uncorrected caveat:
 This costs two device-side transpose kernel launches per call — cheap
 relative to `O(n^3)` factorization work, and it never touches host memory,
 so it does not compromise §1's "stays on device" requirement. Update
-`linear_solver_gpu.cxx`'s `lu_solve()` to match (it can drop its
+`linear_solver_gpu.cpp`'s `lu_solve()` to match (it can drop its
 `CUBLAS_OP_T` workaround once the factor going in is already `A`, not
 `A^T`), and change `TestGpuMatrixOperations.cxx`'s `LuDecompositionSmoke`
 into a real correctness test (compare `P·A` against `L·U` reconstructed
@@ -227,10 +227,10 @@ from `linalg::gpu::lu_decomposition`'s output, the same way
 
 ### 5.3 New GPU ops
 
-**`matrix_inversion_gpu.h`/`.cxx`** (`linalg::gpu::matrix_invert`,
+**`matrix_inversion_gpu.h`/`.cpp`** (`linalg::gpu::matrix_invert`,
 `linalg::gpu::matrix_determinant`). cuSOLVER has no direct `getri`
 equivalent, so mirror the CPU op's actual strategy
-(`matrix_inversion.cxx` already computes the inverse via
+(`matrix_inversion.cpp` already computes the inverse via
 factor-then-solve-against-identity, not a dedicated inversion routine):
 `cusolverDnXgetrf` (via the corrected §5.2 path) followed by
 `cusolverDnXgetrs` with the identity matrix as the batched right-hand
@@ -247,7 +247,7 @@ either becomes a dependency — otherwise a manual one-block kernel, since
 requires only one device→host copy of a single value, not the whole
 factor.
 
-**`svd_decomposition_gpu.h`/`.cxx`** (`linalg::gpu::svd_decomposition`).
+**`svd_decomposition_gpu.h`/`.cpp`** (`linalg::gpu::svd_decomposition`).
 Two cuSOLVER paths, both column-major like `getrf`, so both need the same
 transpose-in/transpose-out treatment as §5.2 applied to `A`, `U`, and
 `V^T`:
@@ -324,7 +324,7 @@ unchanged via trailing defaults):
 
 Unchanged: every CPU header in `include/matrix_operation/`, the compile-
 time `#if LINALG_ENABLE_MKL / #elif LINALG_ENABLE_BLAS / #else` dispatch
-pattern in each op's `.cxx`, `include/memory/allocator.h` (host scratch
+pattern in each op's `.cpp`, `include/memory/allocator.h` (host scratch
 allocator — untouched, out of scope per §2), `include/common/context.h`'s
 read-only introspection surface (`has_mkl()`/`has_blas()`/`has_cuda()` stay
 as they are; no `has_batched_solve()`-style capability flags are needed
@@ -382,8 +382,8 @@ Ordered by dependency, each phase independently buildable/testable:
    fixes the multi-GPU-handle correctness gap immediately. Bundled in the
    §4.3 unchecked-`cudaMalloc` fix at the same time (a `LOGGING_THROW` added
    at each existing call site) since both touched the same three files
-   (`cholesky_decomposition_gpu.cxx`, `lu_decomposition_gpu.cxx`,
-   `linear_solver_gpu.cxx`). Verified: `MathGpu.StreamParameter` (two
+   (`cholesky_decomposition_gpu.cpp`, `lu_decomposition_gpu.cpp`,
+   `linear_solver_gpu.cpp`). Verified: `MathGpu.StreamParameter` (two
    independent solves on two caller-created streams) plus every existing
    GPU test, on real CUDA hardware.
 2. **DONE** — **§5.2 LU layout fix** — corrects existing behavior before
@@ -404,7 +404,7 @@ Ordered by dependency, each phase independently buildable/testable:
    doc did not anticipate: cuSOLVER's classic `gesvd` only supports
    `m >= n`, unlike LAPACK's `gesvd` — the `rows < columns` case is handled
    by factoring `A^T` internally and relabeling `U`/`V` (see
-   `svd_decomposition_gpu.cxx`). Also ships a documented RESTRICTION not in
+   `svd_decomposition_gpu.cpp`). Also ships a documented RESTRICTION not in
    the original plan: `lda`/`ldu`/`ldv` must be tightly packed
    (`lda == columns`, `ldu == min(rows, columns)`, `ldv == columns`) — a
    general-stride implementation was judged not worth the added complexity

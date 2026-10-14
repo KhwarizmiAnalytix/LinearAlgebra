@@ -39,6 +39,10 @@ one consumer, not a required host.
 - `include/matrix_operation/` — the public CPU modules (below).
 - `include/matrix_operation_gpu/` — the `linalg::gpu::*` counterparts
   (below), built when `LINALG_ENABLE_CUBLAS=ON`.
+- `src/` — implementation (`.cpp`) files, mirroring `include/`'s layout
+  (e.g. `include/matrix_operation/lu_decomposition.h` pairs with
+  `src/matrix_operation/lu_decomposition.cpp`). GPU `.cu` kernels stay
+  under `include/matrix_operation_gpu/` alongside their headers.
 - `Testing/Cxx/` — GoogleTest unit tests.
 - `ThirdParty/` — vendored `googletest` submodule, plus `Logging`
   ([KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)),

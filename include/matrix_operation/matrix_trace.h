@@ -10,7 +10,7 @@ namespace linalg
 
 // Host-memory-only CPU entry point. Sum of the diagonal of a square,
 // row-major n x n matrix. There is no vendor-library "trace" routine to
-// call into (same rationale as matrix_determinant in matrix_inversion.cxx),
+// call into (same rationale as matrix_determinant in matrix_inversion.cpp),
 // so this always runs the same direct reduction regardless of
 // LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS.
 LINALG_API float matrix_trace(const float* A, linalg_int n, linalg_int lda);

@@ -6,7 +6,7 @@
 #include <mkl_lapacke.h>
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
 // LAPACKE-dependent — see CMakeLists.txt and
-// cholesky_decomposition.cxx: Apple's Accelerate framework has no LAPACKE
+// cholesky_decomposition.cpp: Apple's Accelerate framework has no LAPACKE
 // wrapper, so this branch only compiles when real lapacke.h exists;
 // otherwise the #else below falls through to the scalar implementation.
 #include <lapacke.h>

@@ -17,7 +17,7 @@ namespace gpu
 namespace
 {
 
-// See lu_decomposition_gpu.cxx: transposing `m` on the device first makes
+// See lu_decomposition_gpu.cpp: transposing `m` on the device first makes
 // cuSOLVER's column-major reading of it equal the caller's actual A rather
 // than A^T, so getrf below factors A itself and a plain (untransposed,
 // CUBLAS_OP_N) getrs solves A x = b directly. Unlike lu_decomposition_gpu,
@@ -86,7 +86,7 @@ void cholesky_solve(BufferSizeFn buffer_size,
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
     // Row-major LOWER factor <-> column-major UPPER fill, see
-    // cholesky_decomposition_gpu.cxx.
+    // cholesky_decomposition_gpu.cpp.
     const auto fill = CUBLAS_FILL_MODE_UPPER;
 
     int lwork = 0;

@@ -20,7 +20,7 @@ namespace gpu
 // CUDA stream the underlying cuSOLVER call is issued on.
 //
 // cuSOLVER is natively column-major; this entry point transposes `m` on the
-// device before and after the factorization (see lu_decomposition_gpu.cxx)
+// device before and after the factorization (see lu_decomposition_gpu.cpp)
 // so the result matches the CPU lu_decomposition's row-major "P * A = L * U"
 // packed layout and 1-based row-swap pivot convention exactly — a
 // GPU-computed factor here is safe to compare against, or feed into

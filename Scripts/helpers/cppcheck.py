@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Source directories that make up the LinearAlgebra library (mirrors
-# CMakeLists.txt's file(GLOB_RECURSE ...) root: include/**/*.cxx, minus
-# Testing/ and ThirdParty/).
-_SOURCE_DIRS = ["include"]
+# CMakeLists.txt's file(GLOB_RECURSE ...) roots: include/**/*.h and
+# src/**/*.cpp, minus Testing/ and ThirdParty/).
+_SOURCE_DIRS = ["include", "src"]
 
 
 @dataclass

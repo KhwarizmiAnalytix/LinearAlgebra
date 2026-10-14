@@ -96,7 +96,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
         cudaFree(a_work);
         LOGGING_THROW("cudaMemcpyAsync failed");
     }
-    // Same identity svd_decomposition_gpu.cxx relies on: transposing the
+    // Same identity svd_decomposition_gpu.cpp relies on: transposing the
     // row-major buffer first makes cuSOLVER's column-major (m=rows,
     // n=columns, lda=rows) reading of it equal A.
     matrix_transpose(rows, columns, a_work, stream);

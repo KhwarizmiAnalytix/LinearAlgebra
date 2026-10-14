@@ -34,7 +34,7 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, cudaStrea
     }
 
     // cuSOLVER is column-major: transposing the row-major buffer first
-    // (device-to-device, matrix_transpose_gpu.cxx) makes its column-major
+    // (device-to-device, matrix_transpose_gpu.cpp) makes its column-major
     // reading of the result equal the caller's actual A rather than A^T
     // (see that file's row/column-major identity), so getrf below factors A
     // itself and its pivots are A's own row-interchange sequence — matching

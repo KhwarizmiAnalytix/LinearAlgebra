@@ -59,7 +59,7 @@ option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearA
 
 # Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...).
 # When both this and LINALG_ENABLE_MKL are ON, MKL takes precedence at
-# compile time (see e.g. matrix_multiplication.cxx's #if/#elif chain).
+# compile time (see e.g. matrix_multiplication.cpp's #if/#elif chain).
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
 # cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as separate
@@ -76,7 +76,7 @@ option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlge
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
 # Enables the scalar (non-MKL/BLAS) matrix_multiplication backend's blocked,
-# SIMD-vectorized GEMM (include/common/packet.h; matrix_multiplication.cxx's
+# SIMD-vectorized GEMM (include/common/packet.h; matrix_multiplication.cpp's
 # LINALG_VECTORIZED block) in place of its plain triple-loop fallback.
 option(LINALG_ENABLE_VECTORIZATION
        "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
@@ -101,7 +101,7 @@ set_property(CACHE LINALG_VECTORIZATION_ISA PROPERTY STRINGS
              auto scalar sse2 avx avx2 avx512 neon
 )
 
-# On MSVC, matrix_multiplication.cxx normally suppresses narrowing-conversion
+# On MSVC, matrix_multiplication.cpp normally suppresses narrowing-conversion
 # warnings (C4244) around its non-MKL fallback; this re-enables them.
 option(LINALG_DISPLAY_WIN32_WARNINGS "Do not suppress MSVC narrowing-conversion warnings" OFF)
 
@@ -303,7 +303,7 @@ endif ()
   # wrapper — only the classic Fortran-mangled LAPACK entry points. The
   # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
   # linear_solver) are therefore only compiled when real lapacke.h is found;
-  # otherwise each op's dispatcher .cxx falls through to the scalar backend
+  # otherwise each op's dispatcher .cpp falls through to the scalar backend
   # at compile time via #if LINALG_BLAS_HAS_LAPACKE.
   set(LINALG_BLAS_HAS_LAPACKE OFF)
 if (LINALG_LAPACKE_INCLUDE_DIR)
@@ -322,7 +322,7 @@ endif ()
 
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
 # cuBLAS/cuSOLVER themselves are host-callable C APIs, linked into ordinary
-# .cxx translation units with no CUDA toolchain needed. One op
+# .cpp translation units with no CUDA toolchain needed. One op
 # (matrix_multiplication_batched_gpu.cu, batched square-matrix multiply) is a
 # genuine hand-written CUDA kernel, so `enable_language(CUDA)` and an nvcc
 # toolchain are only required — and only enabled — when this option is ON;
@@ -384,7 +384,7 @@ set(linalg_headers "")
 set(linalg_sources "")
 
 file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
-file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cxx")
+file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 # .cu sources (currently just matrix_multiplication_batched_gpu.cu) need an
 # nvcc toolchain, so they are only globbed in — and only compilable — when

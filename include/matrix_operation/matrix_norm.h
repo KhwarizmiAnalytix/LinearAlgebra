@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "include/common/linear_algebra_export.h"
 #include "include/common/types.h"
@@ -8,7 +9,7 @@
 namespace linalg
 {
 
-enum class matrix_norm_type : linalg_int
+enum class matrix_norm_type : std::uint8_t
 {
     FROBENIUS = 1,
     ONE       = 2,  // max absolute column sum

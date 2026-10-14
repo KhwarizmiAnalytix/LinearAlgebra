@@ -393,8 +393,8 @@ bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V
 
 // Square (full) Householder QR: A (n x n) = Q * R, Q orthogonal, R upper
 // triangular. Self-contained copy of the same algorithm as
-// qr_decomposition.cxx's scalar fallback (kept private to this translation
-// unit, matching this repo's convention of each op's .cxx being
+// qr_decomposition.cpp's scalar fallback (kept private to this translation
+// unit, matching this repo's convention of each op's .cpp being
 // self-contained rather than reaching across files into another op's
 // anonymous-namespace helpers) — used internally by the general eigenvalue
 // QR algorithm below.
@@ -698,7 +698,7 @@ bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* ei
     {
         // Solve M * y = x via plain Gaussian elimination with partial
         // pivoting (self-contained: this op does not depend on
-        // lu_decomposition.cxx's scalar fallback, matching this file's
+        // lu_decomposition.cpp's scalar fallback, matching this file's
         // self-containment convention).
         auto* LU = Allocator::allocate(n * n);
         std::copy_n(M, static_cast<std::size_t>(n * n), LU);

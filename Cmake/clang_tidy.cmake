@@ -21,8 +21,8 @@ mark_as_advanced(CLANG_TIDY_FOUND)
 # and rejects the flag ("Unknown command line argument"), which then makes
 # CMake's __run_co_compile fail with "cannot specify -o when generating
 # multiple output files". --header-filter already limits reports to
-# Library|Cmake|Tools|Examples, so skipping the exclude filter on older
-# tidy still keeps ThirdParty out of the report.
+# include|src, so skipping the exclude filter on older tidy still keeps
+# ThirdParty out of the report.
 execute_process(
   COMMAND "${CLANG_TIDY_PATH}" --version
   OUTPUT_VARIABLE _clang_tidy_version_out
@@ -43,7 +43,7 @@ message(STATUS "clang-tidy: ${CLANG_TIDY_PATH} (major ${CLANG_TIDY_VERSION_MAJOR
 # enable_fix — pass the caller's XXX_ENABLE_FIX variable value as the second argument. WARNING: fix
 # mode modifies source files. Use with caution in version control.
 function(xsigma_target_clang_tidy target_name enable_fix)
-  set(XSIGMA_CLANG_TIDY_HEADER_FILTER "^${PROJECT_SOURCE_DIR}/(Library|Cmake|Tools|Examples)/.*")
+  set(XSIGMA_CLANG_TIDY_HEADER_FILTER "^${PROJECT_SOURCE_DIR}/(include|src)/.*")
   set(XSIGMA_CLANG_TIDY_EXCLUDE_FILTER ".*/(ThirdParty|third_party|3rdparty|third-party)/.*")
 
   set(_tidy_args "${CLANG_TIDY_PATH}")

@@ -8,7 +8,7 @@
 #include <mkl.h>
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
 // LAPACKE-dependent — see CMakeLists.txt and
-// cholesky_decomposition.cxx.
+// cholesky_decomposition.cpp.
 #include <lapacke.h>
 
 #include <vector>
@@ -84,7 +84,7 @@ void solver_mkl_f64(
 
 namespace
 {
-// See lu_decomposition.cxx: a generic LAPACKE's lapack_int does not
+// See lu_decomposition.cpp: a generic LAPACKE's lapack_int does not
 // necessarily match linalg_int, so the pivot buffer (already populated
 // with linalg_int-widened values by lu_decomposition's own blas backend)
 // is narrowed back down for this call.

@@ -27,7 +27,7 @@ size", which keeps both libraries independently consumable.
 | Layer | Today |
 |---|---|
 | Public API | Free functions in `linalg::`, row-major raw `T*` + leading dimension, no matrix type, caller owns all memory. GPU counterparts live in `linalg::gpu::*` (device pointers, optional trailing `cudaStream_t`). |
-| CPU backend selection | Compile-time `#if LINALG_ENABLE_MKL / #elif LINALG_ENABLE_BLAS [&& LINALG_BLAS_HAS_LAPACKE] / #else` scalar chain, copied into each op's `.cxx`. Replaced a PyTorch-style `dispatch_stub` registry in commit `b09f66e`. |
+| CPU backend selection | Compile-time `#if LINALG_ENABLE_MKL / #elif LINALG_ENABLE_BLAS [&& LINALG_BLAS_HAS_LAPACKE] / #else` scalar chain, copied into each op's `.cpp`. Replaced a PyTorch-style `dispatch_stub` registry in commit `b09f66e`. |
 | CPU backends | Scalar fallback; Intel MKL (implicitly ILP64); vendor-neutral CBLAS/LAPACKE (OpenBLAS, netlib, ...). Apple Accelerate is reached only through `LINALG_ENABLE_BLAS` and covers GEMM/transpose only, because it ships no LAPACKE. |
 | GPU backend | cuBLAS/cuSOLVER for every CPU op except general (non-symmetric) eigenvalue decomposition. Per-thread, per-device handle pool with stream binding ([`cuda_handle.h`](../include/common/cuda_handle.h)). |
 | Memory | Callers own inputs and outputs, but the library still allocates internal scratch itself: `cudaMalloc`/`cudaFree` in 13 GPU sources, [`linalg::allocator`](../include/memory/allocator.h) in 9 CPU sources, and `std::vector` temporaries in most CPU ops. This conflicts with the ownership principle above. |
@@ -66,7 +66,7 @@ Strengths worth preserving:
      `static_assert` guards the assumption.
    - The BLAS/LAPACKE path and every GPU op narrow with
      `static_cast<int>(...)` without checking for overflow (for example
-     [`linear_solver_gpu.cxx`](../include/matrix_operation_gpu/linear_solver_gpu.cxx)).
+     [`linear_solver_gpu.cpp`](../include/matrix_operation_gpu/linear_solver_gpu.cpp)).
 3. **The library allocates internally, against the ownership principle.**
    - GPU: 13 sources call `cudaMalloc`/`cudaFree` for workspace, pivot
      arrays, and intermediate buffers. Because plain `cudaFree` is not
@@ -101,7 +101,7 @@ Strengths worth preserving:
 6. The three-way backend `#if` chain is duplicated across about nine
    translation units; adding a backend means editing every one of them.
 7. About 1,500 lines of Eigen-derived blocked GEMM in
-   [`matrix_multiplication.cxx`](../include/matrix_operation/matrix_multiplication.cxx)
+   [`matrix_multiplication.cpp`](../include/matrix_operation/matrix_multiplication.cpp)
    sit behind `LINALG_VECTORIZED`, which is never defined and includes a
    `common/packet.h` that does not exist. The live scalar GEMM is a naive
    loop, and [`cpu_info.h`](../include/util/cpu_info.h) is a stub.
@@ -157,7 +157,7 @@ not adopt PyTorch's runtime `linalgPreferredBackend()` switch.
    `include/common/detail/lapack.h`: typed overloads such as
    `detail::lapack::getrf(float*, ...)` / `getrf(double*, ...)`. The
    MKL / LAPACKE / Accelerate selection lives in that one header (plus its
-   `.cxx`), and each op's `.cxx` reduces to
+   `src/common/detail/lapack.cpp`), and each op's `.cpp` reduces to
    `#if LINALG_HAS_LAPACK ... #else reference ... #endif`. Adding a backend
    becomes a one-file change.
 2. **Scalar code always compiled as `detail::reference`.** The public entry

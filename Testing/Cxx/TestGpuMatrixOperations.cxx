@@ -54,7 +54,7 @@ template <> struct GpuTolerance<double>
 // scope (not part of the library) — the GPU entry points under test take bare
 // device pointers (cudaMalloc'd), so exercising them needs some minimal
 // device-memory ownership here. Allocation failures are not checked, matching
-// the library's own cudaMalloc call sites (e.g. linear_solver_gpu.cxx).
+// the library's own cudaMalloc call sites (e.g. linear_solver_gpu.cpp).
 template <typename T> class device_buffer
 {
 public:

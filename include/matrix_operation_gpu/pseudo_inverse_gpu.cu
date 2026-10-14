@@ -15,8 +15,8 @@
 // Combines U (rows x k row-major), S (length k), VT (k x columns
 // row-major) into Ainv = V * diag(S+) * U^T (columns x rows row-major),
 // one thread per output element — the direct device-side equivalent of the
-// CPU pseudo_inverse's triple loop (include/matrix_operation/pseudo_inverse
-// .cxx), favoring simple, obviously-correct per-element indexing over a
+// CPU pseudo_inverse's triple loop (src/matrix_operation/pseudo_inverse
+// .cpp), favoring simple, obviously-correct per-element indexing over a
 // cuBLAS dgmm/gemm chain that would need the same row-/column-major
 // bookkeeping tricks the rest of this file uses for factorizations.
 template <typename scalar_t>

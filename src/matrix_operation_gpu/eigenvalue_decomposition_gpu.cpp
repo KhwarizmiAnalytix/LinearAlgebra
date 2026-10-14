@@ -45,7 +45,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     // Symmetric matrix: A == A^T, so (unlike qr/svd) no transpose is needed
     // on input — a row-major-LOWER-supplied matrix and a
     // column-major-UPPER-read of the same bytes describe the identical
-    // symmetric matrix (same identity cholesky_decomposition_gpu.cxx's
+    // symmetric matrix (same identity cholesky_decomposition_gpu.cpp's
     // to_fill_mode relies on). The CPU contract only ever references A's
     // lower triangle, so the fill mode passed to cuSOLVER is always UPPER.
     const auto fill = CUBLAS_FILL_MODE_UPPER;

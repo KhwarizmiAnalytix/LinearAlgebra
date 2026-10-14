@@ -86,7 +86,7 @@ void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_
 
 namespace
 {
-// See lu_decomposition.cxx's blas_lapack branch.
+// See lu_decomposition.cpp's blas_lapack branch.
 std::vector<lapack_int> to_lapack_pivots(const linalg_int* pivot, linalg_int n)
 {
     std::vector<lapack_int> ipiv(static_cast<size_t>(n));

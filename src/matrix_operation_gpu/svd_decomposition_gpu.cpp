@@ -29,7 +29,7 @@ namespace
 // row-major) are written directly — `S` needs no layout conversion (a
 // plain vector), `U`/`VT` are converted from cuSOLVER's column-major
 // output via matrix_transpose_gpu, the same identity used throughout
-// lu_decomposition_gpu.cxx and matrix_inversion_gpu.cu: converting
+// lu_decomposition_gpu.cpp and matrix_inversion_gpu.cu: converting
 // column-major storage of an (RX x CX) matrix to row-major storage of the
 // same matrix is matrix_transpose_gpu(CX, RX, buf) — swapped dimensions
 // relative to the matrix's own true shape.
@@ -63,7 +63,7 @@ void svd_core(BufferSizeFn buffer_size,
         cudaFree(a_work);
         LOGGING_THROW("cudaMemcpyAsync failed");
     }
-    // See lu_decomposition_gpu.cxx: transposing the row-major buffer first
+    // See lu_decomposition_gpu.cpp: transposing the row-major buffer first
     // makes cuSOLVER's column-major (m=rows, n=columns, lda=rows) reading
     // of it equal A.
     matrix_transpose(rows, columns, a_work, stream);

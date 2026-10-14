@@ -1,5 +1,6 @@
 # Standalone LinearAlgebra library. Include root is the repository root; public headers live
-# under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h").
+# under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h"), implementation
+# files under the mirrored src/ tree (e.g. src/matrix_operation/lu_decomposition.cpp).
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
@@ -18,9 +19,9 @@ package(default_visibility = ["//visibility:public"])
 # already being on the toolchain's default search paths. LINALG_ENABLE_CUBLAS
 # (and its helper macros) has no Bazel toggle at all — CMake is this repo's
 # primary, exercised build system for the blas_lapack backend (compiled
-# directly into each op's .cxx under include/matrix_operation/, gated by #if
+# directly into each op's .cpp under src/matrix_operation/, gated by #if
 # LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS) and the cuBLAS/cuSOLVER GPU backend
-# (include/matrix_operation_gpu/, not part of this glob).
+# (src/matrix_operation_gpu/ + include/matrix_operation_gpu/, not part of this glob).
 
 filegroup(
     name = "linear_algebra_hdrs",
@@ -39,8 +40,8 @@ filegroup(
     name = "linear_algebra_srcs",
     srcs = glob(
         [
-            "include/common/*.cxx",
-            "include/matrix_operation/*.cxx",
+            "src/common/*.cpp",
+            "src/matrix_operation/*.cpp",
         ],
         allow_empty = True,
     ),
@@ -76,7 +77,7 @@ cc_library(
     # no other translation unit calling into it directly) with the current
     # #if LINALG_ENABLE_MKL / #elif LINALG_ENABLE_BLAS / #else chain compiled
     # directly into each op's public entry point — see
-    # docs/gpu_backend_design.md §2. Every op's .cxx now defines a symbol
+    # docs/gpu_backend_design.md §2. Every op's .cpp now defines a symbol
     # (e.g. linalg::matrix_multiplication) that callers reference directly,
     # so an ordinary static-archive link already pulls in the .o's it needs.
     # alwayslink=True is kept here defensively (its removal has not been
