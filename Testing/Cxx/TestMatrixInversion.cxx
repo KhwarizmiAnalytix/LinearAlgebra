@@ -99,8 +99,13 @@ void test_inversion(std::size_t dim)
         A        = matmul(R, t_R);
     }
     dense_matrix<value_t> IA = A;
-    linalg::matrix_invert(
-        IA.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+    {
+        const auto ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+            static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        std::vector<unsigned char> ws(ws_size);
+        linalg::matrix_invert(IA.data(), pivot.data(), static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, ws.data(), ws_size);
+    }
 
     for (std::size_t i = 0; i < dim; i++)
     {
@@ -115,27 +120,42 @@ void test_inversion(std::size_t dim)
     EXPECT_LE(max_error, Tolerance<value_t>::value);
 
     IA = A;
-    linalg::matrix_invert(
-        IA.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    {
+        const auto ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+            static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        std::vector<unsigned char> ws(ws_size);
+        linalg::matrix_invert(IA.data(), pivot.data(), static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER, ws.data(), ws_size);
+    }
 
     R         = matmul(IA, A);
     max_error = hmax_abs_diff(R, Id);
     EXPECT_LE(max_error, Tolerance<value_t>::value);
 
-    linalg::matrix_determinant(
-        A.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+    {
+        const auto ws_size = linalg::matrix_determinant_workspace_size(static_cast<const value_t*>(nullptr),
+            static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        std::vector<unsigned char> ws(ws_size);
+        linalg::matrix_determinant(A.data(), pivot.data(), static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, ws.data(), ws_size);
+    }
 
-    linalg::matrix_determinant(
-        A.data(), pivot.data(), static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    {
+        const auto ws_size = linalg::matrix_determinant_workspace_size(static_cast<const value_t*>(nullptr),
+            static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        std::vector<unsigned char> ws(ws_size);
+        linalg::matrix_determinant(A.data(), pivot.data(), static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER, ws.data(), ws_size);
+    }
 
     EXPECT_ANY_THROW({
-        linalg::matrix_invert(
-            IA.data(), pivot.data(), static_cast<linalg_int>(dim), (linalg::linear_solver_type)5);
+        linalg::matrix_invert(IA.data(), pivot.data(), static_cast<linalg_int>(dim),
+            (linalg::linear_solver_type)5, nullptr, 0);
     });
 
     EXPECT_ANY_THROW({
-        linalg::matrix_determinant(
-            IA.data(), pivot.data(), static_cast<linalg_int>(dim), (linalg::linear_solver_type)5);
+        linalg::matrix_determinant(IA.data(), pivot.data(), static_cast<linalg_int>(dim),
+            (linalg::linear_solver_type)5, nullptr, 0);
     });
 }
 }  // namespace

@@ -221,9 +221,9 @@ void solve_decomposed_vectorised(std::vector<double>& x,
 
         for (size_t i = inner_dim; i < n; ++i)
         {
-            auto  a       = tmp_itr1[i];
-            auto* tmp_i   = tmp + i * columns;
-            auto* tmp_i_1 = tmp + (i - inner_dim) * columns;
+            auto        a       = tmp_itr1[i];
+            auto*       tmp_i   = tmp + i * columns;
+            const auto* tmp_i_1 = tmp + (i - inner_dim) * columns;
             for (size_t j = 0; j < columns; ++j)
             {
                 tmp_i[j] += a * tmp_i_1[j];
@@ -232,9 +232,9 @@ void solve_decomposed_vectorised(std::vector<double>& x,
 
         for (int i = end; i >= 0; --i)
         {
-            auto  a       = tmp_itr2[i];
-            auto* tmp_i   = tmp + i * columns;
-            auto* tmp_i_1 = tmp + (i + inner_dim) * columns;
+            auto        a       = tmp_itr2[i];
+            auto*       tmp_i   = tmp + i * columns;
+            const auto* tmp_i_1 = tmp + (i + inner_dim) * columns;
 
             for (size_t j = 0; j < columns; ++j)
             {

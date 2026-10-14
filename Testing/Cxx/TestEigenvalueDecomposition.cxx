@@ -30,6 +30,22 @@ template <> struct EigenTolerance<double>
     static constexpr double tolerance = 1.e-8;
 };
 
+template <typename value_t>
+std::vector<unsigned char> symmetric_eigen_workspace(linalg_int n)
+{
+    const auto bytes = linalg::symmetric_eigenvalue_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), n);
+    return std::vector<unsigned char>(bytes);
+}
+
+template <typename value_t>
+std::vector<unsigned char> general_eigen_workspace(linalg_int n, bool compute_eigenvectors)
+{
+    const auto bytes = linalg::eigenvalue_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), n, compute_eigenvectors);
+    return std::vector<unsigned char>(bytes);
+}
+
 // Symmetric case: A = Q * diag(known eigenvalues) * Q^T for a random
 // orthogonal Q (built from qr_decomposition). Eigenvalues must come back
 // sorted ascending and V^T * A * V must reconstruct the diagonal.
@@ -42,6 +58,9 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
     }
     dense_matrix<value_t> Q(n, n);
     dense_matrix<value_t> R(n, n);
+    const auto qr_ws_size = linalg::qr_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    std::vector<unsigned char> qr_ws(qr_ws_size);
     linalg::qr_decomposition(
         static_cast<linalg_long>(n),
         static_cast<linalg_long>(n),
@@ -50,7 +69,9 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
         Q.begin(),
         static_cast<linalg_long>(n),
         R.begin(),
-        static_cast<linalg_long>(n));
+        static_cast<linalg_long>(n),
+        qr_ws.data(),
+        qr_ws_size);
 
     std::vector<value_t> known(n);
     for (std::size_t i = 0; i < n; i++)
@@ -74,9 +95,10 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
 
     std::vector<value_t>  evals(n);
     dense_matrix<value_t> evecs(n, n);
-    const bool             ok = linalg::symmetric_eigenvalue_decomposition(
+    auto                  eigen_ws = symmetric_eigen_workspace<value_t>(static_cast<linalg_int>(n));
+    const bool            ok = linalg::symmetric_eigenvalue_decomposition(
         A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), evals.data(), evecs.begin(),
-        static_cast<linalg_int>(n));
+        static_cast<linalg_int>(n), eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
     for (std::size_t i = 0; i < n; i++)
@@ -136,8 +158,11 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
         Pinv.begin()[i] = P.begin()[i];
     }
     std::vector<linalg_int> pivot(n);
-    linalg::matrix_invert(
-        Pinv.begin(), pivot.data(), static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    const auto invert_ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    std::vector<unsigned char> invert_ws(invert_ws_size);
+    linalg::matrix_invert(Pinv.begin(), pivot.data(), static_cast<linalg_int>(n),
+        linalg::linear_solver_type::LU_LINEAR_SOLVER, invert_ws.data(), invert_ws_size);
 
     std::vector<value_t> known(n);
     for (std::size_t i = 0; i < n; i++)
@@ -161,9 +186,10 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
 
     std::vector<value_t> er(n);
     std::vector<value_t> ei(n);
-    const bool             ok = linalg::eigenvalue_decomposition(
+    auto                 eigen_ws = general_eigen_workspace<value_t>(static_cast<linalg_int>(n), false);
+    const bool           ok = linalg::eigenvalue_decomposition(
         A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), er.data(), ei.data(), nullptr,
-        static_cast<linalg_int>(n));
+        static_cast<linalg_int>(n), eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
     std::vector<value_t> got = er;
@@ -189,7 +215,8 @@ template <typename value_t> void test_general_eigen_complex_pair()
 
     value_t er[2];
     value_t ei[2];
-    const bool ok = linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, nullptr, 2);
+    auto    eigen_ws = general_eigen_workspace<value_t>(2, false);
+    const bool ok = linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, nullptr, 2, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
     EXPECT_NEAR(static_cast<double>(er[0]), static_cast<double>(a), EigenTolerance<value_t>::tolerance);
@@ -213,7 +240,8 @@ template <typename value_t> void test_general_eigen_eigenvectors()
     value_t                er[3];
     value_t                ei[3];
     dense_matrix<value_t>  evecs(3, 3);
-    const bool ok = linalg::eigenvalue_decomposition(A.begin(), 3, 3, er, ei, evecs.begin(), 3);
+    auto                   eigen_ws = general_eigen_workspace<value_t>(3, true);
+    const bool ok = linalg::eigenvalue_decomposition(A.begin(), 3, 3, er, ei, evecs.begin(), 3, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
     for (std::size_t i = 0; i < 3; i++)
@@ -271,12 +299,13 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     double er[2];
     double ei[2];
     double evecs[4];
+    auto   eigen_ws = general_eigen_workspace<double>(2, true);
 #ifdef LINALG_ENABLE_MKL
     // MKL's LAPACKE *geev call packs complex eigenvectors natively (see
     // eigenvalue_decomposition.h); only the portable scalar fallback, which
     // has no complex arithmetic, throws for this case.
-    EXPECT_NO_THROW(linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, evecs, 2));
+    EXPECT_NO_THROW(linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size()));
 #else
-    EXPECT_THROW(linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, evecs, 2), std::exception);
+    EXPECT_THROW(linalg::eigenvalue_decomposition(A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size()), std::exception);
 #endif
 }

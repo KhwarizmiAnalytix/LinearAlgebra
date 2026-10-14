@@ -173,11 +173,16 @@ void build_cholesky_matrix(
         }
 
         IA = R;
+        const auto invert_ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+            static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
+        std::vector<unsigned char> invert_ws(invert_ws_size);
         linalg::matrix_invert(
             IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
-            linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
+            linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER,
+            invert_ws.data(),
+            invert_ws_size);
 
         for (std::size_t i = 0; i < dim; i++)
         {
@@ -196,7 +201,9 @@ void build_cholesky_matrix(
             IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
-            linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
+            linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER,
+            nullptr,
+            0);
 
         std::vector<value_t> x(dim);
         for (std::size_t i = 0; i < dim; i++)
@@ -209,7 +216,9 @@ void build_cholesky_matrix(
             pivot.data(),
             static_cast<linalg_int>(dim),
             x.data(),
-            linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
+            linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER,
+            nullptr,
+            0);
 
         // b - A * x
         value_t solve_diff = 0;

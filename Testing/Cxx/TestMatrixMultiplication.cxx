@@ -13,6 +13,14 @@ namespace
 {
 using linalg_test::dense_matrix;
 
+template <typename value_t>
+std::vector<unsigned char> gemm_workspace(linalg_int rows, linalg_int columns, linalg_int depth)
+{
+    const auto bytes =
+        linalg::matrix_multiplication_workspace_size(static_cast<const value_t*>(nullptr), rows, columns, depth);
+    return std::vector<unsigned char>(bytes);
+}
+
 template <typename>
 struct matrixTolerance
 {
@@ -58,6 +66,7 @@ void vector_matrix_multiplication(int rows, int columns)
         v[static_cast<std::size_t>(j)] = (value_t)distribution(generator);
     }
 
+    auto gemm_ws = gemm_workspace<value_t>(1, columns, rows);
     linalg::matrix_multiplication(
         false,
         false,
@@ -69,7 +78,9 @@ void vector_matrix_multiplication(int rows, int columns)
         A.data(),
         columns,
         r.data(),
-        columns);
+        columns,
+        gemm_ws.data(),
+        gemm_ws.size());
 
     std::vector<value_t> r_seq(static_cast<std::size_t>(columns));
     for (int j = 0; j < columns; ++j)
@@ -126,6 +137,7 @@ void matrix_vector_multiplication(int rows, int columns)
         v[static_cast<std::size_t>(j)] = (value_t)distribution(generator);
     }
 
+    auto gemm_ws = gemm_workspace<value_t>(rows, 1, columns);
     linalg::matrix_multiplication(
         false,
         false,
@@ -137,7 +149,9 @@ void matrix_vector_multiplication(int rows, int columns)
         v.data(),
         1,
         r.data(),
-        1);
+        1,
+        gemm_ws.data(),
+        gemm_ws.size());
 
     double max_error = 0;
     for (int i = 0; i < rows; ++i)
@@ -234,6 +248,7 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
         }
     }
 
+    auto gemm_ws = gemm_workspace<value_t>(rows, columns, depth);
     linalg::matrix_multiplication(
         transpose_a,
         transpose_b,
@@ -245,7 +260,9 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
         B.data(),
         static_cast<linalg_int>(b_columns),
         C.data(),
-        static_cast<linalg_int>(columns));
+        static_cast<linalg_int>(columns),
+        gemm_ws.data(),
+        gemm_ws.size());
 
     value_t max_error = 0;
     for (int i = 0; i < rows; ++i)

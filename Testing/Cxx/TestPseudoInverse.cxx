@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <vector>
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
@@ -23,13 +24,19 @@ template <typename value_t> void test_pseudo_inverse_tall(std::size_t rows, std:
     }
 
     dense_matrix<value_t> Ainv(columns, rows);
+    const auto ws_size = linalg::pseudo_inverse_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
     linalg::pseudo_inverse(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A.begin(),
         static_cast<linalg_long>(columns),
         Ainv.begin(),
-        static_cast<linalg_long>(rows));
+        static_cast<linalg_long>(rows),
+        static_cast<value_t>(-1),
+        ws.data(),
+        ws_size);
 
     value_t max_error = 0;
     for (std::size_t i = 0; i < columns; i++)

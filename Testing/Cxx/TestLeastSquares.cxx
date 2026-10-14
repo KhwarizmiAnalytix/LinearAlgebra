@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <vector>
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
@@ -49,6 +50,9 @@ template <typename value_t> void test_least_squares_overdetermined()
     }
 
     dense_matrix<value_t> X(columns, nrhs);
+    const auto ws_size = linalg::least_squares_solve_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
     linalg::least_squares_solve(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -58,7 +62,9 @@ template <typename value_t> void test_least_squares_overdetermined()
         B.begin(),
         static_cast<linalg_long>(nrhs),
         X.begin(),
-        static_cast<linalg_long>(nrhs));
+        static_cast<linalg_long>(nrhs),
+        ws.data(),
+        ws_size);
 
     value_t max_error = 0;
     for (std::size_t i = 0; i < columns; i++)
@@ -95,6 +101,9 @@ template <typename value_t> void test_least_squares_underdetermined()
     }
 
     dense_matrix<value_t> X(columns, nrhs);
+    const auto ws_size = linalg::least_squares_solve_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
     linalg::least_squares_solve(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -104,7 +113,9 @@ template <typename value_t> void test_least_squares_underdetermined()
         B.begin(),
         static_cast<linalg_long>(nrhs),
         X.begin(),
-        static_cast<linalg_long>(nrhs));
+        static_cast<linalg_long>(nrhs),
+        ws.data(),
+        ws_size);
 
     value_t max_error = 0;
     for (std::size_t i = 0; i < rows; i++)

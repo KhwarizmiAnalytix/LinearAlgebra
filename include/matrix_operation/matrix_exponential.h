@@ -22,8 +22,18 @@ namespace linalg
 // separate backend selection here, this op simply inherits whichever CPU
 // backend (scalar / blas_lapack / mkl) those were built with. No GPU
 // implementation exists for this op.
-LINALG_API void matrix_exponential(const float* A, linalg_int n, linalg_int lda, float* result, linalg_int ldc);
+// `workspace` must point to at least `matrix_exponential_workspace_size(
+// type_tag, n)` bytes of caller-owned host memory (the library never
+// allocates its own memory — see include/common/workspace_arena.h). The
+// query sizes the degree-13 Pade, which is the most scratch this routine
+// uses, so the same buffer is valid for every matrix of order `n`.
+LINALG_API size_t matrix_exponential_workspace_size(const float* /*type_tag*/, linalg_int n);
+LINALG_API size_t matrix_exponential_workspace_size(const double* /*type_tag*/, linalg_int n);
 
-LINALG_API void matrix_exponential(const double* A, linalg_int n, linalg_int lda, double* result, linalg_int ldc);
+LINALG_API void matrix_exponential(const float* A, linalg_int n, linalg_int lda, float* result, linalg_int ldc,
+    void* workspace, size_t workspace_size);
+
+LINALG_API void matrix_exponential(const double* A, linalg_int n, linalg_int lda, double* result, linalg_int ldc,
+    void* workspace, size_t workspace_size);
 
 }  // namespace linalg

@@ -20,11 +20,34 @@ namespace linalg
 // device (CUDA) pointers, see linalg::gpu::symmetric_eigenvalue_decomposition
 // in include/matrix_operation_gpu/eigenvalue_decomposition_gpu.h — the
 // general (non-symmetric) overload below has no GPU counterpart.
-LINALG_API bool symmetric_eigenvalue_decomposition(
-    const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv);
+// `workspace` must point to at least
+// `symmetric_eigenvalue_decomposition_workspace_size(type_tag, n)` bytes of
+// caller-owned host memory (the library never allocates its own memory —
+// see include/common/workspace_arena.h).
+LINALG_API size_t symmetric_eigenvalue_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_int n);
+LINALG_API size_t symmetric_eigenvalue_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_int n);
 
 LINALG_API bool symmetric_eigenvalue_decomposition(
-    const double* A, linalg_int n, linalg_int lda, double* eigenvalues, double* eigenvectors, linalg_int ldv);
+    const float* A,
+    linalg_int   n,
+    linalg_int   lda,
+    float*       eigenvalues,
+    float*       eigenvectors,
+    linalg_int   ldv,
+    void*        workspace,
+    size_t       workspace_size);
+
+LINALG_API bool symmetric_eigenvalue_decomposition(
+    const double* A,
+    linalg_int    n,
+    linalg_int    lda,
+    double*       eigenvalues,
+    double*       eigenvectors,
+    linalg_int    ldv,
+    void*         workspace,
+    size_t        workspace_size);
 
 // Host-memory-only CPU entry point for general (non-symmetric) real square
 // matrices. This library has no complex type (real-only, see repository
@@ -47,22 +70,35 @@ LINALG_API bool symmetric_eigenvalue_decomposition(
 // backend, whose LAPACKE *geev call packs complex eigenvectors natively, for
 // that case). A is read-only. Returns false if the algorithm failed to
 // converge.
+// `workspace` must point to at least
+// `eigenvalue_decomposition_workspace_size(type_tag, n, compute_eigenvectors)`
+// bytes. `compute_eigenvectors` must match whether the call passes a
+// non-null `eigenvectors` pointer.
+LINALG_API size_t eigenvalue_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_int n, bool compute_eigenvectors);
+LINALG_API size_t eigenvalue_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_int n, bool compute_eigenvectors);
+
 LINALG_API bool eigenvalue_decomposition(
     const float* A,
-    linalg_int n,
-    linalg_int lda,
+    linalg_int   n,
+    linalg_int   lda,
     float*       eigenvalues_real,
     float*       eigenvalues_imag,
     float*       eigenvectors,
-    linalg_int ldv);
+    linalg_int   ldv,
+    void*        workspace,
+    size_t       workspace_size);
 
 LINALG_API bool eigenvalue_decomposition(
     const double* A,
-    linalg_int  n,
-    linalg_int  lda,
+    linalg_int    n,
+    linalg_int    lda,
     double*       eigenvalues_real,
     double*       eigenvalues_imag,
     double*       eigenvectors,
-    linalg_int  ldv);
+    linalg_int    ldv,
+    void*         workspace,
+    size_t        workspace_size);
 
 }  // namespace linalg

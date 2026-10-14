@@ -109,7 +109,11 @@ void test_lu(double tolerance)
     }
 
     a1 = A;
-    linalg::lu_decomposition(a1.data(), static_cast<linalg_int>(n), pivot.data());
+    const auto lu_ws_size = linalg::lu_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_int>(n));
+    std::vector<unsigned char> lu_ws(lu_ws_size);
+    linalg::lu_decomposition(
+        a1.data(), static_cast<linalg_int>(n), pivot.data(), lu_ws.data(), lu_ws_size);
 
     dense_matrix<value_t> L(n, n);
     dense_matrix<value_t> U(n, n);
@@ -150,10 +154,17 @@ void test_lu(double tolerance)
 
     dense_matrix<value_t> IA = a1;
 
-    linalg::matrix_invert(
-        IA.data(), pivot.data(), static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
-    linalg::matrix_determinant(
-        a1.data(), pivot.data(), static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    const auto invert_ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    std::vector<unsigned char> invert_ws(invert_ws_size);
+    linalg::matrix_invert(IA.data(), pivot.data(), static_cast<linalg_int>(n),
+        linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, invert_ws.data(), invert_ws_size);
+
+    const auto det_ws_size = linalg::matrix_determinant_workspace_size(static_cast<const value_t*>(nullptr),
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    std::vector<unsigned char> det_ws(det_ws_size);
+    linalg::matrix_determinant(a1.data(), pivot.data(), static_cast<linalg_int>(n),
+        linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, det_ws.data(), det_ws_size);
 
     dense_matrix<value_t> Id(n, n);
     for (std::size_t i = 0; i < n; i++)
@@ -174,12 +185,17 @@ void test_lu(double tolerance)
     EXPECT_LE(diff, tolerance);
 
     std::vector<value_t> x = b;
+    const auto solve_ws_size = linalg::linear_solver_workspace_size(static_cast<const value_t*>(nullptr),
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    std::vector<unsigned char> solve_ws(solve_ws_size);
     linalg::linear_solver(
         a1.data(),
         pivot.data(),
         static_cast<linalg_int>(n),
         x.data(),
-        linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+        linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER,
+        solve_ws.data(),
+        solve_ws_size);
 
     diff = hmax_abs_diff(b, matvec(A, x));
     EXPECT_LE(diff, tolerance);

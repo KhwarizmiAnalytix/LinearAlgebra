@@ -21,6 +21,15 @@ namespace linalg
 // blas_lapack / mkl) primitive — there is no separate backend selection
 // here. For device (CUDA) pointers, see linalg::gpu::pseudo_inverse in
 // include/matrix_operation_gpu/pseudo_inverse_gpu.h.
+// `workspace` must point to at least `pseudo_inverse_workspace_size(
+// type_tag, rows, columns)` bytes of caller-owned host memory (the library
+// never allocates its own memory; this includes the workspace the internal
+// svd_decomposition call needs — see include/common/workspace_arena.h).
+LINALG_API size_t pseudo_inverse_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t pseudo_inverse_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void pseudo_inverse(
     linalg_long rows,
     linalg_long columns,
@@ -28,7 +37,9 @@ LINALG_API void pseudo_inverse(
     linalg_long lda,
     float*        Ainv,
     linalg_long ldai,
-    float         tol = -1.F);
+    float         tol,
+    void*         workspace,
+    size_t        workspace_size);
 
 LINALG_API void pseudo_inverse(
     linalg_long rows,
@@ -37,6 +48,8 @@ LINALG_API void pseudo_inverse(
     linalg_long lda,
     double*       Ainv,
     linalg_long ldai,
-    double        tol = -1.);
+    double        tol,
+    void*         workspace,
+    size_t        workspace_size);
 
 }  // namespace linalg

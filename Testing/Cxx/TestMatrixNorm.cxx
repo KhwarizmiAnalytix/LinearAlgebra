@@ -39,7 +39,9 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(columns),
-        linalg::matrix_norm_type::FROBENIUS);
+        linalg::matrix_norm_type::FROBENIUS,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(frob), frob_expected, 1e-3);
 
     // One-norm: max absolute column sum.
@@ -58,7 +60,9 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(columns),
-        linalg::matrix_norm_type::ONE);
+        linalg::matrix_norm_type::ONE,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(one), one_expected, 1e-3);
 
     // Infinity-norm: max absolute row sum.
@@ -77,7 +81,9 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(columns),
-        linalg::matrix_norm_type::INFINITY_NORM);
+        linalg::matrix_norm_type::INFINITY_NORM,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(inf), inf_expected, 1e-3);
 
     // Two-norm: cross-check against the largest singular value from
@@ -91,6 +97,9 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
     std::vector<value_t>   S(k);
     dense_matrix<value_t>  U(rows, k);
     dense_matrix<value_t>  VT(k, columns);
+    const auto svd_ws_size = linalg::svd_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> svd_ws(svd_ws_size);
     linalg::svd_decomposition(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -100,19 +109,26 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
         U.begin(),
         static_cast<linalg_long>(k),
         VT.begin(),
-        static_cast<linalg_long>(columns));
+        static_cast<linalg_long>(columns),
+        svd_ws.data(),
+        svd_ws_size);
     value_t smax = 0;
     for (auto s : S)
     {
         smax = std::max(smax, static_cast<value_t>(std::fabs(s)));
     }
 
+    const auto two_ws_size = linalg::matrix_norm_workspace_size(static_cast<const value_t*>(nullptr),
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns), linalg::matrix_norm_type::TWO);
+    std::vector<unsigned char> two_ws(two_ws_size);
     const auto two = linalg::matrix_norm(
         M.begin(),
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(columns),
-        linalg::matrix_norm_type::TWO);
+        linalg::matrix_norm_type::TWO,
+        two_ws.data(),
+        two_ws_size);
     EXPECT_NEAR(static_cast<double>(two), static_cast<double>(smax), 1e-3);
 }
 }  // namespace

@@ -21,6 +21,15 @@ namespace linalg
 // separate backend selection here. For device (CUDA) pointers, see
 // linalg::gpu::least_squares_solve in
 // include/matrix_operation_gpu/least_squares_gpu.h.
+// `workspace` must point to at least `least_squares_solve_workspace_size(
+// type_tag, rows, columns)` bytes of caller-owned host memory (the library
+// never allocates its own memory; this includes the workspace the internal
+// pseudo_inverse call needs — see include/common/workspace_arena.h).
+LINALG_API size_t least_squares_solve_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t least_squares_solve_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void least_squares_solve(
     linalg_long rows,
     linalg_long columns,
@@ -30,7 +39,9 @@ LINALG_API void least_squares_solve(
     const float*  B,
     linalg_long ldb,
     float*        X,
-    linalg_long ldx);
+    linalg_long ldx,
+    void*         workspace,
+    size_t        workspace_size);
 
 LINALG_API void least_squares_solve(
     linalg_long rows,
@@ -41,6 +52,8 @@ LINALG_API void least_squares_solve(
     const double* B,
     linalg_long ldb,
     double*       X,
-    linalg_long ldx);
+    linalg_long ldx,
+    void*         workspace,
+    size_t        workspace_size);
 
 }  // namespace linalg

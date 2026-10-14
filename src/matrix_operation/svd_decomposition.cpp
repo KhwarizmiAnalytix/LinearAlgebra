@@ -2,26 +2,21 @@
 
 #include <include/logging.h>
 
+#include "include/common/workspace_arena.h"
+
 #if defined(LINALG_ENABLE_MKL)
 #include <mkl.h>
 
 #include <algorithm>
-
-#include "include/memory/allocator.h"
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
 #include <lapacke.h>
 
 #include <algorithm>
-
-#include "include/memory/allocator.h"
 #else
 #include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>
-#include <vector>
-
-#include "include/memory/allocator.h"
 #endif
 
 namespace linalg
@@ -33,194 +28,157 @@ namespace detail
 // gated by the same #if/#elif/#else that also picks which body the public
 // svd_decomposition() overloads below call — exactly one is ever built. No
 // GPU implementation exists for this op.
-#if defined(LINALG_ENABLE_MKL)
+#if defined(LINALG_ENABLE_MKL) || (defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE))
 
-void svd_mkl_f32(linalg_long rows,
-    linalg_long              columns,
-    float*                     A,
-    linalg_long              lda,
-    float*                     S,
-    float*                     U,
-    linalg_long              ldu,
-    float*                     VT,
-    linalg_long              ldv)
+namespace
 {
-    using Allocator = linalg::allocator<float>;
-    auto* temp      = Allocator::allocate(ldu - 1);
-    if (rows > columns)
-    {
-        std::copy_n(A, rows * columns, U);
-        auto info = LAPACKE_sgesvd(
-            LAPACK_ROW_MAJOR, 'O', 'S', rows, columns, U, ldu, S, U, ldu, VT, ldv, temp);  // NOLINT
-        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
-    }
-    else
-    {
-        std::copy_n(A, rows * columns, VT);
-        auto info = LAPACKE_sgesvd(LAPACK_ROW_MAJOR,
-            'S',
-            'O',
-            rows,
-            columns,
-            VT,
-            ldv,
-            S,
-            U,
-            ldu,
-            VT,
-            ldv,
-            temp);  // NOLINT
-        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
-    }
-    Allocator::free(temp);
+
+template <typename T>
+struct svd_layout
+{
+    T* superb;  // min(rows,columns)-1: gesvd's mandatory superdiagonal-on-failure output
+    T* work;
+};
+
+template <typename T>
+svd_layout<T> svd_plan(detail::workspace_arena& arena, linalg_long rows, linalg_long columns, lapack_int lwork)
+{
+    svd_layout<T> p;
+    const auto    k = std::min(rows, columns);
+    p.superb        = arena.next<T>(static_cast<size_t>(k > 0 ? k - 1 : 0));
+    p.work          = arena.next<T>(static_cast<size_t>(lwork));
+    return p;
 }
 
-void svd_mkl_f64(linalg_long rows,
-    linalg_long              columns,
-    double*                    A,
-    linalg_long              lda,
-    double*                    S,
-    double*                    U,
-    linalg_long              ldu,
-    double*                    VT,
-    linalg_long              ldv)
+// gesvd's 'O'/'S' job choice (overwrite A in place with one factor) depends
+// on rows > columns exactly as the real call below branches, since the
+// optimal lwork LAPACK reports depends on which of U/VT is requested via
+// jobu/jobvt.
+template <typename T, typename GesvdWorkFn>
+lapack_int svd_lwork(GesvdWorkFn gesvd_work, lapack_int r, lapack_int c, bool rows_gt_columns)
 {
-    using Allocator = linalg::allocator<double>;
-    auto* temp      = Allocator::allocate(ldu - 1);
+    T          query[1];
+    const auto ldu = rows_gt_columns ? r : static_cast<lapack_int>(std::min(r, c));
+    const auto ldv = rows_gt_columns ? static_cast<lapack_int>(std::min(r, c)) : c;
+    if (rows_gt_columns)
+    {
+        gesvd_work(LAPACK_ROW_MAJOR, 'O', 'S', r, c, nullptr, ldu, nullptr, nullptr, ldu, nullptr,
+            ldv, query, -1, nullptr);
+    }
+    else
+    {
+        gesvd_work(LAPACK_ROW_MAJOR, 'S', 'O', r, c, nullptr, ldv, nullptr, nullptr, ldu, nullptr,
+            ldv, query, -1, nullptr);
+    }
+    return static_cast<lapack_int>(query[0]);
+}
+
+template <typename T, typename GesvdWorkFn>
+size_t svd_workspace_size_impl(GesvdWorkFn gesvd_work, linalg_long rows, linalg_long columns)
+{
+    const auto r = static_cast<lapack_int>(rows);
+    const auto c = static_cast<lapack_int>(columns);
+    detail::workspace_arena arena;
+    svd_plan<T>(arena, rows, columns, svd_lwork<T>(gesvd_work, r, c, rows > columns));
+    return arena.total_size();
+}
+
+template <typename T, typename GesvdWorkFn>
+void svd_lapacke_impl(GesvdWorkFn gesvd_work,
+    const char*                   backend_name,
+    linalg_long                   rows,
+    linalg_long                   columns,
+    T*                             A,
+    linalg_long                   lda,
+    T*                             S,
+    T*                             U,
+    linalg_long                   ldu,
+    T*                             VT,
+    linalg_long                   ldv,
+    void*                         workspace,
+    size_t                        workspace_size)
+{
+    const auto r     = static_cast<lapack_int>(rows);
+    const auto c     = static_cast<lapack_int>(columns);
+    const auto lwork = svd_lwork<T>(gesvd_work, r, c, rows > columns);
+
+    LOGGING_CHECK(workspace_size >= svd_workspace_size_impl<T>(gesvd_work, rows, columns),
+        "svd_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto               bufs = svd_plan<T>(arena, rows, columns, lwork);
+
     if (rows > columns)
     {
         std::copy_n(A, rows * columns, U);
-        auto info = LAPACKE_dgesvd(
-            LAPACK_ROW_MAJOR, 'O', 'S', rows, columns, U, ldu, S, U, ldu, VT, ldv, temp);  // NOLINT
-        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
+        auto info = gesvd_work(LAPACK_ROW_MAJOR, 'O', 'S', r, c, U, static_cast<lapack_int>(ldu), S,
+            U, static_cast<lapack_int>(ldu), VT, static_cast<lapack_int>(ldv), bufs.work, lwork,
+            bufs.superb);
+        LOGGING_CHECK(info == 0, "{} SVD was unsuccessful", backend_name);
     }
     else
     {
         std::copy_n(A, rows * columns, VT);
-        auto info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR,
-            'S',
-            'O',
-            rows,
-            columns,
-            VT,
-            ldv,
-            S,
-            U,
-            ldu,
-            VT,
-            ldv,
-            temp);  // NOLINT
-        LOGGING_CHECK(info == 0, "mkl SVD was unsuccessful");
+        auto info = gesvd_work(LAPACK_ROW_MAJOR, 'S', 'O', r, c, VT, static_cast<lapack_int>(ldv), S,
+            U, static_cast<lapack_int>(ldu), VT, static_cast<lapack_int>(ldv), bufs.work, lwork,
+            bufs.superb);
+        LOGGING_CHECK(info == 0, "{} SVD was unsuccessful", backend_name);
     }
-    Allocator::free(temp);
+}
+
+}  // namespace
+
+#endif  // LINALG_ENABLE_MKL || (LINALG_ENABLE_BLAS && LINALG_BLAS_HAS_LAPACKE)
+
+#if defined(LINALG_ENABLE_MKL)
+
+size_t svd_mkl_workspace_size_f32(linalg_long rows, linalg_long columns)
+{
+    return svd_workspace_size_impl<float>(LAPACKE_sgesvd_work, rows, columns);
+}
+
+size_t svd_mkl_workspace_size_f64(linalg_long rows, linalg_long columns)
+{
+    return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);
+}
+
+void svd_mkl_f32(linalg_long rows, linalg_long columns, float* A, linalg_long lda, float* S,
+    float* U, linalg_long ldu, float* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+{
+    svd_lapacke_impl<float>(
+        LAPACKE_sgesvd_work, "mkl", rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
+}
+
+void svd_mkl_f64(linalg_long rows, linalg_long columns, double* A, linalg_long lda, double* S,
+    double* U, linalg_long ldu, double* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+{
+    svd_lapacke_impl<double>(
+        LAPACKE_dgesvd_work, "mkl", rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
 
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
 
-void svd_blas_f32(linalg_long rows,
-    linalg_long               columns,
-    float*                      A,
-    linalg_long               lda,
-    float*                      S,
-    float*                      U,
-    linalg_long               ldu,
-    float*                      VT,
-    linalg_long               ldv)
+size_t svd_blas_workspace_size_f32(linalg_long rows, linalg_long columns)
 {
-    using Allocator = linalg::allocator<float>;
-    auto*      temp = Allocator::allocate(ldu - 1);
-    const auto r    = static_cast<lapack_int>(rows);
-    const auto c    = static_cast<lapack_int>(columns);
-    if (rows > columns)
-    {
-        std::copy_n(A, rows * columns, U);
-        auto info = LAPACKE_sgesvd(LAPACK_ROW_MAJOR,
-            'O',
-            'S',
-            r,
-            c,
-            U,
-            static_cast<lapack_int>(ldu),
-            S,
-            U,
-            static_cast<lapack_int>(ldu),
-            VT,
-            static_cast<lapack_int>(ldv),
-            temp);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
-    }
-    else
-    {
-        std::copy_n(A, rows * columns, VT);
-        auto info = LAPACKE_sgesvd(LAPACK_ROW_MAJOR,
-            'S',
-            'O',
-            r,
-            c,
-            VT,
-            static_cast<lapack_int>(ldv),
-            S,
-            U,
-            static_cast<lapack_int>(ldu),
-            VT,
-            static_cast<lapack_int>(ldv),
-            temp);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
-    }
-    Allocator::free(temp);
+    return svd_workspace_size_impl<float>(LAPACKE_sgesvd_work, rows, columns);
 }
 
-void svd_blas_f64(linalg_long rows,
-    linalg_long               columns,
-    double*                     A,
-    linalg_long               lda,
-    double*                     S,
-    double*                     U,
-    linalg_long               ldu,
-    double*                     VT,
-    linalg_long               ldv)
+size_t svd_blas_workspace_size_f64(linalg_long rows, linalg_long columns)
 {
-    using Allocator = linalg::allocator<double>;
-    auto*      temp = Allocator::allocate(ldu - 1);
-    const auto r    = static_cast<lapack_int>(rows);
-    const auto c    = static_cast<lapack_int>(columns);
-    if (rows > columns)
-    {
-        std::copy_n(A, rows * columns, U);
-        auto info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR,
-            'O',
-            'S',
-            r,
-            c,
-            U,
-            static_cast<lapack_int>(ldu),
-            S,
-            U,
-            static_cast<lapack_int>(ldu),
-            VT,
-            static_cast<lapack_int>(ldv),
-            temp);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
-    }
-    else
-    {
-        std::copy_n(A, rows * columns, VT);
-        auto info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR,
-            'S',
-            'O',
-            r,
-            c,
-            VT,
-            static_cast<lapack_int>(ldv),
-            S,
-            U,
-            static_cast<lapack_int>(ldu),
-            VT,
-            static_cast<lapack_int>(ldv),
-            temp);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
-    }
-    Allocator::free(temp);
+    return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);
+}
+
+void svd_blas_f32(linalg_long rows, linalg_long columns, float* A, linalg_long lda, float* S,
+    float* U, linalg_long ldu, float* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+{
+    svd_lapacke_impl<float>(LAPACKE_sgesvd_work, "blas_lapack", rows, columns, A, lda, S, U, ldu, VT,
+        ldv, workspace, workspace_size);
+}
+
+void svd_blas_f64(linalg_long rows, linalg_long columns, double* A, linalg_long lda, double* S,
+    double* U, linalg_long ldu, double* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+{
+    svd_lapacke_impl<double>(LAPACKE_dgesvd_work, "blas_lapack", rows, columns, A, lda, S, U, ldu,
+        VT, ldv, workspace, workspace_size);
 }
 
 #else
@@ -272,13 +230,13 @@ void GivensR(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLIN
     }
 }
 
-template <class T> void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T eps = -1)  // NOLINT
+// `house_vec` (max(dim[0],dim[1]) elements) is caller-owned scratch.
+template <class T> void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1)  // NOLINT
 {
     assert(dim[0] >= dim[1]);
 
     {  // Bi-diagonalization
         const auto     n = std::min(dim[0], dim[1]);
-        std::vector<T> house_vec(std::max(dim[0], dim[1]));
         for (linalg_long i = 0; i < n; i++)
         {
             // Column Householder
@@ -558,7 +516,36 @@ template <class T> void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T eps
 #undef S
 #undef V
 
-template <class T, class Allocator = linalg::allocator<T>>
+template <typename T>
+struct svd_scalar_layout
+{
+    T* U_;
+    T* V_;
+    T* S_;
+    T* house_vec;
+};
+
+template <typename T>
+svd_scalar_layout<T> svd_scalar_plan(detail::workspace_arena& arena, linalg_long rows, linalg_long columns)
+{
+    const linalg_long dim[2] = {std::max(rows, columns), std::min(rows, columns)};  // NOLINT
+    svd_scalar_layout<T> p;
+    p.U_       = arena.next<T>(static_cast<size_t>(dim[0]) * static_cast<size_t>(dim[0]));
+    p.V_       = arena.next<T>(static_cast<size_t>(dim[1]) * static_cast<size_t>(dim[1]));
+    p.S_       = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+    p.house_vec = arena.next<T>(static_cast<size_t>(std::max(dim[0], dim[1])));
+    return p;
+}
+
+template <typename T>
+size_t svd_scalar_workspace_size_impl(linalg_long rows, linalg_long columns)
+{
+    detail::workspace_arena arena;
+    svd_scalar_plan<T>(arena, rows, columns);
+    return arena.total_size();
+}
+
+template <class T>
 inline void svd(  // NOLINT
     linalg_long rows,
     linalg_long columns,
@@ -568,13 +555,19 @@ inline void svd(  // NOLINT
     T*            U,
     linalg_long ldu,
     T*            VT,
-    linalg_long ldv)
+    linalg_long ldv,
+    void*         workspace,
+    size_t        workspace_size)
 {
     const linalg_long dim[2] = {std::max(rows, columns), std::min(rows, columns)};  // NOLINT
 
-    auto* U_ = Allocator::allocate(dim[0] * dim[0]);
-    auto* V_ = Allocator::allocate(dim[1] * dim[1]);
-    auto* S_ = Allocator::allocate(rows * columns);
+    LOGGING_CHECK(workspace_size >= svd_scalar_workspace_size_impl<T>(rows, columns),
+        "svd_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto               bufs = svd_scalar_plan<T>(arena, rows, columns);
+    auto* const               U_  = bufs.U_;
+    auto* const               V_  = bufs.V_;
+    auto* const               S_  = bufs.S_;
 
     memset(U_, 0, dim[0] * dim[0] * sizeof(T));
     memset(V_, 0, dim[1] * dim[1] * sizeof(T));
@@ -609,7 +602,7 @@ inline void svd(  // NOLINT
         V_[i * dim[1] + i] = 1;
     }
 
-    SVD<T>(dim, U_, S_, V_, (T)-1);
+    SVD<T>(dim, U_, S_, V_, bufs.house_vec, (T)-1);
 
     for (linalg_long i = 0; i < dim[1]; i++)
     {  // Set S
@@ -655,13 +648,19 @@ inline void svd(  // NOLINT
     {
         S[i] = S[i] * static_cast<T>(S[i] < 0.0 ? -1.0 : 1.0);
     }
-
-    Allocator::free(S_);
-    Allocator::free(V_);
-    Allocator::free(U_);
 }
 
 }  // namespace
+
+size_t svd_scalar_workspace_size_f32(linalg_long rows, linalg_long columns)
+{
+    return svd_scalar_workspace_size_impl<float>(rows, columns);
+}
+
+size_t svd_scalar_workspace_size_f64(linalg_long rows, linalg_long columns)
+{
+    return svd_scalar_workspace_size_impl<double>(rows, columns);
+}
 
 void svd_scalar_f32(linalg_long rows,
     linalg_long                 columns,
@@ -671,9 +670,11 @@ void svd_scalar_f32(linalg_long rows,
     float*                        U,
     linalg_long                 ldu,
     float*                        VT,
-    linalg_long                 ldv)
+    linalg_long                 ldv,
+    void*                        workspace,
+    size_t                       workspace_size)
 {
-    svd(rows, columns, A, lda, S, VT, ldu, U, ldv);
+    svd(rows, columns, A, lda, S, VT, ldu, U, ldv, workspace, workspace_size);
 }
 
 void svd_scalar_f64(linalg_long rows,
@@ -684,14 +685,38 @@ void svd_scalar_f64(linalg_long rows,
     double*                       U,
     linalg_long                 ldu,
     double*                       VT,
-    linalg_long                 ldv)
+    linalg_long                 ldv,
+    void*                        workspace,
+    size_t                       workspace_size)
 {
-    svd(rows, columns, A, lda, S, VT, ldu, U, ldv);
+    svd(rows, columns, A, lda, S, VT, ldu, U, ldv, workspace, workspace_size);
 }
 
 #endif
 
 }  // namespace detail
+
+size_t svd_decomposition_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
+{
+#if defined(LINALG_ENABLE_MKL)
+    return detail::svd_mkl_workspace_size_f32(rows, columns);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::svd_blas_workspace_size_f32(rows, columns);
+#else
+    return detail::svd_scalar_workspace_size_f32(rows, columns);
+#endif
+}
+
+size_t svd_decomposition_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
+{
+#if defined(LINALG_ENABLE_MKL)
+    return detail::svd_mkl_workspace_size_f64(rows, columns);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::svd_blas_workspace_size_f64(rows, columns);
+#else
+    return detail::svd_scalar_workspace_size_f64(rows, columns);
+#endif
+}
 
 //-----------------------------------------------------------------------------
 void svd_decomposition(linalg_long rows,
@@ -702,16 +727,18 @@ void svd_decomposition(linalg_long rows,
     float*                           U,
     linalg_long                    ldu,
     float*                           VT,
-    linalg_long                    ldv)
+    linalg_long                    ldv,
+    void*                            workspace,
+    size_t                           workspace_size)
 {
     LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_decomposition: A, S, U, and VT must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0, "svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
-    detail::svd_mkl_f32(rows, columns, A, lda, S, U, ldu, VT, ldv);
+    detail::svd_mkl_f32(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-    detail::svd_blas_f32(rows, columns, A, lda, S, U, ldu, VT, ldv);
+    detail::svd_blas_f32(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 #else
-    detail::svd_scalar_f32(rows, columns, A, lda, S, U, ldu, VT, ldv);
+    detail::svd_scalar_f32(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 #endif
 }
 
@@ -724,16 +751,18 @@ void svd_decomposition(linalg_long rows,
     double*                          U,
     linalg_long                    ldu,
     double*                          VT,
-    linalg_long                    ldv)
+    linalg_long                    ldv,
+    void*                            workspace,
+    size_t                           workspace_size)
 {
     LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_decomposition: A, S, U, and VT must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0, "svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
-    detail::svd_mkl_f64(rows, columns, A, lda, S, U, ldu, VT, ldv);
+    detail::svd_mkl_f64(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-    detail::svd_blas_f64(rows, columns, A, lda, S, U, ldu, VT, ldv);
+    detail::svd_blas_f64(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 #else
-    detail::svd_scalar_f64(rows, columns, A, lda, S, U, ldu, VT, ldv);
+    detail::svd_scalar_f64(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 #endif
 }
 }  // namespace linalg

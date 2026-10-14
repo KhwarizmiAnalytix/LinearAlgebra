@@ -7,21 +7,20 @@
 
 #include <algorithm>
 
-#include "include/memory/allocator.h"
+#include "include/common/workspace_arena.h"
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
 #include <lapacke.h>
 
 #include <algorithm>
 
-#include "include/memory/allocator.h"
+#include "include/common/workspace_arena.h"
 #else
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <numeric>
-#include <vector>
 
-#include "include/memory/allocator.h"
+#include "include/common/workspace_arena.h"
 #endif
 
 namespace linalg
@@ -36,11 +35,56 @@ namespace detail
 // exists for either op.
 #if defined(LINALG_ENABLE_MKL)
 
-bool symmetric_eigen_mkl_f32(
-    const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv)
+namespace
 {
-    using Allocator = linalg::allocator<float>;
-    auto* buf       = Allocator::allocate(n * n);
+template <typename T>
+size_t symmetric_eigen_mkl_workspace_size(linalg_int n)
+{
+    detail::workspace_arena arena;
+    arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    return arena.total_size();
+}
+
+template <typename T>
+size_t general_eigen_mkl_workspace_size(linalg_int n, bool compute_eigenvectors)
+{
+    detail::workspace_arena arena;
+    arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    if (compute_eigenvectors)
+    {
+        arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    }
+    return arena.total_size();
+}
+}  // namespace
+
+size_t symmetric_eigen_mkl_workspace_size_f32(linalg_int n)
+{
+    return symmetric_eigen_mkl_workspace_size<float>(n);
+}
+
+size_t symmetric_eigen_mkl_workspace_size_f64(linalg_int n)
+{
+    return symmetric_eigen_mkl_workspace_size<double>(n);
+}
+
+size_t general_eigen_mkl_workspace_size_f32(linalg_int n, bool compute_eigenvectors)
+{
+    return general_eigen_mkl_workspace_size<float>(n, compute_eigenvectors);
+}
+
+size_t general_eigen_mkl_workspace_size_f64(linalg_int n, bool compute_eigenvectors)
+{
+    return general_eigen_mkl_workspace_size<double>(n, compute_eigenvectors);
+}
+
+bool symmetric_eigen_mkl_f32(const float* A, linalg_int n, linalg_int lda, float* eigenvalues,
+    float* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(workspace_size >= symmetric_eigen_mkl_workspace_size<float>(n),
+        "symmetric_eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    auto* buf = arena.next<float>(static_cast<size_t>(n) * static_cast<size_t>(n));
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, n, buf + i * n);
@@ -50,15 +94,16 @@ bool symmetric_eigen_mkl_f32(
     {
         std::copy_n(buf + i * n, n, eigenvectors + i * ldv);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
-bool symmetric_eigen_mkl_f64(
-    const double* A, linalg_int n, linalg_int lda, double* eigenvalues, double* eigenvectors, linalg_int ldv)
+bool symmetric_eigen_mkl_f64(const double* A, linalg_int n, linalg_int lda, double* eigenvalues,
+    double* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
 {
-    using Allocator = linalg::allocator<double>;
-    auto* buf       = Allocator::allocate(n * n);
+    LOGGING_CHECK(workspace_size >= symmetric_eigen_mkl_workspace_size<double>(n),
+        "symmetric_eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    auto* buf = arena.next<double>(static_cast<size_t>(n) * static_cast<size_t>(n));
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, n, buf + i * n);
@@ -68,88 +113,140 @@ bool symmetric_eigen_mkl_f64(
     {
         std::copy_n(buf + i * n, n, eigenvectors + i * ldv);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
 bool general_eigen_mkl_f32(const float* A,
-    linalg_int                        n,
-    linalg_int                        lda,
-    float*                              eigenvalues_real,
-    float*                              eigenvalues_imag,
-    float*                              eigenvectors,
-    linalg_int                        ldv)
+    linalg_int n,
+    linalg_int lda,
+    float*     eigenvalues_real,
+    float*     eigenvalues_imag,
+    float*     eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    using Allocator = linalg::allocator<float>;
-    auto* buf       = Allocator::allocate(n * n);
+    const bool compute_eigenvectors = eigenvectors != nullptr;
+    LOGGING_CHECK(workspace_size >= general_eigen_mkl_workspace_size<float>(n, compute_eigenvectors),
+        "eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto nn  = static_cast<size_t>(n) * static_cast<size_t>(n);
+    auto*      buf = arena.next<float>(nn);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, n, buf + i * n);
     }
     linalg_int info = 0;
-    if (eigenvectors != nullptr)
+    if (compute_eigenvectors)
     {
-        auto* vr = Allocator::allocate(n * n);
+        auto* vr = arena.next<float>(nn);
         info = LAPACKE_sgeev(  // NOLINT
             LAPACK_ROW_MAJOR, 'N', 'V', n, buf, n, eigenvalues_real, eigenvalues_imag, nullptr, n, vr, n);
         for (linalg_int i = 0; i < n; ++i)
         {
             std::copy_n(vr + i * n, n, eigenvectors + i * ldv);
         }
-        Allocator::free(vr);
     }
     else
     {
         info = LAPACKE_sgeev(  // NOLINT
             LAPACK_ROW_MAJOR, 'N', 'N', n, buf, n, eigenvalues_real, eigenvalues_imag, nullptr, n, nullptr, n);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
 bool general_eigen_mkl_f64(const double* A,
-    linalg_int                         n,
-    linalg_int                         lda,
-    double*                              eigenvalues_real,
-    double*                              eigenvalues_imag,
-    double*                              eigenvectors,
-    linalg_int                         ldv)
+    linalg_int n,
+    linalg_int lda,
+    double*    eigenvalues_real,
+    double*    eigenvalues_imag,
+    double*    eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    using Allocator = linalg::allocator<double>;
-    auto* buf       = Allocator::allocate(n * n);
+    const bool compute_eigenvectors = eigenvectors != nullptr;
+    LOGGING_CHECK(workspace_size >= general_eigen_mkl_workspace_size<double>(n, compute_eigenvectors),
+        "eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto nn  = static_cast<size_t>(n) * static_cast<size_t>(n);
+    auto*      buf = arena.next<double>(nn);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, n, buf + i * n);
     }
     linalg_int info = 0;
-    if (eigenvectors != nullptr)
+    if (compute_eigenvectors)
     {
-        auto* vr = Allocator::allocate(n * n);
+        auto* vr = arena.next<double>(nn);
         info = LAPACKE_dgeev(  // NOLINT
             LAPACK_ROW_MAJOR, 'N', 'V', n, buf, n, eigenvalues_real, eigenvalues_imag, nullptr, n, vr, n);
         for (linalg_int i = 0; i < n; ++i)
         {
             std::copy_n(vr + i * n, n, eigenvectors + i * ldv);
         }
-        Allocator::free(vr);
     }
     else
     {
         info = LAPACKE_dgeev(  // NOLINT
             LAPACK_ROW_MAJOR, 'N', 'N', n, buf, n, eigenvalues_real, eigenvalues_imag, nullptr, n, nullptr, n);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
 
-bool symmetric_eigen_blas_f32(
-    const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv)
+namespace
 {
-    using Allocator = linalg::allocator<float>;
-    auto*      buf  = Allocator::allocate(n * n);
-    const auto nn    = static_cast<lapack_int>(n);
+template <typename T>
+size_t symmetric_eigen_blas_workspace_size(linalg_int n)
+{
+    detail::workspace_arena arena;
+    arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    return arena.total_size();
+}
+
+template <typename T>
+size_t general_eigen_blas_workspace_size(linalg_int n, bool compute_eigenvectors)
+{
+    detail::workspace_arena arena;
+    arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    if (compute_eigenvectors)
+    {
+        arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    }
+    return arena.total_size();
+}
+}  // namespace
+
+size_t symmetric_eigen_blas_workspace_size_f32(linalg_int n)
+{
+    return symmetric_eigen_blas_workspace_size<float>(n);
+}
+
+size_t symmetric_eigen_blas_workspace_size_f64(linalg_int n)
+{
+    return symmetric_eigen_blas_workspace_size<double>(n);
+}
+
+size_t general_eigen_blas_workspace_size_f32(linalg_int n, bool compute_eigenvectors)
+{
+    return general_eigen_blas_workspace_size<float>(n, compute_eigenvectors);
+}
+
+size_t general_eigen_blas_workspace_size_f64(linalg_int n, bool compute_eigenvectors)
+{
+    return general_eigen_blas_workspace_size<double>(n, compute_eigenvectors);
+}
+
+bool symmetric_eigen_blas_f32(const float* A, linalg_int n, linalg_int lda, float* eigenvalues,
+    float* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(workspace_size >= symmetric_eigen_blas_workspace_size<float>(n),
+        "symmetric_eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    auto*      buf = arena.next<float>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    const auto nn  = static_cast<lapack_int>(n);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, static_cast<std::size_t>(n), buf + i * n);
@@ -159,16 +256,17 @@ bool symmetric_eigen_blas_f32(
     {
         std::copy_n(buf + i * n, static_cast<std::size_t>(n), eigenvectors + i * ldv);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
-bool symmetric_eigen_blas_f64(
-    const double* A, linalg_int n, linalg_int lda, double* eigenvalues, double* eigenvectors, linalg_int ldv)
+bool symmetric_eigen_blas_f64(const double* A, linalg_int n, linalg_int lda, double* eigenvalues,
+    double* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
 {
-    using Allocator = linalg::allocator<double>;
-    auto*      buf  = Allocator::allocate(n * n);
-    const auto nn    = static_cast<lapack_int>(n);
+    LOGGING_CHECK(workspace_size >= symmetric_eigen_blas_workspace_size<double>(n),
+        "symmetric_eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    auto*      buf = arena.next<double>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    const auto nn  = static_cast<lapack_int>(n);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, static_cast<std::size_t>(n), buf + i * n);
@@ -178,79 +276,86 @@ bool symmetric_eigen_blas_f64(
     {
         std::copy_n(buf + i * n, static_cast<std::size_t>(n), eigenvectors + i * ldv);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
 bool general_eigen_blas_f32(const float* A,
-    linalg_int                         n,
-    linalg_int                         lda,
-    float*                               eigenvalues_real,
-    float*                               eigenvalues_imag,
-    float*                               eigenvectors,
-    linalg_int                         ldv)
+    linalg_int n,
+    linalg_int lda,
+    float*     eigenvalues_real,
+    float*     eigenvalues_imag,
+    float*     eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    using Allocator = linalg::allocator<float>;
-    auto*      buf  = Allocator::allocate(n * n);
+    const bool compute_eigenvectors = eigenvectors != nullptr;
+    LOGGING_CHECK(workspace_size >= general_eigen_blas_workspace_size<float>(n, compute_eigenvectors),
+        "eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto bytes = static_cast<size_t>(n) * static_cast<size_t>(n);
+    auto*      buf   = arena.next<float>(bytes);
     const auto nn    = static_cast<lapack_int>(n);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, static_cast<std::size_t>(n), buf + i * n);
     }
     lapack_int info = 0;
-    if (eigenvectors != nullptr)
+    if (compute_eigenvectors)
     {
-        auto* vr = Allocator::allocate(n * n);
+        auto* vr = arena.next<float>(bytes);
         info     = LAPACKE_sgeev(
             LAPACK_ROW_MAJOR, 'N', 'V', nn, buf, nn, eigenvalues_real, eigenvalues_imag, nullptr, nn, vr, nn);
         for (linalg_int i = 0; i < n; ++i)
         {
             std::copy_n(vr + i * n, static_cast<std::size_t>(n), eigenvectors + i * ldv);
         }
-        Allocator::free(vr);
     }
     else
     {
         info = LAPACKE_sgeev(
             LAPACK_ROW_MAJOR, 'N', 'N', nn, buf, nn, eigenvalues_real, eigenvalues_imag, nullptr, nn, nullptr, nn);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
 bool general_eigen_blas_f64(const double* A,
-    linalg_int                          n,
-    linalg_int                          lda,
-    double*                               eigenvalues_real,
-    double*                               eigenvalues_imag,
-    double*                               eigenvectors,
-    linalg_int                          ldv)
+    linalg_int n,
+    linalg_int lda,
+    double*    eigenvalues_real,
+    double*    eigenvalues_imag,
+    double*    eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    using Allocator = linalg::allocator<double>;
-    auto*      buf  = Allocator::allocate(n * n);
+    const bool compute_eigenvectors = eigenvectors != nullptr;
+    LOGGING_CHECK(workspace_size >= general_eigen_blas_workspace_size<double>(n, compute_eigenvectors),
+        "eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto bytes = static_cast<size_t>(n) * static_cast<size_t>(n);
+    auto*      buf   = arena.next<double>(bytes);
     const auto nn    = static_cast<lapack_int>(n);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(A + i * lda, static_cast<std::size_t>(n), buf + i * n);
     }
     lapack_int info = 0;
-    if (eigenvectors != nullptr)
+    if (compute_eigenvectors)
     {
-        auto* vr = Allocator::allocate(n * n);
+        auto* vr = arena.next<double>(bytes);
         info     = LAPACKE_dgeev(
             LAPACK_ROW_MAJOR, 'N', 'V', nn, buf, nn, eigenvalues_real, eigenvalues_imag, nullptr, nn, vr, nn);
         for (linalg_int i = 0; i < n; ++i)
         {
             std::copy_n(vr + i * n, static_cast<std::size_t>(n), eigenvectors + i * ldv);
         }
-        Allocator::free(vr);
     }
     else
     {
         info = LAPACKE_dgeev(
             LAPACK_ROW_MAJOR, 'N', 'N', nn, buf, nn, eigenvalues_real, eigenvalues_imag, nullptr, nn, nullptr, nn);
     }
-    Allocator::free(buf);
     return info == 0;
 }
 
@@ -259,17 +364,102 @@ bool general_eigen_blas_f64(const double* A,
 namespace
 {
 
+template <typename T>
+struct jacobi_layout
+{
+    T*          a;
+    T*          v;
+    T*          evals;
+    linalg_int* idx;
+};
+
+template <typename T>
+jacobi_layout<T> jacobi_plan(detail::workspace_arena& arena, linalg_int n)
+{
+    const size_t     nn = static_cast<size_t>(n) * static_cast<size_t>(n);
+    jacobi_layout<T> p;
+    p.a     = arena.next<T>(nn);
+    p.v     = arena.next<T>(nn);
+    p.evals = arena.next<T>(static_cast<size_t>(n));
+    p.idx   = arena.next<linalg_int>(static_cast<size_t>(n));
+    return p;
+}
+
+template <typename T>
+size_t jacobi_workspace_size(linalg_int n)
+{
+    detail::workspace_arena arena;
+    jacobi_plan<T>(arena, n);
+    return arena.total_size();
+}
+
+template <typename T>
+struct general_scalar_layout
+{
+    T*          H;
+    T*          Hm;
+    T*          M;
+    T*          Q;
+    T*          R;
+    T*          tmp;
+    T*          Rwork;
+    T*          Qwork;
+    T*          householder;
+    T*          inv_M;
+    T*          x;
+    T*          y;
+    T*          LU;
+    T*          b;
+    T*          evec;
+};
+
+template <typename T>
+general_scalar_layout<T> general_scalar_plan(detail::workspace_arena& arena, linalg_int n, bool compute_eigenvectors)
+{
+    const size_t             nn = static_cast<size_t>(n) * static_cast<size_t>(n);
+    const size_t             ns = static_cast<size_t>(n);
+    general_scalar_layout<T> p{};
+    p.H           = arena.next<T>(nn);
+    p.Hm          = arena.next<T>(nn);
+    p.M           = arena.next<T>(nn);
+    p.Q           = arena.next<T>(nn);
+    p.R           = arena.next<T>(nn);
+    p.tmp         = arena.next<T>(nn);
+    p.Rwork       = arena.next<T>(nn);
+    p.Qwork       = arena.next<T>(nn);
+    p.householder = arena.next<T>(ns);
+    if (compute_eigenvectors)
+    {
+        p.inv_M = arena.next<T>(nn);
+        p.x     = arena.next<T>(ns);
+        p.y     = arena.next<T>(ns);
+        p.LU    = arena.next<T>(nn);
+        p.b     = arena.next<T>(ns);
+        p.evec  = arena.next<T>(ns);
+    }
+    return p;
+}
+
+template <typename T>
+size_t general_scalar_workspace_size(linalg_int n, bool compute_eigenvectors)
+{
+    detail::workspace_arena arena;
+    general_scalar_plan<T>(arena, n, compute_eigenvectors);
+    return arena.total_size();
+}
+
 // Classic cyclic Jacobi eigenvalue algorithm (Golub & Van Loan, "Matrix
 // Computations", 8.4). Diagonalizes a symmetric matrix by a sequence of
 // plane rotations that each zero one off-diagonal pair; converges
 // quadratically, so a modest sweep cap is plenty even though this loops
 // unconditionally over all n*(n-1)/2 pairs per sweep (no work-queue /
 // threshold-skip bookkeeping, favoring a simple, obviously-correct
-// portable fallback over the fastest possible one).
-template <typename T, class Allocator = linalg::allocator<T>>
-bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V, linalg_int ldv)
+// portable fallback over the fastest possible one). `a`, `v`, `evals`, and
+// `idx` are caller-owned scratch carved by jacobi_plan.
+template <typename T>
+bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V, linalg_int ldv, T* a, T* v,
+    T* evals, linalg_int* idx)
 {
-    std::vector<T> a(static_cast<std::size_t>(n * n));
     for (linalg_int i = 0; i < n; ++i)
     {
         for (linalg_int j = 0; j < n; ++j)
@@ -280,7 +470,7 @@ bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V
         }
     }
 
-    std::vector<T> v(static_cast<std::size_t>(n * n), T(0));
+    std::fill_n(v, static_cast<std::size_t>(n) * static_cast<std::size_t>(n), T(0));
     for (linalg_int i = 0; i < n; ++i)
     {
         v[static_cast<std::size_t>(i * n + i)] = T(1);
@@ -368,15 +558,13 @@ bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V
         }
     }
 
-    std::vector<T> evals(static_cast<std::size_t>(n));
     for (linalg_int i = 0; i < n; ++i)
     {
         evals[static_cast<std::size_t>(i)] = a[static_cast<std::size_t>(i * n + i)];
     }
 
-    std::vector<linalg_int> idx(static_cast<std::size_t>(n));
-    std::iota(idx.begin(), idx.end(), static_cast<linalg_int>(0));
-    std::sort(idx.begin(), idx.end(), [&](linalg_int lhs, linalg_int rhs)
+    std::iota(idx, idx + n, static_cast<linalg_int>(0));
+    std::sort(idx, idx + n, [&](linalg_int lhs, linalg_int rhs)
         { return evals[static_cast<std::size_t>(lhs)] < evals[static_cast<std::size_t>(rhs)]; });
 
     for (linalg_int c = 0; c < n; ++c)
@@ -398,20 +586,16 @@ bool jacobi_eigen(const T* A, linalg_int n, linalg_int lda, T* eigenvalues, T* V
 // self-contained rather than reaching across files into another op's
 // anonymous-namespace helpers) — used internally by the general eigenvalue
 // QR algorithm below.
-template <typename T, class Allocator = linalg::allocator<T>>
-void square_qr(linalg_int n, const T* A, T* Q, T* R)
+template <typename T>
+void square_qr(linalg_int n, const T* A, T* Q, T* R, T* Rwork, T* Qwork, T* v)
 {
-    auto* Rwork = Allocator::allocate(n * n);
     std::copy_n(A, static_cast<std::size_t>(n * n), Rwork);
 
-    auto* Qwork = Allocator::allocate(n * n);
-    std::fill_n(Qwork, n * n, T(0));
+    std::fill_n(Qwork, static_cast<std::size_t>(n) * static_cast<std::size_t>(n), T(0));
     for (linalg_int i = 0; i < n; ++i)
     {
         Qwork[i * n + i] = T(1);
     }
-
-    std::vector<T> v(static_cast<std::size_t>(n));
 
     for (linalg_int i = 0; i < n; ++i)
     {
@@ -486,9 +670,6 @@ void square_qr(linalg_int n, const T* A, T* Q, T* R)
             R[r * n + c] = (c >= r) ? Rwork[r * n + c] : T(0);
         }
     }
-
-    Allocator::free(Qwork);
-    Allocator::free(Rwork);
 }
 
 // Real eigenvalues (and, via a real Schur 2x2 diagonal block, a
@@ -503,10 +684,10 @@ void square_qr(linalg_int n, const T* A, T* Q, T* R)
 // elsewhere. No Hessenberg reduction either, for the same reason: forming
 // H^2 for the shift each iteration already costs the same O(n^3) that
 // Hessenberg reduction would otherwise save on the QR-factorization step.
-template <typename T, class Allocator = linalg::allocator<T>>
-bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_real, T* eigen_imag)
+template <typename T>
+bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_real, T* eigen_imag, T* H, T* Hm, T* M,
+    T* Q, T* R, T* tmp, T* Rwork, T* Qwork, T* householder)
 {
-    std::vector<T> H(static_cast<std::size_t>(n * n));
     for (linalg_int i = 0; i < n; ++i)
     {
         for (linalg_int j = 0; j < n; ++j)
@@ -606,7 +787,6 @@ bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_r
         const T tr  = a + d;
         const T det = a * d - b * c;
 
-        auto* Hm = Allocator::allocate(m * m);
         for (linalg_int i = 0; i < m; ++i)
         {
             for (linalg_int j = 0; j < m; ++j)
@@ -615,7 +795,6 @@ bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_r
             }
         }
 
-        auto* M = Allocator::allocate(m * m);
         for (linalg_int i = 0; i < m; ++i)
         {
             for (linalg_int j = 0; j < m; ++j)
@@ -629,12 +808,9 @@ bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_r
             }
         }
 
-        auto* Q = Allocator::allocate(m * m);
-        auto* R = Allocator::allocate(m * m);
-        square_qr<T, Allocator>(m, M, Q, R);
+        square_qr<T>(m, M, Q, R, Rwork, Qwork, householder);
 
         // Hm <- Q^T * Hm * Q
-        auto* tmp = Allocator::allocate(m * m);
         for (linalg_int i = 0; i < m; ++i)
         {
             for (linalg_int j = 0; j < m; ++j)
@@ -659,12 +835,6 @@ bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_r
                 H[static_cast<std::size_t>(i * n + j)] = sum;
             }
         }
-
-        Allocator::free(tmp);
-        Allocator::free(R);
-        Allocator::free(Q);
-        Allocator::free(M);
-        Allocator::free(Hm);
     }
 
     return true;
@@ -675,13 +845,11 @@ bool general_eigenvalues_qr(linalg_int n, const T* A, linalg_int lda, T* eigen_r
 // (A - lambda*I) * x_{k+1} = x_k and renormalizing converges to the
 // corresponding eigenvector. `lambda` is perturbed slightly so the LU
 // factorization below never sees an exactly-singular pivot.
-template <typename T, class Allocator = linalg::allocator<T>>
-bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* eigenvector)
+template <typename T>
+bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* eigenvector, T* M, T* x, T* y, T* LU, T* b)
 {
-    const T eps      = std::numeric_limits<T>::epsilon();
+    const T eps       = std::numeric_limits<T>::epsilon();
     const T shift_eps = eps * (std::fabs(lambda) + T(1)) * T(10);
-
-    auto* M = Allocator::allocate(n * n);
     for (linalg_int i = 0; i < n; ++i)
     {
         for (linalg_int j = 0; j < n; ++j)
@@ -690,8 +858,7 @@ bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* ei
         }
     }
 
-    std::vector<T> x(static_cast<std::size_t>(n), T(1) / std::sqrt(static_cast<T>(n)));
-    std::vector<T> y(static_cast<std::size_t>(n));
+    std::fill_n(x, static_cast<std::size_t>(n), T(1) / std::sqrt(static_cast<T>(n)));
 
     bool ok = true;
     for (int it = 0; it < 25 && ok; ++it)
@@ -700,11 +867,8 @@ bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* ei
         // pivoting (self-contained: this op does not depend on
         // lu_decomposition.cpp's scalar fallback, matching this file's
         // self-containment convention).
-        auto* LU = Allocator::allocate(n * n);
         std::copy_n(M, static_cast<std::size_t>(n * n), LU);
-        std::vector<T>            b(x.begin(), x.end());
-        std::vector<linalg_int> piv(static_cast<std::size_t>(n));
-        std::iota(piv.begin(), piv.end(), static_cast<linalg_int>(0));
+        std::copy_n(x, static_cast<std::size_t>(n), b);
 
         for (linalg_int k = 0; k < n && ok; ++k)
         {
@@ -730,7 +894,7 @@ bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* ei
                 {
                     std::swap(LU[k * n + c], LU[max_row * n + c]);
                 }
-                std::swap(b[static_cast<std::size_t>(k)], b[static_cast<std::size_t>(max_row)]);
+                std::swap(b[k], b[max_row]);
             }
             for (linalg_int r = k + 1; r < n; ++r)
             {
@@ -769,47 +933,60 @@ bool inverse_iteration(linalg_int n, const T* A, linalg_int lda, T lambda, T* ei
                 }
             }
         }
-
-        Allocator::free(LU);
     }
 
     if (ok)
     {
-        std::copy(x.begin(), x.end(), eigenvector);
+        std::copy_n(x, static_cast<std::size_t>(n), eigenvector);
     }
-    Allocator::free(M);
     return ok;
 }
 
 }  // namespace
 
-bool symmetric_eigen_scalar_f32(
-    const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv)
+bool symmetric_eigen_scalar_f32(const float* A, linalg_int n, linalg_int lda, float* eigenvalues,
+    float* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
 {
-    return jacobi_eigen(A, n, lda, eigenvalues, eigenvectors, ldv);
+    LOGGING_CHECK(workspace_size >= jacobi_workspace_size<float>(n),
+        "symmetric_eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto              bufs = jacobi_plan<float>(arena, n);
+    return jacobi_eigen(A, n, lda, eigenvalues, eigenvectors, ldv, bufs.a, bufs.v, bufs.evals, bufs.idx);
 }
 
-bool symmetric_eigen_scalar_f64(
-    const double* A, linalg_int n, linalg_int lda, double* eigenvalues, double* eigenvectors, linalg_int ldv)
+bool symmetric_eigen_scalar_f64(const double* A, linalg_int n, linalg_int lda, double* eigenvalues,
+    double* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
 {
-    return jacobi_eigen(A, n, lda, eigenvalues, eigenvectors, ldv);
+    LOGGING_CHECK(workspace_size >= jacobi_workspace_size<double>(n),
+        "symmetric_eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto              bufs = jacobi_plan<double>(arena, n);
+    return jacobi_eigen(A, n, lda, eigenvalues, eigenvectors, ldv, bufs.a, bufs.v, bufs.evals, bufs.idx);
 }
 
 template <typename T>
 bool general_eigen_scalar_impl(const T* A,
-    linalg_int                        n,
-    linalg_int                        lda,
-    T*                                  eigenvalues_real,
-    T*                                  eigenvalues_imag,
-    T*                                  eigenvectors,
-    linalg_int                        ldv)
+    linalg_int n,
+    linalg_int lda,
+    T*         eigenvalues_real,
+    T*         eigenvalues_imag,
+    T*         eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    if (!general_eigenvalues_qr<T, linalg::allocator<T>>(n, A, lda, eigenvalues_real, eigenvalues_imag))
+    const bool compute_eigenvectors = eigenvectors != nullptr;
+    LOGGING_CHECK(workspace_size >= general_scalar_workspace_size<T>(n, compute_eigenvectors),
+        "eigenvalue_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto              bufs = general_scalar_plan<T>(arena, n, compute_eigenvectors);
+    if (!general_eigenvalues_qr<T>(n, A, lda, eigenvalues_real, eigenvalues_imag, bufs.H, bufs.Hm, bufs.M, bufs.Q,
+            bufs.R, bufs.tmp, bufs.Rwork, bufs.Qwork, bufs.householder))
     {
         return false;
     }
 
-    if (eigenvectors == nullptr)
+    if (!compute_eigenvectors)
     {
         return true;
     }
@@ -821,112 +998,172 @@ bool general_eigen_scalar_impl(const T* A,
             "eigenvalue_decomposition: scalar fallback cannot compute eigenvectors for a complex eigenvalue (index "
             "{})",
             i);
-        std::vector<T> v(static_cast<std::size_t>(n));
-        if (!inverse_iteration<T, linalg::allocator<T>>(n, A, lda, eigenvalues_real[i], v.data()))
+        if (!inverse_iteration<T>(
+                n, A, lda, eigenvalues_real[i], bufs.evec, bufs.inv_M, bufs.x, bufs.y, bufs.LU, bufs.b))
         {
             return false;
         }
         for (linalg_int r = 0; r < n; ++r)
         {
-            eigenvectors[r * ldv + i] = v[static_cast<std::size_t>(r)];
+            eigenvectors[r * ldv + i] = bufs.evec[static_cast<std::size_t>(r)];
         }
     }
     return true;
 }
 
 bool general_eigen_scalar_f32(const float* A,
-    linalg_int                         n,
-    linalg_int                         lda,
-    float*                               eigenvalues_real,
-    float*                               eigenvalues_imag,
-    float*                               eigenvectors,
-    linalg_int                         ldv)
+    linalg_int n,
+    linalg_int lda,
+    float*     eigenvalues_real,
+    float*     eigenvalues_imag,
+    float*     eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    return general_eigen_scalar_impl(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return general_eigen_scalar_impl(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 }
 
 bool general_eigen_scalar_f64(const double* A,
-    linalg_int                          n,
-    linalg_int                          lda,
-    double*                               eigenvalues_real,
-    double*                               eigenvalues_imag,
-    double*                               eigenvectors,
-    linalg_int                          ldv)
+    linalg_int n,
+    linalg_int lda,
+    double*    eigenvalues_real,
+    double*    eigenvalues_imag,
+    double*    eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
-    return general_eigen_scalar_impl(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return general_eigen_scalar_impl(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 }
 
 #endif
 
 }  // namespace detail
 
-//-----------------------------------------------------------------------------
-bool symmetric_eigenvalue_decomposition(
-    const float* A, linalg_int n, linalg_int lda, float* eigenvalues, float* eigenvectors, linalg_int ldv)
+size_t symmetric_eigenvalue_decomposition_workspace_size(const float* /*type_tag*/, linalg_int n)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr, "symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldv > 0, "symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
-    return detail::symmetric_eigen_mkl_f32(A, n, lda, eigenvalues, eigenvectors, ldv);
+    return detail::symmetric_eigen_mkl_workspace_size_f32(n);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-    return detail::symmetric_eigen_blas_f32(A, n, lda, eigenvalues, eigenvectors, ldv);
+    return detail::symmetric_eigen_blas_workspace_size_f32(n);
 #else
-    return detail::symmetric_eigen_scalar_f32(A, n, lda, eigenvalues, eigenvectors, ldv);
+    return detail::jacobi_workspace_size<float>(n);
+#endif
+}
+
+size_t symmetric_eigenvalue_decomposition_workspace_size(const double* /*type_tag*/, linalg_int n)
+{
+#if defined(LINALG_ENABLE_MKL)
+    return detail::symmetric_eigen_mkl_workspace_size_f64(n);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::symmetric_eigen_blas_workspace_size_f64(n);
+#else
+    return detail::jacobi_workspace_size<double>(n);
+#endif
+}
+
+size_t eigenvalue_decomposition_workspace_size(const float* /*type_tag*/, linalg_int n, bool compute_eigenvectors)
+{
+#if defined(LINALG_ENABLE_MKL)
+    return detail::general_eigen_mkl_workspace_size_f32(n, compute_eigenvectors);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::general_eigen_blas_workspace_size_f32(n, compute_eigenvectors);
+#else
+    return detail::general_scalar_workspace_size<float>(n, compute_eigenvectors);
+#endif
+}
+
+size_t eigenvalue_decomposition_workspace_size(const double* /*type_tag*/, linalg_int n, bool compute_eigenvectors)
+{
+#if defined(LINALG_ENABLE_MKL)
+    return detail::general_eigen_mkl_workspace_size_f64(n, compute_eigenvectors);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::general_eigen_blas_workspace_size_f64(n, compute_eigenvectors);
+#else
+    return detail::general_scalar_workspace_size<double>(n, compute_eigenvectors);
 #endif
 }
 
 //-----------------------------------------------------------------------------
-bool symmetric_eigenvalue_decomposition(
-    const double* A, linalg_int n, linalg_int lda, double* eigenvalues, double* eigenvectors, linalg_int ldv)
+bool symmetric_eigenvalue_decomposition(const float* A, linalg_int n, linalg_int lda, float* eigenvalues,
+    float* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
 {
     LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr, "symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
     LOGGING_CHECK(n > 0 && lda > 0 && ldv > 0, "symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
-    return detail::symmetric_eigen_mkl_f64(A, n, lda, eigenvalues, eigenvectors, ldv);
+    return detail::symmetric_eigen_mkl_f32(A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-    return detail::symmetric_eigen_blas_f64(A, n, lda, eigenvalues, eigenvectors, ldv);
+    return detail::symmetric_eigen_blas_f32(A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size);
 #else
-    return detail::symmetric_eigen_scalar_f64(A, n, lda, eigenvalues, eigenvectors, ldv);
+    return detail::symmetric_eigen_scalar_f32(A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size);
+#endif
+}
+
+//-----------------------------------------------------------------------------
+bool symmetric_eigenvalue_decomposition(const double* A, linalg_int n, linalg_int lda, double* eigenvalues,
+    double* eigenvectors, linalg_int ldv, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr, "symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldv > 0, "symmetric_eigenvalue_decomposition: n/lda/ldv must be positive");
+#if defined(LINALG_ENABLE_MKL)
+    return detail::symmetric_eigen_mkl_f64(A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size);
+#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+    return detail::symmetric_eigen_blas_f64(A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size);
+#else
+    return detail::symmetric_eigen_scalar_f64(A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size);
 #endif
 }
 
 //-----------------------------------------------------------------------------
 bool eigenvalue_decomposition(const float* A,
-    linalg_int                          n,
-    linalg_int                          lda,
-    float*                                eigenvalues_real,
-    float*                                eigenvalues_imag,
-    float*                                eigenvectors,
-    linalg_int                          ldv)
+    linalg_int n,
+    linalg_int lda,
+    float*     eigenvalues_real,
+    float*     eigenvalues_imag,
+    float*     eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
     LOGGING_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr, "eigenvalue_decomposition: A, eigenvalues_real, and eigenvalues_imag must not be null");
     LOGGING_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0), "eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
-    return detail::general_eigen_mkl_f32(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return detail::general_eigen_mkl_f32(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-    return detail::general_eigen_blas_f32(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return detail::general_eigen_blas_f32(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 #else
-    return detail::general_eigen_scalar_f32(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return detail::general_eigen_scalar_f32(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 #endif
 }
 
 //-----------------------------------------------------------------------------
 bool eigenvalue_decomposition(const double* A,
-    linalg_int                           n,
-    linalg_int                           lda,
-    double*                                eigenvalues_real,
-    double*                                eigenvalues_imag,
-    double*                                eigenvectors,
-    linalg_int                           ldv)
+    linalg_int n,
+    linalg_int lda,
+    double*    eigenvalues_real,
+    double*    eigenvalues_imag,
+    double*    eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size)
 {
     LOGGING_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr, "eigenvalue_decomposition: A, eigenvalues_real, and eigenvalues_imag must not be null");
     LOGGING_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0), "eigenvalue_decomposition: n/lda/ldv must be positive");
 #if defined(LINALG_ENABLE_MKL)
-    return detail::general_eigen_mkl_f64(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return detail::general_eigen_mkl_f64(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 #elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
-    return detail::general_eigen_blas_f64(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return detail::general_eigen_blas_f64(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 #else
-    return detail::general_eigen_scalar_f64(A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv);
+    return detail::general_eigen_scalar_f64(
+        A, n, lda, eigenvalues_real, eigenvalues_imag, eigenvectors, ldv, workspace, workspace_size);
 #endif
 }
 

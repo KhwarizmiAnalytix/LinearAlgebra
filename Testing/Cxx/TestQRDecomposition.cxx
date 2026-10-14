@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <vector>
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
@@ -26,6 +27,10 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
     dense_matrix<value_t> Q(rows, k);
     dense_matrix<value_t> R(k, columns);
 
+    const auto ws_size = linalg::qr_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
+
     linalg::qr_decomposition(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -34,7 +39,9 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
         Q.begin(),
         static_cast<linalg_long>(k),
         R.begin(),
-        static_cast<linalg_long>(columns));
+        static_cast<linalg_long>(columns),
+        ws.data(),
+        ws_size);
 
     // Q*R should reconstruct A.
     value_t max_error = 0;

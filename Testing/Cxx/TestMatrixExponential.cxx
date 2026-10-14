@@ -29,6 +29,21 @@ struct ExpTolerance<double>
 };
 
 template <typename value_t>
+std::vector<unsigned char> exp_workspace(linalg_int n)
+{
+    const auto bytes = linalg::matrix_exponential_workspace_size(static_cast<const value_t*>(nullptr), n);
+    return std::vector<unsigned char>(bytes);
+}
+
+template <typename value_t>
+std::vector<unsigned char> gemm_workspace(linalg_int n)
+{
+    const auto bytes =
+        linalg::matrix_multiplication_workspace_size(static_cast<const value_t*>(nullptr), n, n, n);
+    return std::vector<unsigned char>(bytes);
+}
+
+template <typename value_t>
 double max_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>& b, std::size_t n)
 {
     double worst = 0.;
@@ -49,8 +64,10 @@ void test_zero()
     const std::size_t     n = 4;
     dense_matrix<value_t> A(n, n);
     dense_matrix<value_t> R(n, n);
+    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
     linalg::matrix_exponential(
-        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), R.begin(), static_cast<linalg_int>(n));
+        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), R.begin(), static_cast<linalg_int>(n),
+        ws.data(), ws.size());
 
     dense_matrix<value_t> I(n, n);
     for (std::size_t i = 0; i < n; ++i)
@@ -71,8 +88,10 @@ void test_diagonal()
     A(2, 2) = value_t(2.0);
 
     dense_matrix<value_t> R(n, n);
+    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
     linalg::matrix_exponential(
-        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), R.begin(), static_cast<linalg_int>(n));
+        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), R.begin(), static_cast<linalg_int>(n),
+        ws.data(), ws.size());
 
     for (std::size_t i = 0; i < n; ++i)
     {
@@ -92,7 +111,8 @@ void test_nilpotent()
     A(0, 1) = value_t(1);
 
     dense_matrix<value_t> R(2, 2);
-    linalg::matrix_exponential(A.begin(), 2, 2, R.begin(), 2);
+    auto                  ws = exp_workspace<value_t>(2);
+    linalg::matrix_exponential(A.begin(), 2, 2, R.begin(), 2, ws.data(), ws.size());
 
     EXPECT_NEAR(static_cast<double>(R(0, 0)), 1., ExpTolerance<value_t>::tolerance);
     EXPECT_NEAR(static_cast<double>(R(0, 1)), 1., ExpTolerance<value_t>::tolerance);
@@ -112,7 +132,8 @@ void test_rotation_generator(double theta)
     A(1, 0) = static_cast<value_t>(theta);
 
     dense_matrix<value_t> R(2, 2);
-    linalg::matrix_exponential(A.begin(), 2, 2, R.begin(), 2);
+    auto                  ws = exp_workspace<value_t>(2);
+    linalg::matrix_exponential(A.begin(), 2, 2, R.begin(), 2, ws.data(), ws.size());
 
     EXPECT_NEAR(static_cast<double>(R(0, 0)), std::cos(theta), ExpTolerance<value_t>::tolerance);
     EXPECT_NEAR(static_cast<double>(R(0, 1)), -std::sin(theta), ExpTolerance<value_t>::tolerance);
@@ -158,10 +179,11 @@ void test_against_taylor_series(std::size_t n)
     constexpr int kTaylorTerms = 40;
     for (int k = 1; k <= kTaylorTerms; ++k)
     {
+        auto gemm_ws = gemm_workspace<double>(static_cast<linalg_int>(n));
         linalg::matrix_multiplication(
             false, false, static_cast<linalg_int>(n), static_cast<linalg_int>(n), static_cast<linalg_int>(n),
             term.begin(), static_cast<linalg_int>(n), Ad.begin(), static_cast<linalg_int>(n), nextTerm.begin(),
-            static_cast<linalg_int>(n));
+            static_cast<linalg_int>(n), gemm_ws.data(), gemm_ws.size());
         for (std::size_t i = 0; i < n; ++i)
         {
             for (std::size_t j = 0; j < n; ++j)
@@ -175,8 +197,10 @@ void test_against_taylor_series(std::size_t n)
     }
 
     dense_matrix<value_t> R(n, n);
+    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
     linalg::matrix_exponential(
-        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), R.begin(), static_cast<linalg_int>(n));
+        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), R.begin(), static_cast<linalg_int>(n),
+        ws.data(), ws.size());
 
     for (std::size_t i = 0; i < n; ++i)
     {
@@ -204,15 +228,18 @@ void test_inverse_property(std::size_t n)
 
     dense_matrix<value_t> expA(n, n);
     dense_matrix<value_t> expNegA(n, n);
+    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
     linalg::matrix_exponential(
-        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), expA.begin(), static_cast<linalg_int>(n));
+        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), expA.begin(), static_cast<linalg_int>(n),
+        ws.data(), ws.size());
     linalg::matrix_exponential(negA.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n),
-        expNegA.begin(), static_cast<linalg_int>(n));
+        expNegA.begin(), static_cast<linalg_int>(n), ws.data(), ws.size());
 
     dense_matrix<value_t> product(n, n);
+    auto                  gemm_ws = gemm_workspace<value_t>(static_cast<linalg_int>(n));
     linalg::matrix_multiplication(false, false, static_cast<linalg_int>(n), static_cast<linalg_int>(n),
         static_cast<linalg_int>(n), expA.begin(), static_cast<linalg_int>(n), expNegA.begin(),
-        static_cast<linalg_int>(n), product.begin(), static_cast<linalg_int>(n));
+        static_cast<linalg_int>(n), product.begin(), static_cast<linalg_int>(n), gemm_ws.data(), gemm_ws.size());
 
     dense_matrix<value_t> I(n, n);
     for (std::size_t i = 0; i < n; ++i)

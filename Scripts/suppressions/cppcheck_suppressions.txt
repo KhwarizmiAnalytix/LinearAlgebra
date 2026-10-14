@@ -1,0 +1,7 @@
+// unusedFunction reports every library entry point, because this scan
+// excludes Testing/ and does not define LINALG_ENABLE_MKL,
+// LINALG_ENABLE_BLAS, LINALG_ENABLE_CUBLAS, or LINALG_VECTORIZED. Those
+// symbols are called from the test suite, from downstream users, or from
+// the code paths those macros enable (checked_narrow, cpuinfo_cach, the
+// const element() overload).
+unusedFunction

@@ -107,7 +107,9 @@ void test_linear_solver(std::size_t dim, double tolerance)
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
-        linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
+        linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER,
+        nullptr,
+        0);
 
     auto diff = hmax_abs_diff(x_ref, x);
     EXPECT_LE(diff, tolerance);
@@ -119,19 +121,26 @@ void test_linear_solver(std::size_t dim, double tolerance)
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
-        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
+        nullptr,
+        0);
 
     diff = hmax_abs_diff(x_ref, x);
     EXPECT_LE(diff, tolerance);
 
     x       = b;
     auto R3 = A;
+    const auto lu_ws_size = linalg::linear_solver_workspace_size(static_cast<const value_t*>(nullptr),
+        static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    std::vector<unsigned char> lu_ws(lu_ws_size);
     linalg::linear_solver(
         R3.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
-        linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        linalg::linear_solver_type::LU_LINEAR_SOLVER,
+        lu_ws.data(),
+        lu_ws_size);
 
     diff = hmax_abs_diff(x_ref, x);
     EXPECT_LE(diff, tolerance);

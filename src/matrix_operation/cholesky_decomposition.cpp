@@ -191,7 +191,7 @@ enum class aad_matrix_order : std::uint8_t
 template <typename T,
     cholesky_decomposition_enum part,
     aad_matrix_order            order = aad_matrix_order::row_major>
-bool cholesky_decomposition_aad_impl(
+void cholesky_decomposition_aad_impl(
     linalg_int n, T* C_aad, const T* C, linalg_long lda, T* A_aad)
 {
     if constexpr (order == aad_matrix_order::col_major)
@@ -253,7 +253,7 @@ bool cholesky_decomposition_aad_impl(
         {
             const auto* const u_i = &C[i * lda];
 
-            auto* u_i_aad = &C_aad[i * lda];
+            const auto* u_i_aad = &C_aad[i * lda];
             auto* a_i_aad = &A_aad[i * lda];
             {
                 // AAD: u_i[i] = std::sqrt(sum);
@@ -300,8 +300,6 @@ bool cholesky_decomposition_aad_impl(
     {
         throw std::runtime_error("Invalid MatrixPart specified");
     }
-
-    return true;  // Success
 }
 
 }  // namespace detail
@@ -344,11 +342,13 @@ bool cholesky_decomposition_aad(float*  C_aad,
     switch (type)
     {
     case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return detail::cholesky_decomposition_aad_impl<float,
-            cholesky_decomposition_enum::LOWER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<float, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
+            lda, C_aad, C, lda, A_aad);
+        return true;
     case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        return detail::cholesky_decomposition_aad_impl<float,
-            cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<float, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
+            lda, C_aad, C, lda, A_aad);
+        return true;
     default:
         LOGGING_THROW("Unsupported enum type!");
     }
@@ -364,11 +364,13 @@ bool cholesky_decomposition_aad(double* C_aad,
     switch (type)
     {
     case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return detail::cholesky_decomposition_aad_impl<double,
-            cholesky_decomposition_enum::LOWER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<double, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
+            lda, C_aad, C, lda, A_aad);
+        return true;
     case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        return detail::cholesky_decomposition_aad_impl<double,
-            cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<double, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
+            lda, C_aad, C, lda, A_aad);
+        return true;
     default:
         LOGGING_THROW("Unsupported enum type!");
     }

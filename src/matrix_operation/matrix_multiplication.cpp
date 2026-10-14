@@ -21,7 +21,7 @@
 #include <limits>
 
 #include "include/common/macros.h"
-#include "include/memory/allocator.h"
+#include "include/common/workspace_arena.h"
 #include "include/util/cpu_info.h"
 #ifdef LINALG_VECTORIZED
 #include "include/common/packet.h"
@@ -1565,18 +1565,54 @@ void gemm(  // NOLINT
 }
 #endif
 
+template <typename value_t>
+size_t matmul_scalar_workspace_size(linalg_int rows, linalg_int columns, linalg_int depth)
+{
+#if !defined(LINALG_VECTORIZED)
+    (void)rows;
+    (void)columns;
+    (void)depth;
+    return 0;
+#else
+    if (rows + columns + depth <= 20)
+    {
+        return 0;
+    }
+    auto kc = depth;
+    auto mc = rows;
+    auto nc = columns;
+    blocking_sizes<value_t>(kc, mc, nc, 1);
+    mc = std::min<linalg_int>(rows, mc);
+    nc = std::min<linalg_int>(columns, nc);
+    detail::workspace_arena arena;
+    arena.next<value_t>(static_cast<size_t>(mc) * static_cast<size_t>(kc));
+    arena.next<value_t>(static_cast<size_t>(kc) * static_cast<size_t>(nc));
+    if (rows != columns)
+    {
+        arena.next<value_t>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+    }
+    return arena.total_size();
+#endif
+}
+
 template <typename value_t, bool transpose_a, bool transpose_b>
 void matrix_multiplication_seq(  // NOLINT
-    linalg_int   rows,
-    linalg_int   columns,
-    linalg_int   depth,
+    linalg_int     rows,
+    linalg_int     columns,
+    linalg_int     depth,
     value_t const* a,
-    linalg_int   lda,
+    linalg_int     lda,
     value_t const* b,
-    linalg_int   ldb,
+    linalg_int     ldb,
     value_t*       c,
-    linalg_int   ldc)
+    linalg_int     ldc,
+    void*          workspace,
+    size_t         workspace_size)
 {
+#if !defined(LINALG_VECTORIZED)
+    (void)workspace;
+    (void)workspace_size;
+#endif
 #if defined(LINALG_VECTORIZED)
     if (rows + columns + depth > 20)
     {
@@ -1590,14 +1626,15 @@ void matrix_multiplication_seq(  // NOLINT
         mc = std::min<linalg_int>(rows, mc);     // cache block size along the M direction
         nc = std::min<linalg_int>(columns, nc);  // cache block size along the N direction
 
-        linalg_int sizeA = mc * kc;  // NOLINT
-        linalg_int sizeB = kc * nc;  // NOLINT
+        const size_t count_a = static_cast<size_t>(mc) * static_cast<size_t>(kc);
+        const size_t count_b = static_cast<size_t>(kc) * static_cast<size_t>(nc);
 
-        using allocator_t = allocator<value_t>;
-
-        value_t* block_A = allocator_t::allocate(sizeA);
-        value_t* block_B = allocator_t::allocate(sizeB);
-        value_t* result  = rows == columns ? c : allocator_t::allocate(rows * columns);
+        LOGGING_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(rows, columns, depth),
+            "matrix_multiplication: workspace_size too small");
+        detail::workspace_arena arena(workspace, workspace_size);
+        value_t*                 block_A = arena.next<value_t>(count_a);
+        value_t*                 block_B = arena.next<value_t>(count_b);
+        value_t*                 result  = rows == columns ? c : arena.next<value_t>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
 
         std::fill_n(result, rows * columns, 0.);
 
@@ -1670,8 +1707,6 @@ void matrix_multiplication_seq(  // NOLINT
                     element<value_t, false>(c, i, j, columns) = element<value_t>(result, i, j, ldc);
                 }
             }
-
-            allocator_t::free(result);
         }
         else
         {
@@ -1686,9 +1721,6 @@ void matrix_multiplication_seq(  // NOLINT
                 }
             }
         }
-
-        allocator_t::free(block_B);
-        allocator_t::free(block_A);
     }
     else
 #endif
@@ -1781,7 +1813,9 @@ void matmul_scalar_f32(bool transpose_a,
     float const*            b,
     linalg_int            ldb,
     float*                  c,
-    linalg_int            ldc)
+    linalg_int            ldc,
+    void*                   workspace,
+    size_t                  workspace_size)
 {
 #if defined(LINALG_VECTORIZED)
 
@@ -1795,7 +1829,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (transpose_a && !transpose_b)
     {
@@ -1807,7 +1843,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (!transpose_a && transpose_b)
     {
@@ -1819,7 +1857,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (!transpose_a && !transpose_b)
     {
@@ -1831,7 +1871,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
 #else
     if (transpose_a && transpose_b)
@@ -1844,7 +1886,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (transpose_a && !transpose_b)
     {
@@ -1856,7 +1900,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (!transpose_a && transpose_b)
     {
@@ -1868,7 +1914,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (!transpose_a && !transpose_b)
     {
@@ -1880,7 +1928,9 @@ void matmul_scalar_f32(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
 #endif
 }
@@ -1895,7 +1945,9 @@ void matmul_scalar_f64(bool transpose_a,
     double const*           b,
     linalg_int            ldb,
     double*                 c,
-    linalg_int            ldc)
+    linalg_int            ldc,
+    void*                   workspace,
+    size_t                  workspace_size)
 {
     if (transpose_a && transpose_b)
     {
@@ -1907,7 +1959,9 @@ void matmul_scalar_f64(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (transpose_a && !transpose_b)
     {
@@ -1919,7 +1973,9 @@ void matmul_scalar_f64(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (!transpose_a && transpose_b)
     {
@@ -1931,7 +1987,9 @@ void matmul_scalar_f64(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
     if (!transpose_a && !transpose_b)
     {
@@ -1943,7 +2001,9 @@ void matmul_scalar_f64(bool transpose_a,
             b,
             static_cast<linalg_int>(ldb),
             c,
-            static_cast<linalg_int>(ldc));
+            static_cast<linalg_int>(ldc),
+            workspace,
+            workspace_size);
     }
 }
 
@@ -1955,6 +2015,32 @@ void matmul_scalar_f64(bool transpose_a,
 
 }  // namespace detail
 
+size_t matrix_multiplication_workspace_size(
+    const float* /*type_tag*/, linalg_int rows, linalg_int columns, linalg_int depth)
+{
+#if defined(LINALG_ENABLE_MKL) || defined(LINALG_ENABLE_BLAS)
+    (void)rows;
+    (void)columns;
+    (void)depth;
+    return 0;
+#else
+    return detail::matmul_scalar_workspace_size<float>(rows, columns, depth);
+#endif
+}
+
+size_t matrix_multiplication_workspace_size(
+    const double* /*type_tag*/, linalg_int rows, linalg_int columns, linalg_int depth)
+{
+#if defined(LINALG_ENABLE_MKL) || defined(LINALG_ENABLE_BLAS)
+    (void)rows;
+    (void)columns;
+    (void)depth;
+    return 0;
+#else
+    return detail::matmul_scalar_workspace_size<double>(rows, columns, depth);
+#endif
+}
+
 void matrix_multiplication(bool transpose_a,
     bool                        transpose_b,
     linalg_int                rows,
@@ -1965,17 +2051,23 @@ void matrix_multiplication(bool transpose_a,
     float const*                b,
     linalg_int                ldb,
     float*                      c,
-    linalg_int                ldc)
+    linalg_int                ldc,
+    void*                       workspace,
+    size_t                      workspace_size)
 {
     LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
     LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
 #if defined(LINALG_ENABLE_MKL)
+    (void)workspace;
+    (void)workspace_size;
     detail::matmul_mkl_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #elif defined(LINALG_ENABLE_BLAS)
+    (void)workspace;
+    (void)workspace_size;
     detail::matmul_blas_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #else
     detail::matmul_scalar_f32(
-        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
+        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc, workspace, workspace_size);
 #endif
 }
 
@@ -1989,17 +2081,23 @@ void matrix_multiplication(bool transpose_a,
     double const*               b,
     linalg_int                ldb,
     double*                     c,
-    linalg_int                ldc)
+    linalg_int                ldc,
+    void*                       workspace,
+    size_t                      workspace_size)
 {
     LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
     LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
 #if defined(LINALG_ENABLE_MKL)
+    (void)workspace;
+    (void)workspace_size;
     detail::matmul_mkl_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #elif defined(LINALG_ENABLE_BLAS)
+    (void)workspace;
+    (void)workspace_size;
     detail::matmul_blas_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
 #else
     detail::matmul_scalar_f64(
-        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
+        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc, workspace, workspace_size);
 #endif
 }
 

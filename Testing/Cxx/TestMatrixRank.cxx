@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <vector>
 
 #include "dense_matrix_test_helper.h"
 #include "gtest/gtest.h"
@@ -21,11 +22,17 @@ template <typename value_t> void test_rank_full(std::size_t rows, std::size_t co
         }
     }
 
+    const auto ws_size = linalg::matrix_rank_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
     const auto rank = linalg::matrix_rank(
         A.begin(),
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
-        static_cast<linalg_long>(columns));
+        static_cast<linalg_long>(columns),
+        static_cast<value_t>(-1),
+        ws.data(),
+        ws_size);
     EXPECT_EQ(rank, static_cast<linalg_long>(std::min(rows, columns)));
 }
 
@@ -49,8 +56,12 @@ template <typename value_t> void test_rank_deficient(std::size_t n)
         }
     }
 
-    const auto rank = linalg::matrix_rank(
-        A.begin(), static_cast<linalg_long>(n), static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    const auto ws_size = linalg::matrix_rank_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    std::vector<unsigned char> ws(ws_size);
+    const auto rank = linalg::matrix_rank(A.begin(), static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n), static_cast<linalg_long>(n), static_cast<value_t>(-1), ws.data(),
+        ws_size);
     EXPECT_EQ(rank, static_cast<linalg_long>(1));
 }
 
@@ -61,8 +72,11 @@ template <typename value_t> void test_condition_number_identity(std::size_t n)
     {
         I(i, i) = value_t(1);
     }
-    const auto cond = linalg::matrix_condition_number(
-        I.begin(), static_cast<linalg_long>(n), static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    const auto ws_size = linalg::matrix_rank_workspace_size(
+        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    std::vector<unsigned char> ws(ws_size);
+    const auto cond = linalg::matrix_condition_number(I.begin(), static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n), static_cast<linalg_long>(n), ws.data(), ws_size);
     EXPECT_NEAR(static_cast<double>(cond), 1.0, 1e-3);
 }
 }  // namespace

@@ -13,6 +13,14 @@ namespace linalg
 // runtime dispatch or per-call backend override. For device (CUDA) pointers,
 // see linalg::gpu::svd_decomposition in
 // include/matrix_operation_gpu/svd_decomposition_gpu.h.
+// `workspace` must point to at least `svd_decomposition_workspace_size(
+// type_tag, rows, columns)` bytes of caller-owned host memory (the library
+// never allocates its own memory — see include/common/workspace_arena.h).
+LINALG_API size_t svd_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t svd_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void svd_decomposition(
     linalg_long rows,
     linalg_long columns,
@@ -22,7 +30,9 @@ LINALG_API void svd_decomposition(
     float*      U,
     linalg_long ldu,
     float*      VT,
-    linalg_long ldv);
+    linalg_long ldv,
+    void*       workspace,
+    size_t      workspace_size);
 
 LINALG_API void svd_decomposition(
     linalg_long rows,
@@ -33,6 +43,8 @@ LINALG_API void svd_decomposition(
     double*     U,
     linalg_long ldu,
     double*     VT,
-    linalg_long ldv);
+    linalg_long ldv,
+    void*       workspace,
+    size_t      workspace_size);
 
 }  // namespace linalg

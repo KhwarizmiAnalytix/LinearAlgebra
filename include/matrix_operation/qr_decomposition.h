@@ -19,6 +19,14 @@ namespace linalg
 // backend override. For device (CUDA) pointers, see
 // linalg::gpu::qr_decomposition in
 // include/matrix_operation_gpu/qr_decomposition_gpu.h.
+// `workspace` must point to at least `qr_decomposition_workspace_size(
+// type_tag, rows, columns)` bytes of caller-owned host memory (the library
+// never allocates its own memory — see include/common/workspace_arena.h).
+LINALG_API size_t qr_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t qr_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void qr_decomposition(
     linalg_long rows,
     linalg_long columns,
@@ -27,7 +35,9 @@ LINALG_API void qr_decomposition(
     float*        Q,
     linalg_long ldq,
     float*        R,
-    linalg_long ldr);
+    linalg_long ldr,
+    void*         workspace,
+    size_t        workspace_size);
 
 LINALG_API void qr_decomposition(
     linalg_long rows,
@@ -37,6 +47,8 @@ LINALG_API void qr_decomposition(
     double*       Q,
     linalg_long ldq,
     double*       R,
-    linalg_long ldr);
+    linalg_long ldr,
+    void*         workspace,
+    size_t        workspace_size);
 
 }  // namespace linalg
