@@ -37,6 +37,16 @@ namespace gpu
 // note). Use the CPU linalg::eigenvalue_decomposition
 // (include/matrix_operation/eigenvalue_decomposition.h) for the general
 // case.
+// `workspace` must point to at least
+// `symmetric_eigenvalue_decomposition_workspace_size(type_tag, n)` bytes of
+// caller-owned device memory (the library never allocates its own GPU
+// memory); keep it alive and unmodified until work queued on `stream` has
+// completed.
+LINALG_API size_t symmetric_eigenvalue_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_int n);
+LINALG_API size_t symmetric_eigenvalue_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_int n);
+
 LINALG_API void symmetric_eigenvalue_decomposition(const float* A,
     linalg_int                                                n,
     linalg_int                                                lda,
@@ -44,6 +54,8 @@ LINALG_API void symmetric_eigenvalue_decomposition(const float* A,
     float*                                                      eigenvectors,
     linalg_int                                                ldv,
     int*                                                         info,
+    void*                                                        workspace,
+    size_t                                                       workspace_size,
     cudaStream_t                                                stream = nullptr);
 
 LINALG_API void symmetric_eigenvalue_decomposition(const double* A,
@@ -53,6 +65,8 @@ LINALG_API void symmetric_eigenvalue_decomposition(const double* A,
     double*                                                      eigenvectors,
     linalg_int                                                 ldv,
     int*                                                          info,
+    void*                                                         workspace,
+    size_t                                                        workspace_size,
     cudaStream_t                                                 stream = nullptr);
 
 }  // namespace gpu

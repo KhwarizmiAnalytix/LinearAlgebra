@@ -28,11 +28,24 @@ namespace gpu
 // rows x columns matrix.
 //
 // RESTRICTION (matching svd_decomposition_gpu): `lda` must equal `columns`.
+// `workspace` must point to at least `matrix_norm_workspace_size(type_tag,
+// rows, columns, type)` bytes of caller-owned device memory (the library
+// never allocates its own GPU memory) — the size depends on `type` since
+// each norm variant needs different scratch (FROBENIUS needs none; TWO
+// needs the most, including the workspace the internal svd_decomposition
+// call needs).
+LINALG_API size_t matrix_norm_workspace_size(const float* /*type_tag*/, linalg_long rows,
+    linalg_long columns, matrix_norm_type type);
+LINALG_API size_t matrix_norm_workspace_size(const double* /*type_tag*/, linalg_long rows,
+    linalg_long columns, matrix_norm_type type);
+
 LINALG_API float matrix_norm(const float* A,
     linalg_long                        rows,
     linalg_long                        columns,
     linalg_long                        lda,
     matrix_norm_type                     type,
+    void*                                 workspace,
+    size_t                                workspace_size,
     cudaStream_t                         stream = nullptr);
 
 LINALG_API double matrix_norm(const double* A,
@@ -40,6 +53,8 @@ LINALG_API double matrix_norm(const double* A,
     linalg_long                         columns,
     linalg_long                         lda,
     matrix_norm_type                      type,
+    void*                                  workspace,
+    size_t                                 workspace_size,
     cudaStream_t                          stream = nullptr);
 
 }  // namespace gpu

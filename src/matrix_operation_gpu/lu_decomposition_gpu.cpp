@@ -6,6 +6,7 @@
 #include <cusolverDn.h>
 
 #include "include/common/cuda_handle.h"
+#include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
@@ -14,8 +15,61 @@ namespace linalg
 {
 namespace gpu
 {
+namespace
+{
 
-void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, cudaStream_t stream)
+// Two scratch buffers: cuSOLVER's own getrf workspace, and the n x n
+// transpose scratch the pre/post getrf transposes need (detail::
+// transpose_device, matrix_transpose_gpu.cpp — reused across both calls
+// since they run sequentially on the same stream). Shared by the size query
+// and the real call so they can never disagree on layout (see
+// include/common/cuda_workspace.h).
+template <typename T>
+struct lu_decomposition_layout
+{
+    T* workspace;
+    T* transpose_scratch;
+};
+
+template <typename T>
+lu_decomposition_layout<T> lu_decomposition_plan(detail::workspace_arena& arena, int lwork, int n)
+{
+    lu_decomposition_layout<T> p;
+    p.workspace         = arena.next<T>(static_cast<size_t>(lwork));
+    p.transpose_scratch = arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    return p;
+}
+
+}  // namespace
+
+size_t lu_decomposition_workspace_size(const float* /*type_tag*/, linalg_int lda)
+{
+    LOGGING_CHECK(lda > 0, "lu_decomposition_workspace_size: lda must be positive", lda);
+    const auto n      = detail::checked_narrow<int>(lda);
+    auto       handle = detail::cusolver_handle_for_current_device();
+    int        lwork  = 0;
+    LOGGING_CHECK(cusolverDnSgetrf_bufferSize(handle, n, n, nullptr, n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+        "cusolverDnSgetrf_bufferSize failed");
+    detail::workspace_arena arena;
+    lu_decomposition_plan<float>(arena, lwork, n);
+    return arena.total_size();
+}
+
+size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int lda)
+{
+    LOGGING_CHECK(lda > 0, "lu_decomposition_workspace_size: lda must be positive", lda);
+    const auto n      = detail::checked_narrow<int>(lda);
+    auto       handle = detail::cusolver_handle_for_current_device();
+    int        lwork  = 0;
+    LOGGING_CHECK(cusolverDnDgetrf_bufferSize(handle, n, n, nullptr, n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+        "cusolverDnDgetrf_bufferSize failed");
+    detail::workspace_arena arena;
+    lu_decomposition_plan<double>(arena, lwork, n);
+    return arena.total_size();
+}
+
+void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
     LOGGING_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
     LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
@@ -26,12 +80,10 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, cudaStrea
     int lwork = 0;
     LOGGING_CHECK(!(cusolverDnSgetrf_bufferSize(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDnSgetrf_bufferSize failed");
 
-    float* workspace = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&workspace),
-            sizeof(float) * static_cast<size_t>(lwork)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(workspace_size >= lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda),
+        "lu_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto               bufs = lu_decomposition_plan<float>(arena, lwork, n);
 
     // cuSOLVER is column-major: transposing the row-major buffer first
     // (device-to-device, matrix_transpose_gpu.cpp) makes its column-major
@@ -41,18 +93,16 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, cudaStrea
     // lapacke_?getrf's convention exactly. Transposing the packed L\U result
     // back afterward converts cuSOLVER's column-major packed output into
     // the row-major packed layout callers expect.
-    matrix_transpose(lda, lda, m, stream);
+    detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 
-    const auto  status      = cusolverDnSgetrf(handle, n, n, m, n, workspace, pivot, info);
-    cudaError_t sync_status = cudaSuccess;
-    detail::synchronize_and_free(workspace, stream, &sync_status);
+    const auto status = cusolverDnSgetrf(handle, n, n, m, n, bufs.workspace, pivot, info);
     LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDnSgetrf failed");
-    LOGGING_CHECK(!(sync_status != cudaSuccess), "cudaStreamSynchronize failed");
 
-    matrix_transpose(lda, lda, m, stream);
+    detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 }
 
-void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, cudaStream_t stream)
+void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
     LOGGING_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
     LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
@@ -63,24 +113,19 @@ void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, cudaStre
     int lwork = 0;
     LOGGING_CHECK(!(cusolverDnDgetrf_bufferSize(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDnDgetrf_bufferSize failed");
 
-    double* workspace = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&workspace),
-            sizeof(double) * static_cast<size_t>(lwork)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(workspace_size >= lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda),
+        "lu_decomposition: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto               bufs = lu_decomposition_plan<double>(arena, lwork, n);
 
     // See the float overload above for why the transpose-getrf-transpose
     // sequence is needed.
-    matrix_transpose(lda, lda, m, stream);
+    detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 
-    const auto  status      = cusolverDnDgetrf(handle, n, n, m, n, workspace, pivot, info);
-    cudaError_t sync_status = cudaSuccess;
-    detail::synchronize_and_free(workspace, stream, &sync_status);
+    const auto status = cusolverDnDgetrf(handle, n, n, m, n, bufs.workspace, pivot, info);
     LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDnDgetrf failed");
-    LOGGING_CHECK(!(sync_status != cudaSuccess), "cudaStreamSynchronize failed");
 
-    matrix_transpose(lda, lda, m, stream);
+    detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 }
 
 }  // namespace gpu

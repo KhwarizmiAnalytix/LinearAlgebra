@@ -7,6 +7,7 @@
 #include <cuda_runtime_api.h>
 
 #include "include/common/cuda_handle.h"
+#include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
@@ -95,113 +96,105 @@ T reduce_max(AmaxFn amax, const T* values, int n, cudaStream_t stream)
     return result;
 }
 
+template <typename T>
+size_t matrix_norm_workspace_size_impl(linalg_long rows, linalg_long columns, matrix_norm_type type)
+{
+    const auto               c = detail::checked_narrow<int>(columns);
+    const auto               r = detail::checked_narrow<int>(rows);
+    detail::workspace_arena arena;
+    switch (type)
+    {
+    case matrix_norm_type::FROBENIUS:
+        break;
+    case matrix_norm_type::ONE:
+        arena.next<T>(static_cast<size_t>(c));
+        break;
+    case matrix_norm_type::INFINITY_NORM:
+        arena.next<T>(static_cast<size_t>(r));
+        break;
+    case matrix_norm_type::TWO:
+    {
+        const auto k         = std::min(rows, columns);
+        const auto svd_bytes = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
+        arena.next<T>(static_cast<size_t>(k));
+        arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(k));
+        arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(columns));
+        arena.next<int>(1);
+        arena.next<unsigned char>(svd_bytes);
+        break;
+    }
+    default:
+        LOGGING_THROW("unsupported matrix_norm_type", static_cast<linalg_int>(type));
+    }
+    return arena.total_size();
+}
+
 template <typename T, typename AmaxFn>
-T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaStream_t stream)
+T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
 
-    T* col_sums = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&col_sums), sizeof(T) * static_cast<size_t>(c)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, matrix_norm_type::ONE),
+        "matrix_norm: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    T*                        col_sums = arena.next<T>(static_cast<size_t>(c));
+
     const dim3 block(256);
     const dim3 grid((static_cast<unsigned>(c) + block.x - 1) / block.x);
     abs_col_sum_kernel<T><<<grid, block, 0, stream>>>(A, r, c, col_sums);
-    if (cudaGetLastError() != cudaSuccess)
-    {
-        cudaFree(col_sums);
-        LOGGING_THROW("abs_col_sum_kernel launch failed");
-    }
-    const T result = reduce_max(amax, col_sums, c, stream);
-    cudaFree(col_sums);
-    return result;
+    LOGGING_CHECK(cudaGetLastError() == cudaSuccess, "abs_col_sum_kernel launch failed");
+    return reduce_max(amax, col_sums, c, stream);
 }
 
 template <typename T, typename AmaxFn>
-T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaStream_t stream)
+T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
 
-    T* row_sums = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&row_sums), sizeof(T) * static_cast<size_t>(r)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, matrix_norm_type::INFINITY_NORM),
+        "matrix_norm: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    T*                        row_sums = arena.next<T>(static_cast<size_t>(r));
+
     const dim3 block(256);
     const dim3 grid((static_cast<unsigned>(r) + block.x - 1) / block.x);
     abs_row_sum_kernel<T><<<grid, block, 0, stream>>>(A, r, c, row_sums);
-    if (cudaGetLastError() != cudaSuccess)
-    {
-        cudaFree(row_sums);
-        LOGGING_THROW("abs_row_sum_kernel launch failed");
-    }
-    const T result = reduce_max(amax, row_sums, r, stream);
-    cudaFree(row_sums);
-    return result;
+    LOGGING_CHECK(cudaGetLastError() == cudaSuccess, "abs_row_sum_kernel launch failed");
+    return reduce_max(amax, row_sums, r, stream);
 }
 
 template <typename T, typename AmaxFn>
-T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, cudaStream_t stream)
+T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
-    const auto k = std::min(rows, columns);
+    const auto k         = std::min(rows, columns);
+    const auto svd_bytes = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
 
-    T*  S    = nullptr;
-    T*  U    = nullptr;
-    T*  VT   = nullptr;
-    int* info = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&S), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
-    if (cudaMalloc(reinterpret_cast<void**>(&U),
-            sizeof(T) * static_cast<size_t>(rows) * static_cast<size_t>(k)) != cudaSuccess)
-    {
-        cudaFree(S);
-        LOGGING_THROW("cudaMalloc failed");
-    }
-    if (cudaMalloc(reinterpret_cast<void**>(&VT),
-            sizeof(T) * static_cast<size_t>(k) * static_cast<size_t>(columns)) != cudaSuccess)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        LOGGING_THROW("cudaMalloc failed");
-    }
-    if (cudaMalloc(reinterpret_cast<void**>(&info), sizeof(int)) != cudaSuccess)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        cudaFree(VT);
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, matrix_norm_type::TWO),
+        "matrix_norm: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    T*                        S    = arena.next<T>(static_cast<size_t>(k));
+    T*                        U    = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(k));
+    T*                        VT   = arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(columns));
+    int*                       info = arena.next<int>(1);
+    unsigned char*              svd_workspace = arena.next<unsigned char>(svd_bytes);
 
-    svd_decomposition(rows, columns, A, columns, S, U, k, VT, columns, info, stream);
+    svd_decomposition(rows, columns, A, columns, S, U, k, VT, columns, info, svd_workspace,
+        svd_bytes, stream);
 
     int svd_status = -1;
     const auto info_copy_status =
         cudaMemcpyAsync(&svd_status, info, sizeof(int), cudaMemcpyDeviceToHost, stream);
-    // U/VT are unused here (only the singular values matter), but they are
-    // still being written by svd_decomposition's own asynchronous work on
-    // `stream` until this sync — freeing them any earlier would race it.
     const auto sync_status = cudaStreamSynchronize(stream);
-    cudaFree(U);
-    cudaFree(VT);
-    cudaFree(info);
-    if (info_copy_status != cudaSuccess || sync_status != cudaSuccess)
-    {
-        cudaFree(S);
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
-    }
-    if (svd_status != 0)
-    {
-        cudaFree(S);
-        LOGGING_THROW("linalg::gpu::svd_decomposition failed", svd_status);
-    }
+    LOGGING_CHECK(!(info_copy_status != cudaSuccess) && !(sync_status != cudaSuccess),
+        "cudaMemcpyAsync/cudaStreamSynchronize failed");
+    LOGGING_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed", svd_status);
 
     const T result = reduce_max(amax, S, detail::checked_narrow<int>(k), stream);
-    cudaFree(S);
     return (result < T(0)) ? -result : result;
 }
 
@@ -213,6 +206,8 @@ T matrix_norm_impl(Nrm2Fn nrm2,
     linalg_long         columns,
     linalg_long         lda,
     matrix_norm_type      type,
+    void*                 workspace,
+    size_t                workspace_size,
     cudaStream_t          stream)
 {
     if (A == nullptr)
@@ -233,11 +228,11 @@ T matrix_norm_impl(Nrm2Fn nrm2,
     case matrix_norm_type::FROBENIUS:
         return norm_frobenius(nrm2, A, rows, columns, stream);
     case matrix_norm_type::ONE:
-        return norm_one(amax, A, rows, columns, stream);
+        return norm_one(amax, A, rows, columns, workspace, workspace_size, stream);
     case matrix_norm_type::INFINITY_NORM:
-        return norm_infinity(amax, A, rows, columns, stream);
+        return norm_infinity(amax, A, rows, columns, workspace, workspace_size, stream);
     case matrix_norm_type::TWO:
-        return norm_two(amax, A, rows, columns, stream);
+        return norm_two(amax, A, rows, columns, workspace, workspace_size, stream);
     default:
         LOGGING_THROW("unsupported matrix_norm_type", static_cast<linalg_int>(type));
     }
@@ -245,18 +240,30 @@ T matrix_norm_impl(Nrm2Fn nrm2,
 
 }  // namespace
 
-float matrix_norm(
-    const float* A, linalg_long rows, linalg_long columns, linalg_long lda, matrix_norm_type type,
-    cudaStream_t stream)
+size_t matrix_norm_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns,
+    matrix_norm_type type)
 {
-    return matrix_norm_impl(cublasSnrm2, cublasIsamax, A, rows, columns, lda, type, stream);
+    return matrix_norm_workspace_size_impl<float>(rows, columns, type);
 }
 
-double matrix_norm(
-    const double* A, linalg_long rows, linalg_long columns, linalg_long lda, matrix_norm_type type,
-    cudaStream_t stream)
+size_t matrix_norm_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns,
+    matrix_norm_type type)
 {
-    return matrix_norm_impl(cublasDnrm2, cublasIdamax, A, rows, columns, lda, type, stream);
+    return matrix_norm_workspace_size_impl<double>(rows, columns, type);
+}
+
+float matrix_norm(const float* A, linalg_long rows, linalg_long columns, linalg_long lda,
+    matrix_norm_type type, void* workspace, size_t workspace_size, cudaStream_t stream)
+{
+    return matrix_norm_impl(
+        cublasSnrm2, cublasIsamax, A, rows, columns, lda, type, workspace, workspace_size, stream);
+}
+
+double matrix_norm(const double* A, linalg_long rows, linalg_long columns, linalg_long lda,
+    matrix_norm_type type, void* workspace, size_t workspace_size, cudaStream_t stream)
+{
+    return matrix_norm_impl(
+        cublasDnrm2, cublasIdamax, A, rows, columns, lda, type, workspace, workspace_size, stream);
 }
 
 }  // namespace gpu

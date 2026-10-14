@@ -4,6 +4,7 @@
 
 #include <cuda_runtime_api.h>
 
+#include "include/common/cuda_workspace.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
@@ -33,7 +34,16 @@ namespace gpu
 namespace
 {
 
-template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int lda, cudaStream_t stream)
+template <typename T> size_t matrix_trace_workspace_size_impl()
+{
+    detail::workspace_arena arena;
+    arena.next<T>(1);
+    return arena.total_size();
+}
+
+template <typename T>
+T matrix_trace_impl(const T* A, linalg_int n, linalg_int lda, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
     if (A == nullptr)
     {
@@ -47,12 +57,11 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
     {
         LOGGING_THROW("linalg::gpu::matrix_trace requires tightly packed lda (lda == n)");
     }
+    LOGGING_CHECK(workspace_size >= matrix_trace_workspace_size_impl<T>(),
+        "matrix_trace: workspace_size too small");
 
-    T* dev_sum = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&dev_sum), sizeof(T)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    detail::workspace_arena arena(workspace, workspace_size);
+    T*                               dev_sum = arena.next<T>(1);
 
     trace_kernel<T><<<1, 1, 0, stream>>>(A, detail::checked_narrow<int>(n), dev_sum);
     const auto launch_err = cudaGetLastError();
@@ -60,7 +69,6 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
     T          sum = T(0);
     const auto copy_status = cudaMemcpyAsync(&sum, dev_sum, sizeof(T), cudaMemcpyDeviceToHost, stream);
     const auto sync_status = cudaStreamSynchronize(stream);
-    cudaFree(dev_sum);
 
     if (launch_err != cudaSuccess)
     {
@@ -75,14 +83,26 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 
 }  // namespace
 
-float matrix_trace(const float* A, linalg_int n, linalg_int lda, cudaStream_t stream)
+size_t matrix_trace_workspace_size(const float* /*type_tag*/)
 {
-    return matrix_trace_impl(A, n, lda, stream);
+    return matrix_trace_workspace_size_impl<float>();
 }
 
-double matrix_trace(const double* A, linalg_int n, linalg_int lda, cudaStream_t stream)
+size_t matrix_trace_workspace_size(const double* /*type_tag*/)
 {
-    return matrix_trace_impl(A, n, lda, stream);
+    return matrix_trace_workspace_size_impl<double>();
+}
+
+float matrix_trace(const float* A, linalg_int n, linalg_int lda, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
+{
+    return matrix_trace_impl(A, n, lda, workspace, workspace_size, stream);
+}
+
+double matrix_trace(const double* A, linalg_int n, linalg_int lda, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
+{
+    return matrix_trace_impl(A, n, lda, workspace, workspace_size, stream);
 }
 
 }  // namespace gpu

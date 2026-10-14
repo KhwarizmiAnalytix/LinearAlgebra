@@ -29,16 +29,30 @@ namespace gpu
 // on a device synchronization. `stream` (default: the legacy default
 // stream) is the CUDA stream every underlying cuSOLVER/cuBLAS call and
 // device-to-device copy is issued on.
+// `workspace` must point to at least
+// `matrix_invert_workspace_size(type_tag, lda, type)` bytes of caller-owned
+// device memory (the library never allocates its own GPU memory); the
+// caller must keep it alive and unmodified until work queued on `stream`
+// has completed.
+LINALG_API size_t matrix_invert_workspace_size(
+    const float* /*type_tag*/, linalg_int lda, linear_solver_type type);
+LINALG_API size_t matrix_invert_workspace_size(
+    const double* /*type_tag*/, linalg_int lda, linear_solver_type type);
+
 LINALG_API void matrix_invert(float* m,
     linalg_int                     lda,
     int*                             info,
-    linear_solver_type               type   = linear_solver_type::LU_LINEAR_SOLVER,
+    linear_solver_type               type,
+    void*                            workspace,
+    size_t                           workspace_size,
     cudaStream_t                     stream = nullptr);
 
 LINALG_API void matrix_invert(double* m,
     linalg_int                      lda,
     int*                              info,
-    linear_solver_type                type   = linear_solver_type::LU_LINEAR_SOLVER,
+    linear_solver_type                type,
+    void*                             workspace,
+    size_t                            workspace_size,
     cudaStream_t                      stream = nullptr);
 
 // `m` is a CUDA device pointer; only available when built with
@@ -53,14 +67,27 @@ LINALG_API void matrix_invert(double* m,
 // returning by value means the result must actually be known on return,
 // not deferred to a caller-side synchronization the way `info` is
 // elsewhere in this API.
+// `workspace` must point to at least
+// `matrix_determinant_workspace_size(type_tag, lda, type)` bytes of
+// caller-owned device memory (the library never allocates its own GPU
+// memory).
+LINALG_API size_t matrix_determinant_workspace_size(
+    const float* /*type_tag*/, linalg_int lda, linear_solver_type type);
+LINALG_API size_t matrix_determinant_workspace_size(
+    const double* /*type_tag*/, linalg_int lda, linear_solver_type type);
+
 LINALG_API float matrix_determinant(float* m,
     linalg_int                           lda,
-    linear_solver_type                     type   = linear_solver_type::LU_LINEAR_SOLVER,
+    linear_solver_type                     type,
+    void*                                   workspace,
+    size_t                                  workspace_size,
     cudaStream_t                           stream = nullptr);
 
 LINALG_API double matrix_determinant(double* m,
     linalg_int                             lda,
-    linear_solver_type                       type   = linear_solver_type::LU_LINEAR_SOLVER,
+    linear_solver_type                       type,
+    void*                                     workspace,
+    size_t                                    workspace_size,
     cudaStream_t                             stream = nullptr);
 
 }  // namespace gpu

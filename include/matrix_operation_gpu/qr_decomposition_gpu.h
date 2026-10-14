@@ -31,6 +31,16 @@ namespace gpu
 // synchronization. `stream` (default: the legacy default stream) is the
 // CUDA stream every underlying cuSOLVER call and device-to-device copy is
 // issued on.
+// `workspace` must point to at least
+// `qr_decomposition_workspace_size(type_tag, rows, columns)` bytes of
+// caller-owned device memory (the library never allocates its own GPU
+// memory); keep it alive and unmodified until work queued on `stream` has
+// completed.
+LINALG_API size_t qr_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t qr_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void qr_decomposition(linalg_long rows,
     linalg_long                              columns,
     const float*                               A,
@@ -40,6 +50,8 @@ LINALG_API void qr_decomposition(linalg_long rows,
     float*                                     R,
     linalg_long                              ldr,
     int*                                       info,
+    void*                                      workspace,
+    size_t                                     workspace_size,
     cudaStream_t                               stream = nullptr);
 
 LINALG_API void qr_decomposition(linalg_long rows,
@@ -51,6 +63,8 @@ LINALG_API void qr_decomposition(linalg_long rows,
     double*                                    R,
     linalg_long                              ldr,
     int*                                       info,
+    void*                                       workspace,
+    size_t                                      workspace_size,
     cudaStream_t                               stream = nullptr);
 
 }  // namespace gpu

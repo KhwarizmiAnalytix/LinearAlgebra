@@ -21,16 +21,30 @@ namespace gpu
 // own stream) only when/if you need the result, rather than paying that
 // latency on every call. `stream` (default: the legacy default stream) is
 // the CUDA stream the underlying cuSOLVER call is issued on.
+// `workspace` must point to at least
+// `cholesky_decomposition_workspace_size(type_tag, lda, type)` bytes of
+// caller-owned device memory (the library never allocates its own GPU
+// memory); keep it alive and unmodified until work queued on `stream` has
+// completed.
+LINALG_API size_t cholesky_decomposition_workspace_size(
+    const float* /*type_tag*/, linalg_int lda, linalg::cholesky_decomposition_enum type);
+LINALG_API size_t cholesky_decomposition_workspace_size(
+    const double* /*type_tag*/, linalg_int lda, linalg::cholesky_decomposition_enum type);
+
 LINALG_API void cholesky_decomposition(float* C,
     linalg_int                              lda,
     linalg::cholesky_decomposition_enum       type,
     int*                                      info,
+    void*                                     workspace,
+    size_t                                    workspace_size,
     cudaStream_t                              stream = nullptr);
 
 LINALG_API void cholesky_decomposition(double* C,
     linalg_int                               lda,
     linalg::cholesky_decomposition_enum        type,
     int*                                       info,
+    void*                                      workspace,
+    size_t                                     workspace_size,
     cudaStream_t                               stream = nullptr);
 
 }  // namespace gpu

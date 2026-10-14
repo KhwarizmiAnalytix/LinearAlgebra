@@ -21,6 +21,17 @@ namespace gpu
 // RESTRICTION (matching pseudo_inverse_gpu / svd_decomposition_gpu): `lda`
 // must equal `columns`, `ldb` must equal `nrhs`, and `ldx` must equal
 // `nrhs` — every buffer must be tightly packed row-major with no padding.
+// `workspace` must point to at least
+// `least_squares_solve_workspace_size(type_tag, rows, columns)` bytes of
+// caller-owned device memory (the library never allocates its own GPU
+// memory; this includes the workspace the internal pseudo_inverse call
+// needs); keep it alive and unmodified until work queued on `stream` has
+// completed.
+LINALG_API size_t least_squares_solve_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t least_squares_solve_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void least_squares_solve(linalg_long rows,
     linalg_long                                 columns,
     linalg_long                                 nrhs,
@@ -30,6 +41,8 @@ LINALG_API void least_squares_solve(linalg_long rows,
     linalg_long                                 ldb,
     float*                                        X,
     linalg_long                                 ldx,
+    void*                                          workspace,
+    size_t                                         workspace_size,
     cudaStream_t                                  stream = nullptr);
 
 LINALG_API void least_squares_solve(linalg_long rows,
@@ -41,6 +54,8 @@ LINALG_API void least_squares_solve(linalg_long rows,
     linalg_long                                 ldb,
     double*                                       X,
     linalg_long                                 ldx,
+    void*                                          workspace,
+    size_t                                         workspace_size,
     cudaStream_t                                  stream = nullptr);
 
 }  // namespace gpu

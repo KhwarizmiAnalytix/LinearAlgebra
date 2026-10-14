@@ -91,25 +91,6 @@ inline void set_stream(cusolverDnHandle_t handle, cudaStream_t stream)
     }
 }
 
-// Synchronizes `stream` and frees `ptr` with plain cudaFree. Plain cudaFree
-// is not stream-ordered against work still in flight on a non-default
-// stream (that is exactly what cudaFreeAsync / a stream-ordered allocator
-// exist to fix — out of scope here, see docs/gpu_backend_design.md §2/§9);
-// every op that allocates its own workspace against a caller-supplied
-// stream uses this instead of a bare cudaFree so a kernel still reading
-// `ptr` is never raced. `sync_status`, if non-null, receives
-// cudaStreamSynchronize's own result so the caller can report it without
-// masking an earlier, more specific failure.
-inline void synchronize_and_free(void* ptr, cudaStream_t stream, cudaError_t* sync_status = nullptr)
-{
-    const auto status = cudaStreamSynchronize(stream);
-    if (sync_status != nullptr)
-    {
-        *sync_status = status;
-    }
-    cudaFree(ptr);
-}
-
 }  // namespace detail
 }  // namespace linalg
 

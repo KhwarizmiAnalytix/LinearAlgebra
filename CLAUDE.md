@@ -1,6 +1,6 @@
 # LinearAlgebra
 
-Standalone C++ dense linear algebra library. Public headers live in `include/`; implementation (`.cpp`) files live in `src/`, mirroring `include/`'s layout (GPU `.cu` kernels stay under `include/matrix_operation_gpu/` alongside their headers). Tests live in `Testing/Cxx/`. Use namespace `linalg` and `LINALG_*` macros. Dependencies are under `ThirdParty/`.
+Standalone C++ dense linear algebra library. Public headers live in `include/`; implementation (`.cpp`/`.cu`) files live in `src/`, mirroring `include/`'s layout. Tests live in `Testing/Cxx/`. Use namespace `linalg` and `LINALG_*` macros. Dependencies are under `ThirdParty/`.
 
 ## Shared agent guidance
 

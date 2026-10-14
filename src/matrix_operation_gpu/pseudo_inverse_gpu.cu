@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "include/common/cuda_handle.h"
+#include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
@@ -58,6 +59,45 @@ dim3 grid_2d(int width, int height, dim3 block)
         (static_cast<unsigned>(height) + block.y - 1) / block.y);
 }
 
+template <typename T>
+struct pseudo_inverse_layout
+{
+    T*             S;
+    T*             U;
+    T*             VT;
+    int*           svd_info;
+    unsigned char* svd_workspace;
+};
+
+// `svd_workspace_bytes` buffer is handed straight to the internal
+// svd_decomposition call below as ITS workspace — carved from this same
+// arena rather than a second, nested allocation (see
+// include/common/cuda_workspace.h).
+template <typename T>
+pseudo_inverse_layout<T> pseudo_inverse_plan(
+    detail::workspace_arena& arena, int r, int c, int k, size_t svd_workspace_bytes)
+{
+    pseudo_inverse_layout<T> p;
+    p.S             = arena.next<T>(static_cast<size_t>(k));
+    p.U             = arena.next<T>(static_cast<size_t>(r) * static_cast<size_t>(k));
+    p.VT            = arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(c));
+    p.svd_info      = arena.next<int>(1);
+    p.svd_workspace = arena.next<unsigned char>(svd_workspace_bytes);
+    return p;
+}
+
+template <typename T>
+size_t pseudo_inverse_workspace_size_impl(linalg_long rows, linalg_long columns)
+{
+    const auto r            = detail::checked_narrow<int>(rows);
+    const auto c            = detail::checked_narrow<int>(columns);
+    const auto k            = std::min(r, c);
+    const auto svd_bytes    = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
+    detail::workspace_arena arena;
+    pseudo_inverse_plan<T>(arena, r, c, k, svd_bytes);
+    return arena.total_size();
+}
+
 template <typename T, typename AmaxFn>
 void pseudo_inverse_impl(AmaxFn amax,
     linalg_long              rows,
@@ -67,6 +107,8 @@ void pseudo_inverse_impl(AmaxFn amax,
     T*                         Ainv,
     linalg_long              ldai,
     T                          tol,
+    void*                      workspace,
+    size_t                     workspace_size,
     cudaStream_t               stream)
 {
     if (A == nullptr || Ainv == nullptr)
@@ -86,81 +128,35 @@ void pseudo_inverse_impl(AmaxFn amax,
             "rows)");
     }
 
-    const auto k = std::min(r, c);
+    const auto k         = std::min(r, c);
+    const auto svd_bytes = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
 
-    T*  S  = nullptr;
-    T*  U  = nullptr;
-    T*  VT = nullptr;
-    int* svd_info = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&S), sizeof(T) * static_cast<size_t>(k)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
-    if (cudaMalloc(reinterpret_cast<void**>(&U),
-            sizeof(T) * static_cast<size_t>(r) * static_cast<size_t>(k)) != cudaSuccess)
-    {
-        cudaFree(S);
-        LOGGING_THROW("cudaMalloc failed");
-    }
-    if (cudaMalloc(reinterpret_cast<void**>(&VT),
-            sizeof(T) * static_cast<size_t>(k) * static_cast<size_t>(c)) != cudaSuccess)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        LOGGING_THROW("cudaMalloc failed");
-    }
-    if (cudaMalloc(reinterpret_cast<void**>(&svd_info), sizeof(int)) != cudaSuccess)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        cudaFree(VT);
-        LOGGING_THROW("cudaMalloc failed");
-    }
+    LOGGING_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
+        "pseudo_inverse: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    const auto               bufs = pseudo_inverse_plan<T>(arena, r, c, k, svd_bytes);
 
-    svd_decomposition(rows, columns, A, columns, S, U, static_cast<linalg_long>(k), VT, columns,
-        svd_info, stream);
+    svd_decomposition(rows, columns, A, columns, bufs.S, bufs.U, static_cast<linalg_long>(k),
+        bufs.VT, columns, bufs.svd_info, bufs.svd_workspace, svd_bytes, stream);
 
     int svd_status = -1;
-    if (cudaMemcpyAsync(&svd_status, svd_info, sizeof(int), cudaMemcpyDeviceToHost, stream) !=
-            cudaSuccess ||
-        cudaStreamSynchronize(stream) != cudaSuccess)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        cudaFree(VT);
-        cudaFree(svd_info);
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
-    }
-    cudaFree(svd_info);
-    if (svd_status != 0)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        cudaFree(VT);
-        LOGGING_THROW("linalg::gpu::svd_decomposition failed inside pseudo_inverse", svd_status);
-    }
+    LOGGING_CHECK(cudaMemcpyAsync(&svd_status, bufs.svd_info, sizeof(int), cudaMemcpyDeviceToHost,
+                      stream) == cudaSuccess &&
+            cudaStreamSynchronize(stream) == cudaSuccess,
+        "cudaMemcpyAsync/cudaStreamSynchronize failed");
+    LOGGING_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed inside pseudo_inverse", svd_status);
 
     auto cublas_handle = detail::cublas_handle_for_current_device();
     detail::set_stream(cublas_handle, stream);
     int idx_1based = 1;
-    if (amax(cublas_handle, k, S, 1, &idx_1based) != CUBLAS_STATUS_SUCCESS)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        cudaFree(VT);
-        LOGGING_THROW("cublasI*amax failed");
-    }
+    LOGGING_CHECK(
+        amax(cublas_handle, k, bufs.S, 1, &idx_1based) == CUBLAS_STATUS_SUCCESS, "cublasI*amax failed");
 
     T smax = T(0);
-    if (cudaMemcpyAsync(&smax, S + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost, stream) !=
-            cudaSuccess ||
-        cudaStreamSynchronize(stream) != cudaSuccess)
-    {
-        cudaFree(S);
-        cudaFree(U);
-        cudaFree(VT);
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
-    }
+    LOGGING_CHECK(cudaMemcpyAsync(&smax, bufs.S + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost,
+                      stream) == cudaSuccess &&
+            cudaStreamSynchronize(stream) == cudaSuccess,
+        "cudaMemcpyAsync/cudaStreamSynchronize failed");
     smax = std::fabs(smax);
 
     const T eff_tol =
@@ -168,31 +164,21 @@ void pseudo_inverse_impl(AmaxFn amax,
 
     const dim3 block(16, 16);
     pinv_combine_kernel<T>
-        <<<grid_2d(c, r, block), block, 0, stream>>>(U, S, VT, eff_tol, r, c, k, Ainv);
-    const auto launch_err = cudaGetLastError();
-
-    // S/U/VT are still being read by the kernel just launched above; a bare
-    // cudaFree here would only be safe by accident of the legacy default
-    // stream's implicit whole-device sync (see cuda_handle.h's
-    // synchronize_and_free doc comment) — explicitly wait for `stream`
-    // first so this is correct for a caller-supplied non-default stream
-    // too.
-    cudaError_t sync_status = cudaSuccess;
-    detail::synchronize_and_free(S, stream, &sync_status);
-    cudaFree(U);
-    cudaFree(VT);
-
-    if (launch_err != cudaSuccess)
-    {
-        LOGGING_THROW("pinv_combine_kernel launch failed");
-    }
-    if (sync_status != cudaSuccess)
-    {
-        LOGGING_THROW("cudaStreamSynchronize failed");
-    }
+        <<<grid_2d(c, r, block), block, 0, stream>>>(bufs.U, bufs.S, bufs.VT, eff_tol, r, c, k, Ainv);
+    LOGGING_CHECK(cudaGetLastError() == cudaSuccess, "pinv_combine_kernel launch failed");
 }
 
 }  // namespace
+
+size_t pseudo_inverse_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
+{
+    return pseudo_inverse_workspace_size_impl<float>(rows, columns);
+}
+
+size_t pseudo_inverse_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
+{
+    return pseudo_inverse_workspace_size_impl<double>(rows, columns);
+}
 
 void pseudo_inverse(linalg_long rows,
     linalg_long                 columns,
@@ -201,9 +187,12 @@ void pseudo_inverse(linalg_long rows,
     float*                        Ainv,
     linalg_long                 ldai,
     float                         tol,
+    void*                         workspace,
+    size_t                        workspace_size,
     cudaStream_t                  stream)
 {
-    pseudo_inverse_impl(cublasIsamax, rows, columns, A, lda, Ainv, ldai, tol, stream);
+    pseudo_inverse_impl(cublasIsamax, rows, columns, A, lda, Ainv, ldai, tol, workspace,
+        workspace_size, stream);
 }
 
 void pseudo_inverse(linalg_long rows,
@@ -213,9 +202,12 @@ void pseudo_inverse(linalg_long rows,
     double*                       Ainv,
     linalg_long                 ldai,
     double                        tol,
+    void*                         workspace,
+    size_t                        workspace_size,
     cudaStream_t                  stream)
 {
-    pseudo_inverse_impl(cublasIdamax, rows, columns, A, lda, Ainv, ldai, tol, stream);
+    pseudo_inverse_impl(cublasIdamax, rows, columns, A, lda, Ainv, ldai, tol, workspace,
+        workspace_size, stream);
 }
 
 }  // namespace gpu

@@ -79,7 +79,7 @@ with no implicit host round-trip. Concretely:
   primary, exercised build system for ... the cuBLAS/cuSOLVER GPU
   backend"); this plan does not change that split. CMake already wires
   `CUDA::cudart`, `CUDA::cublas`, and `CUDA::cusolver` and globs
-  `src/*.cpp`/`include/*.cu` when `LINALG_ENABLE_CUBLAS` is `ON`, so new
+  `src/*.cpp`/`src/*.cu` when `LINALG_ENABLE_CUBLAS` is `ON`, so new
   GPU `.cpp`/`.cu` files need no `CMakeLists.txt` change to be picked up.
 - No MAGMA, no multi-node, no half/complex types. Stay with `float`/`double`
   and single-GPU, matching the existing scope.

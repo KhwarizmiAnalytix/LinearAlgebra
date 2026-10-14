@@ -386,11 +386,11 @@ set(linalg_sources "")
 file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
 file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-# .cu sources (currently just matrix_multiplication_batched_gpu.cu) need an
-# nvcc toolchain, so they are only globbed in — and only compilable — when
-# LINALG_ENABLE_CUBLAS turned on CUDA above.
+# .cu sources (under src/matrix_operation_gpu/, mirroring every other
+# implementation file) need an nvcc toolchain, so they are only globbed in —
+# and only compilable — when LINALG_ENABLE_CUBLAS turned on CUDA above.
 if(LINALG_ENABLE_CUBLAS)
-  file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cu")
+  file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu")
   list(APPEND linalg_sources ${linalg_cuda_sources})
 endif ()
 

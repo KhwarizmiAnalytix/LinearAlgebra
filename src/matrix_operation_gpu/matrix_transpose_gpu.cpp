@@ -6,6 +6,7 @@
 #include <cuda_runtime_api.h>
 
 #include "include/common/cuda_handle.h"
+#include "include/common/cuda_workspace.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
@@ -16,29 +17,79 @@ namespace gpu
 namespace
 {
 
-// cublasSgeam/Dgeam are out-of-place (C = alpha*op(A) + beta*op(B)), and this
-// API transposes `m` in place, so a scratch device buffer of the same size
-// is used as the out-of-place destination and copied back device-to-device
-// (never touching host memory). Both the geam call and the copy-back run on
-// `stream`, so a caller-supplied non-default stream is honored end to end.
-template <typename T, typename GeamFn>
-void transpose_impl(
-    GeamFn geam, linalg_long rows, linalg_long columns, T* m, cudaStream_t stream)
+template <typename T>
+size_t transpose_workspace_size_impl(linalg_long rows, linalg_long columns)
+{
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
+    detail::workspace_arena arena;
+    arena.next<T>(static_cast<size_t>(r) * static_cast<size_t>(c));
+    return arena.total_size();
+}
+
+}  // namespace
+
+size_t matrix_transpose_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
+{
+    return transpose_workspace_size_impl<float>(rows, columns);
+}
+
+size_t matrix_transpose_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
+{
+    return transpose_workspace_size_impl<double>(rows, columns);
+}
+
+void matrix_transpose(linalg_long rows, linalg_long columns, float* m, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
 {
     LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
-    const auto r = detail::checked_narrow<int>(rows);
-    const auto c = detail::checked_narrow<int>(columns);
+    LOGGING_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const float*>(nullptr), rows, columns),
+        "matrix_transpose: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    float*                  scratch =
+        arena.next<float>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+    detail::transpose_device(rows, columns, m, scratch, stream);
+}
 
-    T* scratch = nullptr;
-    if (cudaMalloc(reinterpret_cast<void**>(&scratch),
-            sizeof(T) * static_cast<size_t>(r) * static_cast<size_t>(c)) != cudaSuccess)
-    {
-        LOGGING_THROW("cudaMalloc failed");
-    }
+void matrix_transpose(linalg_long rows, linalg_long columns, double* m, void* workspace,
+    size_t workspace_size, cudaStream_t stream)
+{
+    LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
+    LOGGING_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const double*>(nullptr), rows, columns),
+        "matrix_transpose: workspace_size too small");
+    detail::workspace_arena arena(workspace, workspace_size);
+    double*                 scratch =
+        arena.next<double>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+    detail::transpose_device(rows, columns, m, scratch, stream);
+}
 
-    auto handle = detail::cublas_handle_for_current_device();
-    detail::set_stream(handle, stream);
+}  // namespace gpu
+
+namespace detail
+{
+
+namespace
+{
+
+// cublasSgeam/Dgeam are out-of-place (C = alpha*op(A) + beta*op(B)), and this
+// API transposes `m` in place, so a caller-supplied scratch device buffer of
+// the same size is used as the out-of-place destination and copied back
+// device-to-device (never touching host memory). Both the geam call and the
+// copy-back run on `stream`, so a caller-supplied non-default stream is
+// honored end to end.
+template <typename T, typename GeamFn>
+void transpose_device_impl(
+    GeamFn geam, linalg_long rows, linalg_long columns, T* m, T* scratch, cudaStream_t stream)
+{
+    LOGGING_CHECK(m != nullptr && scratch != nullptr, "transpose_device: m and scratch must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "transpose_device: rows and columns must be positive");
+    const auto r = checked_narrow<int>(rows);
+    const auto c = checked_narrow<int>(columns);
+
+    auto handle = cublas_handle_for_current_device();
+    set_stream(handle, stream);
 
     const T alpha = static_cast<T>(1);
     const T beta  = static_cast<T>(0);
@@ -49,43 +100,33 @@ void transpose_impl(
     // and produces a genuine (rows x columns, ld=rows) column-major result in
     // `scratch` — which is bit-identical to the desired row-major
     // (columns x rows, ld=rows) transposed output.
-    if (geam(handle, CUBLAS_OP_T, CUBLAS_OP_T, r, c, &alpha, m, c, &beta, m, c, scratch, r) !=
-        CUBLAS_STATUS_SUCCESS)
-    {
-        cudaFree(scratch);
-        LOGGING_THROW("cublasSgeam/Dgeam failed");
-    }
+    LOGGING_CHECK(geam(handle, CUBLAS_OP_T, CUBLAS_OP_T, r, c, &alpha, m, c, &beta, m, c, scratch, r) ==
+            CUBLAS_STATUS_SUCCESS,
+        "cublasSgeam/Dgeam failed");
 
     const auto copy_status = cudaMemcpyAsync(m,
         scratch,
         sizeof(T) * static_cast<size_t>(r) * static_cast<size_t>(c),
         cudaMemcpyDeviceToDevice,
         stream);
-    // Waits for the copy above to actually finish reading `scratch` before
-    // freeing it — see detail::synchronize_and_free. This makes the call
-    // synchronous on its own internal cleanup, exactly like the blocking
-    // cudaMemcpy it replaces; callers only get cross-call stream
-    // composability, not intra-call concurrency, from this scratch buffer's
-    // use of `stream`.
-    cudaError_t sync_status = cudaSuccess;
-    detail::synchronize_and_free(scratch, stream, &sync_status);
     LOGGING_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
-    LOGGING_CHECK(!(sync_status != cudaSuccess), "cudaStreamSynchronize failed");
 }
 
 }  // namespace
 
-void matrix_transpose(linalg_long rows, linalg_long columns, float* m, cudaStream_t stream)
+void transpose_device(
+    linalg_long rows, linalg_long columns, float* m, float* scratch, cudaStream_t stream)
 {
-    transpose_impl(cublasSgeam, rows, columns, m, stream);
+    transpose_device_impl(cublasSgeam, rows, columns, m, scratch, stream);
 }
 
-void matrix_transpose(linalg_long rows, linalg_long columns, double* m, cudaStream_t stream)
+void transpose_device(
+    linalg_long rows, linalg_long columns, double* m, double* scratch, cudaStream_t stream)
 {
-    transpose_impl(cublasDgeam, rows, columns, m, stream);
+    transpose_device_impl(cublasDgeam, rows, columns, m, scratch, stream);
 }
 
-}  // namespace gpu
+}  // namespace detail
 }  // namespace linalg
 
 #endif  // LINALG_ENABLE_CUBLAS

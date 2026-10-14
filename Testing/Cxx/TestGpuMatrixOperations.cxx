@@ -52,9 +52,11 @@ template <> struct GpuTolerance<double>
 
 // Minimal RAII CUDA device buffer: test-only, mirrors dense_matrix_test_helper's
 // scope (not part of the library) — the GPU entry points under test take bare
-// device pointers (cudaMalloc'd), so exercising them needs some minimal
-// device-memory ownership here. Allocation failures are not checked, matching
-// the library's own cudaMalloc call sites (e.g. linear_solver_gpu.cpp).
+// device pointers (cudaMalloc'd) and, for scratch, a caller-owned workspace
+// buffer (the library itself never calls cudaMalloc — see
+// include/common/cuda_workspace.h), so exercising them needs some minimal
+// device-memory ownership here, including for that workspace. Allocation
+// failures are not checked.
 template <typename T> class device_buffer
 {
 public:
@@ -220,7 +222,11 @@ template <typename value_t> void linear_solver_gpu_test(linalg::linear_solver_ty
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
     ASSERT_EQ(dx.upload(b.data()), cudaSuccess);
 
-    linalg::gpu::linear_solver(dA.get(), n, dx.get(), type, dinfo.get());
+    const auto ws_size = linalg::gpu::linear_solver_workspace_size(
+        static_cast<const value_t*>(nullptr), n, type);
+    device_buffer<unsigned char> dws(ws_size);
+
+    linalg::gpu::linear_solver(dA.get(), n, dx.get(), type, dinfo.get(), dws.get(), ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     int info = -1;
@@ -266,7 +272,11 @@ TEST(MathGpu, MatrixTranspose)
 
     device_buffer<float> dA_f(rows * columns);
     ASSERT_EQ(dA_f.upload(A_f.data()), cudaSuccess);
-    linalg::gpu::matrix_transpose((long long)rows, (long long)columns, dA_f.get());
+    const auto ws_size_f = linalg::gpu::matrix_transpose_workspace_size(
+        static_cast<const float*>(nullptr), (long long)rows, (long long)columns);
+    device_buffer<unsigned char> dws_f(ws_size_f);
+    linalg::gpu::matrix_transpose(
+        (long long)rows, (long long)columns, dA_f.get(), dws_f.get(), ws_size_f);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
     dense_matrix<float> T_f(columns, rows);
     ASSERT_EQ(dA_f.download(T_f.data()), cudaSuccess);
@@ -274,7 +284,11 @@ TEST(MathGpu, MatrixTranspose)
 
     device_buffer<double> dA_d(rows * columns);
     ASSERT_EQ(dA_d.upload(A_d.data()), cudaSuccess);
-    linalg::gpu::matrix_transpose((long long)rows, (long long)columns, dA_d.get());
+    const auto ws_size_d = linalg::gpu::matrix_transpose_workspace_size(
+        static_cast<const double*>(nullptr), (long long)rows, (long long)columns);
+    device_buffer<unsigned char> dws_d(ws_size_d);
+    linalg::gpu::matrix_transpose(
+        (long long)rows, (long long)columns, dA_d.get(), dws_d.get(), ws_size_d);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
     dense_matrix<double> T_d(columns, rows);
     ASSERT_EQ(dA_d.download(T_d.data()), cudaSuccess);
@@ -350,8 +364,13 @@ TEST(MathGpu, CholeskyDecomposition)
     device_buffer<int>    dinfo(1);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-    linalg::gpu::cholesky_decomposition(
-        dA.get(), (long long)n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, dinfo.get());
+    const auto ws_size = linalg::gpu::cholesky_decomposition_workspace_size(
+        static_cast<const double*>(nullptr), (long long)n,
+        linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
+    device_buffer<unsigned char> dws(ws_size);
+
+    linalg::gpu::cholesky_decomposition(dA.get(), (long long)n,
+        linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, dinfo.get(), dws.get(), ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     int info = -1;
@@ -412,7 +431,12 @@ TEST(MathGpu, LuDecomposition)
     device_buffer<int>    dinfo(1);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-    linalg::gpu::lu_decomposition(dA.get(), (long long)n, dpivot.get(), dinfo.get());
+    const auto ws_size = linalg::gpu::lu_decomposition_workspace_size(
+        static_cast<const double*>(nullptr), (long long)n);
+    device_buffer<unsigned char> dws(ws_size);
+
+    linalg::gpu::lu_decomposition(
+        dA.get(), (long long)n, dpivot.get(), dinfo.get(), dws.get(), ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     int info = -1;
@@ -489,7 +513,11 @@ TEST(MathGpu, MatrixInversion)
         device_buffer<int>    dinfo(1);
         ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-        linalg::gpu::matrix_invert(dA.get(), (long long)n, dinfo.get(), type);
+        const auto ws_size = linalg::gpu::matrix_invert_workspace_size(
+            static_cast<const double*>(nullptr), (long long)n, type);
+        device_buffer<unsigned char> dws(ws_size);
+
+        linalg::gpu::matrix_invert(dA.get(), (long long)n, dinfo.get(), type, dws.get(), ws_size);
         ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
         int info = -1;
@@ -509,10 +537,18 @@ TEST(MathGpu, MatrixInversion)
     ASSERT_EQ(dA_lu.upload(A.data()), cudaSuccess);
     ASSERT_EQ(dA_chol.upload(A.data()), cudaSuccess);
 
-    const double det_lu = linalg::gpu::matrix_determinant(
-        dA_lu.get(), (long long)n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
-    const double det_chol = linalg::gpu::matrix_determinant(
-        dA_chol.get(), (long long)n, linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+    const auto ws_size_lu = linalg::gpu::matrix_determinant_workspace_size(
+        static_cast<const double*>(nullptr), (long long)n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    device_buffer<unsigned char> dws_lu(ws_size_lu);
+    const auto ws_size_chol = linalg::gpu::matrix_determinant_workspace_size(
+        static_cast<const double*>(nullptr), (long long)n,
+        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+    device_buffer<unsigned char> dws_chol(ws_size_chol);
+
+    const double det_lu = linalg::gpu::matrix_determinant(dA_lu.get(), (long long)n,
+        linalg::linear_solver_type::LU_LINEAR_SOLVER, dws_lu.get(), ws_size_lu);
+    const double det_chol = linalg::gpu::matrix_determinant(dA_chol.get(), (long long)n,
+        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, dws_chol.get(), ws_size_chol);
 
     EXPECT_GT(det_lu, 0.);  // A is SPD
     EXPECT_LE(std::fabs(det_lu - det_chol), tol * std::fabs(det_lu));
@@ -537,6 +573,10 @@ template <typename value_t> void svd_decomposition_gpu_test(std::size_t rows, st
     device_buffer<int>     dinfo(1);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
+    const auto ws_size = linalg::gpu::svd_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), (long long)rows, (long long)columns);
+    device_buffer<unsigned char> dws(ws_size);
+
     linalg::gpu::svd_decomposition((long long)rows,
         (long long)columns,
         dA.get(),
@@ -546,7 +586,9 @@ template <typename value_t> void svd_decomposition_gpu_test(std::size_t rows, st
         (long long)k,
         dVT.get(),
         (long long)columns,
-        dinfo.get());
+        dinfo.get(),
+        dws.get(),
+        ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     int info = -1;
@@ -601,6 +643,10 @@ template <typename value_t> void qr_decomposition_gpu_test(std::size_t rows, std
     device_buffer<int>     dinfo(1);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
+    const auto ws_size = linalg::gpu::qr_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), (long long)rows, (long long)columns);
+    device_buffer<unsigned char> dws(ws_size);
+
     linalg::gpu::qr_decomposition((long long)rows,
         (long long)columns,
         dA.get(),
@@ -609,7 +655,9 @@ template <typename value_t> void qr_decomposition_gpu_test(std::size_t rows, std
         (long long)k,
         dR.get(),
         (long long)columns,
-        dinfo.get());
+        dinfo.get(),
+        dws.get(),
+        ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     int info = -1;
@@ -676,8 +724,11 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
     device_buffer<value_t> dR(n * n);
     device_buffer<int>     dinfo(1);
     ASSERT_EQ(dR0.upload(R0.begin()), cudaSuccess);
-    linalg::gpu::qr_decomposition(
-        (long long)n, (long long)n, dR0.get(), (long long)n, dQ.get(), (long long)n, dR.get(), (long long)n, dinfo.get());
+    const auto qr_ws_size = linalg::gpu::qr_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), (long long)n, (long long)n);
+    device_buffer<unsigned char> qr_dws(qr_ws_size);
+    linalg::gpu::qr_decomposition((long long)n, (long long)n, dR0.get(), (long long)n, dQ.get(),
+        (long long)n, dR.get(), (long long)n, dinfo.get(), qr_dws.get(), qr_ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     dense_matrix<value_t> Q(n, n);
@@ -708,8 +759,12 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
     device_buffer<value_t> devecs(n * n);
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
 
-    linalg::gpu::symmetric_eigenvalue_decomposition(
-        dA.get(), (linalg_int)n, (linalg_int)n, devals.get(), devecs.get(), (linalg_int)n, dinfo.get());
+    const auto eig_ws_size = linalg::gpu::symmetric_eigenvalue_decomposition_workspace_size(
+        static_cast<const value_t*>(nullptr), (linalg_int)n);
+    device_buffer<unsigned char> eig_dws(eig_ws_size);
+
+    linalg::gpu::symmetric_eigenvalue_decomposition(dA.get(), (linalg_int)n, (linalg_int)n,
+        devals.get(), devecs.get(), (linalg_int)n, dinfo.get(), eig_dws.get(), eig_ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     int info = -1;
@@ -778,8 +833,12 @@ template <typename value_t> void pseudo_inverse_gpu_test(std::size_t rows, std::
     device_buffer<value_t> dAinv(columns * rows);
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
 
-    linalg::gpu::pseudo_inverse(
-        (long long)rows, (long long)columns, dA.get(), (long long)columns, dAinv.get(), (long long)rows);
+    const auto ws_size = linalg::gpu::pseudo_inverse_workspace_size(
+        static_cast<const value_t*>(nullptr), (long long)rows, (long long)columns);
+    device_buffer<unsigned char> dws(ws_size);
+
+    linalg::gpu::pseudo_inverse((long long)rows, (long long)columns, dA.get(), (long long)columns,
+        dAinv.get(), (long long)rows, static_cast<value_t>(-1), dws.get(), ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     dense_matrix<value_t> Ainv(columns, rows);
@@ -819,8 +878,14 @@ TEST(MathGpu, MatrixRankAndConditionNumber)
     device_buffer<double> dI(n * n);
     ASSERT_EQ(dI.upload(I.begin()), cudaSuccess);
 
-    const auto rank = linalg::gpu::matrix_rank(dI.get(), (long long)n, (long long)n, (long long)n);
-    const auto cond = linalg::gpu::matrix_condition_number(dI.get(), (long long)n, (long long)n, (long long)n);
+    const auto ws_size = linalg::gpu::matrix_rank_workspace_size(
+        static_cast<const double*>(nullptr), (long long)n, (long long)n);
+    device_buffer<unsigned char> dws(ws_size);
+
+    const auto rank = linalg::gpu::matrix_rank(
+        dI.get(), (long long)n, (long long)n, (long long)n, -1., dws.get(), ws_size);
+    const auto cond = linalg::gpu::matrix_condition_number(
+        dI.get(), (long long)n, (long long)n, (long long)n, dws.get(), ws_size);
     EXPECT_EQ(rank, (linalg_long)n);
     EXPECT_NEAR(cond, 1.0, 1e-6);
 
@@ -843,7 +908,8 @@ TEST(MathGpu, MatrixRankAndConditionNumber)
     }
     device_buffer<double> dA(n * n);
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
-    const auto rank1 = linalg::gpu::matrix_rank(dA.get(), (long long)n, (long long)n, (long long)n);
+    const auto rank1 = linalg::gpu::matrix_rank(
+        dA.get(), (long long)n, (long long)n, (long long)n, -1., dws.get(), ws_size);
     EXPECT_EQ(rank1, (linalg_long)1);
 }
 
@@ -888,12 +954,25 @@ TEST(MathGpu, MatrixNorm)
         inf_expected = std::max(inf_expected, s);
     }
 
-    const auto frob = linalg::gpu::matrix_norm(
-        dA.get(), (long long)rows, (long long)columns, (long long)columns, linalg::matrix_norm_type::FROBENIUS);
-    const auto one = linalg::gpu::matrix_norm(
-        dA.get(), (long long)rows, (long long)columns, (long long)columns, linalg::matrix_norm_type::ONE);
-    const auto inf_norm = linalg::gpu::matrix_norm(
-        dA.get(), (long long)rows, (long long)columns, (long long)columns, linalg::matrix_norm_type::INFINITY_NORM);
+    const auto frob_ws_size = linalg::gpu::matrix_norm_workspace_size(
+        static_cast<const double*>(nullptr), (long long)rows, (long long)columns,
+        linalg::matrix_norm_type::FROBENIUS);
+    device_buffer<unsigned char> frob_dws(frob_ws_size);
+    const auto one_ws_size = linalg::gpu::matrix_norm_workspace_size(
+        static_cast<const double*>(nullptr), (long long)rows, (long long)columns,
+        linalg::matrix_norm_type::ONE);
+    device_buffer<unsigned char> one_dws(one_ws_size);
+    const auto inf_ws_size = linalg::gpu::matrix_norm_workspace_size(
+        static_cast<const double*>(nullptr), (long long)rows, (long long)columns,
+        linalg::matrix_norm_type::INFINITY_NORM);
+    device_buffer<unsigned char> inf_dws(inf_ws_size);
+
+    const auto frob = linalg::gpu::matrix_norm(dA.get(), (long long)rows, (long long)columns,
+        (long long)columns, linalg::matrix_norm_type::FROBENIUS, frob_dws.get(), frob_ws_size);
+    const auto one = linalg::gpu::matrix_norm(dA.get(), (long long)rows, (long long)columns,
+        (long long)columns, linalg::matrix_norm_type::ONE, one_dws.get(), one_ws_size);
+    const auto inf_norm = linalg::gpu::matrix_norm(dA.get(), (long long)rows, (long long)columns,
+        (long long)columns, linalg::matrix_norm_type::INFINITY_NORM, inf_dws.get(), inf_ws_size);
 
     EXPECT_NEAR(frob, frob_expected, 1e-6);
     EXPECT_NEAR(one, one_expected, 1e-6);
@@ -914,7 +993,10 @@ TEST(MathGpu, MatrixTrace)
 
     device_buffer<double> dA(n * n);
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
-    const auto trace = linalg::gpu::matrix_trace(dA.get(), (linalg_int)n, (linalg_int)n);
+    const auto ws_size = linalg::gpu::matrix_trace_workspace_size(static_cast<const double*>(nullptr));
+    device_buffer<unsigned char> dws(ws_size);
+    const auto trace =
+        linalg::gpu::matrix_trace(dA.get(), (linalg_int)n, (linalg_int)n, dws.get(), ws_size);
     EXPECT_NEAR(trace, expected, 1e-9);
 }
 
@@ -960,6 +1042,10 @@ TEST(MathGpu, LeastSquares)
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
     ASSERT_EQ(dB.upload(B.begin()), cudaSuccess);
 
+    const auto ws_size = linalg::gpu::least_squares_solve_workspace_size(
+        static_cast<const double*>(nullptr), (long long)rows, (long long)columns);
+    device_buffer<unsigned char> dws(ws_size);
+
     linalg::gpu::least_squares_solve((long long)rows,
         (long long)columns,
         (long long)nrhs,
@@ -968,7 +1054,9 @@ TEST(MathGpu, LeastSquares)
         dB.get(),
         (long long)nrhs,
         dX.get(),
-        (long long)nrhs);
+        (long long)nrhs,
+        dws.get(),
+        ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     dense_matrix<double> X(columns, nrhs);
@@ -1003,34 +1091,41 @@ TEST(MathGpu, InputValidation)
     EXPECT_ANY_THROW(linalg::gpu::cholesky_decomposition(static_cast<double*>(nullptr),
         n,
         linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR,
-        dinfo.get()));
-    EXPECT_ANY_THROW(linalg::gpu::cholesky_decomposition(
-        dA.get(), 0, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, dinfo.get()));
+        dinfo.get(),
+        nullptr,
+        0));
+    EXPECT_ANY_THROW(linalg::gpu::cholesky_decomposition(dA.get(), 0,
+        linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, dinfo.get(), nullptr, 0));
 
-    EXPECT_ANY_THROW(
-        linalg::gpu::lu_decomposition(static_cast<double*>(nullptr), n, dpivot.get(), dinfo.get()));
-    EXPECT_ANY_THROW(linalg::gpu::lu_decomposition(dA.get(), 0, dpivot.get(), dinfo.get()));
+    EXPECT_ANY_THROW(linalg::gpu::lu_decomposition(
+        static_cast<double*>(nullptr), n, dpivot.get(), dinfo.get(), nullptr, 0));
+    EXPECT_ANY_THROW(linalg::gpu::lu_decomposition(dA.get(), 0, dpivot.get(), dinfo.get(), nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::linear_solver(static_cast<double*>(nullptr),
         n,
         dx.get(),
         linalg::linear_solver_type::LU_LINEAR_SOLVER,
-        dinfo.get()));
-    EXPECT_ANY_THROW(linalg::gpu::linear_solver(
-        dA.get(), 0, dx.get(), linalg::linear_solver_type::LU_LINEAR_SOLVER, dinfo.get()));
+        dinfo.get(),
+        nullptr,
+        0));
+    EXPECT_ANY_THROW(linalg::gpu::linear_solver(dA.get(), 0, dx.get(),
+        linalg::linear_solver_type::LU_LINEAR_SOLVER, dinfo.get(), nullptr, 0));
 
-    EXPECT_ANY_THROW(linalg::gpu::matrix_invert(static_cast<double*>(nullptr), n, dinfo.get()));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_invert(dA.get(), 0, dinfo.get()));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_determinant(static_cast<double*>(nullptr), n));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_invert(static_cast<double*>(nullptr), n, dinfo.get(),
+        linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_invert(
+        dA.get(), 0, dinfo.get(), linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_determinant(
+        static_cast<double*>(nullptr), n, linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::matrix_multiplication(
         false, false, n, n, n, static_cast<const double*>(nullptr), n, dA.get(), n, dA.get(), n));
     EXPECT_ANY_THROW(linalg::gpu::matrix_multiplication(
         false, false, 0, n, n, dA.get(), n, dA.get(), n, dA.get(), n));
 
-    EXPECT_ANY_THROW(
-        linalg::gpu::matrix_transpose((long long)n, (long long)n, static_cast<double*>(nullptr)));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_transpose(0LL, (long long)n, dA.get()));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_transpose(
+        (long long)n, (long long)n, static_cast<double*>(nullptr), nullptr, 0));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_transpose(0LL, (long long)n, dA.get(), nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::svd_decomposition((long long)n,
         (long long)n,
@@ -1041,7 +1136,9 @@ TEST(MathGpu, InputValidation)
         (long long)n,
         dA.get(),
         (long long)n,
-        dinfo.get()));
+        dinfo.get(),
+        nullptr,
+        0));
     EXPECT_ANY_THROW(linalg::gpu::svd_decomposition(0LL,
         (long long)n,
         dA.get(),
@@ -1051,7 +1148,9 @@ TEST(MathGpu, InputValidation)
         (long long)n,
         dA.get(),
         (long long)n,
-        dinfo.get()));
+        dinfo.get(),
+        nullptr,
+        0));
 
     EXPECT_ANY_THROW(linalg::gpu::qr_decomposition((long long)n,
         (long long)n,
@@ -1061,38 +1160,45 @@ TEST(MathGpu, InputValidation)
         (long long)n,
         dA.get(),
         (long long)n,
-        dinfo.get()));
-    EXPECT_ANY_THROW(linalg::gpu::qr_decomposition(
-        0LL, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, dinfo.get()));
+        dinfo.get(),
+        nullptr,
+        0));
+    EXPECT_ANY_THROW(linalg::gpu::qr_decomposition(0LL, (long long)n, dA.get(), (long long)n,
+        dA.get(), (long long)n, dA.get(), (long long)n, dinfo.get(), nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::symmetric_eigenvalue_decomposition(
-        static_cast<const double*>(nullptr), n, n, dS.get(), dA.get(), n, dinfo.get()));
-    EXPECT_ANY_THROW(
-        linalg::gpu::symmetric_eigenvalue_decomposition(dA.get(), 0, 0, dS.get(), dA.get(), 0, dinfo.get()));
+        static_cast<const double*>(nullptr), n, n, dS.get(), dA.get(), n, dinfo.get(), nullptr, 0));
+    EXPECT_ANY_THROW(linalg::gpu::symmetric_eigenvalue_decomposition(
+        dA.get(), 0, 0, dS.get(), dA.get(), 0, dinfo.get(), nullptr, 0));
 
+    EXPECT_ANY_THROW(linalg::gpu::pseudo_inverse((long long)n, (long long)n,
+        static_cast<const double*>(nullptr), (long long)n, dA.get(), (long long)n, -1., nullptr, 0));
     EXPECT_ANY_THROW(linalg::gpu::pseudo_inverse(
-        (long long)n, (long long)n, static_cast<const double*>(nullptr), (long long)n, dA.get(), (long long)n));
-    EXPECT_ANY_THROW(
-        linalg::gpu::pseudo_inverse(0LL, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n));
+        0LL, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, -1., nullptr, 0));
 
-    EXPECT_ANY_THROW(linalg::gpu::matrix_rank(
-        static_cast<const double*>(nullptr), (long long)n, (long long)n, (long long)n));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_rank(dA.get(), 0LL, (long long)n, (long long)n));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_rank(static_cast<const double*>(nullptr), (long long)n,
+        (long long)n, (long long)n, -1., nullptr, 0));
+    EXPECT_ANY_THROW(
+        linalg::gpu::matrix_rank(dA.get(), 0LL, (long long)n, (long long)n, -1., nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::matrix_condition_number(
-        static_cast<const double*>(nullptr), (long long)n, (long long)n, (long long)n));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_condition_number(dA.get(), 0LL, (long long)n, (long long)n));
+        static_cast<const double*>(nullptr), (long long)n, (long long)n, (long long)n, nullptr, 0));
+    EXPECT_ANY_THROW(
+        linalg::gpu::matrix_condition_number(dA.get(), 0LL, (long long)n, (long long)n, nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::matrix_norm(static_cast<const double*>(nullptr),
         (long long)n,
         (long long)n,
         (long long)n,
-        linalg::matrix_norm_type::FROBENIUS));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_norm(
-        dA.get(), 0LL, (long long)n, (long long)n, linalg::matrix_norm_type::FROBENIUS));
+        linalg::matrix_norm_type::FROBENIUS,
+        nullptr,
+        0));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_norm(dA.get(), 0LL, (long long)n, (long long)n,
+        linalg::matrix_norm_type::FROBENIUS, nullptr, 0));
 
-    EXPECT_ANY_THROW(linalg::gpu::matrix_trace(static_cast<const double*>(nullptr), n, n));
-    EXPECT_ANY_THROW(linalg::gpu::matrix_trace(dA.get(), 0, n));
+    EXPECT_ANY_THROW(
+        linalg::gpu::matrix_trace(static_cast<const double*>(nullptr), n, n, nullptr, 0));
+    EXPECT_ANY_THROW(linalg::gpu::matrix_trace(dA.get(), 0, n, nullptr, 0));
 
     EXPECT_ANY_THROW(linalg::gpu::least_squares_solve((long long)n,
         (long long)n,
@@ -1102,9 +1208,11 @@ TEST(MathGpu, InputValidation)
         dA.get(),
         (long long)n,
         dA.get(),
-        (long long)n));
-    EXPECT_ANY_THROW(linalg::gpu::least_squares_solve(
-        0LL, (long long)n, (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, dA.get(), (long long)n));
+        (long long)n,
+        nullptr,
+        0));
+    EXPECT_ANY_THROW(linalg::gpu::least_squares_solve(0LL, (long long)n, (long long)n, dA.get(),
+        (long long)n, dA.get(), (long long)n, dA.get(), (long long)n, nullptr, 0));
 }
 
 // Two independent Cholesky solves issued on two distinct caller-created
@@ -1142,17 +1250,26 @@ TEST(MathGpu, StreamParameter)
     ASSERT_EQ(dA_b.upload(A_b.data()), cudaSuccess);
     ASSERT_EQ(dx_b.upload(b_b.data()), cudaSuccess);
 
+    const auto ws_size = linalg::gpu::linear_solver_workspace_size(
+        static_cast<const double*>(nullptr), n, linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+    device_buffer<unsigned char> dws_a(ws_size);
+    device_buffer<unsigned char> dws_b(ws_size);
+
     linalg::gpu::linear_solver(dA_a.get(),
         n,
         dx_a.get(),
         linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
         dinfo_a.get(),
+        dws_a.get(),
+        ws_size,
         stream_a);
     linalg::gpu::linear_solver(dA_b.get(),
         n,
         dx_b.get(),
         linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
         dinfo_b.get(),
+        dws_b.get(),
+        ws_size,
         stream_b);
 
     ASSERT_EQ(cudaStreamSynchronize(stream_a), cudaSuccess);

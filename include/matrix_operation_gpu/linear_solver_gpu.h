@@ -21,11 +21,22 @@ namespace gpu
 // `info` explicitly (e.g. cudaMemcpyAsync on your own stream) only when/if
 // you need the result. `stream` (default: the legacy default stream) is the
 // CUDA stream the underlying cuSOLVER call is issued on.
+// `workspace` must point to at least
+// `linear_solver_workspace_size(type_tag, lda, type)` bytes of caller-owned
+// device memory (the library never allocates its own GPU memory); keep it
+// alive and unmodified until work queued on `stream` has completed.
+LINALG_API size_t linear_solver_workspace_size(
+    const float* /*type_tag*/, linalg_int lda, linear_solver_type type);
+LINALG_API size_t linear_solver_workspace_size(
+    const double* /*type_tag*/, linalg_int lda, linear_solver_type type);
+
 LINALG_API void linear_solver(float* m,
     linalg_int                     lda,
     float*                           x,
     linear_solver_type               type,
     int*                             info,
+    void*                            workspace,
+    size_t                           workspace_size,
     cudaStream_t                     stream = nullptr);
 
 LINALG_API void linear_solver(double* m,
@@ -33,6 +44,8 @@ LINALG_API void linear_solver(double* m,
     double*                           x,
     linear_solver_type                type,
     int*                              info,
+    void*                             workspace,
+    size_t                            workspace_size,
     cudaStream_t                      stream = nullptr);
 
 }  // namespace gpu

@@ -29,13 +29,26 @@ namespace gpu
 // RESTRICTION (matching svd_decomposition_gpu / qr_decomposition_gpu):
 // `lda` must equal `columns` and `ldai` must equal `rows` — every buffer
 // must be tightly packed row-major with no padding.
+// `workspace` must point to at least
+// `pseudo_inverse_workspace_size(type_tag, rows, columns)` bytes of
+// caller-owned device memory (the library never allocates its own GPU
+// memory; this includes the workspace the internal svd_decomposition call
+// needs, carved from the same buffer); keep it alive and unmodified until
+// work queued on `stream` has completed.
+LINALG_API size_t pseudo_inverse_workspace_size(
+    const float* /*type_tag*/, linalg_long rows, linalg_long columns);
+LINALG_API size_t pseudo_inverse_workspace_size(
+    const double* /*type_tag*/, linalg_long rows, linalg_long columns);
+
 LINALG_API void pseudo_inverse(linalg_long rows,
     linalg_long                            columns,
     const float*                             A,
     linalg_long                            lda,
     float*                                   Ainv,
     linalg_long                            ldai,
-    float                                    tol    = -1.F,
+    float                                    tol,
+    void*                                    workspace,
+    size_t                                   workspace_size,
     cudaStream_t                             stream = nullptr);
 
 LINALG_API void pseudo_inverse(linalg_long rows,
@@ -44,7 +57,9 @@ LINALG_API void pseudo_inverse(linalg_long rows,
     linalg_long                            lda,
     double*                                  Ainv,
     linalg_long                            ldai,
-    double                                   tol    = -1.,
+    double                                   tol,
+    void*                                    workspace,
+    size_t                                   workspace_size,
     cudaStream_t                             stream = nullptr);
 
 }  // namespace gpu
