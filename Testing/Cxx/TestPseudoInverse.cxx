@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/pseudo_inverse.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -24,8 +24,9 @@ template <typename value_t> void test_pseudo_inverse_tall(std::size_t rows, std:
     }
 
     dense_matrix<value_t> Ainv(columns, rows);
-    const auto ws_size = linalg::pseudo_inverse_backend<value_t, linalg::linalg_backend::native>::workspace_size(
-        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    const auto            ws_size =
+        linalg::pseudo_inverse_backend<value_t, linalg::linalg_backend::native>::workspace_size(
+            static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
     linalg::pseudo_inverse_backend<value_t, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(rows),
@@ -49,7 +50,7 @@ template <typename value_t> void test_pseudo_inverse_tall(std::size_t rows, std:
                 sum += Ainv(i, k) * A(k, j);
             }
             const value_t expected = (i == j) ? value_t(1) : value_t(0);
-            max_error               = std::max(max_error, static_cast<value_t>(std::fabs(sum - expected)));
+            max_error = std::max(max_error, static_cast<value_t>(std::fabs(sum - expected)));
         }
     }
     EXPECT_LT(max_error, static_cast<value_t>(1e-2));

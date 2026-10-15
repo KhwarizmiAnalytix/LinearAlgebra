@@ -1,6 +1,6 @@
 ---
 name: clang-tidy
-description: Run or diagnose clang-tidy for first-party C++ work associated with Logging. Use for requested C++ static analysis or suppression fixes; this tool does not lint Python.
+description: Run or diagnose clang-tidy for first-party C++ under include/ and src/. Use for requested C++ static analysis or suppression fixes; this tool does not lint Python.
 ---
 
 # clang-tidy
@@ -18,8 +18,9 @@ python3 setup.py config.build.ninja.clang.clangtidy
 Read the repository's CMake clang-tidy integration before enabling fix mode;
 fix flags can rewrite source during compilation.
 
-The repository's lintrunner configuration currently has no `CLANGTIDY`
-entry; use the build integration instead of assuming that lint code exists.
+`.lintrunner.toml` has a `CLANGTIDY` entry scoped to `include/`, `src/`,
+and `Testing/`, with `ThirdParty/` excluded. It needs a `compile_commands.json`
+from a build of this repo.
 
 For an applicable C++ analysis:
 

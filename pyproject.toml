@@ -10,4 +10,15 @@ target-version = "py312"
 [tool.ruff.format]
 
 [tool.codespell]
-skip = "ThirdParty,.git,build,build_*,__pycache__"
+skip = "ThirdParty,.git,build,build_*,build-*,.mkl-x86-env,.lintbin,__pycache__"
+
+[tool.lint-tool]
+# Third-party and in-tree modules the import linter should allow.
+# First-party C++ is include/ and src/; these names are Python-only.
+import-allowlist = [
+    "clang_format",
+    "colorama",
+    "coverage_tool",
+    "helpers",
+    "psutil",
+]

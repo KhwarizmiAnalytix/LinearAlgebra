@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/least_squares.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -50,8 +50,9 @@ template <typename value_t> void test_least_squares_overdetermined()
     }
 
     dense_matrix<value_t> X(columns, nrhs);
-    const auto ws_size = linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::workspace_size(
-        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    const auto            ws_size =
+        linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::workspace_size(
+            static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
     linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(rows),
@@ -71,7 +72,8 @@ template <typename value_t> void test_least_squares_overdetermined()
     {
         for (std::size_t j = 0; j < nrhs; j++)
         {
-            max_error = std::max(max_error, static_cast<value_t>(std::fabs(X(i, j) - X_true(i, j))));
+            max_error =
+                std::max(max_error, static_cast<value_t>(std::fabs(X(i, j) - X_true(i, j))));
         }
     }
     EXPECT_LT(max_error, static_cast<value_t>(1e-2));
@@ -101,8 +103,9 @@ template <typename value_t> void test_least_squares_underdetermined()
     }
 
     dense_matrix<value_t> X(columns, nrhs);
-    const auto ws_size = linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::workspace_size(
-        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    const auto            ws_size =
+        linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::workspace_size(
+            static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
     linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(rows),

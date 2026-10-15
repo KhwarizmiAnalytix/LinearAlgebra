@@ -3,15 +3,14 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/linear_solver.h"
+#include "gtest/gtest.h"
 
 namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename value_t>
-dense_matrix<value_t> transpose(const dense_matrix<value_t>& a)
+template <typename value_t> dense_matrix<value_t> transpose(const dense_matrix<value_t>& a)
 {
     dense_matrix<value_t> t(a.cols(), a.rows());
     for (std::size_t i = 0; i < a.rows(); ++i)
@@ -70,8 +69,7 @@ value_t hmax_abs_diff(const std::vector<value_t>& a, const std::vector<value_t>&
     return max_error;
 }
 
-template <typename value_t>
-void test_linear_solver(std::size_t dim, double tolerance)
+template <typename value_t> void test_linear_solver(std::size_t dim, double tolerance)
 {
     dense_matrix<value_t> R(dim, dim);
 
@@ -85,7 +83,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
         }
     }
 
-    std::vector<value_t>      x_ref(dim);
+    std::vector<value_t>    x_ref(dim);
     std::vector<linalg_int> pivot(dim + 1);
 
     for (std::size_t i = 0; i < dim; i++)
@@ -102,8 +100,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
     std::vector<value_t> b = matvec(A, x_ref);
 
     std::vector<value_t> x = b;
-    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
-        R.begin(),
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(R.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
@@ -114,10 +111,9 @@ void test_linear_solver(std::size_t dim, double tolerance)
     auto diff = hmax_abs_diff(x_ref, x);
     EXPECT_LE(diff, tolerance);
 
-    x        = b;
-    auto R2  = A;
-    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
-        R2.begin(),
+    x       = b;
+    auto R2 = A;
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(R2.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
@@ -128,13 +124,12 @@ void test_linear_solver(std::size_t dim, double tolerance)
     diff = hmax_abs_diff(x_ref, x);
     EXPECT_LE(diff, tolerance);
 
-    x       = b;
-    auto R3 = A;
+    x                     = b;
+    auto       R3         = A;
     const auto lu_ws_size = linalg::solver_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
     std::vector<unsigned char> lu_ws(lu_ws_size);
-    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
-        R3.begin(),
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(R3.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),

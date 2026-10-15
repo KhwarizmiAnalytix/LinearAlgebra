@@ -1,0 +1,15 @@
+[flake8]
+# Match [tool.ruff] line-length in pyproject.toml. Flake8's default of 79
+# otherwise reports every Black/Ruff-clean line past column 79.
+max-line-length = 88
+exclude =
+    ThirdParty,
+    .git,
+    build,
+    build_*,
+    build-*,
+    .mkl-x86-env,
+    .lintbin,
+    __pycache__
+# Scripts are invoked as `python3 Scripts/setup.py`, not as executables.
+extend-ignore = EXE001

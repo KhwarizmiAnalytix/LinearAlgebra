@@ -5,18 +5,17 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/eigenvalue_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/matrix_inversion.h"
 #include "include/matrix_operation/qr_decomposition.h"
+#include "gtest/gtest.h"
 
 namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename>
-struct EigenTolerance
+template <typename> struct EigenTolerance
 {
 };
 
@@ -30,17 +29,19 @@ template <> struct EigenTolerance<double>
     static constexpr double tolerance = 1.e-8;
 };
 
-template <typename value_t>
-std::vector<unsigned char> symmetric_eigen_workspace(linalg_int n)
+template <typename value_t> std::vector<unsigned char> symmetric_eigen_workspace(linalg_int n)
 {
-    const auto bytes = linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(n);
+    const auto bytes =
+        linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(n);
     return std::vector<unsigned char>(bytes);
 }
 
 template <typename value_t>
 std::vector<unsigned char> general_eigen_workspace(linalg_int n, bool compute_eigenvectors)
 {
-    const auto bytes = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(n, compute_eigenvectors);
+    const auto bytes =
+        linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(
+            n, compute_eigenvectors);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -59,8 +60,7 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
     const auto qr_ws_size = linalg::qr_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_long>(n), static_cast<linalg_long>(n));
     std::vector<unsigned char> qr_ws(qr_ws_size);
-    linalg::qr_backend<value_t, linalg::kActiveBackend>::apply(
-        static_cast<linalg_long>(n),
+    linalg::qr_backend<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(n),
         static_cast<linalg_long>(n),
         R0.begin(),
         static_cast<linalg_long>(n),
@@ -94,14 +94,22 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
     std::vector<value_t>  evals(n);
     dense_matrix<value_t> evecs(n, n);
     auto                  eigen_ws = symmetric_eigen_workspace<value_t>(static_cast<linalg_int>(n));
-    const bool            ok = linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::apply(
-        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), evals.data(), evecs.begin(),
-        static_cast<linalg_int>(n), eigen_ws.data(), eigen_ws.size());
+    const bool            ok =
+        linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::apply(A.begin(),
+            static_cast<linalg_int>(n),
+            static_cast<linalg_int>(n),
+            evals.data(),
+            evecs.begin(),
+            static_cast<linalg_int>(n),
+            eigen_ws.data(),
+            eigen_ws.size());
     EXPECT_TRUE(ok);
 
     for (std::size_t i = 0; i < n; i++)
     {
-        EXPECT_NEAR(static_cast<double>(evals[i]), static_cast<double>(known[i]), EigenTolerance<value_t>::tolerance);
+        EXPECT_NEAR(static_cast<double>(evals[i]),
+            static_cast<double>(known[i]),
+            EigenTolerance<value_t>::tolerance);
     }
 
     // AV = A * evecs, then check evecs^T * AV == diag(evals).
@@ -130,7 +138,7 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
                 sum += evecs(p, i) * AV(p, j);
             }
             const value_t expected = (i == j) ? evals[i] : value_t(0);
-            max_error               = std::max(max_error, static_cast<value_t>(std::fabs(sum - expected)));
+            max_error = std::max(max_error, static_cast<value_t>(std::fabs(sum - expected)));
         }
     }
     EXPECT_LT(max_error, static_cast<value_t>(EigenTolerance<value_t>::tolerance));
@@ -156,11 +164,15 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
         Pinv.begin()[i] = P.begin()[i];
     }
     std::vector<linalg_int> pivot(n);
-    const auto invert_ws_size = linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
-        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    const auto              invert_ws_size =
+        linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
+            static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
     std::vector<unsigned char> invert_ws(invert_ws_size);
-    linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(Pinv.begin(), pivot.data(),
-        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER, invert_ws.data(),
+    linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(Pinv.begin(),
+        pivot.data(),
+        static_cast<linalg_int>(n),
+        linalg::linear_solver_type::LU_LINEAR_SOLVER,
+        invert_ws.data(),
         invert_ws_size);
 
     std::vector<value_t> known(n);
@@ -185,17 +197,25 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
 
     std::vector<value_t> er(n);
     std::vector<value_t> ei(n);
-    auto                 eigen_ws = general_eigen_workspace<value_t>(static_cast<linalg_int>(n), false);
-    const bool           ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
-        A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), er.data(), ei.data(), nullptr,
-        static_cast<linalg_int>(n), eigen_ws.data(), eigen_ws.size());
+    auto       eigen_ws = general_eigen_workspace<value_t>(static_cast<linalg_int>(n), false);
+    const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(A.begin(),
+        static_cast<linalg_int>(n),
+        static_cast<linalg_int>(n),
+        er.data(),
+        ei.data(),
+        nullptr,
+        static_cast<linalg_int>(n),
+        eigen_ws.data(),
+        eigen_ws.size());
     EXPECT_TRUE(ok);
 
     std::vector<value_t> got = er;
     std::sort(got.begin(), got.end());
     for (std::size_t i = 0; i < n; i++)
     {
-        EXPECT_NEAR(static_cast<double>(got[i]), static_cast<double>(known[i]), EigenTolerance<value_t>::tolerance);
+        EXPECT_NEAR(static_cast<double>(got[i]),
+            static_cast<double>(known[i]),
+            EigenTolerance<value_t>::tolerance);
         EXPECT_NEAR(static_cast<double>(ei[i]), 0.0, EigenTolerance<value_t>::tolerance);
     }
 }
@@ -204,25 +224,31 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
 // eigenvalues a +- b*i exactly.
 template <typename value_t> void test_general_eigen_complex_pair()
 {
-    const value_t a = static_cast<value_t>(1.5);
-    const value_t b = static_cast<value_t>(2.0);
+    const value_t         a = static_cast<value_t>(1.5);
+    const value_t         b = static_cast<value_t>(2.0);
     dense_matrix<value_t> A(2, 2);
     A(0, 0) = a;
     A(0, 1) = -b;
     A(1, 0) = b;
     A(1, 1) = a;
 
-    value_t er[2];
-    value_t ei[2];
-    auto    eigen_ws = general_eigen_workspace<value_t>(2, false);
-    const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    value_t    er[2];
+    value_t    ei[2];
+    auto       eigen_ws = general_eigen_workspace<value_t>(2, false);
+    const bool ok       = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
         A.begin(), 2, 2, er, ei, nullptr, 2, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
-    EXPECT_NEAR(static_cast<double>(er[0]), static_cast<double>(a), EigenTolerance<value_t>::tolerance);
-    EXPECT_NEAR(static_cast<double>(er[1]), static_cast<double>(a), EigenTolerance<value_t>::tolerance);
-    EXPECT_NEAR(static_cast<double>(std::fabs(ei[0])), static_cast<double>(b), EigenTolerance<value_t>::tolerance);
-    EXPECT_NEAR(static_cast<double>(std::fabs(ei[1])), static_cast<double>(b), EigenTolerance<value_t>::tolerance);
+    EXPECT_NEAR(
+        static_cast<double>(er[0]), static_cast<double>(a), EigenTolerance<value_t>::tolerance);
+    EXPECT_NEAR(
+        static_cast<double>(er[1]), static_cast<double>(a), EigenTolerance<value_t>::tolerance);
+    EXPECT_NEAR(static_cast<double>(std::fabs(ei[0])),
+        static_cast<double>(b),
+        EigenTolerance<value_t>::tolerance);
+    EXPECT_NEAR(static_cast<double>(std::fabs(ei[1])),
+        static_cast<double>(b),
+        EigenTolerance<value_t>::tolerance);
     EXPECT_NEAR(static_cast<double>(ei[0] + ei[1]), 0.0, EigenTolerance<value_t>::tolerance);
 }
 
@@ -237,10 +263,10 @@ template <typename value_t> void test_general_eigen_eigenvectors()
     A(2, 1) = 1;
     A(2, 2) = 4;
 
-    value_t                er[3];
-    value_t                ei[3];
-    dense_matrix<value_t>  evecs(3, 3);
-    auto                   eigen_ws = general_eigen_workspace<value_t>(3, true);
+    value_t               er[3];
+    value_t               ei[3];
+    dense_matrix<value_t> evecs(3, 3);
+    auto                  eigen_ws = general_eigen_workspace<value_t>(3, true);
     const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
         A.begin(), 3, 3, er, ei, evecs.begin(), 3, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
@@ -256,7 +282,7 @@ template <typename value_t> void test_general_eigen_eigenvectors()
                 sum += A(r, c) * evecs(c, i);
             }
             const value_t expected = er[i] * evecs(r, i);
-            max_error               = std::max(max_error, static_cast<value_t>(std::fabs(sum - expected)));
+            max_error = std::max(max_error, static_cast<value_t>(std::fabs(sum - expected)));
         }
         EXPECT_LT(max_error, static_cast<value_t>(EigenTolerance<value_t>::tolerance));
     }
@@ -309,6 +335,7 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
         A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
 #else
     EXPECT_THROW((linalg::general_eigen_backend<double, linalg::kActiveBackend>::apply(
-        A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())), std::exception);
+                     A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())),
+        std::exception);
 #endif
 }

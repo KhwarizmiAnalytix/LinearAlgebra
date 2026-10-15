@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/matrix_multiplication.h"
+#include "gtest/gtest.h"
 
 // #define DEBUG_MATRIXMULTIPLICATION
 
@@ -17,32 +17,36 @@ template <typename value_t>
 std::vector<unsigned char> gemm_workspace(linalg_int rows, linalg_int columns, linalg_int depth)
 {
     const auto bytes =
-        linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::workspace_size(rows, columns, depth);
+        linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::workspace_size(
+            rows, columns, depth);
     return std::vector<unsigned char>(bytes);
 }
 
-template <typename>
-struct matrixTolerance
+template <typename> struct matrixTolerance
 {
 };
 
-template <>
-struct matrixTolerance<float>
+template <> struct matrixTolerance<float>
 {
     static constexpr float tolerance = (float)1.5e-4;
 };
 
-template <>
-struct matrixTolerance<double>
+template <> struct matrixTolerance<double>
 {
     static constexpr double tolerance = 5.e-13;
 };
 
+// Fixed seed so a failure is reproducible. These values feed a tolerance
+// check; a predictable sequence is intended.
+std::default_random_engine test_generator()
+{
+    return std::default_random_engine{42};  // NOLINT(bugprone-random-generator-seed)
+}
+
 // v (1 x rows) * A (rows x columns) -> r (1 x columns), via the raw
 // matrix_multiplication(transpose_a=false, transpose_b=false, ...) entry
 // point, treating v as a 1-row matrix.
-template <typename value_t>
-void vector_matrix_multiplication(int rows, int columns)
+template <typename value_t> void vector_matrix_multiplication(int rows, int columns)
 {
     constexpr auto tol = matrixTolerance<value_t>::tolerance;
 
@@ -50,7 +54,7 @@ void vector_matrix_multiplication(int rows, int columns)
     std::vector<value_t>  v(rows);
     std::vector<value_t>  r(columns);
 
-    std::default_random_engine             generator;
+    auto                                   generator = test_generator();
     std::uniform_real_distribution<double> distribution(-5., 5.);
 
     for (int i = 0; i < rows; ++i)
@@ -67,8 +71,7 @@ void vector_matrix_multiplication(int rows, int columns)
     }
 
     auto gemm_ws = gemm_workspace<value_t>(1, columns, rows);
-    linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(
-        false,
+    linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(false,
         false,
         1,
         columns,
@@ -97,9 +100,9 @@ void vector_matrix_multiplication(int rows, int columns)
     value_t max_error = 0;
     for (int j = 0; j < columns; ++j)
     {
-        max_error = std::fmax(
-            max_error,
-            std::fabs(static_cast<double>(r[static_cast<std::size_t>(j)] - r_seq[static_cast<std::size_t>(j)])));
+        max_error = std::fmax(max_error,
+            std::fabs(static_cast<double>(
+                r[static_cast<std::size_t>(j)] - r_seq[static_cast<std::size_t>(j)])));
     }
 
 #ifdef DEBUG_MATRIXMULTIPLICATION
@@ -112,8 +115,7 @@ void vector_matrix_multiplication(int rows, int columns)
 // A (rows x columns) * v (columns x 1) -> r (rows x 1), plus a transpose
 // sanity check (B = transpose(A) computed by hand, since matrix_transpose
 // is not exercised by this test file — matches the original test scope).
-template <typename value_t>
-void matrix_vector_multiplication(int rows, int columns)
+template <typename value_t> void matrix_vector_multiplication(int rows, int columns)
 {
     constexpr auto tol = matrixTolerance<value_t>::tolerance;
 
@@ -121,7 +123,7 @@ void matrix_vector_multiplication(int rows, int columns)
     std::vector<value_t>  v(columns);
     std::vector<value_t>  r(rows);
 
-    std::default_random_engine             generator;
+    auto                                   generator = test_generator();
     std::uniform_real_distribution<double> distribution(-5., 5.);
 
     for (int i = 0; i < rows; ++i)
@@ -138,8 +140,7 @@ void matrix_vector_multiplication(int rows, int columns)
     }
 
     auto gemm_ws = gemm_workspace<value_t>(rows, 1, columns);
-    linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(
-        false,
+    linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(false,
         false,
         rows,
         1,
@@ -186,8 +187,7 @@ void matrix_vector_multiplication(int rows, int columns)
     {
         for (int j = 0; j < columns; ++j)
         {
-            max_error = std::fmax(
-                max_error,
+            max_error = std::fmax(max_error,
                 std::fabs(static_cast<double>(
                     A(static_cast<std::size_t>(i), static_cast<std::size_t>(j)) -
                     B(static_cast<std::size_t>(j), static_cast<std::size_t>(i)))));
@@ -206,7 +206,8 @@ void matrix_vector_multiplication(int rows, int columns)
 // (columns x depth) — matching linalg::matrix_multiplication's row-major
 // convention (see src/matrix_operation/matrix_multiplication.cpp).
 template <typename value_t>
-void matrix_multiplication_test(int rows, int columns, int depth, bool transpose_a, bool transpose_b)
+void matrix_multiplication_test(
+    int rows, int columns, int depth, bool transpose_a, bool transpose_b)
 {
     constexpr auto tol       = matrixTolerance<value_t>::tolerance;
     auto           a_rows    = rows;
@@ -227,7 +228,7 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
     dense_matrix<value_t> B(b_rows, b_columns);
     dense_matrix<value_t> C(rows, columns);
 
-    std::default_random_engine             generator;
+    auto                                   generator = test_generator();
     std::uniform_real_distribution<double> distribution(-5., 5.);
 
     for (int i = 0; i < a_rows; ++i)
@@ -249,8 +250,7 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
     }
 
     auto gemm_ws = gemm_workspace<value_t>(rows, columns, depth);
-    linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(
-        transpose_a,
+    linalg::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(transpose_a,
         transpose_b,
         rows,
         columns,
@@ -272,15 +272,15 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
             value_t sum = 0;
             for (int k = 0; k < depth; ++k)
             {
-                const value_t a_val = transpose_a
-                                           ? A(static_cast<std::size_t>(k), static_cast<std::size_t>(i))
-                                           : A(static_cast<std::size_t>(i), static_cast<std::size_t>(k));
-                const value_t b_val = transpose_b
-                                           ? B(static_cast<std::size_t>(j), static_cast<std::size_t>(k))
-                                           : B(static_cast<std::size_t>(k), static_cast<std::size_t>(j));
+                const value_t a_val =
+                    transpose_a ? A(static_cast<std::size_t>(k), static_cast<std::size_t>(i))
+                                : A(static_cast<std::size_t>(i), static_cast<std::size_t>(k));
+                const value_t b_val =
+                    transpose_b ? B(static_cast<std::size_t>(j), static_cast<std::size_t>(k))
+                                : B(static_cast<std::size_t>(k), static_cast<std::size_t>(j));
                 sum += a_val * b_val;
             }
-            auto c = C(static_cast<std::size_t>(i), static_cast<std::size_t>(j));
+            auto c    = C(static_cast<std::size_t>(i), static_cast<std::size_t>(j));
             max_error = std::fmax(max_error, std::fabs(static_cast<double>(sum - c)));
         }
     }

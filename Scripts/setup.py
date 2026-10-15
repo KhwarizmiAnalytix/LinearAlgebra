@@ -17,6 +17,7 @@ Usage:
 """
 
 import glob
+import importlib.util
 import os
 import platform
 import re
@@ -35,10 +36,10 @@ try:
     colorama.init()
 except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
 
-    class Fore:  # pylint: disable=too-few-public-methods
+    class Fore:
         CYAN = GREEN = YELLOW = RED = WHITE = ""
 
-    class Style:  # pylint: disable=too-few-public-methods
+    class Style:
         RESET_ALL = ""
 
 
@@ -306,12 +307,14 @@ class SummaryReporter:
             )
             if report.get("total_functions", 0) > 0:
                 print_status(
-                    f"Function Coverage: {report.get('function_coverage_percent', 0.0):.2f}%",
+                    "Function Coverage: "
+                    f"{report.get('function_coverage_percent', 0.0):.2f}%",
                     "INFO",
                 )
             if report.get("total_regions", 0) > 0:
                 print_status(
-                    f"Region Coverage:   {report.get('region_coverage_percent', 0.0):.2f}%",
+                    "Region Coverage:   "
+                    f"{report.get('region_coverage_percent', 0.0):.2f}%",
                     "INFO",
                 )
             report_file = report.get("report_file", "")
@@ -385,7 +388,8 @@ def check_xcode_availability() -> bool:
         )
         if "command line tools instance" in stderr_output:
             print_status(
-                "Xcode Command Line Tools found, but full Xcode is required for Xcode generator",
+                "Xcode Command Line Tools found, but full Xcode is required for Xcode "
+                "generator",
                 "WARNING",
             )
         else:
@@ -469,10 +473,12 @@ class LinearAlgebraFlags:
             "build the LinearAlgebra test suite (LINALG_ENABLE_TESTING; default ON)",
             "enable GoogleTest for LinearAlgebra (default ON; token disables it)",
             "enable the Intel MKL-backed LAPACKE code paths",
-            "enable a vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...)",
+            "enable a vendor-neutral CBLAS/LAPACKE backend "
+            "(OpenBLAS, Accelerate, netlib, ...)",
             "enable the cuBLAS/cuSOLVER GPU backend (requires the CUDA toolkit)",
             "enable partial pivoting in the scalar (non-MKL) LU fallback paths",
-            "re-enable MSVC narrowing-conversion warnings (C4244) around the scalar fallback",
+            "re-enable MSVC narrowing-conversion warnings (C4244) "
+            "around the scalar fallback",
             "use Icecream (icecc) distributed compiler",
             "enable per-target compiler cache launcher (default ON; token disables it)",
             "compiler cache backend: none, ccache, sccache, or buildcache",
@@ -483,13 +489,15 @@ class LinearAlgebraFlags:
             "sanitizer type: address, undefined, thread, memory, leak",
             "enable check-only spell checking",
             "execute the test suite under Valgrind",
-            "linker: --linker.default, --linker.mold, --linker.lld, --linker.gold, --linker.lld-link",
+            "linker: --linker.default, --linker.mold, --linker.lld, "
+            "--linker.gold, --linker.lld-link",
             "enable code coverage instrumentation",
             "C++ standard: cxx17, cxx20, cxx23",
             "LTO mode: off | thin | full | ipo | auto (bare 'lto' = auto)",
             "enable cppcheck static analysis",
             "enable Google Benchmark micro-benchmarks (LINALG_ENABLE_BENCHMARK)",
-            "SIMD ISA override: scalar, sse2, avx, avx2, avx512, neon (bare tokens also accepted)",
+            "SIMD ISA override: scalar, sse2, avx, avx2, avx512, neon "
+            "(bare tokens also accepted)",
         ]
 
     def __build_cmake_flag(self):
@@ -533,7 +541,8 @@ class LinearAlgebraFlags:
         self.__value = dict.fromkeys(self.__key, self.OFF)
         self.__value.update(
             {
-                "static": self.ON,  # BUILD_SHARED_LIBS default is ON, so static=ON means "shared"
+                # BUILD_SHARED_LIBS default is ON, so static=ON means "shared".
+                "static": self.ON,
                 "test": self.ON,  # LINALG_ENABLE_TESTING default ON
                 "gtest": self.ON,  # LINALG_ENABLE_GTEST default ON
                 "cache": self.ON,  # LINALG_ENABLE_CACHE default ON
@@ -572,7 +581,8 @@ class LinearAlgebraFlags:
                     print_status(f"LTO mode: {lto_mode}", "INFO")
                 else:
                     print_status(
-                        f"Unknown LTO mode '{lto_mode}'. Valid options: {', '.join(lto_modes)}",
+                        f"Unknown LTO mode '{lto_mode}'. "
+                        f"Valid options: {', '.join(lto_modes)}",
                         "ERROR",
                     )
                     sys.exit(1)
@@ -583,9 +593,12 @@ class LinearAlgebraFlags:
                     self.builder_suffix += f"_linker_{linker_value}"
                     print_status(f"Setting linker to {linker_value}", "INFO")
                 else:
+                    valid_linkers = ", ".join(
+                        name for name in linker_list if name != "default"
+                    )
                     print_status(
-                        f"Unknown linker '{linker_value}'. Valid options: "
-                        f"{', '.join(name for name in linker_list if name != 'default')}",
+                        f"Unknown linker '{linker_value}'. "
+                        f"Valid options: {valid_linkers}",
                         "ERROR",
                     )
                     sys.exit(1)
@@ -606,7 +619,8 @@ class LinearAlgebraFlags:
                     print_status(f"Setting vectorization ISA to {isa_value}", "INFO")
                 else:
                     print_status(
-                        f"Unknown ISA '{isa_value}'. Valid options: {', '.join(isa_list)}",
+                        f"Unknown ISA '{isa_value}'. "
+                        f"Valid options: {', '.join(isa_list)}",
                         "ERROR",
                     )
                     sys.exit(1)
@@ -647,34 +661,39 @@ class LinearAlgebraFlags:
             and self.__value.get("test") != self.ON
         ):
             print_status(
-                "Coverage enabled but testing is disabled - enabling tests automatically.",
+                "Coverage enabled but testing is disabled - "
+                "enabling tests automatically.",
                 "WARNING",
             )
             self.__value["test"] = self.ON
 
-        if self.__value.get("coverage") == self.ON:
-            try:
-                import coverage_tool  # noqa: F401
-            except ImportError:
-                print_status(
-                    "coverage-tool is not installed. Install with: pip install coverage-tool",
-                    "ERROR",
-                )
-                sys.exit(1)
+        if (
+            self.__value.get("coverage") == self.ON
+            and importlib.util.find_spec("coverage_tool") is None
+        ):
+            print_status(
+                "coverage-tool is not installed. "
+                "Install with: pip install coverage-tool",
+                "ERROR",
+            )
+            sys.exit(1)
 
         if self.__value.get("spell") == self.ON:
             print_status(
-                "SPELL CHECKING ENABLED: Automatic spelling corrections will be applied during build!",
+                "SPELL CHECKING ENABLED: Automatic spelling corrections "
+                "will be applied during build!",
                 "WARNING",
             )
             print_status(
-                "Ensure you have committed your changes before building with this option.",
+                "Ensure you have committed your changes before building "
+                "with this option.",
                 "WARNING",
             )
 
         if self.__value.get("mkl") == self.ON and self.__value.get("blas") == self.ON:
             print_status(
-                "Both MKL and the vendor-neutral BLAS backend are enabled - MKL takes precedence at compile time.",
+                "Both MKL and the vendor-neutral BLAS backend are enabled - "
+                "MKL takes precedence at compile time.",
                 "WARNING",
             )
 
@@ -731,7 +750,7 @@ class LinearAlgebraFlags:
 
 
 class LinearAlgebraConfiguration:
-    """Drives config/build/test/coverage for LinearAlgebra from parsed dotted-token args."""
+    """Drive config, build, test, and coverage from dotted-token CLI args."""
 
     def __init__(self, args_list):
         missing_deps = check_dependencies()
@@ -990,7 +1009,8 @@ class LinearAlgebraConfiguration:
             from coverage_tool import get_coverage
         except ImportError:
             print_status(
-                "coverage-tool is not installed. Install with: pip install coverage-tool",
+                "coverage-tool is not installed. "
+                "Install with: pip install coverage-tool",
                 "ERROR",
             )
             return 1
@@ -1035,7 +1055,8 @@ def parse_args(args):
                 processed_args.extend(["sanitizer", sanitizer_type])
             else:
                 print_status(
-                    f"Invalid sanitizer type: {sanitizer_type}. Valid options: {', '.join(valid_sanitizers)}",
+                    f"Invalid sanitizer type: {sanitizer_type}. "
+                    f"Valid options: {', '.join(valid_sanitizers)}",
                     "ERROR",
                 )
                 sys.exit(1)
@@ -1046,7 +1067,8 @@ def parse_args(args):
                 processed_args.append(f"lto.{lto_mode}")
             else:
                 print_status(
-                    f"Invalid LTO mode '{lto_mode}'. Valid options: {', '.join(valid_lto_modes)}",
+                    f"Invalid LTO mode '{lto_mode}'. "
+                    f"Valid options: {', '.join(valid_lto_modes)}",
                     "ERROR",
                 )
                 sys.exit(1)
@@ -1055,7 +1077,8 @@ def parse_args(args):
         elif re.search(r"[/\\]", arg) and re.search(
             r"[Cc]lang|[Gg][Cc][Cc]|[Gg]\+\+", arg
         ):
-            # Compiler path argument (e.g. C:/msys64/mingw64/bin/clang.exe) — pass through verbatim.
+            # Compiler path (for example C:/msys64/mingw64/bin/clang.exe).
+            # Pass the argument through verbatim.
             processed_args.append(arg)
         else:
             for part in re.split(r"\.|\ ", arg.lower()):
@@ -1142,8 +1165,9 @@ def main():
 
             compilation_calc.summary_reporter.display_summary()
             if compilation_calc.error_logger.has_errors():
+                log_path = compilation_calc.error_logger.get_log_file_path()
                 print_status(
-                    f"Error log available at: {compilation_calc.error_logger.get_log_file_path()}",
+                    f"Error log available at: {log_path}",
                     "INFO",
                 )
 

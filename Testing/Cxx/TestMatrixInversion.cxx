@@ -3,32 +3,28 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/matrix_inversion.h"
+#include "gtest/gtest.h"
 
 namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename>
-struct Tolerance
+template <typename> struct Tolerance
 {
 };
 
-template <>
-struct Tolerance<float>
+template <> struct Tolerance<float>
 {
     static constexpr float value = 0.0002F;
 };
 
-template <>
-struct Tolerance<double>
+template <> struct Tolerance<double>
 {
     static constexpr double value = 5.e-12;
 };
 
-template <typename value_t>
-dense_matrix<value_t> transpose(const dense_matrix<value_t>& a)
+template <typename value_t> dense_matrix<value_t> transpose(const dense_matrix<value_t>& a)
 {
     dense_matrix<value_t> t(a.cols(), a.rows());
     for (std::size_t i = 0; i < a.rows(); ++i)
@@ -74,8 +70,7 @@ double hmax_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>
     return max_error;
 }
 
-template <typename value_t>
-void test_inversion(std::size_t dim)
+template <typename value_t> void test_inversion(std::size_t dim)
 {
     dense_matrix<value_t> R(dim, dim);
     dense_matrix<value_t> Id(dim, dim);
@@ -100,11 +95,16 @@ void test_inversion(std::size_t dim)
     }
     dense_matrix<value_t> IA = A;
     {
-        const auto ws_size = linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
-            static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        const auto ws_size =
+            linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
+                static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(), pivot.data(), static_cast<linalg_int>(dim),
-            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, ws.data(), ws_size);
+        linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(),
+            pivot.data(),
+            static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
+            ws.data(),
+            ws_size);
     }
 
     for (std::size_t i = 0; i < dim; i++)
@@ -115,17 +115,22 @@ void test_inversion(std::size_t dim)
         }
     }
 
-    R                 = matmul(IA, A);
+    R                = matmul(IA, A);
     double max_error = hmax_abs_diff(R, Id);
     EXPECT_LE(max_error, Tolerance<value_t>::value);
 
     IA = A;
     {
-        const auto ws_size = linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
-            static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        const auto ws_size =
+            linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
+                static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(), pivot.data(), static_cast<linalg_int>(dim),
-            linalg::linear_solver_type::LU_LINEAR_SOLVER, ws.data(), ws_size);
+        linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(),
+            pivot.data(),
+            static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            ws.data(),
+            ws_size);
     }
 
     R         = matmul(IA, A);
@@ -133,29 +138,46 @@ void test_inversion(std::size_t dim)
     EXPECT_LE(max_error, Tolerance<value_t>::value);
 
     {
-        const auto ws_size = linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::workspace_size(
-            static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
+        const auto                 ws_size = linalg::matrix_determinant_backend<value_t,
+                            linalg::linalg_backend::native>::workspace_size(static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(
-            A.data(), pivot.data(), static_cast<linalg_int>(dim),
-            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, ws.data(), ws_size);
+        linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(A.data(),
+            pivot.data(),
+            static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
+            ws.data(),
+            ws_size);
     }
 
     {
-        const auto ws_size = linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::workspace_size(
-            static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        const auto                 ws_size = linalg::matrix_determinant_backend<value_t,
+                            linalg::linalg_backend::native>::workspace_size(static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(
-            A.data(), pivot.data(), static_cast<linalg_int>(dim),
-            linalg::linear_solver_type::LU_LINEAR_SOLVER, ws.data(), ws_size);
+        linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(A.data(),
+            pivot.data(),
+            static_cast<linalg_int>(dim),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            ws.data(),
+            ws_size);
     }
 
     EXPECT_ANY_THROW((linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(),
-        pivot.data(), static_cast<linalg_int>(dim), (linalg::linear_solver_type)5, nullptr, 0)));
+        pivot.data(),
+        static_cast<linalg_int>(dim),
+        (linalg::linear_solver_type)5,
+        nullptr,
+        0)));
 
-    EXPECT_ANY_THROW((linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(
-        IA.data(), pivot.data(), static_cast<linalg_int>(dim),
-        (linalg::linear_solver_type)5, nullptr, 0)));
+    EXPECT_ANY_THROW(
+        (linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(
+            IA.data(),
+            pivot.data(),
+            static_cast<linalg_int>(dim),
+            (linalg::linear_solver_type)5,
+            nullptr,
+            0)));
 }
 }  // namespace
 

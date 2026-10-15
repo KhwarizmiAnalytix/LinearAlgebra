@@ -8,32 +8,28 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/svd_decomposition.h"
+#include "gtest/gtest.h"
 
 namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename>
-struct SVDTolerance
+template <typename> struct SVDTolerance
 {
 };
 
-template <>
-struct SVDTolerance<float>
+template <> struct SVDTolerance<float>
 {
     static constexpr double tolerance = 5.e-4;
 };
 
-template <>
-struct SVDTolerance<double>
+template <> struct SVDTolerance<double>
 {
     static constexpr double tolerance = 5.e-13;
 };
 
-template <typename value_t>
-void test_svd(std::size_t rows, std::size_t columns)
+template <typename value_t> void test_svd(std::size_t rows, std::size_t columns)
 {
     dense_matrix<value_t> M(rows, columns);
 
@@ -51,13 +47,12 @@ void test_svd(std::size_t rows, std::size_t columns)
     dense_matrix<value_t> U(rows, ldu);
     dense_matrix<value_t> tV(ldu, columns);
 
-    const auto ldm = columns;
-    const auto ldv = columns;
+    const auto ldm     = columns;
+    const auto ldv     = columns;
     const auto ws_size = linalg::svd_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::svd_backend<value_t, linalg::kActiveBackend>::apply(
-        static_cast<linalg_long>(rows),
+    linalg::svd_backend<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         M.begin(),
         static_cast<linalg_long>(ldm),

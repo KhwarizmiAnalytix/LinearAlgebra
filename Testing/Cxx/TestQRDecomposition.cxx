@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "gtest/gtest.h"
 #include "include/matrix_operation/qr_decomposition.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -31,8 +31,7 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
 
-    linalg::qr_backend<value_t, linalg::kActiveBackend>::apply(
-        static_cast<linalg_long>(rows),
+    linalg::qr_backend<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A.begin(),
         static_cast<linalg_long>(columns),
@@ -70,8 +69,9 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
             {
                 sum += Q(r, i) * Q(r, j);
             }
-            const value_t expected      = (i == j) ? value_t(1) : value_t(0);
-            max_orth_error = std::max(max_orth_error, static_cast<value_t>(std::fabs(sum - expected)));
+            const value_t expected = (i == j) ? value_t(1) : value_t(0);
+            max_orth_error =
+                std::max(max_orth_error, static_cast<value_t>(std::fabs(sum - expected)));
         }
     }
     EXPECT_LT(max_orth_error, static_cast<value_t>(1e-3));

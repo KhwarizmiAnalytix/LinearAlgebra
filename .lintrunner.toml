@@ -1,6 +1,6 @@
-# Comprehensive Linting Configuration for KhwarizmiAnalytix Ecosystem
-# Includes all 32 linting checks across C++, Python, CMake, and CI/CD
-# Based on XSigma standards and lint-tool adapters
+# Linting configuration for LinearAlgebra.
+# First-party C++ lives in include/ and src/ (tests in Testing/).
+# Every check excludes ThirdParty/ (Logging, googletest, benchmark).
 
 # ==============================================================================
 # C++ FORMATTING & ANALYSIS
@@ -15,15 +15,24 @@ include_patterns = [
     'include/**/*.cpp',
     'include/**/*.cxx',
     'include/**/*.c',
-    'Testing/**/*.h',
-    'Testing/**/*.cpp',
-    'Tests/**/*.h',
-    'Tests/**/*.cpp',
+    'include/**/*.cu',
+    'include/**/*.cuh',
     'src/**/*.h',
+    'src/**/*.hpp',
     'src/**/*.cpp',
+    'src/**/*.cxx',
+    'src/**/*.cu',
+    'src/**/*.cuh',
+    'Testing/**/*.h',
+    'Testing/**/*.hpp',
+    'Testing/**/*.cpp',
+    'Testing/**/*.cxx',
 ]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -55,13 +64,24 @@ include_patterns = [
     'include/**/*.hpp',
     'include/**/*.cpp',
     'include/**/*.cxx',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cxx',
+    'src/**/*.cu',
+    'src/**/*.cuh',
     'Testing/**/*.h',
+    'Testing/**/*.hpp',
     'Testing/**/*.cpp',
-    'Tests/**/*.h',
-    'Tests/**/*.cpp',
+    'Testing/**/*.cxx',
 ]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
 ]
@@ -80,9 +100,17 @@ command = [
 
 [[linter]]
 code = 'CMAKE'
-include_patterns = ['CMakeLists.txt', '**/*.cmake']
+include_patterns = [
+    'CMakeLists.txt',
+    'Cmake/**/*.cmake',
+    'Testing/**/CMakeLists.txt',
+    'Testing/**/*.cmake',
+]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -99,9 +127,17 @@ command = [
 
 [[linter]]
 code = 'CMAKEFORMAT'
-include_patterns = ['CMakeLists.txt', '**/*.cmake']
+include_patterns = [
+    'CMakeLists.txt',
+    'Cmake/**/*.cmake',
+    'Testing/**/CMakeLists.txt',
+    'Testing/**/*.cmake',
+]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -126,9 +162,12 @@ is_formatter = true
 
 [[linter]]
 code = 'CMAKE_MINIMUM_REQUIRED'
-include_patterns = ['CMakeLists.txt', '**/CMakeLists.txt']
+include_patterns = ['CMakeLists.txt', 'Testing/**/CMakeLists.txt', 'Cmake/**/CMakeLists.txt']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 command = [
@@ -145,9 +184,12 @@ command = [
 
 [[linter]]
 code = 'FLAKE8'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     'build_*/**',
@@ -171,9 +213,12 @@ command = [
 
 [[linter]]
 code = 'MYPY'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     'build_*/**',
@@ -198,9 +243,12 @@ command = [
 
 [[linter]]
 code = 'MYPYSTRICT'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     'build_*/**',
@@ -226,9 +274,12 @@ command = [
 
 [[linter]]
 code = 'RUFF'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     'build_*/**',
@@ -251,9 +302,12 @@ command = [
 
 [[linter]]
 code = 'PYFMT'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     'build_*/**',
@@ -281,9 +335,12 @@ is_formatter = true
 
 [[linter]]
 code = 'PYREFLY'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     '__pycache__/**',
@@ -304,9 +361,12 @@ command = [
 
 [[linter]]
 code = 'IMPORT_LINTER'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     '__pycache__/**',
@@ -328,9 +388,12 @@ command = [
 
 [[linter]]
 code = 'DOCSTRING_LINTER'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     '__pycache__/**',
@@ -360,6 +423,9 @@ include_patterns = ['**']
 exclude_patterns = [
     '.lintrunner.toml',
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -384,6 +450,9 @@ include_patterns = ['**']
 exclude_patterns = [
     '.lintrunner.toml',
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -410,6 +479,9 @@ include_patterns = ['**']
 exclude_patterns = [
     '.lintrunner.toml',
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -440,6 +512,9 @@ include_patterns = ['**']
 exclude_patterns = [
     '.lintrunner.toml',
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -470,6 +545,9 @@ code = 'EDITORCONFIG'
 include_patterns = ['**']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'bazel-*/**',
     'build/**',
@@ -492,9 +570,12 @@ command = [
 
 [[linter]]
 code = 'PYPROJECT'
-include_patterns = ['pyproject.toml', 'setup.py', 'setup.cfg']
+include_patterns = ['pyproject.toml']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 command = [
@@ -511,9 +592,19 @@ include_patterns = [
     'include/**/*.h',
     'include/**/*.hpp',
     'include/**/*.cpp',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cu',
+    'src/**/*.cuh',
 ]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 command = [
@@ -534,22 +625,38 @@ include_patterns = [
     'include/**/*.h',
     'include/**/*.hpp',
     'include/**/*.cpp',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cxx',
+    'src/**/*.cu',
+    'src/**/*.cuh',
     'Testing/**/*.h',
+    'Testing/**/*.hpp',
     'Testing/**/*.cpp',
+    'Testing/**/*.cxx',
 ]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
 ]
 command = [
     'python3',
     '-m',
     'lint_tool.adapters.grep_linter',
-    '--invert-match',
-    '--pattern=(Copyright|SPDX-License)',
+    '--match-first-only',
+    '--pattern=Copyright|SPDX-License-Identifier',
     '--linter-name=COPYRIGHT',
-    '--error-name=missing copyright header',
-    '--error-description=Add copyright/SPDX header to this file.',
+    '--error-name=per-file copyright header',
+    '--error-description=Keep the project license in LICENSE. Do not add per-file Copyright or SPDX headers under include/, src/, or Testing/.',
     '--',
     '@{{PATHSFILE}}',
 ]
@@ -563,6 +670,9 @@ code = 'GHA'
 include_patterns = ['.github/workflows/**/*.yml', '.github/workflows/**/*.yaml']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 command = [
@@ -578,6 +688,9 @@ code = 'ACTIONLINT'
 include_patterns = ['.github/workflows/**/*.yml', '.github/workflows/**/*.yaml']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 init_command = [
@@ -600,9 +713,12 @@ command = [
 
 [[linter]]
 code = 'SHELLCHECK'
-include_patterns = ['**/*.sh', 'Scripts/**/*.sh']
+include_patterns = ['Scripts/**/*.sh']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     'build_*/**',
@@ -627,6 +743,9 @@ code = 'EXEC'
 include_patterns = ['Scripts/**', 'tools/**', 'bin/**']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 command = [
@@ -652,9 +771,20 @@ command = [
 
 [[linter]]
 code = 'BAZEL_LINTER'
-include_patterns = ['BUILD', 'BUILD.bazel', 'WORKSPACE', 'WORKSPACE.bazel', '**/*.bzl']
+include_patterns = [
+    'BUILD',
+    'BUILD.bazel',
+    'WORKSPACE',
+    'WORKSPACE.bazel',
+    'MODULE.bazel',
+    'bazel/**/*.bzl',
+    '*.bzl',
+]
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
 ]
 command = [
@@ -670,42 +800,24 @@ command = [
 # ==============================================================================
 
 [[linter]]
-code = 'ROOT_LOGGING'
-include_patterns = [
-    'include/**/*.h',
-    'include/**/*.cpp',
-    'include/**/*.cxx',
-]
-exclude_patterns = [
-    'ThirdParty/**',
-    '.git/**',
-]
-command = [
-    'python3',
-    '-m',
-    'lint_tool.adapters.grep_linter',
-    '--pattern=LOG(.*)\|SPDLOG.*\|logger->',
-    '--invert-match',
-    '--linter-name=ROOT_LOGGING',
-    '--error-name=logging not from logger param',
-    '--error-description=Use logger->info/debug/warn/error instead of direct logging.',
-    '--',
-    '@{{PATHSFILE}}',
-]
-
-[[linter]]
 code = 'NOQA'
-include_patterns = ['**/*.py', '**/*.cpp', '**/*.h']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
+    'build_*/**',
+    'bazel-*/**',
+    '**/__pycache__/**',
 ]
 command = [
     'python3',
     '-m',
     'lint_tool.adapters.grep_linter',
-    '--pattern=noqa|NOLINT|pylint:.*disable',
+    '--pattern=noqa|pylint:.*disable',
     '--linter-name=NOQA',
     '--error-name=suppression directive found',
     '--error-description=Code has inline suppressions; review if necessary or remove.',
@@ -714,26 +826,13 @@ command = [
 ]
 
 [[linter]]
-code = 'PYPIDEP'
-include_patterns = ['pyproject.toml', 'setup.py', 'requirements*.txt']
-exclude_patterns = [
-    'ThirdParty/**',
-    '.git/**',
-]
-command = [
-    'python3',
-    '-m',
-    'lint_tool.adapters.pip_init',
-    '--check-deps',
-    '--',
-    '@{{PATHSFILE}}',
-]
-
-[[linter]]
 code = 'TYPEIGNORE'
-include_patterns = ['**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
     '.git/**',
     'build/**',
     '__pycache__/**',

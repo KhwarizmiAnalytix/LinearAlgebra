@@ -24,23 +24,24 @@ cmake_minimum_required(VERSION 3.16)
 # Standalone CMake package — any C++ project can consume it via add_subdirectory;
 # XSigma is one consumer, not a required host.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(
-    LinearAlgebra
-    VERSION 1.0.0
-    DESCRIPTION "Dense linear algebra: Cholesky/LU/SVD decompositions, linear solve, matrix inversion/multiplication/transpose, optional MKL backend"
-    HOMEPAGE_URL "https://github.com/KhwarizmiAnalytix/LinearAlgebra"
-    LANGUAGES CXX C
-  )
-  set(LINALG_STANDALONE ON)
-  include(CTest)
-  enable_testing()
-  option(BUILD_SHARED_LIBS "Build shared libraries" ON)
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-else ()
-  set(LINALG_STANDALONE OFF)
-endif ()
+    project(
+        LinearAlgebra
+        VERSION 1.0.0
+        DESCRIPTION
+            "Dense linear algebra: Cholesky/LU/SVD decompositions, linear solve, matrix inversion/multiplication/transpose, optional MKL backend"
+        HOMEPAGE_URL "https://github.com/KhwarizmiAnalytix/LinearAlgebra"
+        LANGUAGES CXX C
+    )
+    set(LINALG_STANDALONE ON)
+    include(CTest)
+    enable_testing()
+    option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+else()
+    set(LINALG_STANDALONE OFF)
+endif()
 
 # Own CMake modules: toolchain helpers (lto/cache/sanitize/...), the
 # add_third_party_library machinery (third_party_helpers.cmake), and test
@@ -99,20 +100,30 @@ option(LINALG_ENABLE_VECTORIZATION
 #            avx2 is the default on x86_64/AMD64/i386/i686; neon is the
 #            default on aarch64/arm64.
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _linalg_system_processor_lower)
-if (_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
-  set(_linalg_vectorization_isa_default "neon")
-elseif (_linalg_system_processor_lower MATCHES "^(x86_64|amd64|i386|i686)$")
-  set(_linalg_vectorization_isa_default "avx2")
-else ()
-  set(_linalg_vectorization_isa_default "scalar")
-endif ()
+if(_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
+    set(_linalg_vectorization_isa_default "neon")
+elseif(_linalg_system_processor_lower MATCHES "^(x86_64|amd64|i386|i686)$")
+    set(_linalg_vectorization_isa_default "avx2")
+else()
+    set(_linalg_vectorization_isa_default "scalar")
+endif()
 unset(_linalg_system_processor_lower)
-set(LINALG_VECTORIZATION_ISA "${_linalg_vectorization_isa_default}" CACHE STRING
-    "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse2, avx, avx2, avx512, neon"
+set(LINALG_VECTORIZATION_ISA
+    "${_linalg_vectorization_isa_default}"
+    CACHE
+        STRING
+        "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse2, avx, avx2, avx512, neon"
 )
 unset(_linalg_vectorization_isa_default)
-set_property(CACHE LINALG_VECTORIZATION_ISA PROPERTY STRINGS
-             scalar sse2 avx avx2 avx512 neon
+set_property(
+    CACHE LINALG_VECTORIZATION_ISA
+    PROPERTY STRINGS
+             scalar
+             sse2
+             avx
+             avx2
+             avx512
+             neon
 )
 
 # On MSVC, matrix_multiplication.cpp normally suppresses narrowing-conversion
@@ -123,8 +134,8 @@ option(LINALG_DISPLAY_WIN32_WARNINGS "Do not suppress MSVC narrowing-conversion 
 # (LTO conflicts with instrumentation / sanitizers).
 include(lto)
 xsigma_lto_compute_default(_lto_default PROFILE SUPPORT)
-set(LINALG_LTO_MODE "${_lto_default}" CACHE STRING
-                                            "LTO mode for LinearAlgebra: off | thin | full | ipo | auto"
+set(LINALG_LTO_MODE "${_lto_default}"
+    CACHE STRING "LTO mode for LinearAlgebra: off | thin | full | ipo | auto"
 )
 set_property(CACHE LINALG_LTO_MODE PROPERTY STRINGS off thin full ipo auto)
 
@@ -161,7 +172,8 @@ option(LINALG_ENABLE_IWYU "Enable include-what-you-use analysis for LinearAlgebr
 mark_as_advanced(LINALG_ENABLE_IWYU)
 option(LINALG_ENABLE_SANITIZER "Build LinearAlgebra with sanitizer support (Clang/GCC only)" OFF)
 set(LINALG_SANITIZER_TYPE "address"
-    CACHE STRING "Sanitizer type for LinearAlgebra. Options: address, undefined, thread, memory, leak"
+    CACHE STRING
+          "Sanitizer type for LinearAlgebra. Options: address, undefined, thread, memory, leak"
 )
 set_property(CACHE LINALG_SANITIZER_TYPE PROPERTY STRINGS address undefined thread memory leak)
 mark_as_advanced(LINALG_ENABLE_SANITIZER LINALG_SANITIZER_TYPE)
@@ -169,13 +181,14 @@ option(LINALG_ENABLE_SPELL "Enable check-only spell checking for LinearAlgebra" 
 mark_as_advanced(LINALG_ENABLE_SPELL)
 option(LINALG_ENABLE_VALGRIND "Execute LinearAlgebra test suite with Valgrind" OFF)
 mark_as_advanced(LINALG_ENABLE_VALGRIND)
-set(LINALG_LINKER_CHOICE "default" CACHE STRING
-                                          "Linker for LinearAlgebra: default, lld, mold, gold, lld-link"
+set(LINALG_LINKER_CHOICE "default"
+    CACHE STRING "Linker for LinearAlgebra: default, lld, mold, gold, lld-link"
 )
 set_property(CACHE LINALG_LINKER_CHOICE PROPERTY STRINGS default lld mold gold lld-link)
 mark_as_advanced(LINALG_LINKER_CHOICE)
 set(LINALG_CACHE_BACKEND "none"
-    CACHE STRING "Compiler cache backend for LinearAlgebra. Options: none, ccache, sccache, buildcache"
+    CACHE STRING
+          "Compiler cache backend for LinearAlgebra. Options: none, ccache, sccache, buildcache"
 )
 set_property(CACHE LINALG_CACHE_BACKEND PROPERTY STRINGS none ccache sccache buildcache)
 mark_as_advanced(LINALG_CACHE_BACKEND)
@@ -183,9 +196,9 @@ mark_as_advanced(LINALG_CACHE_BACKEND)
 # C++ standard — applied to every TU in this module via CMAKE_CXX_STANDARD.
 set(LINALG_CXX_STANDARD "17" CACHE STRING "C++ standard for LinearAlgebra. Options: 17 20 23")
 set_property(CACHE LINALG_CXX_STANDARD PROPERTY STRINGS 17 20 23)
-if (NOT LINALG_CXX_STANDARD MATCHES "^(17|20|23)$")
-message(FATAL_ERROR "LINALG_CXX_STANDARD must be one of: 17 20 23")
-endif ()
+if(NOT LINALG_CXX_STANDARD MATCHES "^(17|20|23)$")
+    message(FATAL_ERROR "LINALG_CXX_STANDARD must be one of: 17 20 23")
+endif()
 
 # --- Section 2: CMake module includes --- Order: introspection → toolchain helpers →
 # coverage/sanitizer → LTO/linker.
@@ -203,152 +216,150 @@ include(platform) # Platform flags (macOS rpath, Windows /utf-8, …)
 include(cache) # Configures per-target compiler cache launcher
 include(CMakeDependentOption)
 include(helper_macros)
-if (LINALG_ENABLE_SANITIZER)
-  include(sanitize)
-endif ()
-if (LINALG_ENABLE_SPELL)
-  include(spell)
-endif ()
-if (LINALG_ENABLE_VALGRIND)
-  include(valgrind)
-endif ()
+if(LINALG_ENABLE_SANITIZER)
+    include(sanitize)
+endif()
+if(LINALG_ENABLE_SPELL)
+    include(spell)
+endif()
+if(LINALG_ENABLE_VALGRIND)
+    include(valgrind)
+endif()
 # c) Coverage gate — appends -fprofile-instr-generate / --coverage; LTO already cleared above.
 if(LINALG_ENABLE_COVERAGE)
-  include(coverage)
+    include(coverage)
 elseif(MSVC)
-  string(APPEND CMAKE_EXE_LINKER_FLAGS " /DEBUG:FULL")
-  string(APPEND CMAKE_SHARED_LINKER_FLAGS " /DEBUG:FULL")
-endif ()
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " /DEBUG:FULL")
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS " /DEBUG:FULL")
+endif()
 
 # --- Optional Intel MKL backend ---
 set(LINALG_DEPENDENCY_LIBS "")
-if (LINALG_ENABLE_MKL)
-  # MKL call sites pass linalg_int/linalg_long (64-bit) straight through as
-  # MKL_INT* with no narrowing, so the oneMKL CMake config package must
-  # select its ilp64 (64-bit MKL_INT) interface, not the lp64 default.
-  # Must be set before find_package(MKL CONFIG) — it selects which
-  # MKL::MKL interface target that package defines.
-  set(MKL_INTERFACE "ilp64")
-  find_package(MKL CONFIG QUIET)
-if (NOT MKL_FOUND)
-    # Fall back to the classic (non-CONFIG) FindMKL-style search some
-    # environments still ship instead of the oneMKL CMake config package.
-    find_package(MKL QUIET)
-endif ()
-if (NOT MKL_FOUND)
-message(
-      FATAL_ERROR
-      "LINALG_ENABLE_MKL is ON but MKL could not be found by find_package(MKL). "
-      "Install Intel oneMKL or set MKLROOT / CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_MKL=OFF."
-    )
-endif ()
-if (TARGET MKL::MKL)
-    # GNU ld's default --as-needed can drop libmkl_core.so (and the
-    # threading library) from DT_NEEDED: the interface library
-    # (libmkl_intel_ilp64.so) calls into them through an internal ABI
-    # rather than a linker-visible undefined symbol, so --as-needed sees no
-    # reason to keep the dependency and the loader later fails with
-    # "undefined symbol: mkl_blas_dgemm" the first time MKL is actually
-    # called. Intel's own linking guidance is to force --no-as-needed
-    # around the MKL libraries on ELF/GNU-ld platforms; MSVC has no such
-    # flag and Apple's ld doesn't prune unresolved lazy symbols this way.
-    if(NOT MSVC AND NOT APPLE)
-      list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--no-as-needed)
-endif ()
-    list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
-if (NOT MSVC AND NOT APPLE)
-      list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--as-needed)
-endif ()
-endif ()
-endif ()
+if(LINALG_ENABLE_MKL)
+    # MKL call sites pass linalg_int/linalg_long (64-bit) straight through as
+    # MKL_INT* with no narrowing, so the oneMKL CMake config package must
+    # select its ilp64 (64-bit MKL_INT) interface, not the lp64 default.
+    # Must be set before find_package(MKL CONFIG) — it selects which
+    # MKL::MKL interface target that package defines.
+    set(MKL_INTERFACE "ilp64")
+    find_package(MKL CONFIG QUIET)
+    if(NOT MKL_FOUND)
+        # Fall back to the classic (non-CONFIG) FindMKL-style search some
+        # environments still ship instead of the oneMKL CMake config package.
+        find_package(MKL QUIET)
+    endif()
+    if(NOT MKL_FOUND)
+        message(
+            FATAL_ERROR
+                "LINALG_ENABLE_MKL is ON but MKL could not be found by find_package(MKL). "
+                "Install Intel oneMKL or set MKLROOT / CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_MKL=OFF."
+        )
+    endif()
+    if(TARGET MKL::MKL)
+        # GNU ld's default --as-needed can drop libmkl_core.so (and the
+        # threading library) from DT_NEEDED: the interface library
+        # (libmkl_intel_ilp64.so) calls into them through an internal ABI
+        # rather than a linker-visible undefined symbol, so --as-needed sees no
+        # reason to keep the dependency and the loader later fails with
+        # "undefined symbol: mkl_blas_dgemm" the first time MKL is actually
+        # called. Intel's own linking guidance is to force --no-as-needed
+        # around the MKL libraries on ELF/GNU-ld platforms; MSVC has no such
+        # flag and Apple's ld doesn't prune unresolved lazy symbols this way.
+        if(NOT MSVC AND NOT APPLE)
+            list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--no-as-needed)
+        endif()
+        list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
+        if(NOT MSVC AND NOT APPLE)
+            list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--as-needed)
+        endif()
+    endif()
+endif()
 
 # --- Optional vendor-neutral BLAS/LAPACK backend ---
 if(LINALG_ENABLE_BLAS)
-  find_package(BLAS REQUIRED)
-  find_package(LAPACK REQUIRED)
-  # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
-  # back to the raw *_LIBRARIES lists on older CMake (project minimum: 3.16).
-  if(TARGET BLAS::BLAS)
-    list(APPEND LINALG_DEPENDENCY_LIBS BLAS::BLAS)
-else ()
-    list(APPEND LINALG_DEPENDENCY_LIBS ${BLAS_LIBRARIES})
-endif ()
-if (TARGET LAPACK::LAPACK)
-    list(APPEND LINALG_DEPENDENCY_LIBS LAPACK::LAPACK)
-else ()
-    list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
-endif ()
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+    # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
+    # back to the raw *_LIBRARIES lists on older CMake (project minimum: 3.16).
+    if(TARGET BLAS::BLAS)
+        list(APPEND LINALG_DEPENDENCY_LIBS BLAS::BLAS)
+    else()
+        list(APPEND LINALG_DEPENDENCY_LIBS ${BLAS_LIBRARIES})
+    endif()
+    if(TARGET LAPACK::LAPACK)
+        list(APPEND LINALG_DEPENDENCY_LIBS LAPACK::LAPACK)
+    else()
+        list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
+    endif()
 
-  # BLAS::BLAS/LAPACK::LAPACK link the libraries but do not guarantee a
-  # cblas.h/lapacke.h C declaration header is on the include path — Homebrew's
-  # OpenBLAS, for instance, is keg-only and needs its prefix's include/ added
-  # explicitly, which find_path() does via CMAKE_PREFIX_PATH/CMAKE_FIND_ROOT_PATH
-  # (unlike CheckIncludeFileCXX, which only sees the compiler's default search
-  # path). CMAKE_FIND_FRAMEWORK is forced to LAST for this lookup so a plain
-  # header from the vendor find_package(BLAS) actually linked against (e.g.
-  # OpenBLAS) is found ahead of an unrelated macOS framework's cblas.h —
-  # mixing one vendor's declarations with a different vendor's linked
-  # implementation is not guaranteed ABI-safe (e.g. differing CBLAS_INDEX /
-  # ILP64 widths) and has produced silently wrong GEMM results in testing.
-  set(_linalg_find_framework_save ${CMAKE_FIND_FRAMEWORK})
-  set(CMAKE_FIND_FRAMEWORK LAST)
-  find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h)
-  find_path(LINALG_LAPACKE_INCLUDE_DIR NAMES lapacke.h)
-  set(CMAKE_FIND_FRAMEWORK ${_linalg_find_framework_save})
-  unset(_linalg_find_framework_save)
-  mark_as_advanced(LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR)
+    # BLAS::BLAS/LAPACK::LAPACK link the libraries but do not guarantee a
+    # cblas.h/lapacke.h C declaration header is on the include path — Homebrew's
+    # OpenBLAS, for instance, is keg-only and needs its prefix's include/ added
+    # explicitly, which find_path() does via CMAKE_PREFIX_PATH/CMAKE_FIND_ROOT_PATH
+    # (unlike CheckIncludeFileCXX, which only sees the compiler's default search
+    # path). CMAKE_FIND_FRAMEWORK is forced to LAST for this lookup so a plain
+    # header from the vendor find_package(BLAS) actually linked against (e.g.
+    # OpenBLAS) is found ahead of an unrelated macOS framework's cblas.h —
+    # mixing one vendor's declarations with a different vendor's linked
+    # implementation is not guaranteed ABI-safe (e.g. differing CBLAS_INDEX /
+    # ILP64 widths) and has produced silently wrong GEMM results in testing.
+    set(_linalg_find_framework_save ${CMAKE_FIND_FRAMEWORK})
+    set(CMAKE_FIND_FRAMEWORK LAST)
+    find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h)
+    find_path(LINALG_LAPACKE_INCLUDE_DIR NAMES lapacke.h)
+    set(CMAKE_FIND_FRAMEWORK ${_linalg_find_framework_save})
+    unset(_linalg_find_framework_save)
+    mark_as_advanced(LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR)
 
-  set(LINALG_BLAS_USE_ACCELERATE OFF)
-  set(LINALG_BLAS_INCLUDE_DIRS "")
-if (LINALG_CBLAS_INCLUDE_DIR MATCHES "\\.framework")
-    # On macOS, the generic cblas.h search above commonly lands on
-    # Accelerate's own vecLib.framework/Accelerate.framework header (Xcode's
-    # SDK always exposes it) rather than a separate vendor's cblas.h. Route
-    # through <Accelerate/Accelerate.h> in that case — found via the
-    # compiler's default framework search path, no extra include dir needed
-    # — so the ACCELERATE-specific code path (and LINALG_HAS_ACCELERATE) is
-    # actually taken instead of silently falling through to the generic
-    # <cblas.h> branch.
-    set(LINALG_BLAS_USE_ACCELERATE ON)
-  elseif (LINALG_CBLAS_INCLUDE_DIR)
-    list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_CBLAS_INCLUDE_DIR}")
-  elseif(APPLE)
-    include(CheckIncludeFileCXX)
-    check_include_file_cxx("Accelerate/Accelerate.h" LINALG_HAVE_ACCELERATE_H)
-if (LINALG_HAVE_ACCELERATE_H)
-      set(LINALG_BLAS_USE_ACCELERATE ON)
-endif ()
-endif ()
-if (NOT LINALG_CBLAS_INCLUDE_DIR AND NOT LINALG_BLAS_USE_ACCELERATE)
-message(
-      FATAL_ERROR
-      "LINALG_ENABLE_BLAS is ON but cblas.h (or, on Apple, Accelerate/Accelerate.h) "
-      "was not found. Install a CBLAS-providing package (OpenBLAS, netlib, ...) "
-      "and/or extend CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_BLAS=OFF."
-    )
-endif ()
+    set(LINALG_BLAS_USE_ACCELERATE OFF)
+    set(LINALG_BLAS_INCLUDE_DIRS "")
+    if(LINALG_CBLAS_INCLUDE_DIR MATCHES "\\.framework")
+        # On macOS, the generic cblas.h search above commonly lands on
+        # Accelerate's own vecLib.framework/Accelerate.framework header (Xcode's
+        # SDK always exposes it) rather than a separate vendor's cblas.h. Route
+        # through <Accelerate/Accelerate.h> in that case — found via the
+        # compiler's default framework search path, no extra include dir needed
+        # — so the ACCELERATE-specific code path (and LINALG_HAS_ACCELERATE) is
+        # actually taken instead of silently falling through to the generic
+        # <cblas.h> branch.
+        set(LINALG_BLAS_USE_ACCELERATE ON)
+    elseif(LINALG_CBLAS_INCLUDE_DIR)
+        list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_CBLAS_INCLUDE_DIR}")
+    elseif(APPLE)
+        include(CheckIncludeFileCXX)
+        check_include_file_cxx("Accelerate/Accelerate.h" LINALG_HAVE_ACCELERATE_H)
+        if(LINALG_HAVE_ACCELERATE_H)
+            set(LINALG_BLAS_USE_ACCELERATE ON)
+        endif()
+    endif()
+    if(NOT LINALG_CBLAS_INCLUDE_DIR AND NOT LINALG_BLAS_USE_ACCELERATE)
+        message(
+            FATAL_ERROR
+                "LINALG_ENABLE_BLAS is ON but cblas.h (or, on Apple, Accelerate/Accelerate.h) "
+                "was not found. Install a CBLAS-providing package (OpenBLAS, netlib, ...) "
+                "and/or extend CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_BLAS=OFF."
+        )
+    endif()
 
-  # Apple's Accelerate framework ships CBLAS (used for matrix_multiplication /
-  # matrix_transpose) but deliberately does not ship the LAPACKE row-major C
-  # wrapper — only the classic Fortran-mangled LAPACK entry points. The
-  # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
-  # linear_solver) are therefore only compiled when real lapacke.h is found;
-  # otherwise each op's dispatcher .cpp falls through to the scalar backend
-  # at compile time via #if LINALG_HAS_LAPACKE.
-  set(LINALG_BLAS_HAS_LAPACKE OFF)
-if (LINALG_LAPACKE_INCLUDE_DIR)
-    list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
-    set(LINALG_BLAS_HAS_LAPACKE ON)
-else ()
-message(
-      STATUS
-      "LinearAlgebra: lapacke.h not found — blas_lapack backend covers "
-      "matrix_multiplication/matrix_transpose only; cholesky/lu/svd/inversion/"
-      "linear_solver fall back to scalar under LINALG_ENABLE_BLAS."
-    )
-endif ()
-  list(REMOVE_DUPLICATES LINALG_BLAS_INCLUDE_DIRS)
-endif ()
+    # Apple's Accelerate framework ships CBLAS (used for matrix_multiplication /
+    # matrix_transpose) but deliberately does not ship the LAPACKE row-major C
+    # wrapper — only the classic Fortran-mangled LAPACK entry points. The
+    # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
+    # linear_solver) are therefore only compiled when real lapacke.h is found;
+    # otherwise each op's dispatcher .cpp falls through to the scalar backend
+    # at compile time via #if LINALG_HAS_LAPACKE.
+    set(LINALG_BLAS_HAS_LAPACKE OFF)
+    if(LINALG_LAPACKE_INCLUDE_DIR)
+        list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
+        set(LINALG_BLAS_HAS_LAPACKE ON)
+    else()
+        message(STATUS "LinearAlgebra: lapacke.h not found — blas_lapack backend covers "
+                       "matrix_multiplication/matrix_transpose only; cholesky/lu/svd/inversion/"
+                       "linear_solver fall back to scalar under LINALG_ENABLE_BLAS."
+        )
+    endif()
+    list(REMOVE_DUPLICATES LINALG_BLAS_INCLUDE_DIRS)
+endif()
 
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
 # cuBLAS/cuSOLVER themselves are host-callable C APIs, linked into ordinary
@@ -358,17 +369,17 @@ endif ()
 # toolchain are only required — and only enabled — when this option is ON;
 # plain CPU builds remain free of any CUDA toolchain requirement.
 if(LINALG_ENABLE_CUBLAS)
-  find_package(CUDAToolkit REQUIRED)
-  enable_language(CUDA)
-if (NOT DEFINED CMAKE_CUDA_STANDARD)
-    set(CMAKE_CUDA_STANDARD ${LINALG_CXX_STANDARD})
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-endif ()
-if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES native)
-endif ()
-  list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
-endif ()
+    find_package(CUDAToolkit REQUIRED)
+    enable_language(CUDA)
+    if(NOT DEFINED CMAKE_CUDA_STANDARD)
+        set(CMAKE_CUDA_STANDARD ${LINALG_CXX_STANDARD})
+        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    endif()
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES native)
+    endif()
+    list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
+endif()
 
 # --- Optional cpuinfo backend (pytorch/cpuinfo), auto-detected ---
 # CPU cache-size introspection via find_package(cpuinfo) — no vendored copy,
@@ -378,13 +389,13 @@ endif ()
 # conservative defaults (used when the package is not installed).
 find_package(cpuinfo CONFIG QUIET)
 set(LINALG_HAS_CPUINFO OFF)
-if (TARGET cpuinfo::cpuinfo)
-  list(APPEND LINALG_DEPENDENCY_LIBS cpuinfo::cpuinfo)
-  set(LINALG_HAS_CPUINFO ON)
-elseif (TARGET cpuinfo)
-  list(APPEND LINALG_DEPENDENCY_LIBS cpuinfo)
-  set(LINALG_HAS_CPUINFO ON)
-endif ()
+if(TARGET cpuinfo::cpuinfo)
+    list(APPEND LINALG_DEPENDENCY_LIBS cpuinfo::cpuinfo)
+    set(LINALG_HAS_CPUINFO ON)
+elseif(TARGET cpuinfo)
+    list(APPEND LINALG_DEPENDENCY_LIBS cpuinfo)
+    set(LINALG_HAS_CPUINFO ON)
+endif()
 
 # --- Optional Profiler backend (KhwarizmiAnalytix/Profiler), auto-detected ---
 # CPU/GPU profiling instrumentation via find_package(Profiler) — no vendored
@@ -395,10 +406,10 @@ endif ()
 # https://github.com/KhwarizmiAnalytix/Profiler).
 find_package(Profiler CONFIG QUIET)
 set(LINALG_HAS_PROFILER OFF)
-if (TARGET Profiler::Profiler)
-  list(APPEND LINALG_DEPENDENCY_LIBS Profiler::Profiler)
-  set(LINALG_HAS_PROFILER ON)
-endif ()
+if(TARGET Profiler::Profiler)
+    list(APPEND LINALG_DEPENDENCY_LIBS Profiler::Profiler)
+    set(LINALG_HAS_PROFILER ON)
+endif()
 
 # --- Logging (required) ---
 # KhwarizmiAnalytix/Logging (ThirdParty/Logging, a nested submodule with its
@@ -413,8 +424,9 @@ endif ()
 set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
 set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
-                 "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
+add_subdirectory(
+    "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
+    "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
 )
 # $<BUILD_INTERFACE:> here mirrors Profiler's install(EXPORT) fix
 # (Profiler/CMakeLists.txt's PROFILER_DEPENDENCY_LIBS handling, ~line 310):
@@ -435,8 +447,8 @@ list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>)
 
 # --- Configure-time headers ---
 configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/Testing/LinearAlgebraTest.h.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/Testing/LinearAlgebraTest.h" @ONLY
+    "${CMAKE_CURRENT_SOURCE_DIR}/Testing/LinearAlgebraTest.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/Testing/LinearAlgebraTest.h" @ONLY
 )
 
 # --- Source discovery ---
@@ -451,215 +463,224 @@ file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /
 # LINALG_ENABLE_BLAS turned on the matching backend above.
 list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(mkl|blas)/")
-if (LINALG_ENABLE_MKL)
-  file(GLOB linalg_mkl_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/mkl/*.cpp")
-  list(APPEND linalg_sources ${linalg_mkl_sources})
-endif ()
-if (LINALG_ENABLE_BLAS)
-  file(GLOB linalg_blas_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp")
-  list(APPEND linalg_sources ${linalg_blas_sources})
-endif ()
+if(LINALG_ENABLE_MKL)
+    file(GLOB linalg_mkl_sources LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/mkl/*.cpp"
+    )
+    list(APPEND linalg_sources ${linalg_mkl_sources})
+endif()
+if(LINALG_ENABLE_BLAS)
+    file(GLOB linalg_blas_sources LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp"
+    )
+    list(APPEND linalg_sources ${linalg_blas_sources})
+endif()
 
 # .cu sources (under src/matrix_operation_gpu/, mirroring every other
 # implementation file) need an nvcc toolchain, so they are only globbed in —
 # and only compilable — when LINALG_ENABLE_CUBLAS turned on CUDA above.
 if(LINALG_ENABLE_CUBLAS)
-  file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu")
-  list(APPEND linalg_sources ${linalg_cuda_sources})
-endif ()
+    file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
+    )
+    list(APPEND linalg_sources ${linalg_cuda_sources})
+endif()
 
 # --- Target definition ---
 set(CMAKE_CXX_STANDARD ${LINALG_CXX_STANDARD})
 
 add_library(LinearAlgebra ${linalg_sources} ${linalg_headers})
 xsigma_target_apply_lto(LinearAlgebra LINALG)
-if (LINALG_ENABLE_SANITIZER)
-xsigma_configure_sanitizer(LINALG)
-endif ()
+if(LINALG_ENABLE_SANITIZER)
+    xsigma_configure_sanitizer(LINALG)
+endif()
 xsigma_find_linker(${LINALG_LINKER_CHOICE} LinearAlgebra LINALG_LTO_MODE)
 xsigma_target_apply_cache(LinearAlgebra LINALG_ENABLE_CACHE LINALG_CACHE_BACKEND)
 xsigma_target_optional_icecc(LinearAlgebra LINALG_ENABLE_ICECC)
-if (BUILD_SHARED_LIBS)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_SHARED_DEFINE PRIVATE LINALG_BUILDING_DLL)
-if (COMMAND xsigma_set_target_output_directories)
-xsigma_set_target_output_directories(LinearAlgebra)
-endif ()
-else ()
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_STATIC_DEFINE)
-endif ()
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(
+        LinearAlgebra PUBLIC LINALG_SHARED_DEFINE PRIVATE LINALG_BUILDING_DLL
+    )
+    if(COMMAND xsigma_set_target_output_directories)
+        xsigma_set_target_output_directories(LinearAlgebra)
+    endif()
+else()
+    target_compile_definitions(LinearAlgebra PUBLIC LINALG_STATIC_DEFINE)
+endif()
 
 add_library(LinearAlgebra::LinearAlgebra ALIAS LinearAlgebra)
-if (COMMAND xsigma_module_create_filters)
-xsigma_module_create_filters("${CMAKE_CURRENT_SOURCE_DIR}")
-endif ()
+if(COMMAND xsigma_module_create_filters)
+    xsigma_module_create_filters("${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
 
 set_target_properties(
-  LinearAlgebra PROPERTIES CXX_STANDARD ${LINALG_CXX_STANDARD} CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS
-                                                                                   OFF
+    LinearAlgebra PROPERTIES CXX_STANDARD ${LINALG_CXX_STANDARD} CXX_STANDARD_REQUIRED ON
+                             CXX_EXTENSIONS OFF
 )
-if (MSVC)
-  # Excludes CUDA: nvcc's frontend does not recognize the bare MSVC-style
-  # /WX flag and misparses it as a second input file ("nvcc fatal: A single
-  # input file is required for a non-link phase when an outputfile is
-  # specified") when LINALG_ENABLE_CUBLAS compiles the .cu source below.
-  target_compile_options(LinearAlgebra PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/WX>)
-else ()
-  target_compile_options(LinearAlgebra PRIVATE -include cstdlib)
-endif ()
+if(MSVC)
+    # Excludes CUDA: nvcc's frontend does not recognize the bare MSVC-style
+    # /WX flag and misparses it as a second input file ("nvcc fatal: A single
+    # input file is required for a non-link phase when an outputfile is
+    # specified") when LINALG_ENABLE_CUBLAS compiles the .cu source below.
+    target_compile_options(LinearAlgebra PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/WX>)
+else()
+    target_compile_options(LinearAlgebra PRIVATE -include cstdlib)
+endif()
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
 #                             "include/util/cpu_info.h", ...
 target_include_directories(
-  LinearAlgebra
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-         $<INSTALL_INTERFACE:include/LinearAlgebra>
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    LinearAlgebra
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+           $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> $<INSTALL_INTERFACE:include/LinearAlgebra>
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 )
-if (LINALG_BLAS_INCLUDE_DIRS)
-  target_include_directories(LinearAlgebra PRIVATE ${LINALG_BLAS_INCLUDE_DIRS})
-endif ()
-target_compile_definitions(LinearAlgebra PUBLIC
-  "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
-  "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
-  "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
-  "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
-  "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
-  "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
-  "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
-  "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
-  "LINALG_HAS_VECTORIZATION=$<BOOL:${LINALG_ENABLE_VECTORIZATION}>"
-  "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
+if(LINALG_BLAS_INCLUDE_DIRS)
+    target_include_directories(LinearAlgebra PRIVATE ${LINALG_BLAS_INCLUDE_DIRS})
+endif()
+target_compile_definitions(
+    LinearAlgebra
+    PUBLIC "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
+           "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
+           "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
+           "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
+           "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
+           "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
+           "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
+           "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
+           "LINALG_HAS_VECTORIZATION=$<BOOL:${LINALG_ENABLE_VECTORIZATION}>"
+           "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
 )
-if (LINALG_ENABLE_VECTORIZATION)
-  string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
-  target_compile_definitions(LinearAlgebra PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
-  unset(_linalg_simd_isa_upper)
+if(LINALG_ENABLE_VECTORIZATION)
+    string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
+    target_compile_definitions(LinearAlgebra PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
+    unset(_linalg_simd_isa_upper)
 
-  # x86 ISAs need the matching -m<isa> flag to actually be assembled;
-  # NEON is the aarch64 baseline (and has no single standard x86-style
-  # flag on the compilers this repository targets), so "neon" adds none.
-  # MSVC has no per-ISA -mXXX flags of its own — /arch:AVX[2|512] is the
-  # closest equivalent but covers the whole TU like GCC/Clang's -m flags
-  # do, and this repository's MSVC support does not target AVX-512 at
-  # all, so it is left for whoever first needs it to wire up.
-  if (NOT MSVC)
-    if (LINALG_VECTORIZATION_ISA STREQUAL "sse2")
-      target_compile_options(LinearAlgebra PUBLIC -msse2)
-    elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx")
-      target_compile_options(LinearAlgebra PUBLIC -mavx)
-    elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx2")
-      target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
-    elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx512")
-      target_compile_options(LinearAlgebra PUBLIC -mavx512f)
-    endif ()
-  endif ()
-endif ()
-if (LINALG_ENABLE_CLANGTIDY)
-  include(clang_tidy)
-xsigma_target_clang_tidy(LinearAlgebra ${LINALG_ENABLE_FIX})
-endif ()
-if (LINALG_ENABLE_IWYU)
-  include(iwyu)
-xsigma_apply_iwyu(LinearAlgebra)
-endif ()
-if (LINALG_DEPENDENCY_LIBS)
-  target_link_libraries(LinearAlgebra PUBLIC ${LINALG_DEPENDENCY_LIBS})
-endif ()
+    # x86 ISAs need the matching -m<isa> flag to actually be assembled;
+    # NEON is the aarch64 baseline (and has no single standard x86-style
+    # flag on the compilers this repository targets), so "neon" adds none.
+    # MSVC has no per-ISA -mXXX flags of its own — /arch:AVX[2|512] is the
+    # closest equivalent but covers the whole TU like GCC/Clang's -m flags
+    # do, and this repository's MSVC support does not target AVX-512 at
+    # all, so it is left for whoever first needs it to wire up.
+    if(NOT MSVC)
+        if(LINALG_VECTORIZATION_ISA STREQUAL "sse2")
+            target_compile_options(LinearAlgebra PUBLIC -msse2)
+        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx")
+            target_compile_options(LinearAlgebra PUBLIC -mavx)
+        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx2")
+            target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
+        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx512")
+            target_compile_options(LinearAlgebra PUBLIC -mavx512f)
+        endif()
+    endif()
+endif()
+if(LINALG_ENABLE_CLANGTIDY)
+    include(clang_tidy)
+    xsigma_target_clang_tidy(LinearAlgebra ${LINALG_ENABLE_FIX})
+endif()
+if(LINALG_ENABLE_IWYU)
+    include(iwyu)
+    xsigma_apply_iwyu(LinearAlgebra)
+endif()
+if(LINALG_DEPENDENCY_LIBS)
+    target_link_libraries(LinearAlgebra PUBLIC ${LINALG_DEPENDENCY_LIBS})
+endif()
 
 # --- Installation ---
 install(
-  TARGETS LinearAlgebra
-  EXPORT LinearAlgebraTargets
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION bin
-  INCLUDES
-  DESTINATION include
+    TARGETS LinearAlgebra
+    EXPORT LinearAlgebraTargets
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES
+    DESTINATION include
 )
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  DESTINATION include/LinearAlgebra
-  FILES_MATCHING
-  PATTERN "*.h"
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    DESTINATION include/LinearAlgebra
+    FILES_MATCHING
+    PATTERN "*.h"
 )
 
 # --- CMake Package Configuration Files (find_package(LinearAlgebra) support) ---
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/Cmake/LinearAlgebraConfig.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
-  INSTALL_DESTINATION lib/cmake/LinearAlgebra
+    "${CMAKE_CURRENT_SOURCE_DIR}/Cmake/LinearAlgebraConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/LinearAlgebra
 )
 
 write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
-  # Hardcoded rather than ${PROJECT_VERSION}: when embedded via
-  # add_subdirectory (LINALG_STANDALONE OFF), PROJECT_VERSION belongs to
-  # whichever project() call is nearest/outermost, not this one's
-  # project(LinearAlgebra VERSION 1.0.0 ...), which only runs in the
-  # standalone branch above. Keep in sync with that VERSION.
-  VERSION 1.0.0
-  COMPATIBILITY SameMajorVersion
+    "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
+    # Hardcoded rather than ${PROJECT_VERSION}: when embedded via
+    # add_subdirectory (LINALG_STANDALONE OFF), PROJECT_VERSION belongs to
+    # whichever project() call is nearest/outermost, not this one's
+    # project(LinearAlgebra VERSION 1.0.0 ...), which only runs in the
+    # standalone branch above. Keep in sync with that VERSION.
+    VERSION 1.0.0
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
+        DESTINATION lib/cmake/LinearAlgebra
 )
 
 install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
-  DESTINATION lib/cmake/LinearAlgebra
-)
-
-install(
-  EXPORT LinearAlgebraTargets
-  NAMESPACE LinearAlgebra::
-  FILE LinearAlgebraTargets.cmake
-  DESTINATION lib/cmake/LinearAlgebra
+    EXPORT LinearAlgebraTargets
+    NAMESPACE LinearAlgebra::
+    FILE LinearAlgebraTargets.cmake
+    DESTINATION lib/cmake/LinearAlgebra
 )
 
 # --- Testing ---
 if(LINALG_ENABLE_TESTING)
-  add_subdirectory(Testing/Cxx)
-endif ()
-if (LINALG_ENABLE_VALGRIND AND LINALG_ENABLE_TESTING)
-xsigma_apply_valgrind_timeouts()
-endif ()
+    add_subdirectory(Testing/Cxx)
+endif()
+if(LINALG_ENABLE_VALGRIND AND LINALG_ENABLE_TESTING)
+    xsigma_apply_valgrind_timeouts()
+endif()
 if(LINALG_STANDALONE)
-  message("")
-  message("******** LinearAlgebra module (CMake flags) ********")
-  message("  Cxx standard         : ${LINALG_CXX_STANDARD}")
-  message("  Cache                : ${LINALG_ENABLE_CACHE}")
-  message("  Cache backend        : ${LINALG_CACHE_BACKEND}")
-  message("  Icecc                : ${LINALG_ENABLE_ICECC}")
-  xsigma_print_lto_linker_summary(LINALG)
-  message("  Coverage             : ${LINALG_ENABLE_COVERAGE}")
-  message("  Testing              : ${LINALG_ENABLE_TESTING}")
-  message("  Gtest                : ${LINALG_ENABLE_GTEST}")
-  message("  Benchmark            : ${LINALG_ENABLE_BENCHMARK}")
-  message("  MKL                  : ${LINALG_ENABLE_MKL}")
-  message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
-  message("  cuBLAS               : ${LINALG_ENABLE_CUBLAS}")
-  message("  Cpuinfo              : ${LINALG_HAS_CPUINFO}")
-  message("  Profiler             : ${LINALG_HAS_PROFILER}")
-  message("  LU pivoting          : ${LINALG_LU_PIVOTING}")
-  message("  Vectorization        : ${LINALG_ENABLE_VECTORIZATION}")
-  message("  Vectorization ISA    : ${LINALG_VECTORIZATION_ISA}")
-  message("  Clang-tidy           : ${LINALG_ENABLE_CLANGTIDY}")
-  message("  Fix                  : ${LINALG_ENABLE_FIX}")
-  message("  Iwyu                 : ${LINALG_ENABLE_IWYU}")
-  message("  Sanitizer            : ${LINALG_ENABLE_SANITIZER}")
-  message("  Sanitizer type       : ${LINALG_SANITIZER_TYPE}")
-  message("  Spell                : ${LINALG_ENABLE_SPELL}")
-  message("  Valgrind             : ${LINALG_ENABLE_VALGRIND}")
-  message("")
-  message("Build:")
-  message("  Default C++ standard : ${CMAKE_CXX_STANDARD}")
-  message("  C flags              : ${CMAKE_C_FLAGS}")
-  message("  CXX flags            : ${CMAKE_CXX_FLAGS}")
-  message("  Shared linker flags  : ${CMAKE_SHARED_LINKER_FLAGS}")
-  message("  Static linker flags  : ${CMAKE_STATIC_LINKER_FLAGS}")
-  message("  Module linker flags  : ${CMAKE_MODULE_LINKER_FLAGS}")
-  get_directory_property(_summary_compile_defs DIRECTORY ${PROJECT_SOURCE_DIR} COMPILE_DEFINITIONS)
-  message("  Top-level compile defs : ${_summary_compile_defs}")
-  message("")
+    message("")
+    message("******** LinearAlgebra module (CMake flags) ********")
+    message("  Cxx standard         : ${LINALG_CXX_STANDARD}")
+    message("  Cache                : ${LINALG_ENABLE_CACHE}")
+    message("  Cache backend        : ${LINALG_CACHE_BACKEND}")
+    message("  Icecc                : ${LINALG_ENABLE_ICECC}")
+    xsigma_print_lto_linker_summary(LINALG)
+    message("  Coverage             : ${LINALG_ENABLE_COVERAGE}")
+    message("  Testing              : ${LINALG_ENABLE_TESTING}")
+    message("  Gtest                : ${LINALG_ENABLE_GTEST}")
+    message("  Benchmark            : ${LINALG_ENABLE_BENCHMARK}")
+    message("  MKL                  : ${LINALG_ENABLE_MKL}")
+    message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
+    message("  cuBLAS               : ${LINALG_ENABLE_CUBLAS}")
+    message("  Cpuinfo              : ${LINALG_HAS_CPUINFO}")
+    message("  Profiler             : ${LINALG_HAS_PROFILER}")
+    message("  LU pivoting          : ${LINALG_LU_PIVOTING}")
+    message("  Vectorization        : ${LINALG_ENABLE_VECTORIZATION}")
+    message("  Vectorization ISA    : ${LINALG_VECTORIZATION_ISA}")
+    message("  Clang-tidy           : ${LINALG_ENABLE_CLANGTIDY}")
+    message("  Fix                  : ${LINALG_ENABLE_FIX}")
+    message("  Iwyu                 : ${LINALG_ENABLE_IWYU}")
+    message("  Sanitizer            : ${LINALG_ENABLE_SANITIZER}")
+    message("  Sanitizer type       : ${LINALG_SANITIZER_TYPE}")
+    message("  Spell                : ${LINALG_ENABLE_SPELL}")
+    message("  Valgrind             : ${LINALG_ENABLE_VALGRIND}")
+    message("")
+    message("Build:")
+    message("  Default C++ standard : ${CMAKE_CXX_STANDARD}")
+    message("  C flags              : ${CMAKE_C_FLAGS}")
+    message("  CXX flags            : ${CMAKE_CXX_FLAGS}")
+    message("  Shared linker flags  : ${CMAKE_SHARED_LINKER_FLAGS}")
+    message("  Static linker flags  : ${CMAKE_STATIC_LINKER_FLAGS}")
+    message("  Module linker flags  : ${CMAKE_MODULE_LINKER_FLAGS}")
+    get_directory_property(
+        _summary_compile_defs DIRECTORY ${PROJECT_SOURCE_DIR} COMPILE_DEFINITIONS
+    )
+    message("  Top-level compile defs : ${_summary_compile_defs}")
+    message("")
 endif()

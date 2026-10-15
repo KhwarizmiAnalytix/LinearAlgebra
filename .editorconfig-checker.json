@@ -4,10 +4,12 @@
   "IgnoreDefaults": false,
   "Exclude": [
     "^ThirdParty/",
+    "^\\.mkl-x86-env/",
+    "^\\.lintbin/",
     "/third_party/",
     "/bespoke/",
     "^build(_[^/]+)?/",
-    "^\\.lintbin/",
+    "^build-",
     "^\\.git/"
   ],
   "Disable": {

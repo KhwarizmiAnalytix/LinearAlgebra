@@ -16,8 +16,8 @@
 // this is a regression guard for that contract, not an exhaustive sweep.
 TEST(Math, InputValidation)
 {
-    std::vector<double>       buf(9, 1.0);
-    std::vector<double>       vec(3, 1.0);
+    std::vector<double>     buf(9, 1.0);
+    std::vector<double>     vec(3, 1.0);
     std::vector<linalg_int> pivot(4);
 
     EXPECT_ANY_THROW((linalg::cholesky_backend<double, linalg::kActiveBackend>::apply(
@@ -32,25 +32,39 @@ TEST(Math, InputValidation)
     EXPECT_ANY_THROW((linalg::lu_backend<double, linalg::kActiveBackend>::apply(
         buf.data(), 3, static_cast<linalg_int*>(nullptr), nullptr, 0)));
 
-    EXPECT_ANY_THROW((linalg::solver_backend<double, linalg::kActiveBackend>::apply(
-        static_cast<double*>(nullptr),
+    EXPECT_ANY_THROW((
+        linalg::solver_backend<double, linalg::kActiveBackend>::apply(static_cast<double*>(nullptr),
+            pivot.data(),
+            3,
+            vec.data(),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            nullptr,
+            0)));
+    EXPECT_ANY_THROW((linalg::solver_backend<double, linalg::kActiveBackend>::apply(buf.data(),
         pivot.data(),
-        3,
+        0,
         vec.data(),
         linalg::linear_solver_type::LU_LINEAR_SOLVER,
         nullptr,
         0)));
-    EXPECT_ANY_THROW((linalg::solver_backend<double, linalg::kActiveBackend>::apply(buf.data(),
-        pivot.data(), 0, vec.data(), linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0)));
 
-    EXPECT_ANY_THROW((linalg::invert_backend<double, linalg::kActiveBackend>::apply(
-        static_cast<double*>(nullptr), pivot.data(), 3,
-        linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0)));
+    EXPECT_ANY_THROW((
+        linalg::invert_backend<double, linalg::kActiveBackend>::apply(static_cast<double*>(nullptr),
+            pivot.data(),
+            3,
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            nullptr,
+            0)));
     EXPECT_ANY_THROW((linalg::invert_backend<double, linalg::kActiveBackend>::apply(
         buf.data(), pivot.data(), 0, linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0)));
-    EXPECT_ANY_THROW((linalg::matrix_determinant_backend<double, linalg::linalg_backend::native>::apply(
-        static_cast<double*>(nullptr), pivot.data(), 3,
-        linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0)));
+    EXPECT_ANY_THROW(
+        (linalg::matrix_determinant_backend<double, linalg::linalg_backend::native>::apply(
+            static_cast<double*>(nullptr),
+            pivot.data(),
+            3,
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            nullptr,
+            0)));
 
     EXPECT_ANY_THROW((linalg::matmul_backend<double, linalg::kMatmulActiveBackend>::apply(false,
         false,
