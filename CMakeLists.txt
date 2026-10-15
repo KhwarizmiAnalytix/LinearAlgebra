@@ -15,7 +15,7 @@
 # LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION, LINALG_HAS_LU_PIVOTING,
 # LINALG_HAS_WIN32_WARNINGS below) are always-defined 0/1 macros, checked in
 # C++ with plain #if (never #ifdef/#if defined), not conditionally-defined
-# ones. Active for every CPU op except matrix_exponential and the
+# ones. Active for every CPU op except exponential and the
 # tri-/pentadiagonal operations (scalar only), and every GPU op except
 # general (non-symmetric) eigenvalue decomposition.
 # =============================================================================
@@ -57,14 +57,14 @@ include(third_party_helpers)
 
 # Optional Intel MKL backend for the LAPACKE-based code paths in
 # cholesky_decomposition / linear_solver / lu_decomposition /
-# matrix_inversion / matrix_multiplication / matrix_transpose /
+# inversion / multiplication / transpose /
 # svd_decomposition. Off by default: the portable scalar fallback
 # implementations are used instead.
 option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearAlgebra" OFF)
 
 # Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...).
 # When both this and LINALG_ENABLE_MKL are ON, MKL takes precedence at
-# compile time (see e.g. matrix_multiplication.cpp's #if/#elif chain).
+# compile time (see e.g. multiplication.cpp's #if/#elif chain).
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
 # cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as separate
@@ -80,8 +80,8 @@ option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlge
 # ships).
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
-# Enables the scalar (non-MKL/BLAS) matrix_multiplication backend's blocked,
-# SIMD-vectorized GEMM (include/common/packet.h; matrix_multiplication.cpp's
+# Enables the scalar (non-MKL/BLAS) multiplication backend's blocked,
+# SIMD-vectorized GEMM (include/common/packet.h; multiplication.cpp's
 # LINALG_HAS_VECTORIZATION block) in place of its plain triple-loop fallback.
 option(LINALG_ENABLE_VECTORIZATION
        "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
@@ -126,7 +126,7 @@ set_property(
              neon
 )
 
-# On MSVC, matrix_multiplication.cpp normally suppresses narrowing-conversion
+# On MSVC, multiplication.cpp normally suppresses narrowing-conversion
 # warnings (C4244) around its non-MKL fallback; this re-enables them.
 option(LINALG_DISPLAY_WIN32_WARNINGS "Do not suppress MSVC narrowing-conversion warnings" OFF)
 
@@ -341,8 +341,8 @@ if(LINALG_ENABLE_BLAS)
         )
     endif()
 
-    # Apple's Accelerate framework ships CBLAS (used for matrix_multiplication /
-    # matrix_transpose) but deliberately does not ship the LAPACKE row-major C
+    # Apple's Accelerate framework ships CBLAS (used for multiplication /
+    # transpose) but deliberately does not ship the LAPACKE row-major C
     # wrapper — only the classic Fortran-mangled LAPACK entry points. The
     # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
     # linear_solver) are therefore only compiled when real lapacke.h is found;
@@ -354,7 +354,7 @@ if(LINALG_ENABLE_BLAS)
         set(LINALG_BLAS_HAS_LAPACKE ON)
     else()
         message(STATUS "LinearAlgebra: lapacke.h not found — blas_lapack backend covers "
-                       "matrix_multiplication/matrix_transpose only; cholesky/lu/svd/inversion/"
+                       "multiplication/transpose only; cholesky/lu/svd/inversion/"
                        "linear_solver fall back to scalar under LINALG_ENABLE_BLAS."
         )
     endif()
@@ -364,7 +364,7 @@ endif()
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
 # cuBLAS/cuSOLVER themselves are host-callable C APIs, linked into ordinary
 # .cpp translation units with no CUDA toolchain needed. One op
-# (matrix_multiplication_batched_gpu.cu, batched square-matrix multiply) is a
+# (multiplication_batched_gpu.cu, batched square-matrix multiply) is a
 # genuine hand-written CUDA kernel, so `enable_language(CUDA)` and an nvcc
 # toolchain are only required — and only enabled — when this option is ON;
 # plain CPU builds remain free of any CUDA toolchain requirement.
@@ -639,6 +639,9 @@ install(
 # --- Testing ---
 if(LINALG_ENABLE_TESTING)
     add_subdirectory(Testing/Cxx)
+endif()
+if(LINALG_ENABLE_BENCHMARK)
+    add_subdirectory(Testing/Benchmark)
 endif()
 if(LINALG_ENABLE_VALGRIND AND LINALG_ENABLE_TESTING)
     xsigma_apply_valgrind_timeouts()

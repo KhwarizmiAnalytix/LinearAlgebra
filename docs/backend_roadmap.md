@@ -31,8 +31,8 @@ size", which keeps both libraries independently consumable.
 | CPU backends | Scalar fallback; Intel MKL (implicitly ILP64); vendor-neutral CBLAS/LAPACKE (OpenBLAS, netlib, ...). Apple Accelerate is reached only through `LINALG_ENABLE_BLAS` and covers GEMM/transpose only, because it ships no LAPACKE. |
 | GPU backend | cuBLAS/cuSOLVER for every CPU op except general (non-symmetric) eigenvalue decomposition. Per-thread, per-device handle pool with stream binding ([`cuda_handle.h`](../include/common/cuda_handle.h)). |
 | Memory | Callers own inputs and outputs, but the library still allocates internal scratch itself: `cudaMalloc`/`cudaFree` in 13 GPU sources, [`linalg::allocator`](../include/memory/allocator.h) in 9 CPU sources, and `std::vector` temporaries in most CPU ops. This conflicts with the ownership principle above. |
-| Composite ops | `least_squares`, `pseudo_inverse`, `matrix_rank`, `matrix_norm`, `matrix_trace` build on SVD and inherit its backend. |
-| Outside the backend model | Tri-/penta-/multi-diagonal operations, `matrix_exponential`, `cholesky_decomposition_aad` — scalar only, with their own API conventions. |
+| Composite ops | `least_squares`, `pseudo_inverse`, `rank`, `norm`, `trace` build on SVD and inherit its backend. |
+| Outside the backend model | Tri-/penta-/multi-diagonal operations, `exponential`, `cholesky_decomposition_aad` — scalar only, with their own API conventions. |
 | Build systems | CMake is primary. Bazel covers the CPU tree, with an MKL toggle but no BLAS toggle. |
 | CI | Scalar (Linux, macOS), MKL (Linux), Bazel (Linux, macOS), coverage (Linux, macOS, Windows). Not covered: BLAS/LAPACKE, `LINALG_LU_PIVOTING`, CUDA, sanitizers. |
 
@@ -58,7 +58,7 @@ Strengths worth preserving:
 2. **Index types.**
    - `linalg_int` / `linalg_long` are preprocessor macros redefined in every
      public header (for example
-     [`matrix_multiplication.h`](../include/matrix_operation/matrix_multiplication.h)).
+     [`multiplication.h`](../include/matrix_operation/multiplication.h)).
      They leak into the global namespace, and signed (`linalg_int`) and
      unsigned (`linalg_long`, used by SVD) indices are mixed.
    - The MKL path passes `linalg_int*` directly as `MKL_INT*`, which only
@@ -101,20 +101,20 @@ Strengths worth preserving:
 6. The three-way backend `#if` chain is duplicated across about nine
    translation units; adding a backend means editing every one of them.
 7. About 1,500 lines of Eigen-derived blocked GEMM in
-   [`matrix_multiplication.cpp`](../include/matrix_operation/matrix_multiplication.cpp)
+   [`multiplication.cpp`](../include/matrix_operation/multiplication.cpp)
    sit behind `LINALG_VECTORIZED`, which is never defined and includes a
    `common/packet.h` that does not exist. The live scalar GEMM is a naive
    loop, and [`cpu_info.h`](../include/util/cpu_info.h) is a stub.
 8. Stale documentation:
    - [`svd_decomposition.h`](../include/matrix_operation/svd_decomposition.h),
-     [`eigenvalue_decomposition.h`](../include/matrix_operation/eigenvalue_decomposition.h)
-     and [`matrix_inversion.h`](../include/matrix_operation/matrix_inversion.h)
+     [`eigen.h`](../include/matrix_operation/eigen.h)
+     and [`inversion.h`](../include/matrix_operation/inversion.h)
      state that no GPU implementation exists; one does.
    - [`BUILD.bazel`](../BUILD.bazel) justifies `alwayslink = True` with the
      removed `dispatch_stub` registrars.
    - The header comment of [`CMakeLists.txt`](../CMakeLists.txt) lists only
      Cholesky/LU/SVD.
-   - The README module table omits `matrix_exponential` and the diagonal
+   - The README module table omits `exponential` and the diagonal
      operations.
 9. No benchmarks exist, so performance-dependent decisions (for example the
    batched-GEMM size cutoff in `gpu_backend_design.md` §9) cannot be made
@@ -285,7 +285,7 @@ are covered by the parity suite on every backend.
 - [ ] Batched factorizations and `cublasXgemmStridedBatched`
       (`gpu_backend_design.md` §5.4), with the size cutoff taken from
       Phase 1 benchmark data.
-- [ ] `eigenvalue_decomposition` on the GPU via `cusolverDnXgeev`, guarded
+- [ ] `eigen` on the GPU via `cusolverDnXgeev`, guarded
       by a CUDA toolkit version check.
 - [ ] Update `gpu_backend_design.md` accordingly. Its §2 currently keeps
       per-call `cudaMalloc`/`cudaFree` workspace "by design"; that must be

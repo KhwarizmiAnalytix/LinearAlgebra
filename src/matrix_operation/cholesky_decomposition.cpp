@@ -13,16 +13,16 @@ namespace linalg
 namespace detail
 {
 
-// Null/positivity checks shared by every cholesky_backend<T, Backend>::apply
-// below, so callers (linear_solver.cpp, matrix_inversion.cpp, this file's
+// Null/positivity checks shared by every cholesky_decomposition<T, Backend>::apply
+// below, so callers (linear_solver.cpp, inversion.cpp, this file's
 // own scalar path) get the same validation regardless of which backend is
 // active. There is no non-detail cholesky_decomposition() wrapper to put
-// this in any more — callers use cholesky_backend<T, kActiveBackend>::apply
+// this in any more — callers use cholesky_decomposition<T, kActiveBackend>::apply
 // directly.
 static void check_cholesky_inputs(const void* C, linalg_int lda)
 {
-    LOGGING_CHECK(C != nullptr, "cholesky_backend::apply: C must not be null");
-    LOGGING_CHECK(lda > 0, "cholesky_backend::apply: lda must be positive", lda);
+    LOGGING_CHECK(C != nullptr, "cholesky_decomposition::apply: C must not be null");
+    LOGGING_CHECK(lda > 0, "cholesky_decomposition::apply: lda must be positive", lda);
 }
 
 }  // namespace detail
@@ -122,7 +122,7 @@ linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda
 }  // namespace
 
 template <>
-bool cholesky_backend<float, linalg_backend::native>::apply(
+bool cholesky_decomposition<float, linalg_backend::native>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
     detail::check_cholesky_inputs(C, lda);
@@ -141,7 +141,7 @@ bool cholesky_backend<float, linalg_backend::native>::apply(
 }
 
 template <>
-bool cholesky_backend<double, linalg_backend::native>::apply(
+bool cholesky_decomposition<double, linalg_backend::native>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
     detail::check_cholesky_inputs(C, lda);
@@ -159,7 +159,7 @@ bool cholesky_backend<double, linalg_backend::native>::apply(
     }
 }
 
-// Reverse-mode adjoint of cholesky_backend<T, Backend>::apply_aad: no vendor
+// Reverse-mode adjoint of cholesky_decomposition<T, Backend>::apply_aad: no vendor
 // library (LAPACK/cuSOLVER) exposes this, so it always runs the scalar
 // implementation directly, regardless of which backend is active.
 namespace detail
@@ -289,7 +289,7 @@ void cholesky_decomposition_aad_impl(linalg_int n, T* C_aad, const T* C, linalg_
 // apply_aad has no vendor-library equivalent: the mkl and blas_lapacke
 // specializations forward to these native ones.
 template <>
-bool cholesky_backend<float, linalg_backend::native>::apply_aad(
+bool cholesky_decomposition<float, linalg_backend::native>::apply_aad(
     float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
     switch (type)
@@ -308,7 +308,7 @@ bool cholesky_backend<float, linalg_backend::native>::apply_aad(
 }
 
 template <>
-bool cholesky_backend<double, linalg_backend::native>::apply_aad(
+bool cholesky_decomposition<double, linalg_backend::native>::apply_aad(
     double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
     switch (type)

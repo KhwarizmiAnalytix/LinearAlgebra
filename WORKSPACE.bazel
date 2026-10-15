@@ -34,6 +34,15 @@ local_repository(
 )
 
 # =============================================================================
+# Google Benchmark — vendored nested submodule (ThirdParty/), gates
+# LINALG_ENABLE_BENCHMARK's micro-benchmark targets under Testing/Benchmark.
+# =============================================================================
+local_repository(
+    name = "com_google_benchmark",
+    path = "ThirdParty/benchmark",
+)
+
+# =============================================================================
 # ThirdParty/Logging's own backend deps — nested submodules under
 # ThirdParty/Logging/ThirdParty/, using Logging's own BUILD overlay files.
 # Logging's default backend (LOGURU) plus its always-on deps (fmt,

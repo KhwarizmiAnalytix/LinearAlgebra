@@ -4,7 +4,7 @@
  * Reconstructed minimal stand-in for the (orphaned) util/cpu_info.h this
  * code used to depend on. Its only call site is the scalar backend's
  * blocked-GEMM blocking-size heuristic (src/matrix_operation/
- * matrix_multiplication.cpp's LINALG_HAS_VECTORIZATION block, on by default — see
+ * multiplication.cpp's LINALG_HAS_VECTORIZATION block, on by default — see
  * LINALG_ENABLE_VECTORIZATION in CMakeLists.txt).
  *
  * When LINALG_HAS_CPUINFO (CMakeLists.txt's find_package(cpuinfo)) is 1, real

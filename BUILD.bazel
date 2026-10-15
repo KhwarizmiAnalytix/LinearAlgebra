@@ -87,7 +87,7 @@ cc_library(
     # #if LINALG_HAS_MKL / #elif LINALG_HAS_BLAS / #else chain compiled
     # directly into each op's public entry point — see
     # docs/gpu_backend_design.md §2. Every op's .cpp now defines a symbol
-    # (e.g. linalg::matrix_multiplication) that callers reference directly,
+    # (e.g. linalg::multiplication) that callers reference directly,
     # so an ordinary static-archive link already pulls in the .o's it needs.
     # alwayslink=True is kept here defensively (its removal has not been
     # verified against every Bazel consumer) rather than because the old

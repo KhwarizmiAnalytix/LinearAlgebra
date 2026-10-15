@@ -9,36 +9,40 @@
 
 namespace linalg
 {
+/**
+ * @brief Factorization and factor-reuse mode for square matrix operations.
+ */
 enum class linear_solver_type : std::uint8_t
 {
-    LU_LINEAR_SOLVER               = 1,
-    LU_UPFRONT_LINEAR_SOLVER       = 2,
-    CHOLESKY_LINEAR_SOLVER         = 3,
-    CHOLESKY_UPFRONT_LINEAR_SOLVER = 4,
+    LU_LINEAR_SOLVER               = 1,  ///< Factor the matrix using LU before the operation.
+    LU_UPFRONT_LINEAR_SOLVER       = 2,  ///< Reuse existing LU factors and pivots.
+    CHOLESKY_LINEAR_SOLVER         = 3,  ///< Factor the matrix using lower Cholesky before the operation.
+    CHOLESKY_UPFRONT_LINEAR_SOLVER = 4,  ///< Reuse an existing lower Cholesky factor.
 };
 
-// Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapacke /
-// mkl) is a compile-time choice fixed by linalg::kActiveBackend
-// (include/common/backend.h) — MKL takes precedence over BLAS+LAPACKE over
-// the scalar fallback, with no runtime dispatch or per-call override.
-//
-// `apply` and `workspace_size` are declared here but deliberately have NO
-// body: this class template is never specialized as a whole, only these
-// members are, via explicit member specializations defined once in
-// linear_solver.cpp (for whichever backend LINALG_HAS_MKL /
-// LINALG_HAS_BLAS && LINALG_HAS_LAPACKE selects — mkl.h / lapacke.h stay
-// out of this public header). Every caller — including tests — sees only
-// this declaration and calls `solver_backend<T, kActiveBackend>::apply(...)`;
-// the actual function body is resolved by the linker against the one
-// definition in linear_solver.cpp, so LINALG_API matters here (it must
-// cross the shared-library boundary to reach the test binary) and there is
-// no inline fallback body to silently instantiate per call site — calling
-// this for a (T, Backend) nobody defined is a link error, not silently wrong
-// behavior. For device (CUDA) pointers, see linalg::gpu::linear_solver in
-// include/matrix_operation_gpu/linear_solver_gpu.h (no `pivot` parameter
-// there — cuSOLVER manages LU pivots as internal device-side scratch).
-template <typename T, linalg_backend Backend> struct solver_backend
+/**
+ * @brief Solves square linear systems using LU or Cholesky factors.
+ */
+template <typename T, linalg_backend Backend> struct linear_solver
 {
+    /**
+     * @brief Solves a linear system, replacing its right-hand side with the solution.
+     *
+     * Cholesky modes require a symmetric positive-definite matrix and use lower triangular
+     * factors. Provide at least workspace_size(lda, type) bytes of temporary storage.
+     *
+     * @param[in,out] m Row-major lda x lda matrix, or existing factors for an UPFRONT mode.
+     *     Factorization overwrites the matrix.
+     * @param[in,out] pivot Array of lda pivot entries for LU modes; produced during
+     *     factorization or supplied with existing factors. Unused for Cholesky.
+     * @param[in] lda Matrix order and row stride in elements; the matrix is lda x lda.
+     * @param[in,out] x Array of lda right-hand-side values; overwritten with the solution.
+     * @param[in] type LU or Cholesky solve mode. UPFRONT modes reuse existing factors; other
+     *     modes factor the matrix first.
+     * @param[out] workspace Caller-owned temporary buffer in host memory.
+     * @param[in] workspace_size Size of workspace in bytes; must meet the size returned by
+     *     workspace_size().
+     */
     LINALG_API static void apply(T* m,
         linalg_int*                 pivot,
         linalg_int                  lda,
@@ -47,6 +51,15 @@ template <typename T, linalg_backend Backend> struct solver_backend
         void*                       workspace,
         size_t                      workspace_size);
 
+    /**
+     * @brief Returns the temporary storage required for this operation.
+     *
+     * @param[in] lda Matrix order and row stride in elements; the matrix is lda x lda.
+     * @param[in] type LU or Cholesky solve mode. UPFRONT modes reuse existing factors; other
+     *     modes factor the matrix first.
+     * @return Required size of the caller-owned host buffer in bytes; zero if no buffer is
+     * needed.
+     */
     LINALG_API static size_t workspace_size(linalg_int lda, linear_solver_type type);
 };
 

@@ -11,15 +11,15 @@
 namespace linalg
 {
 
-// Null/positivity checks shared by every solver_backend<T, Backend>::apply
+// Null/positivity checks shared by every linear_solver<T, Backend>::apply
 // below, so callers (tests included) get the same validation regardless of
 // which backend is active. There is no non-detail linear_solver() wrapper
 // to put this in any more — callers use
-// solver_backend<T, kActiveBackend>::apply directly.
+// linear_solver<T, kActiveBackend>::apply directly.
 static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 {
-    LOGGING_CHECK(m != nullptr && x != nullptr, "solver_backend::apply: m and x must not be null");
-    LOGGING_CHECK(lda > 0, "solver_backend::apply: lda must be positive", lda);
+    LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
+    LOGGING_CHECK(lda > 0, "linear_solver::apply: lda must be positive", lda);
 }
 
 // Only the native specializations are defined here. The mkl and blas_lapacke
@@ -99,8 +99,8 @@ void linear_solver_scalar_impl(
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        // Scalar lu_backend needs no scratch of its own.
-        if (lu_backend<T, kActiveBackend>::apply(m, lda, pivot, nullptr, 0))
+        // Scalar lu_decomposition needs no scratch of its own.
+        if (lu_decomposition<T, kActiveBackend>::apply(m, lda, pivot, nullptr, 0))
         {
             lu_solve(m, pivot, lda, x);
         }
@@ -113,7 +113,7 @@ void linear_solver_scalar_impl(
 
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
-        if (cholesky_backend<T, kActiveBackend>::apply(
+        if (cholesky_decomposition<T, kActiveBackend>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_solve(m, lda, x);
@@ -130,7 +130,7 @@ void linear_solver_scalar_impl(
 }  // namespace
 
 template <>
-void solver_backend<float, linalg_backend::native>::apply(float* m,
+void linear_solver<float, linalg_backend::native>::apply(float* m,
     linalg_int*                                                  pivot,
     linalg_int                                                   lda,
     float*                                                       x,
@@ -143,7 +143,7 @@ void solver_backend<float, linalg_backend::native>::apply(float* m,
 }
 
 template <>
-void solver_backend<double, linalg_backend::native>::apply(double* m,
+void linear_solver<double, linalg_backend::native>::apply(double* m,
     linalg_int*                                                    pivot,
     linalg_int                                                     lda,
     double*                                                        x,
@@ -156,14 +156,14 @@ void solver_backend<double, linalg_backend::native>::apply(double* m,
 }
 
 template <>
-size_t solver_backend<float, linalg_backend::native>::workspace_size(
+size_t linear_solver<float, linalg_backend::native>::workspace_size(
     linalg_int /*lda*/, linear_solver_type /*type*/)
 {
     return 0;
 }
 
 template <>
-size_t solver_backend<double, linalg_backend::native>::workspace_size(
+size_t linear_solver<double, linalg_backend::native>::workspace_size(
     linalg_int /*lda*/, linear_solver_type /*type*/)
 {
     return 0;

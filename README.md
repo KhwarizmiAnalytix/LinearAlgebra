@@ -61,18 +61,20 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 | `matrix_operation/cholesky_decomposition.h` | In-place Cholesky factorization (upper/lower), scalar or MKL LAPACKE |
 | `matrix_operation/lu_decomposition.h` | In-place LU factorization with pivot vector |
 | `matrix_operation/linear_solver.h` | `linear_solver_type`-selectable solve (LU / Cholesky, upfront or fused) |
-| `matrix_operation/matrix_inversion.h` | `matrix_invert`, `matrix_determinant` |
-| `matrix_operation/matrix_multiplication.h` | Row-major GEMM with optional operand transpose |
-| `matrix_operation/matrix_transpose.h` | In-place / out-of-place transpose |
+| `matrix_operation/inversion.h` | `matrix_invert` |
+| `matrix_operation/determinant.h` | `determinant` |
+| `matrix_operation/multiplication.h` | Row-major GEMM with optional operand transpose |
+| `matrix_operation/transpose.h` | In-place / out-of-place transpose |
 | `matrix_operation/svd_decomposition.h` | Singular value decomposition |
 | `matrix_operation/qr_decomposition.h` | Economy Householder QR (`A = Q*R`) |
 | `matrix_operation/least_squares.h` | `least_squares_solve` — over/under-determined, via pseudo-inverse |
 | `matrix_operation/pseudo_inverse.h` | Moore-Penrose pseudo-inverse, via SVD |
-| `matrix_operation/matrix_rank.h` | `matrix_rank`, `matrix_condition_number`, via SVD |
-| `matrix_operation/matrix_norm.h` | Frobenius / 1 / infinity / 2 (spectral) matrix norms |
-| `matrix_operation/matrix_trace.h` | `matrix_trace` |
-| `matrix_operation/eigenvalue_decomposition.h` | Symmetric (Jacobi) and general (real Schur QR) eigenvalue/eigenvector decomposition |
-| `matrix_operation/matrix_exponential.h` | `matrix_exponential` via scaling and squaring with a Padé approximant, composed on `matrix_multiplication`/`matrix_invert`/`matrix_norm` (inherits their backend transitively) |
+| `matrix_operation/rank.h` | `rank`, via SVD |
+| `matrix_operation/condition_number.h` | `condition_number`, via SVD |
+| `matrix_operation/norm.h` | Frobenius / 1 / infinity / 2 (spectral) matrix norms |
+| `matrix_operation/trace.h` | `trace` |
+| `matrix_operation/eigen.h` | Symmetric (Jacobi) and general (real Schur QR) eigenvalue/eigenvector decomposition |
+| `matrix_operation/exponential.h` | `exponential` via scaling and squaring with a Padé approximant, composed on `multiplication`/`matrix_invert`/`norm` (inherits their backend transitively) |
 | `matrix_operation/tridiagonal_operations.h` | Tridiagonal solve/multiply/decompose — scalar only, `std::vector`-based API outside the backend model |
 | `matrix_operation/pentadiagonal_operations.h` | Pentadiagonal solve/multiply — scalar only, `std::vector`-based API outside the backend model |
 
@@ -86,23 +88,23 @@ matrix class is part of the public API; callers own their own storage.
 | `matrix_operation_gpu/cholesky_decomposition_gpu.h` | In-place Cholesky factorization on device memory |
 | `matrix_operation_gpu/lu_decomposition_gpu.h` | In-place LU factorization, row-major "P·A = L·U" packed layout matching the CPU convention |
 | `matrix_operation_gpu/linear_solver_gpu.h` | Cholesky/LU solve (no caller-visible pivot — cuSOLVER manages it internally) |
-| `matrix_operation_gpu/matrix_inversion_gpu.h` | `matrix_invert`, `matrix_determinant` |
-| `matrix_operation_gpu/matrix_multiplication_gpu.h` | cuBLAS GEMM with optional operand transpose |
-| `matrix_operation_gpu/matrix_multiplication_batched_gpu.h` | Batched same-size square matrix multiply |
-| `matrix_operation_gpu/matrix_transpose_gpu.h` | In-place transpose |
+| `matrix_operation_gpu/inversion_gpu.h` | `matrix_invert`, `determinant` |
+| `matrix_operation_gpu/multiplication_gpu.h` | cuBLAS GEMM with optional operand transpose |
+| `matrix_operation_gpu/multiplication_batched_gpu.h` | Batched same-size square matrix multiply |
+| `matrix_operation_gpu/transpose_gpu.h` | In-place transpose |
 | `matrix_operation_gpu/svd_decomposition_gpu.h` | Economy SVD (tightly packed `lda`/`ldu`/`ldv` only — see the header) |
 | `matrix_operation_gpu/qr_decomposition_gpu.h` | Economy Householder QR (tightly packed only) |
-| `matrix_operation_gpu/eigenvalue_decomposition_gpu.h` | Symmetric eigenvalue/eigenvector decomposition only — cuSOLVER's dense API has no general (non-symmetric) `geev`-equivalent, so there is no GPU counterpart for that case; use the CPU `eigenvalue_decomposition` |
+| `matrix_operation_gpu/eigen_gpu.h` | Symmetric eigenvalue/eigenvector decomposition only — cuSOLVER's dense API has no general (non-symmetric) `geev`-equivalent, so there is no GPU counterpart for that case; use the CPU `eigen` |
 | `matrix_operation_gpu/pseudo_inverse_gpu.h` | Moore-Penrose pseudo-inverse, via GPU SVD |
-| `matrix_operation_gpu/matrix_rank_gpu.h` | `matrix_rank`, `matrix_condition_number`, via GPU SVD (downloads only the small singular-value vector, never the full matrix) |
-| `matrix_operation_gpu/matrix_norm_gpu.h` | Frobenius / 1 / infinity / 2 matrix norms (`cublasXnrm2`/`cublasIXamax` plus a small reduction kernel for 1/infinity) |
-| `matrix_operation_gpu/matrix_trace_gpu.h` | `matrix_trace` |
+| `matrix_operation_gpu/rank_gpu.h` | `rank`, `condition_number`, via GPU SVD (downloads only the small singular-value vector, never the full matrix) |
+| `matrix_operation_gpu/norm_gpu.h` | Frobenius / 1 / infinity / 2 matrix norms (`cublasXnrm2`/`cublasIXamax` plus a small reduction kernel for 1/infinity) |
+| `matrix_operation_gpu/trace_gpu.h` | `trace` |
 | `matrix_operation_gpu/least_squares_gpu.h` | `least_squares_solve` — over/under-determined, via GPU pseudo-inverse |
 
 Every GPU entry point takes device pointers only (never touches host
 memory internally) and an optional trailing `cudaStream_t` (default: the
-legacy default stream); `matrix_determinant`/`pseudo_inverse`/`matrix_rank`/
-`matrix_condition_number`/`matrix_norm`/`matrix_trace` are the exceptions
+legacy default stream); `determinant`/`pseudo_inverse`/`rank`/
+`condition_number`/`norm`/`trace` are the exceptions
 that must synchronize once and copy back a single scalar (or, for
 `pseudo_inverse`, the small singular-value vector) to compute their result
 — every other buffer involved stays device-resident. See
@@ -114,7 +116,7 @@ batched factorizations).
 
 | CMake variable | Default | Summary |
 |-----------------|---------|---------|
-| `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigenvalue_decomposition); least_squares/pseudo_inverse/matrix_rank/matrix_norm/matrix_trace compose on top of svd_decomposition and pick up the same backend transitively |
+| `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigen); least_squares/pseudo_inverse/rank/norm/trace compose on top of svd_decomposition and pick up the same backend transitively |
 | `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); MKL takes precedence when both are ON |
 | `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg::gpu::*`, `include/matrix_operation_gpu/`); requires the CUDA toolkit, enables the CUDA language only when ON |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
@@ -129,9 +131,36 @@ When `LINALG_ENABLE_MKL` is `ON`, `find_package(MKL)` must resolve (via
 When `LINALG_ENABLE_BLAS` is `ON`, `find_package(BLAS)`/`find_package(LAPACK)`
 must resolve, or configuration fails with `FATAL_ERROR`; `cblas.h` is
 required, but `lapacke.h` is optional — without it, the backend covers only
-`matrix_multiplication`/`matrix_transpose` and every other op falls back to
+`multiplication`/`transpose` and every other op falls back to
 scalar (a `STATUS` message reports which case applies). When
 `LINALG_ENABLE_CUBLAS` is `ON`, `find_package(CUDAToolkit)` must resolve.
+
+## Backend landscape
+
+General reference for where each vendor backend sits (CPU/GPU, which
+operation families it covers); not every row is wired into LinearAlgebra —
+see the Implemented column.
+
+| Backend | CPU/GPU | Dense BLAS | LAPACK | Sparse | FFT | Implemented here |
+|---|---|---:|---:|---:|---:|---|
+| **Intel oneMKL** | CPU + Intel GPU | ✅ | ✅ | ✅ | ✅ | ✅ `LINALG_ENABLE_MKL` |
+| **OpenBLAS** | CPU | ✅ | ✅* | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
+| **Apple Accelerate** | CPU / Apple Silicon | ✅ | ✅ | ✅ | ✅ | ✅ via `LINALG_ENABLE_BLAS` |
+| **Netlib BLAS/LAPACK** | CPU | ✅ | ✅ | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
+| **cuBLAS / cuSOLVER** | NVIDIA GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_CUBLAS` (`linalg::gpu::*`) |
+| **BLIS** | CPU | ✅ | ❌ | ❌ | ❌ | ❌ not wired up |
+| **cuBLASLt** | NVIDIA GPU | ✅ | — | — | — | ❌ not wired up |
+| **cuSPARSE** | NVIDIA GPU | — | — | ✅ | — | ❌ out of scope (dense only) |
+| **rocBLAS** | AMD GPU | ✅ | — | — | — | ❌ not wired up |
+| **hipSOLVER** | AMD GPU | — | ✅ | — | — | ❌ not wired up |
+| **rocSPARSE** | AMD GPU | — | — | ✅ | — | ❌ out of scope (dense only) |
+
+\* OpenBLAS ships LAPACK only when built with its bundled reference LAPACK
+(the common case for prebuilt packages); a BLAS-only OpenBLAS build falls
+back to the scalar path here for LAPACK-level ops (see `LINALG_ENABLE_BLAS`
+above). FFT and sparse routines are out of scope for LinearAlgebra, which is
+dense-only; the FFT/Sparse columns above describe each vendor library in
+general, not something this repo calls.
 
 ## Public API (abridged)
 
@@ -142,11 +171,11 @@ scalar (a `STATUS` message reports which case applies). When
 // In-place lower-triangular Cholesky factor of an n x n row-major matrix.
 // kActiveBackend (include/common/backend.h) is the compile-time choice
 // between the scalar / BLAS+LAPACKE / MKL implementation.
-linalg::detail::cholesky_backend<double, linalg::kActiveBackend>::apply(
+linalg::detail::cholesky_decomposition<double, linalg::kActiveBackend>::apply(
     A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
 
 // Solve A x = b in place, reusing the Cholesky factor above.
-linalg::detail::solver_backend<double, linalg::kActiveBackend>::apply(
+linalg::detail::linear_solver<double, linalg::kActiveBackend>::apply(
     A.data(), pivot.data(), n, x.data(),
     linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER, nullptr, 0);
 ```

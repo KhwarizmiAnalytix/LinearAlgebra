@@ -14,16 +14,16 @@
 namespace linalg
 {
 
-// Null/positivity checks shared by every lu_backend<T, Backend>::apply
-// below, so callers (linear_solver.cpp, matrix_inversion.cpp, tests) get the
+// Null/positivity checks shared by every lu_decomposition<T, Backend>::apply
+// below, so callers (linear_solver.cpp, inversion.cpp, tests) get the
 // same validation regardless of which backend is active. There is no
 // non-detail lu_decomposition() wrapper to put this in any more — callers
-// use lu_backend<T, kActiveBackend>::apply directly.
+// use lu_decomposition<T, kActiveBackend>::apply directly.
 static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 {
     LOGGING_CHECK(
-        m != nullptr && pivot != nullptr, "lu_backend::apply: m and pivot must not be null");
-    LOGGING_CHECK(lda > 0, "lu_backend::apply: lda must be positive", lda);
+        m != nullptr && pivot != nullptr, "lu_decomposition::apply: m and pivot must not be null");
+    LOGGING_CHECK(lda > 0, "lu_decomposition::apply: lda must be positive", lda);
 }
 
 // Only the native specializations are defined here. The mkl and blas_lapacke
@@ -110,7 +110,7 @@ bool lu_decomposition_scalar_impl(
 }  // namespace
 
 template <>
-bool lu_backend<float, linalg_backend::native>::apply(
+bool lu_decomposition<float, linalg_backend::native>::apply(
     float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
     check_lu_inputs(m, pivot, lda);
@@ -118,19 +118,19 @@ bool lu_backend<float, linalg_backend::native>::apply(
 }
 
 template <>
-bool lu_backend<double, linalg_backend::native>::apply(
+bool lu_decomposition<double, linalg_backend::native>::apply(
     double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
     check_lu_inputs(m, pivot, lda);
     return lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
 }
 
-template <> size_t lu_backend<float, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
+template <> size_t lu_decomposition<float, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }
 
-template <> size_t lu_backend<double, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
+template <> size_t lu_decomposition<double, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }

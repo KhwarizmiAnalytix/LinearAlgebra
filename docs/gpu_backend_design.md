@@ -2,20 +2,20 @@
 
 Status: §8 phases 1–3 implemented and verified against real CUDA hardware
 (handle pool + stream parameter, the `lu_decomposition_gpu` layout fix,
-`matrix_inversion_gpu`, `svd_decomposition_gpu`). Phase 4 (multi-RHS and
+`inversion_gpu`, `svd_decomposition_gpu`). Phase 4 (multi-RHS and
 batched extensions) is not yet started.
 
 Beyond the original seven ops this plan scoped, the CPU-side additions
 (QR, least-squares, pseudo-inverse, rank/condition-number/norm/trace,
 eigenvalue decomposition — see the top-level README's CPU module table)
 now also have GPU counterparts (`qr_decomposition_gpu`,
-`pseudo_inverse_gpu`, `matrix_rank_gpu`, `matrix_norm_gpu`,
-`matrix_trace_gpu`, `least_squares_gpu`, and
-`symmetric_eigenvalue_decomposition_gpu`), verified against real CUDA
+`pseudo_inverse_gpu`, `rank_gpu`, `norm_gpu`,
+`trace_gpu`, `least_squares_gpu`, and
+`eigen_gpu`), verified against real CUDA
 hardware the same way. The one CPU op with no GPU counterpart at all is
 general (non-symmetric) eigenvalue decomposition: cuSOLVER's dense API
 (`cusolverDn`) has no `geev`-equivalent routine, so there is nothing to
-call into — `eigenvalue_decomposition_gpu.h` documents this gap rather than
+call into — `eigen_gpu.h` documents this gap rather than
 declaring a function with nowhere to route to.
 
 **Standing principle: `LinearAlgebra` does not manage memory.** It is a
@@ -34,9 +34,9 @@ and GPU, and make chained GPU calls run start-to-finish on device memory
 with no implicit host round-trip. Concretely:
 
 1. Every op that exists for the CPU (`cholesky_decomposition`,
-   `lu_decomposition`, `linear_solver`, `matrix_invert`/`matrix_determinant`,
-   `matrix_multiplication`, `matrix_transpose`, `svd_decomposition`) gets a
-   `linalg::gpu::*` counterpart. Today `matrix_invert`/`matrix_determinant`
+   `lu_decomposition`, `linear_solver`, `matrix_invert`/`determinant`,
+   `multiplication`, `transpose`, `svd_decomposition`) gets a
+   `linalg::gpu::*` counterpart. Today `matrix_invert`/`determinant`
    and `svd_decomposition` have none.
 2. GPU calls stop being pinned to a single implicit stream, and stop
    producing a factorization (`lu_decomposition`) whose on-device layout is
@@ -97,7 +97,7 @@ codebase and this plan's raw-pointer contract:
 | PyTorch mechanism | What it solves | Scoped-down equivalent proposed here |
 |---|---|---|
 | `getCurrentCUDABlasHandle()` / `getCurrentCUDASolverDnHandle()`, keyed by `(device, stream)` | A single `thread_local` handle (today's `cuda_handle.h`) is silently wrong across `cudaSetDevice` calls and never rides the caller's stream | §5.1 — handle pool keyed by device ordinal + stream |
-| `cloneBatchedColumnMajor` | cuSOLVER is column-major; PyTorch materializes a device-side transpose rather than accepting a semantically different factorization | §5.2 — use the library's own `matrix_transpose_gpu` kernel (already device-only, already exists) to fix `lu_decomposition_gpu`'s A-vs-A^T mismatch, instead of leaving it as a documented caveat |
+| `cloneBatchedColumnMajor` | cuSOLVER is column-major; PyTorch materializes a device-side transpose rather than accepting a semantically different factorization | §5.2 — use the library's own `transpose_gpu` kernel (already device-only, already exists) to fix `lu_decomposition_gpu`'s A-vs-A^T mismatch, instead of leaving it as a documented caveat |
 | Batched linear algebra over a leading batch dimension (`torch.linalg.solve` on a `(*, n, n)` tensor lowers to `getrfBatched`/`gesvdaStridedBatched`) | Many independent small systems is the common case in practice, not one big matrix | §5.4 — `getrfBatched`/`potrfBatched`/`gesvdjBatched` overloads alongside the existing single-matrix ones, and replacing the hand-written batched GEMM kernel with `cublasXgemmStridedBatched` |
 
 Everything else about ATen — `TensorIterator`, the dtype-macro dispatcher,
@@ -110,21 +110,21 @@ by §2.
 
 | Op | CPU (scalar/BLAS/MKL) | GPU (cuBLAS/cuSOLVER) |
 |---|---|---|
-| `matrix_multiplication` | yes | yes (single + a hand-written batched kernel) |
-| `matrix_transpose` | yes | yes |
+| `multiplication` | yes | yes (single + a hand-written batched kernel) |
+| `transpose` | yes | yes |
 | `cholesky_decomposition` | yes | yes |
 | `lu_decomposition` | yes | yes, but returns a **different factorization** than the CPU op (see §4.2) |
 | `linear_solver` | yes, single RHS vector | yes, single RHS vector only |
-| `matrix_invert` / `matrix_determinant` | yes | yes |
+| `matrix_invert` / `determinant` | yes | yes |
 | `svd_decomposition` | yes | yes (economy only, tightly packed leading dimensions only) |
 | `qr_decomposition` | yes | yes (economy only, tightly packed leading dimensions only) |
 | `pseudo_inverse` | yes | yes |
-| `matrix_rank` / `matrix_condition_number` | yes | yes |
-| `matrix_norm` | yes | yes |
-| `matrix_trace` | yes | yes |
+| `rank` / `condition_number` | yes | yes |
+| `norm` | yes | yes |
+| `trace` | yes | yes |
 | `least_squares_solve` | yes | yes |
 | `symmetric_eigenvalue_decomposition` | yes | yes |
-| `eigenvalue_decomposition` (general/non-symmetric) | yes | **missing — no cuSOLVER dense `geev`-equivalent to call into** |
+| `eigen` (general/non-symmetric) | yes | **missing — no cuSOLVER dense `geev`-equivalent to call into** |
 
 ### 4.2 Known correctness caveat: `lu_decomposition_gpu`
 
@@ -199,12 +199,12 @@ context (e.g. issuing work alongside a caller-owned CUDA graph capture).
 
 ### 5.2 Fix `lu_decomposition_gpu`'s layout mismatch
 
-Use the library's own `linalg::gpu::matrix_transpose` (already a pure
+Use the library's own `linalg::gpu::transpose` (already a pure
 device-to-device kernel, no host traffic) to make `lu_decomposition_gpu`
 return the same `P · A = L · U` convention as the CPU op, instead of
 leaving `A^T`'s factorization as a documented-but-uncorrected caveat:
 
-1. Transpose the input in place on the device (`matrix_transpose(n, n,
+1. Transpose the input in place on the device (`transpose(n, n,
    m)`).
 2. Run `cusolverDnXgetrf` as today — this now factors the *actual* `A`
    (since the buffer handed to cuSOLVER is `A`'s transpose, and cuSOLVER
@@ -227,10 +227,10 @@ from `linalg::gpu::lu_decomposition`'s output, the same way
 
 ### 5.3 New GPU ops
 
-**`matrix_inversion_gpu.h`/`.cpp`** (`linalg::gpu::matrix_invert`,
-`linalg::gpu::matrix_determinant`). cuSOLVER has no direct `getri`
+**`inversion_gpu.h`/`.cpp`** (`linalg::gpu::matrix_invert`,
+`linalg::gpu::determinant`). cuSOLVER has no direct `getri`
 equivalent, so mirror the CPU op's actual strategy
-(`matrix_inversion.cpp` already computes the inverse via
+(`inversion.cpp` already computes the inverse via
 factor-then-solve-against-identity, not a dedicated inversion routine):
 `cusolverDnXgetrf` (via the corrected §5.2 path) followed by
 `cusolverDnXgetrs` with the identity matrix as the batched right-hand
@@ -239,7 +239,7 @@ matrix is built directly on the device (a small fill kernel, or
 `cudaMemsetAsync` plus a strided unit-diagonal write) into a buffer the
 caller supplies (or the op allocates and frees itself with plain
 `cudaMalloc`/`cudaFree`, per §2) — never staged through the host.
-`matrix_determinant` reads the product of the factor's diagonal together
+`determinant` reads the product of the factor's diagonal together
 with the pivot permutation's sign, exactly as the CPU path does, evaluated
 with a small device-side reduction kernel (or a `thrust`/`cub` reduction if
 either becomes a dependency — otherwise a manual one-block kernel, since
@@ -285,7 +285,7 @@ mirroring the CPU header's row/column/`lda`/`ldu`/`ldv` signature shape.
   loop over the pooled handle from §5.1 if no batched `getrs` exists in the
   targeted toolkit).
 - **`batched_matrix_multiplication`**: replace the hand-written one-thread-
-  per-output-element kernel in `matrix_multiplication_batched_gpu.cu` with
+  per-output-element kernel in `multiplication_batched_gpu.cu` with
   `cublasXgemmStridedBatched` (uniform stride across same-size matrices,
   exactly this op's existing contract), which uses cuBLAS's tuned kernels
   (tensor cores where applicable) instead of a naive kernel. Keep the
@@ -306,7 +306,7 @@ written" / "does not synchronize" notes on every declaration, and, per §2,
 every parameter a bare `T*`/`int*` the caller owns, exactly like every
 existing `matrix_operation_gpu/*.h` entry point):
 
-- `matrix_inversion_gpu.h`
+- `inversion_gpu.h`
 - `svd_decomposition_gpu.h`
 - `batched_cholesky_decomposition_gpu.h`, `batched_lu_decomposition_gpu.h`,
   `batched_linear_solver_gpu.h`
@@ -338,7 +338,7 @@ Per `.augment/rules/testing.md` conventions (Google Test, `Test*.cxx` under
 Bazel does not build the GPU tree, per §2, so these are CMake/CTest-only,
 same as `TestGpuMatrixOperations.cxx` today):
 
-1. **New op correctness**: `matrix_invert`/`matrix_determinant` and
+1. **New op correctness**: `matrix_invert`/`determinant` and
    `svd_decomposition` GPU tests compare against the same CPU reference
    values `TestMatrixInversion.cxx`/`TestSVDDecomposition.cxx` already
    compute, at `GpuTolerance<T>` (existing `5e-3f`/`1e-9` thresholds).
@@ -394,9 +394,9 @@ Ordered by dependency, each phase independently buildable/testable:
    as part of this work. Verified: `MathGpu.LuDecomposition` now checks
    real `P · A = L · U` reconstruction (previously only a smoke test),
    passing on real hardware.
-3. **DONE** — **§5.3 new ops** (`matrix_inversion_gpu`, `svd_decomposition_
+3. **DONE** — **§5.3 new ops** (`inversion_gpu`, `svd_decomposition_
    gpu`) — closes the CPU/GPU op-coverage gap from §4.1's table.
-   `matrix_invert`/`matrix_determinant` collapse the CPU's `*_UPFRONT_*`
+   `matrix_invert`/`determinant` collapse the CPU's `*_UPFRONT_*`
    variants into their non-upfront counterparts, matching
    `linear_solver_gpu`'s existing precedent (cuSOLVER always re-factors;
    there is no "assume already factored" GPU path). `svd_decomposition_gpu`

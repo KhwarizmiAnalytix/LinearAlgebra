@@ -40,7 +40,7 @@ template <typename T>
 size_t pseudo_inverse_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
     const auto svd_bytes =
-        linalg::svd_backend<T, linalg::kActiveBackend>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, linalg::kActiveBackend>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     pseudo_inverse_plan<T>(arena, rows, columns, svd_bytes);
     return arena.total_size();
@@ -59,7 +59,7 @@ void pseudo_inverse_impl(linalg_long rows,
 {
     const linalg_long k = std::min(rows, columns);
     const auto        svd_bytes =
-        linalg::svd_backend<T, linalg::kActiveBackend>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, linalg::kActiveBackend>::workspace_size(rows, columns);
 
     LOGGING_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
         "pseudo_inverse: workspace_size too small");
@@ -74,7 +74,7 @@ void pseudo_inverse_impl(linalg_long rows,
         }
     }
 
-    linalg::svd_backend<T, linalg::kActiveBackend>::apply(rows,
+    linalg::svd_decomposition<T, linalg::kActiveBackend>::apply(rows,
         columns,
         bufs.A_copy,
         columns,
@@ -115,7 +115,7 @@ void pseudo_inverse_impl(linalg_long rows,
 }
 
 template <>
-void pseudo_inverse_backend<float, linalg_backend::native>::apply(linalg_long rows,
+void pseudo_inverse<float, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                               columns,
     const float*                                                              A,
     linalg_long                                                               lda,
@@ -126,14 +126,14 @@ void pseudo_inverse_backend<float, linalg_backend::native>::apply(linalg_long ro
     size_t                                                                    workspace_size)
 {
     LOGGING_CHECK(A != nullptr && Ainv != nullptr,
-        "pseudo_inverse_backend::apply: A and Ainv must not be null");
+        "pseudo_inverse::apply: A and Ainv must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
-        "pseudo_inverse_backend::apply: rows/columns/lda/ldai must be positive");
+        "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
     pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-void pseudo_inverse_backend<double, linalg_backend::native>::apply(linalg_long rows,
+void pseudo_inverse<double, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                                columns,
     const double*                                                              A,
     linalg_long                                                                lda,
@@ -144,21 +144,21 @@ void pseudo_inverse_backend<double, linalg_backend::native>::apply(linalg_long r
     size_t                                                                     workspace_size)
 {
     LOGGING_CHECK(A != nullptr && Ainv != nullptr,
-        "pseudo_inverse_backend::apply: A and Ainv must not be null");
+        "pseudo_inverse::apply: A and Ainv must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
-        "pseudo_inverse_backend::apply: rows/columns/lda/ldai must be positive");
+        "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
     pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-size_t pseudo_inverse_backend<float, linalg_backend::native>::workspace_size(
+size_t pseudo_inverse<float, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return pseudo_inverse_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t pseudo_inverse_backend<double, linalg_backend::native>::workspace_size(
+size_t pseudo_inverse<double, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return pseudo_inverse_workspace_size_impl<double>(rows, columns);

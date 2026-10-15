@@ -9,26 +9,30 @@
 namespace linalg
 {
 
-// Host-memory-only CPU entry point. Solves the general linear least-squares
-// problem min_X ||A*X - B||_2 for a rows x columns, row-major A and a
-// rows x nrhs, row-major B: overdetermined (rows > columns) gives the
-// least-squares solution, underdetermined (rows < columns) gives the
-// minimum-norm solution, and rank-deficient A is handled the same way via
-// the pseudo-inverse. X is sized columns x nrhs (ldx >= nrhs). A and B are
-// read-only.
-//
-// Always routes through linalg::pseudo_inverse_backend
-// (X = A+ * B), which is itself backend-dispatched via
-// linalg::svd_backend — there is no separate backend selection for
-// the reduction done here, so only the `native` specialization below is
-// ever defined, and callers always name it explicitly rather than
-// kActiveBackend. The template still exists, with the same
-// explicit-member-specialization shape as cholesky_backend and friends,
-// purely so this op's call site looks like every other op's. For device
-// (CUDA) pointers, see linalg::gpu::least_squares_solve in
-// include/matrix_operation_gpu/least_squares_gpu.h.
-template <typename T, linalg_backend Backend> struct least_squares_backend
+/**
+ * @brief Computes minimum-norm solutions to linear least-squares problems.
+ */
+template <typename T, linalg_backend Backend> struct least_squares
 {
+    /**
+     * @brief Computes the minimum-norm least-squares solution X to A * X = B.
+     *
+     * Supports overdetermined, underdetermined, and rank-deficient systems. Provide at least
+     * workspace_size(rows, columns) bytes of temporary storage.
+     *
+     * @param[in] rows Number of matrix rows; must be positive.
+     * @param[in] columns Number of matrix columns; must be positive.
+     * @param[in] nrhs Number of right-hand sides; must be positive.
+     * @param[in] A Row-major rows x columns coefficient matrix; left unchanged.
+     * @param[in] lda Row stride of A in elements; must be at least columns.
+     * @param[in] B Row-major rows x nrhs right-hand-side matrix; left unchanged.
+     * @param[in] ldb Row stride of B in elements; must be at least nrhs.
+     * @param[out] X Row-major columns x nrhs solution matrix.
+     * @param[in] ldx Row stride of X in elements; must be at least nrhs.
+     * @param[out] workspace Caller-owned temporary buffer in host memory.
+     * @param[in] workspace_size Size of workspace in bytes; must meet the size returned by
+     *     workspace_size().
+     */
     LINALG_API static void apply(linalg_long rows,
         linalg_long                          columns,
         linalg_long                          nrhs,
@@ -41,6 +45,14 @@ template <typename T, linalg_backend Backend> struct least_squares_backend
         void*                                workspace,
         size_t                               workspace_size);
 
+    /**
+     * @brief Returns the temporary storage required for this operation.
+     *
+     * @param[in] rows Number of matrix rows; must be positive.
+     * @param[in] columns Number of matrix columns; must be positive.
+     * @return Required size of the caller-owned host buffer in bytes; zero if no buffer is
+     * needed.
+     */
     LINALG_API static size_t workspace_size(linalg_long rows, linalg_long columns);
 };
 

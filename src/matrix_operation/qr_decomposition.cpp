@@ -10,11 +10,11 @@
 namespace linalg
 {
 
-// Null/positivity checks shared by every qr_backend<T, Backend>::apply
+// Null/positivity checks shared by every qr_decomposition<T, Backend>::apply
 // below, so callers (tests included) get the same validation regardless of
 // which backend is active. There is no non-detail qr_decomposition()
 // wrapper to put this in any more — callers use
-// qr_backend<T, kActiveBackend>::apply directly.
+// qr_decomposition<T, kActiveBackend>::apply directly.
 static void check_qr_inputs(const void* A,
     const void*                         Q,
     const void*                         R,
@@ -25,9 +25,9 @@ static void check_qr_inputs(const void* A,
     linalg_long                         ldr)
 {
     LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr,
-        "qr_backend::apply: A, Q, and R must not be null");
+        "qr_decomposition::apply: A, Q, and R must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0,
-        "qr_backend::apply: rows/columns/lda/ldq/ldr must be positive");
+        "qr_decomposition::apply: rows/columns/lda/ldq/ldr must be positive");
 }
 
 // Only the native specializations are defined here. The mkl and blas_lapacke
@@ -190,7 +190,7 @@ void qr_householder(linalg_long rows,
 }  // namespace
 
 template <>
-void qr_backend<float, linalg_backend::native>::apply(linalg_long rows,
+void qr_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                   columns,
     const float*                                                  A,
     linalg_long                                                   lda,
@@ -206,7 +206,7 @@ void qr_backend<float, linalg_backend::native>::apply(linalg_long rows,
 }
 
 template <>
-void qr_backend<double, linalg_backend::native>::apply(linalg_long rows,
+void qr_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                    columns,
     const double*                                                  A,
     linalg_long                                                    lda,
@@ -222,14 +222,14 @@ void qr_backend<double, linalg_backend::native>::apply(linalg_long rows,
 }
 
 template <>
-size_t qr_backend<float, linalg_backend::native>::workspace_size(
+size_t qr_decomposition<float, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return qr_householder_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t qr_backend<double, linalg_backend::native>::workspace_size(
+size_t qr_decomposition<double, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return qr_householder_workspace_size_impl<double>(rows, columns);

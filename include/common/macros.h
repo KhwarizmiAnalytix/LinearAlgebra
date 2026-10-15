@@ -8,6 +8,6 @@
 
 // Marks an intentionally-unused function parameter (e.g. `pivot` in the
 // non-pivoting fallback paths of lu_decomposition / linear_solver /
-// matrix_inversion). Placed as a leading attribute-specifier-seq on the
+// inversion). Placed as a leading attribute-specifier-seq on the
 // parameter declaration, so plain [[maybe_unused]] is sufficient in C++17.
 #define LINALG_UNUSED [[maybe_unused]]

@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
-#include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
+#include "include/matrix_operation_gpu/transpose_gpu.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
@@ -20,7 +20,7 @@ namespace
 
 // Two scratch buffers: cuSOLVER's own getrf workspace, and the n x n
 // transpose scratch the pre/post getrf transposes need (detail::
-// transpose_device, matrix_transpose_gpu.cpp — reused across both calls
+// transpose_device, transpose_gpu.cpp — reused across both calls
 // since they run sequentially on the same stream). Shared by the size query
 // and the real call so they can never disagree on layout (see
 // include/common/cuda_workspace.h).
@@ -86,7 +86,7 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* wor
     const auto               bufs = lu_decomposition_plan<float>(arena, lwork, n);
 
     // cuSOLVER is column-major: transposing the row-major buffer first
-    // (device-to-device, matrix_transpose_gpu.cpp) makes its column-major
+    // (device-to-device, transpose_gpu.cpp) makes its column-major
     // reading of the result equal the caller's actual A rather than A^T
     // (see that file's row/column-major identity), so getrf below factors A
     // itself and its pivots are A's own row-interchange sequence — matching

@@ -49,10 +49,10 @@ template <typename value_t> void test_svd(std::size_t rows, std::size_t columns)
 
     const auto ldm     = columns;
     const auto ldv     = columns;
-    const auto ws_size = linalg::svd_backend<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto ws_size = linalg::svd_decomposition<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::svd_backend<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
+    linalg::svd_decomposition<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         M.begin(),
         static_cast<linalg_long>(ldm),

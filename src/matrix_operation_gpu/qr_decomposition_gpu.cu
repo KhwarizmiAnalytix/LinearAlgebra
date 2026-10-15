@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
-#include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
+#include "include/matrix_operation_gpu/transpose_gpu.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
@@ -16,7 +16,7 @@
 // over from geqrf, not zero — this clears them, matching the CPU
 // qr_decomposition's explicit "(c >= r) ? value : 0" contract. `R` is
 // row-major k x columns, tightly packed (ld = columns), matching
-// matrix_inversion_gpu.cu's convention of a single-purpose file-scope
+// inversion_gpu.cu's convention of a single-purpose file-scope
 // kernel per translation unit.
 template <typename scalar_t>
 static __global__ void zero_qr_lower_triangle_kernel(scalar_t* R, int k, int columns)

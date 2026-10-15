@@ -8,7 +8,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
-#include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
+#include "include/matrix_operation_gpu/transpose_gpu.h"
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
@@ -121,7 +121,7 @@ size_t svd_workspace_size_impl(BufferSizeFn buffer_size, linalg_long rows, linal
 // row-major) are written directly — `S` needs no layout conversion (a
 // plain vector), `U`/`VT` are converted from cuSOLVER's column-major
 // output via detail::transpose_device, the same identity used throughout
-// lu_decomposition_gpu.cpp and matrix_inversion_gpu.cu: converting
+// lu_decomposition_gpu.cpp and inversion_gpu.cu: converting
 // column-major storage of an (RX x CX) matrix to row-major storage of the
 // same matrix is transpose_device(CX, RX, buf, scratch) — swapped
 // dimensions relative to the matrix's own true shape. `bufs`/

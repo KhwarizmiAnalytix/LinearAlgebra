@@ -27,9 +27,9 @@ static void check_svd_inputs(const void* A,
     linalg_long                          ldv)
 {
     LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr,
-        "svd_backend::apply: A, S, U, and VT must not be null");
+        "svd_decomposition::apply: A, S, U, and VT must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0,
-        "svd_backend::apply: rows/columns/lda/ldu/ldv must be positive");
+        "svd_decomposition::apply: rows/columns/lda/ldu/ldv must be positive");
 }
 
 namespace
@@ -171,7 +171,7 @@ void svd_lapacke_impl(GesvdWorkFn gesvd_work,
 }  // namespace
 
 template <>
-void svd_backend<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
     linalg_long                                                          columns,
     float*                                                               A,
     linalg_long                                                          lda,
@@ -233,7 +233,7 @@ void svd_backend<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
 }
 
 template <>
-void svd_backend<double, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long rows,
     linalg_long                                                           columns,
     double*                                                               A,
     linalg_long                                                           lda,
@@ -295,14 +295,14 @@ void svd_backend<double, linalg_backend::blas_lapacke>::apply(linalg_long rows,
 }
 
 template <>
-size_t svd_backend<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t svd_decomposition<float, linalg_backend::blas_lapacke>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return svd_workspace_size_impl<float>(LAPACKE_sgesvd_work, rows, columns);
 }
 
 template <>
-size_t svd_backend<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t svd_decomposition<double, linalg_backend::blas_lapacke>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);

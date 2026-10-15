@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
+
+package(default_visibility = ["//visibility:public"])
+
+# One cc_binary per Benchmark*.cxx — mirrors Testing/Benchmark/CMakeLists.txt.
+[
+    cc_binary(
+        name = "benchmark_" + _src[len("Benchmark"):-len(".cxx")].lower(),
+        srcs = [_src],
+        copts = linear_algebra_copts(),
+        defines = linear_algebra_defines(),
+        includes = ["."],
+        linkopts = linear_algebra_linkopts(),
+        deps = [
+            "//:LinearAlgebra",
+            "@com_google_benchmark//:benchmark",
+            "@com_google_benchmark//:benchmark_main",
+        ],
+    )
+    for _src in glob(["Benchmark*.cxx"], allow_empty = True)
+]

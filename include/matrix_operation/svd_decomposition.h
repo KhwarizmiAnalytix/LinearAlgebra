@@ -1,34 +1,39 @@
 #pragma once
 
-#include <cstddef>  // for linalg_long
+#include <cstddef>
 
 #include "include/common/backend.h"
-#include "include/common/linear_algebra_export.h"  // for LINALG_API
+#include "include/common/linear_algebra_export.h"
 #include "include/common/types.h"
 
 namespace linalg
 {
 
-// Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapacke /
-// mkl) is a compile-time choice fixed by linalg::kActiveBackend
-// (include/common/backend.h) — MKL takes precedence over BLAS+LAPACKE over
-// the scalar fallback, with no runtime dispatch or per-call override.
-//
-// `apply` and `workspace_size` are declared here but deliberately have NO body:
-// this class template is never specialized as a whole, only these members are,
-// via explicit member specializations defined once in svd_decomposition.cpp
-// (for whichever backend LINALG_HAS_MKL / LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-// selects — mkl.h / lapacke.h stay out of this public header). Every caller —
-// including tests — sees only this declaration and calls
-// `svd_backend<T, kActiveBackend>::apply(...)`; the actual function body is
-// resolved by the linker against the one definition in svd_decomposition.cpp,
-// so LINALG_API matters here (it must cross the shared-library boundary to
-// reach the test binary) and there is no inline fallback body to silently
-// instantiate per call site — calling this for a (T, Backend) nobody defined
-// is a link error, not silently wrong behavior. For device (CUDA) pointers,
-// see linalg::gpu::svd_decomposition in include/matrix_operation_gpu/svd_decomposition_gpu.h.
-template <typename T, linalg_backend Backend> struct svd_backend
+/**
+ * @brief Computes the economy singular value decomposition A = U * diag(S) * VT.
+ */
+template <typename T, linalg_backend Backend> struct svd_decomposition
 {
+    /**
+     * @brief Computes the economy factorization A = U * diag(S) * VT.
+     *
+     * Provide at least workspace_size(rows, columns) bytes of temporary storage.
+     *
+     * @param[in] rows Number of matrix rows; must be positive.
+     * @param[in] columns Number of matrix columns; must be positive.
+     * @param[in] A Contiguous row-major input matrix of size rows x columns; left unchanged.
+     * @param[in] lda Row stride of A in elements; use columns.
+     * @param[out] S Array of k nonnegative singular values, where k = min(rows, columns).
+     *     Ordering is not guaranteed.
+     * @param[out] U Contiguous row-major rows x k matrix of left singular vectors.
+     * @param[in] ldu Row stride of U in elements; use k.
+     * @param[out] VT Contiguous row-major k x columns transpose of the right singular-vector
+     *     matrix.
+     * @param[in] ldv Row stride of VT in elements; use columns.
+     * @param[out] workspace Caller-owned temporary buffer in host memory.
+     * @param[in] workspace_size Size of workspace in bytes; must meet the size returned by
+     *     workspace_size().
+     */
     LINALG_API static void apply(linalg_long rows,
         linalg_long                          columns,
         T*                                   A,
@@ -41,6 +46,14 @@ template <typename T, linalg_backend Backend> struct svd_backend
         void*                                workspace,
         size_t                               workspace_size);
 
+    /**
+     * @brief Returns the temporary storage required for this operation.
+     *
+     * @param[in] rows Number of matrix rows; must be positive.
+     * @param[in] columns Number of matrix columns; must be positive.
+     * @return Required size of the caller-owned host buffer in bytes; zero if no buffer is
+     * needed.
+     */
     LINALG_API static size_t workspace_size(linalg_long rows, linalg_long columns);
 };
 

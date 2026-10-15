@@ -5,7 +5,7 @@
 #include "include/common/types.h"
 
 // LinearAlgebra — SIMD packet abstraction for the scalar backend's blocked
-// GEMM (see the LINALG_HAS_VECTORIZATION block in matrix_multiplication.cpp, an
+// GEMM (see the LINALG_HAS_VECTORIZATION block in multiplication.cpp, an
 // Eigen-derived GEBP-style micro-kernel). `linalg::packet<T>` mirrors the
 // subset of Eigen's internal packet-math primitives (Eigen/src/Core/arch/
 // */PacketMath.h, GenericPacketMathFunctions.h) that kernel actually calls:
@@ -14,7 +14,7 @@
 //
 // Naming and calling convention (out-parameter style: `op(ins..., out&)`
 // rather than `out = op(ins...)`) intentionally match the call sites in
-// matrix_multiplication.cpp rather than following a more idiomatic
+// multiplication.cpp rather than following a more idiomatic
 // return-based API — this header exists to satisfy that already-written
 // kernel, not the other way around.
 //
@@ -51,7 +51,7 @@ struct packet;
 // Shared by every packet<T>::ptranspose<N> below (scalar and every ISA
 // specialization alike) instead of each duplicating its own shuffle logic.
 //
-// Two call shapes reach this, both from matrix_multiplication.cpp: pack_lhs
+// Two call shapes reach this, both from multiplication.cpp: pack_lhs
 // calls ptranspose<PacketSize>, i.e. N == packet<T>::size — an ordinary NxN
 // transpose of N whole registers. pack_rhs always calls ptranspose<4> (nr,
 // the GEBP micro-kernel's fixed column-block width, independent of the
@@ -430,7 +430,7 @@ struct packet<float>
     static constexpr int size = 8;
 
     // Deliberately not half_size's mathematically honest value (4): the
-    // only reader of half_size is matrix_multiplication.cpp's "process
+    // only reader of half_size is multiplication.cpp's "process
     // remaining rows, 1 at once" loop, which — for a packet this wide —
     // asks packet<T>::ploadquad/predux_downto4/gather/scatter to do more
     // than broadcast-and-reduce a single scalar (Eigen's own pload_quad
@@ -627,7 +627,7 @@ struct packet<float>
 
     static constexpr int size = 16;
 
-    // Always unreachable regardless of value: matrix_multiplication.cpp's
+    // Always unreachable regardless of value: multiplication.cpp's
     // "process remaining rows, 1 at once" loop only consults half_size
     // when LhsProgress <= 8, and this packet's LhsProgress (== size) is
     // 16 — so this is never compared against anything. Kept at the
@@ -726,7 +726,7 @@ struct packet<double>
 
     // See packet<float>::half_size (AVX/AVX2 specialization above) for why
     // this is deliberately not the honest value (4): this packet's
-    // LhsProgress (== size) is 8, so matrix_multiplication.cpp's "process
+    // LhsProgress (== size) is 8, so multiplication.cpp's "process
     // remaining rows, 1 at once" loop would otherwise take the branch this
     // header does not implement a verified semantic for.
     static constexpr int half_size = -1;

@@ -27,11 +27,11 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
     dense_matrix<value_t> Q(rows, k);
     dense_matrix<value_t> R(k, columns);
 
-    const auto ws_size = linalg::qr_backend<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto ws_size = linalg::qr_decomposition<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
 
-    linalg::qr_backend<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
+    linalg::qr_decomposition<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A.begin(),
         static_cast<linalg_long>(columns),

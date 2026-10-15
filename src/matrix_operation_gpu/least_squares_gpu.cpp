@@ -6,7 +6,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
-#include "include/matrix_operation_gpu/matrix_multiplication_gpu.h"
+#include "include/matrix_operation_gpu/multiplication_gpu.h"
 #include "include/matrix_operation_gpu/pseudo_inverse_gpu.h"
 #include <include/logging.h>
 
@@ -74,7 +74,7 @@ void least_squares_solve_impl(linalg_long rows,
         pinv_bytes, stream);
 
     // X (columns x nrhs) = Ainv (columns x rows) * B (rows x nrhs).
-    matrix_multiplication(false,
+    multiplication(false,
         false,
         static_cast<linalg_int>(columns),
         static_cast<linalg_int>(nrhs),

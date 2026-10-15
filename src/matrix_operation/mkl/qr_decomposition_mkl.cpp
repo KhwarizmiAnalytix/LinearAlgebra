@@ -27,9 +27,9 @@ static void check_qr_inputs(const void* A,
     linalg_long                         ldr)
 {
     LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr,
-        "qr_backend::apply: A, Q, and R must not be null");
+        "qr_decomposition::apply: A, Q, and R must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0,
-        "qr_backend::apply: rows/columns/lda/ldq/ldr must be positive");
+        "qr_decomposition::apply: rows/columns/lda/ldq/ldr must be positive");
 }
 
 namespace
@@ -144,7 +144,7 @@ void qr_lapacke_impl(GeqrfWorkFn geqrf_work,
 }  // namespace
 
 template <>
-void qr_backend<float, linalg_backend::mkl>::apply(linalg_long rows,
+void qr_decomposition<float, linalg_backend::mkl>::apply(linalg_long rows,
     linalg_long                                                columns,
     const float*                                               A,
     linalg_long                                                lda,
@@ -172,7 +172,7 @@ void qr_backend<float, linalg_backend::mkl>::apply(linalg_long rows,
 }
 
 template <>
-void qr_backend<double, linalg_backend::mkl>::apply(linalg_long rows,
+void qr_decomposition<double, linalg_backend::mkl>::apply(linalg_long rows,
     linalg_long                                                 columns,
     const double*                                               A,
     linalg_long                                                 lda,
@@ -200,13 +200,13 @@ void qr_backend<double, linalg_backend::mkl>::apply(linalg_long rows,
 }
 
 template <>
-size_t qr_backend<float, linalg_backend::mkl>::workspace_size(linalg_long rows, linalg_long columns)
+size_t qr_decomposition<float, linalg_backend::mkl>::workspace_size(linalg_long rows, linalg_long columns)
 {
     return qr_workspace_size_impl<float>(LAPACKE_sgeqrf_work, LAPACKE_sorgqr_work, rows, columns);
 }
 
 template <>
-size_t qr_backend<double, linalg_backend::mkl>::workspace_size(
+size_t qr_decomposition<double, linalg_backend::mkl>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return qr_workspace_size_impl<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, rows, columns);

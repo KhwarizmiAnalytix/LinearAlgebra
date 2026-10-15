@@ -9,32 +9,30 @@
 namespace linalg
 {
 
-// Host-memory-only CPU entry point. Economy ("thin") QR factorization of a
-// general rows x columns, row-major matrix A: A = Q * R with
-// k = min(rows, columns), Q sized rows x k with orthonormal columns
-// (ldq >= k), and R sized k x columns, upper-trapezoidal (ldr >= columns;
-// entries below the diagonal of R are written as zero). A is read-only. The
-// CPU backend (scalar / blas_lapacke / mkl) is a compile-time choice fixed
-// by linalg::kActiveBackend (include/common/backend.h) — MKL takes
-// precedence over BLAS+LAPACKE over the scalar fallback, with no runtime
-// dispatch or per-call override.
-//
-// `apply` and `workspace_size` are declared here but deliberately have NO
-// body: this class template is never specialized as a whole, only these
-// members are, via explicit member specializations defined once in
-// qr_decomposition.cpp (for whichever backend LINALG_HAS_MKL /
-// LINALG_HAS_BLAS && LINALG_HAS_LAPACKE selects — mkl.h / lapacke.h stay
-// out of this public header). Every caller — including tests — sees only
-// this declaration and calls `qr_backend<T, kActiveBackend>::apply(...)`;
-// the actual function body is resolved by the linker against the one
-// definition in qr_decomposition.cpp, so LINALG_API matters here (it must
-// cross the shared-library boundary to reach the test binary) and there is
-// no inline fallback body to silently instantiate per call site — calling
-// this for a (T, Backend) nobody defined is a link error, not silently
-// wrong behavior. For device (CUDA) pointers, see linalg::gpu::qr_decomposition
-// in include/matrix_operation_gpu/qr_decomposition_gpu.h.
-template <typename T, linalg_backend Backend> struct qr_backend
+/**
+ * @brief Computes the economy QR factorization A = Q * R.
+ */
+template <typename T, linalg_backend Backend> struct qr_decomposition
 {
+    /**
+     * @brief Computes the economy factorization A = Q * R.
+     *
+     * Provide at least workspace_size(rows, columns) bytes of temporary storage.
+     *
+     * @param[in] rows Number of matrix rows; must be positive.
+     * @param[in] columns Number of matrix columns; must be positive.
+     * @param[in] A Row-major input matrix of size rows x columns; left unchanged.
+     * @param[in] lda Row stride of A in elements; must be at least columns.
+     * @param[out] Q Row-major rows x k matrix with orthonormal columns, where k = min(rows,
+     *     columns).
+     * @param[in] ldq Row stride of Q in elements; must be at least k.
+     * @param[out] R Row-major k x columns upper trapezoidal matrix; entries below the diagonal
+     *     are zero.
+     * @param[in] ldr Row stride of R in elements; must be at least columns.
+     * @param[out] workspace Caller-owned temporary buffer in host memory.
+     * @param[in] workspace_size Size of workspace in bytes; must meet the size returned by
+     *     workspace_size().
+     */
     LINALG_API static void apply(linalg_long rows,
         linalg_long                          columns,
         const T*                             A,
@@ -46,6 +44,14 @@ template <typename T, linalg_backend Backend> struct qr_backend
         void*                                workspace,
         size_t                               workspace_size);
 
+    /**
+     * @brief Returns the temporary storage required for this operation.
+     *
+     * @param[in] rows Number of matrix rows; must be positive.
+     * @param[in] columns Number of matrix columns; must be positive.
+     * @return Required size of the caller-owned host buffer in bytes; zero if no buffer is
+     * needed.
+     */
     LINALG_API static size_t workspace_size(linalg_long rows, linalg_long columns);
 };
 
