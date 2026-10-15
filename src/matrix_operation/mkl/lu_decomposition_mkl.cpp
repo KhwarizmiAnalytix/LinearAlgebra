@@ -1,19 +1,18 @@
+#if LINALG_HAS_MKL
+
 #include "include/matrix_operation/lu_decomposition.h"
 
 #include <include/logging.h>
 
 #include "include/common/backend.h"
 
-#if LINALG_HAS_MKL
 #include <mkl_lapacke.h>
-#endif
 
 // MKL specializations for lu_decomposition.h (the native backend lives in
 // lu_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_MKL
 
 // Same checks as lu_decomposition.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
@@ -52,5 +51,5 @@ template <> size_t lu_backend<double, linalg_backend::mkl>::workspace_size(linal
     return 0;
 }
 
-#endif  // LINALG_HAS_MKL
 }  // namespace linalg
+#endif  // LINALG_HAS_MKL

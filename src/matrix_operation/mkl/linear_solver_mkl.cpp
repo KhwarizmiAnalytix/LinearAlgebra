@@ -1,19 +1,18 @@
+#if LINALG_HAS_MKL
+
 #include "include/matrix_operation/linear_solver.h"
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_MKL
 #include <mkl.h>
-#endif
 
 // MKL specializations for linear_solver.h (the native backend lives in
 // linear_solver.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_MKL
 
 // Same checks as linear_solver.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
@@ -117,5 +116,5 @@ size_t solver_backend<double, linalg_backend::mkl>::workspace_size(
     }
 }
 
-#endif  // LINALG_HAS_MKL
 }  // namespace linalg
+#endif  // LINALG_HAS_MKL

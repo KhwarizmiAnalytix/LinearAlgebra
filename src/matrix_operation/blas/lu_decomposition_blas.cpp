@@ -1,25 +1,23 @@
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
 #include "include/matrix_operation/lu_decomposition.h"
 
 #include <include/logging.h>
 
 #include "include/common/backend.h"
 
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp: Apple's Accelerate framework has no LAPACKE
 // wrapper, so this file only compiles when real lapacke.h exists.
 #include <lapacke.h>
 
 #include "include/common/workspace_arena.h"
-#endif
 
 // BLAS/LAPACKE specializations for lu_decomposition.h (the native backend lives in
 // lu_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
 // Same checks as lu_decomposition.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
 static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
@@ -90,5 +88,5 @@ template <> size_t lu_backend<double, linalg_backend::blas_lapacke>::workspace_s
     return lu_blas_workspace_size(lda);
 }
 
-#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 }  // namespace linalg
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE

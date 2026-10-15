@@ -1,21 +1,20 @@
+#if LINALG_HAS_MKL
+
 #include "include/matrix_operation/matrix_inversion.h"
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_MKL
 #include <mkl.h>
 
 #include "include/common/workspace_arena.h"
-#endif
 
 // MKL specializations for matrix_inversion.h (the native backend lives in
 // matrix_inversion.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_MKL
 
 // Same checks as matrix_inversion.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
@@ -179,5 +178,5 @@ size_t invert_backend<double, linalg_backend::mkl>::workspace_size(
     return invert_mkl_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type);
 }
 
-#endif  // LINALG_HAS_MKL
 }  // namespace linalg
+#endif  // LINALG_HAS_MKL

@@ -1,20 +1,19 @@
+#if LINALG_HAS_MKL
+
 #include "include/matrix_operation/svd_decomposition.h"
 
 #include <include/logging.h>
 
 #include "include/common/workspace_arena.h"
 
-#if LINALG_HAS_MKL
-#include <mkl.h>
-#endif
 #include <algorithm>
+#include <mkl.h>
 
 // MKL specializations for svd_decomposition.h (the native backend lives in
 // svd_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_MKL
 
 // Same checks as svd_decomposition.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
@@ -244,5 +243,5 @@ size_t svd_backend<double, linalg_backend::mkl>::workspace_size(
     return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);
 }
 
-#endif  // LINALG_HAS_MKL
 }  // namespace linalg
+#endif  // LINALG_HAS_MKL

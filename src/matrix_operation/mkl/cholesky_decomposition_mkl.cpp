@@ -1,18 +1,17 @@
+#if LINALG_HAS_MKL
+
 #include "include/matrix_operation/cholesky_decomposition.h"
 
 #include "include/common/backend.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_MKL
 #include <mkl.h>
-#endif
 
 // MKL specializations for cholesky_decomposition.h (the native backend lives in
 // cholesky_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_MKL
 
 namespace detail
 {
@@ -61,5 +60,5 @@ bool cholesky_backend<double, linalg_backend::mkl>::apply_aad(
     return cholesky_backend<double, linalg_backend::native>::apply_aad(C_aad, C, lda, type, A_aad);
 }
 
-#endif  // LINALG_HAS_MKL
 }  // namespace linalg
+#endif  // LINALG_HAS_MKL

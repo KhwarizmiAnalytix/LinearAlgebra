@@ -1,23 +1,21 @@
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
 #include "include/matrix_operation/cholesky_decomposition.h"
 
 #include "include/common/backend.h"
 #include "include/common/narrow.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 // LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate framework ships
 // CBLAS but not the LAPACKE row-major C wrapper, so this block only compiles
 // when a real lapacke.h was found.
 #include <lapacke.h>
-#endif
 
 // BLAS/LAPACKE specializations for cholesky_decomposition.h (the native backend lives in
 // cholesky_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
 namespace detail
 {
 
@@ -64,6 +62,5 @@ bool cholesky_backend<double, linalg_backend::blas_lapacke>::apply_aad(
 {
     return cholesky_backend<double, linalg_backend::native>::apply_aad(C_aad, C, lda, type, A_aad);
 }
-
-#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 }  // namespace linalg
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE

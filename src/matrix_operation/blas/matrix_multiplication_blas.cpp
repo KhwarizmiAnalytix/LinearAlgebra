@@ -1,14 +1,14 @@
+#if LINALG_HAS_BLAS
+
 #include "include/matrix_operation/matrix_multiplication.h"
 
 #include "include/common/narrow.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_BLAS
 #if LINALG_HAS_ACCELERATE
 #include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>
-#endif
 #endif
 
 // BLAS specializations for matrix_multiplication.h (the native backend lives in
@@ -16,7 +16,6 @@
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_BLAS
 
 // Same checks as matrix_multiplication.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
@@ -133,5 +132,5 @@ size_t matmul_backend<double, linalg_backend::blas_lapacke>::workspace_size(
     return 0;
 }
 
-#endif  // LINALG_HAS_BLAS
 }  // namespace linalg
+#endif  // LINALG_HAS_BLAS

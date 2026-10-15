@@ -1,11 +1,11 @@
+#if LINALG_HAS_MKL
+
 #include "include/matrix_operation/eigenvalue_decomposition.h"
 
 #include <include/logging.h>
 
-#if LINALG_HAS_MKL
-#include <mkl.h>
-#endif
 #include <algorithm>
+#include <mkl.h>
 
 #include "include/common/workspace_arena.h"
 
@@ -14,7 +14,6 @@
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_MKL
 
 namespace detail
 {
@@ -281,5 +280,5 @@ size_t general_eigen_backend<double, linalg_backend::mkl>::workspace_size(
     return general_eigen_mkl_workspace_size<double>(n, compute_eigenvectors);
 }
 
-#endif  // LINALG_HAS_MKL
 }  // namespace linalg
+#endif  // LINALG_HAS_MKL

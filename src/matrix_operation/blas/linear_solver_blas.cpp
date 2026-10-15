@@ -1,24 +1,22 @@
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
 #include "include/matrix_operation/linear_solver.h"
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp.
 #include <lapacke.h>
 
 #include "include/common/workspace_arena.h"
-#endif
 
 // BLAS/LAPACKE specializations for linear_solver.h (the native backend lives in
 // linear_solver.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
 // Same checks as linear_solver.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
 static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
@@ -177,5 +175,5 @@ size_t solver_backend<double, linalg_backend::blas_lapacke>::workspace_size(
     return solver_blas_workspace_size<double>(lda, type);
 }
 
-#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 }  // namespace linalg
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE

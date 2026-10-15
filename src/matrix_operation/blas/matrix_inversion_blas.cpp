@@ -1,22 +1,20 @@
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
 #include "include/matrix_operation/matrix_inversion.h"
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 #include <lapacke.h>
 
 #include "include/common/workspace_arena.h"
-#endif
 
 // BLAS/LAPACKE specializations for matrix_inversion.h (the native backend lives in
 // matrix_inversion.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
 // Same checks as matrix_inversion.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
 static void check_invert_inputs(const void* m, linalg_int lda)
@@ -196,6 +194,6 @@ size_t invert_backend<double, linalg_backend::blas_lapacke>::workspace_size(
 {
     return invert_blas_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type);
 }
+}  // namespace linalg
 
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-}  // namespace linalg

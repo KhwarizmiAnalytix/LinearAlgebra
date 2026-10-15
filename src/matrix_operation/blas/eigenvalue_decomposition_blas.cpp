@@ -1,11 +1,11 @@
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
 #include "include/matrix_operation/eigenvalue_decomposition.h"
 
 #include <include/logging.h>
 
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-#include <lapacke.h>
-#endif
 #include <algorithm>
+#include <lapacke.h>
 
 #include "include/common/workspace_arena.h"
 
@@ -14,7 +14,6 @@
 // on; the #if below is kept as a second guard.
 namespace linalg
 {
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 namespace detail
 {
@@ -282,5 +281,5 @@ size_t general_eigen_backend<double, linalg_backend::blas_lapacke>::workspace_si
     return general_eigen_blas_workspace_size<double>(n, compute_eigenvectors);
 }
 
-#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 }  // namespace linalg
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
