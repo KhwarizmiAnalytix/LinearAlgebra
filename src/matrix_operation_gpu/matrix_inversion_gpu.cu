@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/matrix_inversion_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime.h>
 #include <cusolverDn.h>
@@ -647,4 +647,4 @@ double matrix_determinant(double* m, linalg_int lda, linear_solver_type type, vo
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

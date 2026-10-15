@@ -253,7 +253,7 @@ void test_cholesky(std::size_t dim)
     build_cholesky_matrix<value_t>(values, dim, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
     build_cholesky_matrix<value_t>(values, dim, linalg::cholesky_decomposition_enum::UPPER_TRIANGULAR);
 
-#ifndef LINALG_ENABLE_MKL
+#if !LINALG_HAS_MKL
     EXPECT_ANY_THROW({
         linalg::cholesky_decomposition(&values[0], 1, (linalg::cholesky_decomposition_enum)'5');
     });

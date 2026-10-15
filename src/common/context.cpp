@@ -1,10 +1,10 @@
 #include "include/common/context.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 #include <cuda_runtime_api.h>
 #endif
 
-#ifdef LINALG_ENABLE_MKL
+#if LINALG_HAS_MKL
 #include <mkl.h>
 
 #include "include/common/types.h"
@@ -26,7 +26,7 @@ namespace linalg
 
 bool Context::has_mkl() const noexcept
 {
-#ifdef LINALG_ENABLE_MKL
+#if LINALG_HAS_MKL
     return true;
 #else
     return false;
@@ -35,7 +35,7 @@ bool Context::has_mkl() const noexcept
 
 bool Context::has_blas() const noexcept
 {
-#ifdef LINALG_ENABLE_BLAS
+#if LINALG_HAS_BLAS
     return true;
 #else
     return false;
@@ -44,7 +44,7 @@ bool Context::has_blas() const noexcept
 
 bool Context::has_cuda() const noexcept
 {
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
     int count = 0;
     return cudaGetDeviceCount(&count) == cudaSuccess && count > 0;
 #else

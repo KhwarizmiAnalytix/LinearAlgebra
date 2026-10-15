@@ -300,7 +300,7 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     double ei[2];
     double evecs[4];
     auto   eigen_ws = general_eigen_workspace<double>(2, true);
-#ifdef LINALG_ENABLE_MKL
+#if LINALG_HAS_MKL
     // MKL's LAPACKE *geev call packs complex eigenvectors natively (see
     // eigenvalue_decomposition.h); only the portable scalar fallback, which
     // has no complex arithmetic, throws for this case.

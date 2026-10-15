@@ -13,7 +13,7 @@ namespace gpu
 {
 
 // `C` is a CUDA device pointer; only available when built with
-// LINALG_ENABLE_CUBLAS. Success/failure (cuSOLVER's devInfo: 0 means
+// LINALG_HAS_CUBLAS. Success/failure (cuSOLVER's devInfo: 0 means
 // success, i > 0 means the leading i-th minor is not positive definite) is
 // written into `info`, itself a device int* the caller owns — this call
 // never copies to or from host memory, so it never blocks on a device

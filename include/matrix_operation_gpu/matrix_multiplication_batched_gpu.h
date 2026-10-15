@@ -15,7 +15,7 @@ namespace gpu
 // matrices: C_i = A_i * B_i for i in [0, count). `a`, `b`, `c` are CUDA
 // device pointers to `count` contiguous dim*dim-element matrices each
 // (matrix i starts at a[i*dim*dim], etc.); only available when built with
-// LINALG_ENABLE_CUBLAS. This runs a hand-written CUDA kernel (one thread per
+// LINALG_HAS_CUBLAS. This runs a hand-written CUDA kernel (one thread per
 // output element, one z-block per matrix) rather than cuBLAS, and reads or
 // writes only device memory — no host copy is performed by this call, and
 // it does not synchronize the stream it runs on; the caller is responsible

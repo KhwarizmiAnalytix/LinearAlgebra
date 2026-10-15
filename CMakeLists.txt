@@ -8,12 +8,16 @@
 # tri-/pentadiagonal operations, with optional Intel MKL, vendor-neutral
 # CBLAS/LAPACKE, and cuBLAS/cuSOLVER GPU backends.
 #
-# Public compile definitions: LINALG_ENABLE_MKL — MKL-backed LAPACKE code
-# paths; LINALG_ENABLE_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
-# LINALG_ENABLE_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
-# include/matrix_operation_gpu/. Active for every CPU op except
-# matrix_exponential and the tri-/pentadiagonal operations (scalar only),
-# and every GPU op except general (non-symmetric) eigenvalue decomposition.
+# Public compile definitions: LINALG_HAS_MKL — MKL-backed LAPACKE code
+# paths; LINALG_HAS_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
+# LINALG_HAS_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
+# include/matrix_operation_gpu/. These (and LINALG_HAS_LAPACKE,
+# LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION, LINALG_HAS_LU_PIVOTING,
+# LINALG_HAS_WIN32_WARNINGS below) are always-defined 0/1 macros, checked in
+# C++ with plain #if (never #ifdef/#if defined), not conditionally-defined
+# ones. Active for every CPU op except matrix_exponential and the
+# tri-/pentadiagonal operations (scalar only), and every GPU op except
+# general (non-symmetric) eigenvalue decomposition.
 # =============================================================================
 cmake_minimum_required(VERSION 3.16)
 
@@ -77,28 +81,38 @@ option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback pat
 
 # Enables the scalar (non-MKL/BLAS) matrix_multiplication backend's blocked,
 # SIMD-vectorized GEMM (include/common/packet.h; matrix_multiplication.cpp's
-# LINALG_VECTORIZED block) in place of its plain triple-loop fallback.
+# LINALG_HAS_VECTORIZATION block) in place of its plain triple-loop fallback.
 option(LINALG_ENABLE_VECTORIZATION
        "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
 )
 
-# Which linalg::packet<T> specialization backs LINALG_ENABLE_VECTORIZATION:
-#   auto   - let include/common/packet.h pick the widest ISA the compiler's
-#            own predefined macros say is already enabled (its -march/
-#            -mavx.../-mfpu flags), falling back to the scalar packet<T>
-#            primary template if none apply. Does not add any compiler flag
-#            itself.
-#   scalar - force linalg::packet<T>'s scalar (width-1) primary template
-#            even if the compiler has a wider ISA enabled.
+# Which linalg::packet<T> specialization backs LINALG_ENABLE_VECTORIZATION.
+# There is no "auto" choice: the ISA is always explicit, and CMake computes a
+# platform-appropriate default (below) when the cache variable is not
+# overridden on the command line:
+#   scalar - force linalg::packet<T>'s scalar (width-1) primary template.
+#            Default for platforms other than x86_64/aarch64.
 #   sse2/avx/avx2/avx512/neon - force that specialization and (x86 targets
 #            only) add the matching -m<isa> compiler flag so it is actually
 #            enabled; a target that cannot assemble the requested ISA fails
 #            to build rather than silently falling back to a narrower one.
-set(LINALG_VECTORIZATION_ISA "auto" CACHE STRING
-    "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: auto, scalar, sse2, avx, avx2, avx512, neon"
+#            avx2 is the default on x86_64/AMD64/i386/i686; neon is the
+#            default on aarch64/arm64.
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _linalg_system_processor_lower)
+if (_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
+  set(_linalg_vectorization_isa_default "neon")
+elseif (_linalg_system_processor_lower MATCHES "^(x86_64|amd64|i386|i686)$")
+  set(_linalg_vectorization_isa_default "avx2")
+else ()
+  set(_linalg_vectorization_isa_default "scalar")
+endif ()
+unset(_linalg_system_processor_lower)
+set(LINALG_VECTORIZATION_ISA "${_linalg_vectorization_isa_default}" CACHE STRING
+    "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse2, avx, avx2, avx512, neon"
 )
+unset(_linalg_vectorization_isa_default)
 set_property(CACHE LINALG_VECTORIZATION_ISA PROPERTY STRINGS
-             auto scalar sse2 avx avx2 avx512 neon
+             scalar sse2 avx avx2 avx512 neon
 )
 
 # On MSVC, matrix_multiplication.cpp normally suppresses narrowing-conversion
@@ -280,7 +294,17 @@ endif ()
 
   set(LINALG_BLAS_USE_ACCELERATE OFF)
   set(LINALG_BLAS_INCLUDE_DIRS "")
-if (LINALG_CBLAS_INCLUDE_DIR)
+if (LINALG_CBLAS_INCLUDE_DIR MATCHES "\\.framework")
+    # On macOS, the generic cblas.h search above commonly lands on
+    # Accelerate's own vecLib.framework/Accelerate.framework header (Xcode's
+    # SDK always exposes it) rather than a separate vendor's cblas.h. Route
+    # through <Accelerate/Accelerate.h> in that case — found via the
+    # compiler's default framework search path, no extra include dir needed
+    # — so the ACCELERATE-specific code path (and LINALG_HAS_ACCELERATE) is
+    # actually taken instead of silently falling through to the generic
+    # <cblas.h> branch.
+    set(LINALG_BLAS_USE_ACCELERATE ON)
+  elseif (LINALG_CBLAS_INCLUDE_DIR)
     list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_CBLAS_INCLUDE_DIR}")
   elseif(APPLE)
     include(CheckIncludeFileCXX)
@@ -304,7 +328,7 @@ endif ()
   # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
   # linear_solver) are therefore only compiled when real lapacke.h is found;
   # otherwise each op's dispatcher .cpp falls through to the scalar backend
-  # at compile time via #if LINALG_BLAS_HAS_LAPACKE.
+  # at compile time via #if LINALG_HAS_LAPACKE.
   set(LINALG_BLAS_HAS_LAPACKE OFF)
 if (LINALG_LAPACKE_INCLUDE_DIR)
     list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
@@ -445,54 +469,39 @@ target_include_directories(
 if (LINALG_BLAS_INCLUDE_DIRS)
   target_include_directories(LinearAlgebra PRIVATE ${LINALG_BLAS_INCLUDE_DIRS})
 endif ()
-if (LINALG_ENABLE_MKL)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_MKL)
-endif ()
-if (LINALG_ENABLE_BLAS)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_BLAS)
-if (LINALG_BLAS_USE_ACCELERATE)
-    target_compile_definitions(LinearAlgebra PUBLIC LINALG_BLAS_USE_ACCELERATE)
-endif ()
-if (LINALG_BLAS_HAS_LAPACKE)
-    target_compile_definitions(LinearAlgebra PUBLIC LINALG_BLAS_HAS_LAPACKE)
-endif ()
-endif ()
-if (LINALG_ENABLE_CUBLAS)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_ENABLE_CUBLAS)
-endif ()
-if (LINALG_LU_PIVOTING)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_LU_PIVOTING)
-endif ()
+target_compile_definitions(LinearAlgebra PUBLIC
+  "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
+  "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
+  "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
+  "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
+  "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
+  "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
+  "LINALG_HAS_VECTORIZATION=$<BOOL:${LINALG_ENABLE_VECTORIZATION}>"
+  "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
+)
 if (LINALG_ENABLE_VECTORIZATION)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_VECTORIZED)
+  string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
+  target_compile_definitions(LinearAlgebra PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
+  unset(_linalg_simd_isa_upper)
 
-  if (NOT LINALG_VECTORIZATION_ISA STREQUAL "auto")
-    string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
-    target_compile_definitions(LinearAlgebra PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
-    unset(_linalg_simd_isa_upper)
-
-    # x86 ISAs need the matching -m<isa> flag to actually be assembled;
-    # NEON is the aarch64 baseline (and has no single standard x86-style
-    # flag on the compilers this repository targets), so "neon" adds none.
-    # MSVC has no per-ISA -mXXX flags of its own — /arch:AVX[2|512] is the
-    # closest equivalent but covers the whole TU like GCC/Clang's -m flags
-    # do, and this repository's MSVC support does not target AVX-512 at
-    # all, so it is left for whoever first needs it to wire up.
-    if (NOT MSVC)
-      if (LINALG_VECTORIZATION_ISA STREQUAL "sse2")
-        target_compile_options(LinearAlgebra PUBLIC -msse2)
-      elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx")
-        target_compile_options(LinearAlgebra PUBLIC -mavx)
-      elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx2")
-        target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
-      elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx512")
-        target_compile_options(LinearAlgebra PUBLIC -mavx512f)
-      endif ()
+  # x86 ISAs need the matching -m<isa> flag to actually be assembled;
+  # NEON is the aarch64 baseline (and has no single standard x86-style
+  # flag on the compilers this repository targets), so "neon" adds none.
+  # MSVC has no per-ISA -mXXX flags of its own — /arch:AVX[2|512] is the
+  # closest equivalent but covers the whole TU like GCC/Clang's -m flags
+  # do, and this repository's MSVC support does not target AVX-512 at
+  # all, so it is left for whoever first needs it to wire up.
+  if (NOT MSVC)
+    if (LINALG_VECTORIZATION_ISA STREQUAL "sse2")
+      target_compile_options(LinearAlgebra PUBLIC -msse2)
+    elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx")
+      target_compile_options(LinearAlgebra PUBLIC -mavx)
+    elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx2")
+      target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
+    elseif (LINALG_VECTORIZATION_ISA STREQUAL "avx512")
+      target_compile_options(LinearAlgebra PUBLIC -mavx512f)
     endif ()
   endif ()
-endif ()
-if (LINALG_DISPLAY_WIN32_WARNINGS)
-  target_compile_definitions(LinearAlgebra PUBLIC LINALG_DISPLAY_WIN32_WARNINGS)
 endif ()
 if (LINALG_ENABLE_CLANGTIDY)
   include(clang_tidy)

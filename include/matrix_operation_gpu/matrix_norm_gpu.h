@@ -13,7 +13,7 @@ namespace gpu
 {
 
 // `A` is a CUDA device pointer; only available when built with
-// LINALG_ENABLE_CUBLAS. Reuses linalg::matrix_norm_type
+// LINALG_HAS_CUBLAS. Reuses linalg::matrix_norm_type
 // (include/matrix_operation/matrix_norm.h) so callers switch backends
 // without a second enum. `A` is read-only.
 //

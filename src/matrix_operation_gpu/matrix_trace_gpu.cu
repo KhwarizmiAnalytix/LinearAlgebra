@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/matrix_trace_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime_api.h>
 
@@ -108,4 +108,4 @@ double matrix_trace(const double* A, linalg_int n, linalg_int lda, void* workspa
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

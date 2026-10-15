@@ -10,8 +10,8 @@
  */
 #pragma once
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include "include/common/workspace_arena.h"
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

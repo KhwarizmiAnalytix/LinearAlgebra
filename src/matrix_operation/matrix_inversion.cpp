@@ -4,11 +4,11 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl.h>
 
 #include "include/common/workspace_arena.h"
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 #include <lapacke.h>
 
 #include "include/common/workspace_arena.h"
@@ -28,7 +28,7 @@ namespace detail
 // gated by the same #if/#elif/#else that also picks which body the public
 // matrix_invert() overloads below call — exactly one is ever built. No GPU
 // implementation exists for this op.
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 
 namespace
 {
@@ -161,7 +161,7 @@ void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_
     }
 }
 
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 namespace
 {
@@ -387,7 +387,7 @@ void lu_invert(T* m, LINALG_UNUSED const linalg_int* pivot, linalg_int lda, doub
             A(i, j) = IA(i, j);
         }
     }
-#ifdef LINALG_LU_PIVOTING
+#if LINALG_HAS_LU_PIVOTING
     for (size_type i = lda - 1; i >= 0; --i)
     {
         size_type p = pivot[i] - 1;
@@ -588,9 +588,9 @@ T matrix_determinant_helper(
 
 size_t matrix_invert_workspace_size(const float* /*type_tag*/, linalg_int lda, linear_solver_type type)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::invert_mkl_workspace_size_f32(lda, type);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::invert_blas_workspace_size_f32(lda, type);
 #else
     return detail::invert_scalar_workspace_size<float>(lda, type);
@@ -599,9 +599,9 @@ size_t matrix_invert_workspace_size(const float* /*type_tag*/, linalg_int lda, l
 
 size_t matrix_invert_workspace_size(const double* /*type_tag*/, linalg_int lda, linear_solver_type type)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::invert_mkl_workspace_size_f64(lda, type);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::invert_blas_workspace_size_f64(lda, type);
 #else
     return detail::invert_scalar_workspace_size<double>(lda, type);
@@ -614,9 +614,9 @@ void matrix_invert(float* m, linalg_int* pivot, linalg_int lda, linear_solver_ty
 {
     LOGGING_CHECK(m != nullptr, "matrix_invert: m must not be null");
     LOGGING_CHECK(lda > 0, "matrix_invert: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::invert_mkl_f32(m, pivot, lda, type, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     detail::invert_blas_f32(m, pivot, lda, type, workspace, workspace_size);
 #else
     detail::invert_scalar_f32(m, pivot, lda, type, workspace, workspace_size);
@@ -629,9 +629,9 @@ void matrix_invert(double* m, linalg_int* pivot, linalg_int lda, linear_solver_t
 {
     LOGGING_CHECK(m != nullptr, "matrix_invert: m must not be null");
     LOGGING_CHECK(lda > 0, "matrix_invert: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::invert_mkl_f64(m, pivot, lda, type, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     detail::invert_blas_f64(m, pivot, lda, type, workspace, workspace_size);
 #else
     detail::invert_scalar_f64(m, pivot, lda, type, workspace, workspace_size);

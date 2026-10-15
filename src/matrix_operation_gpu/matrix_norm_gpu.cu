@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/matrix_norm_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <algorithm>
 #include <cublas_v2.h>
@@ -269,4 +269,4 @@ double matrix_norm(const double* A, linalg_long rows, linalg_long columns, linal
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

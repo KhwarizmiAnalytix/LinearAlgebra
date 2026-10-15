@@ -14,7 +14,7 @@ namespace linalg
 // eigenvectors written as the columns of `eigenvectors` (n x n, row-major,
 // ldv >= n). A is read-only; only its lower triangle is referenced. The CPU
 // backend (scalar / blas_lapack / mkl) is a compile-time choice fixed by
-// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS (MKL takes precedence over BLAS
+// LINALG_HAS_MKL / LINALG_HAS_BLAS (MKL takes precedence over BLAS
 // over the scalar fallback) — there is no runtime dispatch or per-call
 // backend override. Returns false if the algorithm failed to converge. For
 // device (CUDA) pointers, see linalg::gpu::symmetric_eigenvalue_decomposition

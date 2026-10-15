@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/cholesky_decomposition_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
@@ -116,4 +116,4 @@ void cholesky_decomposition(double* C, linalg_int lda, cholesky_decomposition_en
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

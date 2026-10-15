@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A`, `B`, `X` are CUDA device pointers; only available when built with
-// LINALG_ENABLE_CUBLAS. Solves min_X ||A*X - B||_2, matching the CPU
+// LINALG_HAS_CUBLAS. Solves min_X ||A*X - B||_2, matching the CPU
 // least_squares_solve contract exactly (over/under-determined,
 // rank-deficient A handled the same way via the pseudo-inverse): `X`
 // (columns x nrhs, row-major, ldx >= nrhs) = linalg::gpu::pseudo_inverse(A)

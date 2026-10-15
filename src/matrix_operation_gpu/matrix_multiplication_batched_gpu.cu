@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/matrix_multiplication_batched_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime.h>
 
@@ -103,4 +103,4 @@ void batched_matrix_multiplication(linalg_int dim,
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

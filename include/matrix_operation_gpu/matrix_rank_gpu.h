@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A` is a CUDA device pointer; only available when built with
-// LINALG_ENABLE_CUBLAS. Both route through linalg::gpu::svd_decomposition
+// LINALG_HAS_CUBLAS. Both route through linalg::gpu::svd_decomposition
 // and then reduce over the (small, length k = min(rows, columns))
 // singular-value vector on the host — like matrix_determinant, this
 // performs one internal device synchronization and copies that small

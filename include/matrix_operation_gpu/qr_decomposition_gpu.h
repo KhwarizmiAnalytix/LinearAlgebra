@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A`, `Q`, `R` are CUDA device pointers; only available when built with
-// LINALG_ENABLE_CUBLAS. Economy Householder QR (matches the CPU
+// LINALG_HAS_CUBLAS. Economy Householder QR (matches the CPU
 // qr_decomposition contract exactly): with k = min(rows, columns), `Q` is
 // rows x k with orthonormal columns and `R` is k x columns, upper
 // trapezoidal (strictly-below-diagonal entries are written as zero), both

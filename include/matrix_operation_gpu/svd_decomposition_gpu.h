@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A`, `S`, `U`, `VT` are CUDA device pointers; only available when built
-// with LINALG_ENABLE_CUBLAS. Economy SVD (jobu = jobvt = 'S', matching the
+// with LINALG_HAS_CUBLAS. Economy SVD (jobu = jobvt = 'S', matching the
 // reduced/economy shapes the CPU svd_decomposition also produces): with
 // k = min(rows, columns), `S` holds k singular values, `U` is rows x k, and
 // `VT` is k x columns, all row-major on return, so that

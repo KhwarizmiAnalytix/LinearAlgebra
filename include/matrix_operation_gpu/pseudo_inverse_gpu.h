@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A`, `Ainv` are CUDA device pointers; only available when built with
-// LINALG_ENABLE_CUBLAS. Moore-Penrose pseudo-inverse of a general
+// LINALG_HAS_CUBLAS. Moore-Penrose pseudo-inverse of a general
 // rows x columns, row-major device matrix A, computed from its SVD
 // (A+ = V * S+ * U^T, dropping singular values <= tol) via
 // linalg::gpu::svd_decomposition — the same composition the CPU

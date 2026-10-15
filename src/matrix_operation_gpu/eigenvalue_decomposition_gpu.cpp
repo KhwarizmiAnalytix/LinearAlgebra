@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/eigenvalue_decomposition_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
@@ -169,4 +169,4 @@ void symmetric_eigenvalue_decomposition(const double* A,
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

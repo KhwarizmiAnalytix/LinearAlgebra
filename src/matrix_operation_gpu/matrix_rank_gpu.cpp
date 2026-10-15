@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/matrix_rank_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <algorithm>
 #include <cmath>
@@ -166,4 +166,4 @@ double matrix_condition_number(const double* A, linalg_long rows, linalg_long co
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

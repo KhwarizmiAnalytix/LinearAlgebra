@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/linear_solver_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
@@ -223,4 +223,4 @@ void linear_solver(double* m, linalg_int lda, double* x, linear_solver_type type
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

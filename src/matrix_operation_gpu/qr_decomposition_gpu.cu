@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/qr_decomposition_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <algorithm>
 #include <cuda_runtime_api.h>
@@ -301,4 +301,4 @@ void qr_decomposition(linalg_long rows,
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

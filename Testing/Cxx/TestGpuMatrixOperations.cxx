@@ -1,9 +1,9 @@
 // The linalg::gpu::* entry points under test only exist when the library was
-// configured with LINALG_ENABLE_CUBLAS (see include/matrix_operation_gpu/);
+// configured with LINALG_HAS_CUBLAS (see include/matrix_operation_gpu/);
 // on a scalar-fallback build this file contributes no TEST cases, matching
 // how backend-conditional checks elsewhere in Testing/Cxx behave (e.g.
-// TestCholeskyDecomposition.cxx's #ifndef LINALG_ENABLE_MKL guard).
-#ifdef LINALG_ENABLE_CUBLAS
+// TestCholeskyDecomposition.cxx's #if !LINALG_HAS_MKL guard).
+#if LINALG_HAS_CUBLAS
 
 #include <algorithm>
 #include <cmath>
@@ -408,7 +408,7 @@ TEST(MathGpu, LinearSolverLU)
 // cxx), so its row-major packed L\U output and 1-based pivot sequence match
 // the CPU lapacke_?getrf convention bit-for-bit in semantics — unlike the
 // CPU scalar fallback, cuSOLVER's getrf always partial-pivots (no
-// LINALG_LU_PIVOTING/MKL guard needed here).
+// LINALG_HAS_LU_PIVOTING/MKL guard needed here).
 TEST(MathGpu, LuDecomposition)
 {
     constexpr auto                         tol = GpuTolerance<double>::value;
@@ -1301,4 +1301,4 @@ TEST(MathGpu, StreamParameter)
     ASSERT_EQ(cudaStreamDestroy(stream_b), cudaSuccess);
 }
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

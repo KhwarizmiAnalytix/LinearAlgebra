@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/matrix_transpose_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
@@ -129,4 +129,4 @@ void transpose_device(
 }  // namespace detail
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

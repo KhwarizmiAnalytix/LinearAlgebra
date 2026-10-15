@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/lu_decomposition_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
@@ -131,4 +131,4 @@ void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, void* wo
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

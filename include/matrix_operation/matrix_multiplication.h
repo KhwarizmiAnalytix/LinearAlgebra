@@ -9,7 +9,7 @@ namespace linalg
 {
 
 // Host-memory-only CPU entry point. The CPU backend is a compile-time choice
-// fixed by which of LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS was set at build
+// fixed by which of LINALG_HAS_MKL / LINALG_HAS_BLAS was set at build
 // time (MKL takes precedence over BLAS over the scalar fallback) — there is
 // no runtime dispatch or per-call backend override. For device (CUDA)
 // pointers, see linalg::gpu::matrix_multiplication in

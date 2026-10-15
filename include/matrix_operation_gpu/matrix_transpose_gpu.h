@@ -21,7 +21,7 @@ LINALG_API size_t matrix_transpose_workspace_size(
     const double* /*type_tag*/, linalg_long rows, linalg_long columns);
 
 // `m`, `workspace` are CUDA device pointers (cudaMalloc'd); only available
-// when built with LINALG_ENABLE_CUBLAS. No host memory is read or written by
+// when built with LINALG_HAS_CUBLAS. No host memory is read or written by
 // this call. `workspace` must point to at least
 // `matrix_transpose_workspace_size(type_tag, rows, columns)` bytes; the
 // caller must keep it alive and unmodified until work queued on `stream` has

@@ -2,9 +2,9 @@
 
 #include <include/logging.h>
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl_lapacke.h>
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp: Apple's Accelerate framework has no LAPACKE
 // wrapper, so this branch only compiles when real lapacke.h exists;
@@ -29,7 +29,7 @@ namespace detail
 // Backend implementation is compiled directly into this translation unit,
 // gated by the same #if/#elif/#else that also picks which body the public
 // lu_decomposition() overloads below call — exactly one is ever built.
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 
 // No scratch needed: an ILP64 MKL build has MKL_INT == linalg_int, so the
 // caller's pivot buffer is passed straight through to getrf.
@@ -43,7 +43,7 @@ bool lu_mkl_f64(double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*
     return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
 }
 
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 namespace
 {
@@ -121,13 +121,13 @@ namespace
 #define A(i, j) m[(i) * lda + (j)]
 
 template <typename T>
-void lu_decomposition_scalar_impl(
+bool lu_decomposition_scalar_impl(
     T* m, linalg_long lda, LINALG_UNUSED linalg_int* pivot, LINALG_UNUSED T tolerance)
 {
     using value_t   = T;
     using size_type = linalg_long;
 
-#ifdef LINALG_LU_PIVOTING
+#if LINALG_HAS_LU_PIVOTING
     // Initialize pivot array. `pivot` holds exactly `lda` entries (LAPACK's
     // ipiv convention: pivot[i] is the 1-based row swapped with row i) —
     // pivotCount (the swap count, used only to flip the determinant's sign
@@ -142,7 +142,7 @@ void lu_decomposition_scalar_impl(
 #endif
     for (size_type i = 0; i < lda; ++i)
     {
-#ifdef LINALG_LU_PIVOTING
+#if LINALG_HAS_LU_PIVOTING
         value_t   maxA = std::abs(A(i, i));
         size_type imax = i;
         for (size_type k = i + 1; k < lda; ++k)
@@ -186,20 +186,21 @@ void lu_decomposition_scalar_impl(
             }
         }
     }
+    return true;
 }
 
 #undef A
 
 }  // namespace
 
-void lu_scalar_f32(float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+bool lu_scalar_f32(float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
-    lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<float>::epsilon());
+    return lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<float>::epsilon());
 }
 
-void lu_scalar_f64(double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+bool lu_scalar_f64(double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
-    lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
+    return lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
 }
 
 #endif
@@ -208,10 +209,10 @@ void lu_scalar_f64(double* m, linalg_int lda, linalg_int* pivot, void* /*workspa
 
 size_t lu_decomposition_workspace_size(const float* /*type_tag*/, linalg_int lda)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     (void)lda;
     return 0;
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::lu_blas_workspace_size_f32(lda);
 #else
     (void)lda;
@@ -221,10 +222,10 @@ size_t lu_decomposition_workspace_size(const float* /*type_tag*/, linalg_int lda
 
 size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int lda)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     (void)lda;
     return 0;
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::lu_blas_workspace_size_f64(lda);
 #else
     (void)lda;
@@ -236,13 +237,12 @@ bool lu_decomposition(float* m, linalg_int lda, linalg_int* pivot, void* workspa
 {
     LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
     LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::lu_mkl_f32(m, lda, pivot, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::lu_blas_f32(m, lda, pivot, workspace, workspace_size);
 #else
-    detail::lu_scalar_f32(m, lda, pivot, workspace, workspace_size);
-    return true;
+    return detail::lu_scalar_f32(m, lda, pivot, workspace, workspace_size);
 #endif
 }
 
@@ -250,13 +250,12 @@ bool lu_decomposition(double* m, linalg_int lda, linalg_int* pivot, void* worksp
 {
     LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
     LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::lu_mkl_f64(m, lda, pivot, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::lu_blas_f64(m, lda, pivot, workspace, workspace_size);
 #else
-    detail::lu_scalar_f64(m, lda, pivot, workspace, workspace_size);
-    return true;
+    return detail::lu_scalar_f64(m, lda, pivot, workspace, workspace_size);
 #endif
 }
 

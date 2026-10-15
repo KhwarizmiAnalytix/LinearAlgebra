@@ -13,7 +13,7 @@ namespace gpu
 {
 
 // `m` is a CUDA device pointer; only available when built with
-// LINALG_ENABLE_CUBLAS. In place, exactly like the CPU overload: `m` holds
+// LINALG_HAS_CUBLAS. In place, exactly like the CPU overload: `m` holds
 // A on input and A^-1 on output. Unlike the CPU overload there is no
 // `pivot` parameter — cuSOLVER manages LU pivots as its own internal
 // device-side scratch, matching linalg::gpu::linear_solver's convention
@@ -56,7 +56,7 @@ LINALG_API void matrix_invert(double* m,
     cudaStream_t                      stream = nullptr);
 
 // `m` is a CUDA device pointer; only available when built with
-// LINALG_ENABLE_CUBLAS. `m` is factored internally exactly as matrix_invert
+// LINALG_HAS_CUBLAS. `m` is factored internally exactly as matrix_invert
 // above (same UPFRONT-collapsing note applies), then the determinant is
 // computed via a small on-device reduction over the factor's diagonal (and,
 // for the LU path, the pivot permutation's sign) — so this never downloads

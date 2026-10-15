@@ -15,6 +15,9 @@ DartConfiguration.tcl
 # Bazel
 bazel-*
 
+# Local MKL verification env (Rosetta x86_64 conda env)
+.mkl-x86-env/
+
 # Coverage
 *.gcda
 *.gcno

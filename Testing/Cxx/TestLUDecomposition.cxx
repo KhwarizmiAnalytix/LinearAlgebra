@@ -130,7 +130,7 @@ void test_lu(double tolerance)
     }
     dense_matrix<value_t> result = matmul(L, U);
 
-#if defined(LINALG_LU_PIVOTING) || defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_LU_PIVOTING || LINALG_HAS_MKL
     for (linalg_int i = static_cast<linalg_int>(n) - 1; i >= 0; --i)
     {
         auto p = pivot[i] - 1;

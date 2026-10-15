@@ -3,7 +3,7 @@
  *
  * Which CPU/GPU backend a matrix_operation call actually runs is a
  * compile-time choice (see e.g. matrix_multiplication.cpp: #if
- * LINALG_ENABLE_MKL / #elif LINALG_ENABLE_BLAS / #else scalar) — there is no
+ * LINALG_HAS_MKL / #elif LINALG_HAS_BLAS / #else scalar) — there is no
  * runtime dispatch to steer, unlike PyTorch's at::Context, which this used
  * to mirror more closely. What remains here is read-only introspection of
  * what a given build actually has available, for callers that want to know

@@ -1,6 +1,6 @@
 #include "include/matrix_operation_gpu/least_squares_gpu.h"
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime_api.h>
 
@@ -139,4 +139,4 @@ void least_squares_solve(linalg_long rows,
 }  // namespace gpu
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

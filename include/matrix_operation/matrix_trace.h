@@ -12,7 +12,7 @@ namespace linalg
 // row-major n x n matrix. There is no vendor-library "trace" routine to
 // call into (same rationale as matrix_determinant in matrix_inversion.cpp),
 // so this always runs the same direct reduction regardless of
-// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS.
+// LINALG_HAS_MKL / LINALG_HAS_BLAS.
 LINALG_API float matrix_trace(const float* A, linalg_int n, linalg_int lda);
 
 LINALG_API double matrix_trace(const double* A, linalg_int n, linalg_int lda);

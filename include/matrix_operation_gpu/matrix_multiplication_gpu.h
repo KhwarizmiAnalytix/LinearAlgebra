@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // a/b/c are CUDA device pointers (cudaMalloc'd); only available when built
-// with LINALG_ENABLE_CUBLAS. No host memory is read or written by this call.
+// with LINALG_HAS_CUBLAS. No host memory is read or written by this call.
 // `stream` (default: the legacy default stream) is the CUDA stream the
 // underlying cuBLAS call is issued on; this call does not synchronize it.
 // For host pointers, see linalg::matrix_multiplication in

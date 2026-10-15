@@ -19,8 +19,8 @@ enum class matrix_norm_type : std::uint8_t
 
 // Host-memory-only CPU entry point. Works on general rows x columns,
 // row-major matrices (not just square). FROBENIUS/ONE/INFINITY_NORM are a
-// direct reduction over A and do not depend on LINALG_ENABLE_MKL /
-// LINALG_ENABLE_BLAS. TWO routes through linalg::svd_decomposition, which is
+// direct reduction over A and do not depend on LINALG_HAS_MKL /
+// LINALG_HAS_BLAS. TWO routes through linalg::svd_decomposition, which is
 // itself backend-dispatched (see svd_decomposition.h) — A is read-only here
 // in every case.
 // `workspace` must point to at least `matrix_norm_workspace_size(type_tag,

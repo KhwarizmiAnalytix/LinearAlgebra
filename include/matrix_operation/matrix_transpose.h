@@ -8,7 +8,7 @@
 namespace linalg
 {
 // Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapack /
-// mkl) is a compile-time choice fixed by LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS
+// mkl) is a compile-time choice fixed by LINALG_HAS_MKL / LINALG_HAS_BLAS
 // (MKL takes precedence over BLAS over the scalar fallback) — there is no
 // runtime dispatch or per-call backend override. No vendor-neutral CBLAS
 // extension performs an in-place transpose (MKL's mkl_?imatcopy is an

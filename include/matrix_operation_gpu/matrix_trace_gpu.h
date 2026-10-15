@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A` is a CUDA device pointer; only available when built with
-// LINALG_ENABLE_CUBLAS. Sum of the diagonal of a square, row-major n x n
+// LINALG_HAS_CUBLAS. Sum of the diagonal of a square, row-major n x n
 // device matrix. Like matrix_determinant_gpu, this performs one internal
 // device synchronization and a single-scalar device-to-host copy — the
 // diagonal is summed on-device by a small kernel first, so the full n x n

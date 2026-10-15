@@ -316,7 +316,7 @@ TEST(Math, MatrixMultiplication)
     matrix_multiplication_test<double>(rows, lda, columns, true, true);
 }
 
-// The scalar backend's LINALG_VECTORIZED path (matrix_multiplication.cpp)
+// The scalar backend's LINALG_HAS_VECTORIZATION path (matrix_multiplication.cpp)
 // packs operands into mr/nr-sized register blocks (mr = 3 * linalg::simd<
 // value_t>::size, i.e. 12 for float, 6 for double; nr = 4) and only
 // activates once rows + columns + depth > 20 — below that it falls through

@@ -4,9 +4,9 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl.h>
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp.
 #include <lapacke.h>
@@ -26,7 +26,7 @@ namespace detail
 // Backend implementation is compiled directly into this translation unit,
 // gated by the same #if/#elif/#else that also picks which body the public
 // linear_solver() overloads below call — exactly one is ever built.
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 
 // No scratch of its own: an ILP64 MKL build's lu_decomposition also needs
 // none (see lu_decomposition.cpp), so `workspace`/`workspace_size` here only
@@ -94,7 +94,7 @@ void solver_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, double* x,
     }
 }
 
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 namespace
 {
@@ -228,7 +228,7 @@ namespace
 template <typename T>
 void lu_solve(T* m, LINALG_UNUSED const linalg_int* pivot, linalg_int lda, T* x)
 {
-#ifdef LINALG_LU_PIVOTING
+#if LINALG_HAS_LU_PIVOTING
     for (int i = 0; i < lda; i++)
     {
         std::swap(x[i], x[pivot[i] - 1]);
@@ -339,9 +339,9 @@ void solver_scalar_f64(double* m, linalg_int* pivot, linalg_int lda, double* x,
 
 size_t linear_solver_workspace_size(const float* /*type_tag*/, linalg_int lda, linear_solver_type type)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::solver_mkl_workspace_size(lda, type);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::solver_blas_workspace_size<float>(lda, type);
 #else
     (void)lda;
@@ -352,9 +352,9 @@ size_t linear_solver_workspace_size(const float* /*type_tag*/, linalg_int lda, l
 
 size_t linear_solver_workspace_size(const double* /*type_tag*/, linalg_int lda, linear_solver_type type)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::solver_mkl_workspace_size(lda, type);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::solver_blas_workspace_size<double>(lda, type);
 #else
     (void)lda;
@@ -369,9 +369,9 @@ void linear_solver(float* m, linalg_int* pivot, linalg_int lda, float* x, linear
 {
     LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver: m and x must not be null");
     LOGGING_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::solver_mkl_f32(m, pivot, lda, x, type, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     detail::solver_blas_f32(m, pivot, lda, x, type, workspace, workspace_size);
 #else
     detail::solver_scalar_f32(m, pivot, lda, x, type, workspace, workspace_size);
@@ -384,9 +384,9 @@ void linear_solver(double* m, linalg_int* pivot, linalg_int lda, double* x, line
 {
     LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver: m and x must not be null");
     LOGGING_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::solver_mkl_f64(m, pivot, lda, x, type, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     detail::solver_blas_f64(m, pivot, lda, x, type, workspace, workspace_size);
 #else
     detail::solver_scalar_f64(m, pivot, lda, x, type, workspace, workspace_size);

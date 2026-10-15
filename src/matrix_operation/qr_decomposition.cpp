@@ -4,11 +4,11 @@
 
 #include "include/common/workspace_arena.h"
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl.h>
 
 #include <algorithm>
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 #include <lapacke.h>
 
 #include <algorithm>
@@ -26,7 +26,7 @@ namespace detail
 // gated by the same #if/#elif/#else that also picks which body the public
 // qr_decomposition() overloads below call — exactly one is ever built. No
 // GPU implementation exists for this op.
-#if defined(LINALG_ENABLE_MKL) || (defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE))
+#if LINALG_HAS_MKL || (LINALG_HAS_BLAS && LINALG_HAS_LAPACKE)
 
 namespace
 {
@@ -134,9 +134,9 @@ void qr_lapacke_impl(GeqrfWorkFn geqrf_work,
 
 }  // namespace
 
-#endif  // LINALG_ENABLE_MKL || (LINALG_ENABLE_BLAS && LINALG_BLAS_HAS_LAPACKE)
+#endif  // LINALG_HAS_MKL || (LINALG_HAS_BLAS && LINALG_HAS_LAPACKE)
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 
 size_t qr_mkl_workspace_size_f32(linalg_long rows, linalg_long columns)
 {
@@ -162,7 +162,7 @@ void qr_mkl_f64(linalg_long rows, linalg_long columns, const double* A, linalg_l
         Q, ldq, R, ldr, workspace, workspace_size);
 }
 
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 size_t qr_blas_workspace_size_f32(linalg_long rows, linalg_long columns)
 {
@@ -388,9 +388,9 @@ void qr_scalar_f64(linalg_long rows,
 
 size_t qr_decomposition_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::qr_mkl_workspace_size_f32(rows, columns);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::qr_blas_workspace_size_f32(rows, columns);
 #else
     return detail::qr_scalar_workspace_size_f32(rows, columns);
@@ -399,9 +399,9 @@ size_t qr_decomposition_workspace_size(const float* /*type_tag*/, linalg_long ro
 
 size_t qr_decomposition_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::qr_mkl_workspace_size_f64(rows, columns);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::qr_blas_workspace_size_f64(rows, columns);
 #else
     return detail::qr_scalar_workspace_size_f64(rows, columns);
@@ -422,9 +422,9 @@ void qr_decomposition(linalg_long rows,
 {
     LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_decomposition: A, Q, and R must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0, "qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::qr_mkl_f32(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     detail::qr_blas_f32(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 #else
     detail::qr_scalar_f32(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
@@ -445,9 +445,9 @@ void qr_decomposition(linalg_long rows,
 {
     LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_decomposition: A, Q, and R must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0, "qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::qr_mkl_f64(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     detail::qr_blas_f64(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 #else
     detail::qr_scalar_f64(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);

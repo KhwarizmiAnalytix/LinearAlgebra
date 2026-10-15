@@ -5,10 +5,10 @@
 
 #include "include/common/workspace_arena.h"
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl.h>
-#elif defined(LINALG_ENABLE_BLAS)
-#ifdef LINALG_BLAS_USE_ACCELERATE
+#elif LINALG_HAS_BLAS
+#if LINALG_HAS_ACCELERATE
 #include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>
@@ -26,7 +26,7 @@ namespace detail
 // Backend implementation is compiled directly into this translation unit,
 // gated by the same #if/#elif/#else that also picks which body the public
 // matrix_transpose() overloads below call — exactly one is ever built.
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 
 size_t transpose_mkl_workspace_size(linalg_long /*rows*/, linalg_long /*columns*/)
 {
@@ -43,7 +43,7 @@ void transpose_mkl_f64(linalg_long rows, linalg_long columns, double* m, void* /
     mkl_dimatcopy('R', 'T', rows, columns, 1., m, columns, rows);
 }
 
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
 
 // No vendor-neutral CBLAS extension performs an in-place transpose (MKL's
 // mkl_?imatcopy is an MKL-only extension), but a correct out-of-place one is
@@ -177,9 +177,9 @@ void transpose_scalar_f64(linalg_long rows, linalg_long columns, double* m, void
 
 size_t matrix_transpose_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::transpose_mkl_workspace_size(rows, columns);
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
     return detail::transpose_blas_workspace_size_f32(rows, columns);
 #else
     return detail::transpose_scalar_workspace_size_f32(rows, columns);
@@ -188,9 +188,9 @@ size_t matrix_transpose_workspace_size(const float* /*type_tag*/, linalg_long ro
 
 size_t matrix_transpose_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
 {
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::transpose_mkl_workspace_size(rows, columns);
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
     return detail::transpose_blas_workspace_size_f64(rows, columns);
 #else
     return detail::transpose_scalar_workspace_size_f64(rows, columns);
@@ -201,9 +201,9 @@ void matrix_transpose(linalg_long rows, linalg_long columns, float* m, void* wor
 {
     LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::transpose_mkl_f32(rows, columns, m, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
     detail::transpose_blas_f32(rows, columns, m, workspace, workspace_size);
 #else
     detail::transpose_scalar_f32(rows, columns, m, workspace, workspace_size);
@@ -214,9 +214,9 @@ void matrix_transpose(linalg_long rows, linalg_long columns, double* m, void* wo
 {
     LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
     LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     detail::transpose_mkl_f64(rows, columns, m, workspace, workspace_size);
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
     detail::transpose_blas_f64(rows, columns, m, workspace, workspace_size);
 #else
     detail::transpose_scalar_f64(rows, columns, m, workspace, workspace_size);

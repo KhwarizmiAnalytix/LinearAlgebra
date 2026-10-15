@@ -1,4 +1,4 @@
-#if defined(_MSC_VER) && !defined(LINALG_DISPLAY_WIN32_WARNINGS)
+#if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(push)
 #pragma warning(disable : 4305)
 #endif  // _MSC_VER
@@ -105,6 +105,6 @@ TEST(Math, SVDDecomposition)
     test_svd<double>(rows, columns);
 }
 
-#if defined(_MSC_VER) && !defined(LINALG_DISPLAY_WIN32_WARNINGS)
+#if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(pop)
 #endif

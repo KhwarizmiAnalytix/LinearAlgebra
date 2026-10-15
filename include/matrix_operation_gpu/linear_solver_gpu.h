@@ -13,7 +13,7 @@ namespace gpu
 {
 
 // `m`, `x` are CUDA device pointers; only available when built with
-// LINALG_ENABLE_CUBLAS. Unlike the CPU overload, there is no `pivot`
+// LINALG_HAS_CUBLAS. Unlike the CPU overload, there is no `pivot`
 // parameter: cuSOLVER manages LU pivots as its own internal device-side
 // scratch (freed before this call returns). Success/failure is written into
 // `info`, a device int* the caller owns — this call never copies to or from

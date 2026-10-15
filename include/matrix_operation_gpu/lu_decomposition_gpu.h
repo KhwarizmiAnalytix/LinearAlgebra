@@ -22,7 +22,7 @@ LINALG_API size_t lu_decomposition_workspace_size(const float* /*type_tag*/, lin
 LINALG_API size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int lda);
 
 // `m`, `pivot`, `info`, `workspace` are CUDA device pointers; only available
-// when built with LINALG_ENABLE_CUBLAS. `pivot` must point to at least `lda`
+// when built with LINALG_HAS_CUBLAS. `pivot` must point to at least `lda`
 // ints of device memory, `info` to one, and `workspace` to at least
 // `lu_decomposition_workspace_size<T>(lda)` bytes; none is copied to or from
 // host memory by this call, so it never blocks on a device synchronization —

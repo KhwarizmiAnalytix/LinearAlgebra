@@ -5,7 +5,7 @@
 #include "include/common/types.h"
 
 // LinearAlgebra — SIMD packet abstraction for the scalar backend's blocked
-// GEMM (see the LINALG_VECTORIZED block in matrix_multiplication.cpp, an
+// GEMM (see the LINALG_HAS_VECTORIZATION block in matrix_multiplication.cpp, an
 // Eigen-derived GEBP-style micro-kernel). `linalg::packet<T>` mirrors the
 // subset of Eigen's internal packet-math primitives (Eigen/src/Core/arch/
 // */PacketMath.h, GenericPacketMathFunctions.h) that kernel actually calls:
@@ -24,28 +24,22 @@
 // repository targets need the workaround.
 #define LINALG_ASM_COMMENT(msg) ((void)0)
 
-// ISA selection. CMakeLists.txt's LINALG_VECTORIZATION_ISA option defines
-// exactly one of the LINALG_SIMD_* macros below when set to anything other
-// than "auto" (and adds the matching -m<isa> compiler flag on x86, so the
-// intrinsics below actually assemble). With LINALG_VECTORIZATION_ISA=auto
-// (the default), none of them are predefined and this falls back to
-// whatever the compiler's own predefined macros say is already enabled —
-// picking the widest ISA among them — rather than failing to pick one.
+// ISA selection. CMakeLists.txt's LINALG_VECTORIZATION_ISA cache variable
+// always has a concrete value — never "auto" — defaulting per
+// CMAKE_SYSTEM_PROCESSOR (avx2 on x86_64/AMD64/i386/i686, neon on
+// aarch64/arm64, scalar otherwise) when not overridden on the command line.
+// Whenever LINALG_ENABLE_VECTORIZATION is ON, CMake defines exactly one of
+// the LINALG_SIMD_* macros below unconditionally (and adds the matching
+// -m<isa> compiler flag on x86, so the intrinsics below actually assemble).
+// There is no compiler-predefined-macro auto-detection fallback any more: if
+// none of the six is defined, this header is being built outside that
+// CMake-driven path (e.g. standalone, or with LINALG_HAS_VECTORIZATION off
+// but packet.h still included) and must fail loudly rather than silently
+// guess an ISA.
 #if !defined(LINALG_SIMD_SCALAR) && !defined(LINALG_SIMD_SSE2) && !defined(LINALG_SIMD_AVX) && \
     !defined(LINALG_SIMD_AVX2) && !defined(LINALG_SIMD_AVX512) && !defined(LINALG_SIMD_NEON)
-#if defined(__AVX512F__)
-#define LINALG_SIMD_AVX512
-#elif defined(__AVX2__)
-#define LINALG_SIMD_AVX2
-#elif defined(__AVX__)
-#define LINALG_SIMD_AVX
-#elif defined(__SSE2__)
-#define LINALG_SIMD_SSE2
-#elif defined(__ARM_NEON) || defined(__ARM_NEON__) || defined(__aarch64__)
-#define LINALG_SIMD_NEON
-#else
-#define LINALG_SIMD_SCALAR
-#endif
+#error \
+    "packet.h requires exactly one LINALG_SIMD_* macro to be predefined (set by CMakeLists.txt's LINALG_VECTORIZATION_ISA option); define one explicitly if building this header outside that CMake path."
 #endif
 
 namespace linalg

@@ -11,7 +11,7 @@
  */
 #pragma once
 
-#ifdef LINALG_ENABLE_CUBLAS
+#if LINALG_HAS_CUBLAS
 
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
@@ -94,4 +94,4 @@ inline void set_stream(cusolverDnHandle_t handle, cudaStream_t stream)
 }  // namespace detail
 }  // namespace linalg
 
-#endif  // LINALG_ENABLE_CUBLAS
+#endif  // LINALG_HAS_CUBLAS

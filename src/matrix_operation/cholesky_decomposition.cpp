@@ -5,9 +5,9 @@
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl.h>
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 // LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate
 // framework ships CBLAS but not the LAPACKE row-major C wrapper, so this
 // branch only compiles when a real lapacke.h was found; otherwise the #else
@@ -26,7 +26,7 @@ namespace detail
 // Backend implementation is compiled directly into this translation unit,
 // gated by the same #if/#elif/#else that also picks which body the public
 // cholesky_decomposition() overloads below call — exactly one is ever built.
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 
 bool cholesky_mkl_f32(float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
@@ -40,7 +40,7 @@ bool cholesky_mkl_f64(double* C, linalg_int lda, cholesky_decomposition_enum typ
     return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 bool cholesky_blas_f32(float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
@@ -309,9 +309,9 @@ bool cholesky_decomposition(float* C, linalg_int lda, linalg::cholesky_decomposi
 {
     LOGGING_CHECK(C != nullptr, "cholesky_decomposition: C must not be null");
     LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::cholesky_mkl_f32(C, lda, type);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::cholesky_blas_f32(C, lda, type);
 #else
     return detail::cholesky_scalar_f32(C, lda, type);
@@ -323,9 +323,9 @@ bool cholesky_decomposition(double* C, linalg_int lda, linalg::cholesky_decompos
 {
     LOGGING_CHECK(C != nullptr, "cholesky_decomposition: C must not be null");
     LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     return detail::cholesky_mkl_f64(C, lda, type);
-#elif defined(LINALG_ENABLE_BLAS) && defined(LINALG_BLAS_HAS_LAPACKE)
+#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
     return detail::cholesky_blas_f64(C, lda, type);
 #else
     return detail::cholesky_scalar_f64(C, lda, type);

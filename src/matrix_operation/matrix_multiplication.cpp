@@ -3,16 +3,16 @@
 #include <include/logging.h>
 #include "include/common/narrow.h"
 
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 #include <mkl.h>
-#elif defined(LINALG_ENABLE_BLAS)
-#ifdef LINALG_BLAS_USE_ACCELERATE
+#elif LINALG_HAS_BLAS
+#if LINALG_HAS_ACCELERATE
 #include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>
 #endif
 #else
-#if defined(_MSC_VER) && !defined(LINALG_DISPLAY_WIN32_WARNINGS)
+#if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(push)
 #pragma warning(disable : 4244)
 #endif  // _MSC_VER
@@ -23,7 +23,7 @@
 #include "include/common/macros.h"
 #include "include/common/workspace_arena.h"
 #include "include/util/cpu_info.h"
-#ifdef LINALG_VECTORIZED
+#if LINALG_HAS_VECTORIZATION
 #include "include/common/packet.h"
 #endif
 #endif
@@ -36,7 +36,7 @@ namespace detail
 // Backend implementation is compiled directly into this translation unit,
 // gated by the same #if/#elif/#else that also picks which body the public
 // matrix_multiplication() overloads below call — exactly one is ever built.
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
 void matmul_mkl_f32(bool transpose_a,
     bool                 transpose_b,
     linalg_int         rows,
@@ -92,7 +92,7 @@ void matmul_mkl_f64(bool transpose_a,
         c,
         ldc);
 }
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
 void matmul_blas_f32(bool transpose_a,
     bool                  transpose_b,
     linalg_int          rows,
@@ -183,7 +183,7 @@ constexpr value_t& element(value_t* data, linalg_int i, linalg_int j, linalg_int
     }
 }
 
-#ifdef LINALG_VECTORIZED
+#if LINALG_HAS_VECTORIZATION
 std::ptrdiff_t l1 = 0, l2 = 0, l3 = 0, l3_count = 0;
 
 template <typename value_t, bool vectorizable = true> struct gemm_traits
@@ -1568,7 +1568,7 @@ void gemm(  // NOLINT
 template <typename value_t>
 size_t matmul_scalar_workspace_size(linalg_int rows, linalg_int columns, linalg_int depth)
 {
-#if !defined(LINALG_VECTORIZED)
+#if !LINALG_HAS_VECTORIZATION
     (void)rows;
     (void)columns;
     (void)depth;
@@ -1609,11 +1609,11 @@ void matrix_multiplication_seq(  // NOLINT
     void*          workspace,
     size_t         workspace_size)
 {
-#if !defined(LINALG_VECTORIZED)
+#if !LINALG_HAS_VECTORIZATION
     (void)workspace;
     (void)workspace_size;
 #endif
-#if defined(LINALG_VECTORIZED)
+#if LINALG_HAS_VECTORIZATION
     if (rows + columns + depth > 20)
     {
         ldc = rows;
@@ -1817,7 +1817,7 @@ void matmul_scalar_f32(bool transpose_a,
     void*                   workspace,
     size_t                  workspace_size)
 {
-#if defined(LINALG_VECTORIZED)
+#if LINALG_HAS_VECTORIZATION
 
     if (transpose_a && transpose_b)
     {
@@ -2018,7 +2018,7 @@ void matmul_scalar_f64(bool transpose_a,
 size_t matrix_multiplication_workspace_size(
     const float* /*type_tag*/, linalg_int rows, linalg_int columns, linalg_int depth)
 {
-#if defined(LINALG_ENABLE_MKL) || defined(LINALG_ENABLE_BLAS)
+#if LINALG_HAS_MKL || LINALG_HAS_BLAS
     (void)rows;
     (void)columns;
     (void)depth;
@@ -2031,7 +2031,7 @@ size_t matrix_multiplication_workspace_size(
 size_t matrix_multiplication_workspace_size(
     const double* /*type_tag*/, linalg_int rows, linalg_int columns, linalg_int depth)
 {
-#if defined(LINALG_ENABLE_MKL) || defined(LINALG_ENABLE_BLAS)
+#if LINALG_HAS_MKL || LINALG_HAS_BLAS
     (void)rows;
     (void)columns;
     (void)depth;
@@ -2057,11 +2057,11 @@ void matrix_multiplication(bool transpose_a,
 {
     LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
     LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     (void)workspace;
     (void)workspace_size;
     detail::matmul_mkl_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
     (void)workspace;
     (void)workspace_size;
     detail::matmul_blas_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
@@ -2087,11 +2087,11 @@ void matrix_multiplication(bool transpose_a,
 {
     LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
     LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-#if defined(LINALG_ENABLE_MKL)
+#if LINALG_HAS_MKL
     (void)workspace;
     (void)workspace_size;
     detail::matmul_mkl_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
-#elif defined(LINALG_ENABLE_BLAS)
+#elif LINALG_HAS_BLAS
     (void)workspace;
     (void)workspace_size;
     detail::matmul_blas_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
@@ -2102,8 +2102,8 @@ void matrix_multiplication(bool transpose_a,
 }
 
 }  // namespace linalg
-#if !defined(LINALG_ENABLE_MKL) && !defined(LINALG_ENABLE_BLAS)
-#if defined(_MSC_VER) && !defined(LINALG_DISPLAY_WIN32_WARNINGS)
+#if !LINALG_HAS_MKL && !LINALG_HAS_BLAS
+#if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(pop)
 #endif
 #endif

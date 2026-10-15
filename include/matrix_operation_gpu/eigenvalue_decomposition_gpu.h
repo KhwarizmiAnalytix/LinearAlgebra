@@ -12,7 +12,7 @@ namespace gpu
 {
 
 // `A`, `eigenvalues`, `eigenvectors` are CUDA device pointers; only
-// available when built with LINALG_ENABLE_CUBLAS. Real symmetric
+// available when built with LINALG_HAS_CUBLAS. Real symmetric
 // eigenvalue decomposition via cusolverDnXsyevd, matching the CPU
 // symmetric_eigenvalue_decomposition contract exactly: eigenvalues are
 // written ascending, and the corresponding orthonormal eigenvectors as the

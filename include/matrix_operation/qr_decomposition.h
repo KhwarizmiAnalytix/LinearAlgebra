@@ -14,7 +14,7 @@ namespace linalg
 // (ldq >= k), and R sized k x columns, upper-trapezoidal (ldr >= columns;
 // entries below the diagonal of R are written as zero). A is read-only. The
 // CPU backend (scalar / blas_lapack / mkl) is a compile-time choice fixed by
-// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS (MKL takes precedence over BLAS
+// LINALG_HAS_MKL / LINALG_HAS_BLAS (MKL takes precedence over BLAS
 // over the scalar fallback) — there is no runtime dispatch or per-call
 // backend override. For device (CUDA) pointers, see
 // linalg::gpu::qr_decomposition in

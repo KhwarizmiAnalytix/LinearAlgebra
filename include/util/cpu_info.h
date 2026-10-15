@@ -4,7 +4,7 @@
  * Reconstructed minimal stand-in for the (orphaned) util/cpu_info.h this
  * code used to depend on. Its only call site is the scalar backend's
  * blocked-GEMM blocking-size heuristic (src/matrix_operation/
- * matrix_multiplication.cpp's LINALG_VECTORIZED block, on by default — see
+ * matrix_multiplication.cpp's LINALG_HAS_VECTORIZATION block, on by default — see
  * LINALG_ENABLE_VECTORIZATION in CMakeLists.txt).
  *
  * Real hardware cache detection (CPUID leaf 0x4 / 0x8000001D on x86,
