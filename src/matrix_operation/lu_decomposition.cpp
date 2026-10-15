@@ -2,6 +2,8 @@
 
 #include <include/logging.h>
 
+#include "include/common/backend.h"
+
 #if LINALG_HAS_MKL
 #include <mkl_lapacke.h>
 #elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -26,20 +28,43 @@ namespace linalg
 namespace detail
 {
 
+// Null/positivity checks shared by every lu_backend<T, Backend>::apply
+// below, so callers (linear_solver.cpp, matrix_inversion.cpp, tests) get the
+// same validation regardless of which backend is active. There is no
+// non-detail lu_decomposition() wrapper to put this in any more — callers
+// use lu_backend<T, kActiveBackend>::apply directly.
+void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
+{
+    LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_backend::apply: m and pivot must not be null");
+    LOGGING_CHECK(lda > 0, "lu_backend::apply: lda must be positive", lda);
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// lu_decomposition() overloads below call — exactly one is ever built.
+// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
+// (include/common/backend.h). Each `apply` below is an explicit
+// specialization of the one member lu_decomposition.h declares (not of the
+// whole class), so it's defined exactly once, here, for whichever (T,
+// Backend) pair is active — mkl.h / lapacke.h stay out of the public
+// header. Other translation units only ever see the header's declaration
+// and link against this definition; they never instantiate a body of their
+// own, so there's nothing to silently get wrong by omission.
 #if LINALG_HAS_MKL
 
 // No scratch needed: an ILP64 MKL build has MKL_INT == linalg_int, so the
 // caller's pivot buffer is passed straight through to getrf.
-bool lu_mkl_f32(float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+template <>
+bool lu_backend<float, linalg_backend::mkl>::apply(
+    float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    check_lu_inputs(m, pivot, lda);
     return LAPACKE_sgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
 }
 
-bool lu_mkl_f64(double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+template <>
+bool lu_backend<double, linalg_backend::mkl>::apply(
+    double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    check_lu_inputs(m, pivot, lda);
     return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
 }
 
@@ -89,8 +114,11 @@ size_t lu_blas_workspace_size_f64(linalg_int lda)
     return lu_blas_workspace_size(lda);
 }
 
-bool lu_blas_f32(float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
+template <>
+bool lu_backend<float, linalg_backend::blas_lapacke>::apply(
+    float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
 {
+    check_lu_inputs(m, pivot, lda);
     return lu_blas_impl(
         [](int order, lapack_int r, lapack_int c, void* a, lapack_int ld, lapack_int* ip)
         { return LAPACKE_sgetrf(order, r, c, static_cast<float*>(a), ld, ip); },
@@ -101,8 +129,11 @@ bool lu_blas_f32(float* m, linalg_int lda, linalg_int* pivot, void* workspace, s
         workspace_size);
 }
 
-bool lu_blas_f64(double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
+template <>
+bool lu_backend<double, linalg_backend::blas_lapacke>::apply(
+    double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
 {
+    check_lu_inputs(m, pivot, lda);
     return lu_blas_impl(
         [](int order, lapack_int r, lapack_int c, void* a, lapack_int ld, lapack_int* ip)
         { return LAPACKE_dgetrf(order, r, c, static_cast<double*>(a), ld, ip); },
@@ -193,13 +224,19 @@ bool lu_decomposition_scalar_impl(
 
 }  // namespace
 
-bool lu_scalar_f32(float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+template <>
+bool lu_backend<float, linalg_backend::native>::apply(
+    float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    check_lu_inputs(m, pivot, lda);
     return lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<float>::epsilon());
 }
 
-bool lu_scalar_f64(double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+template <>
+bool lu_backend<double, linalg_backend::native>::apply(
+    double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    check_lu_inputs(m, pivot, lda);
     return lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
 }
 
@@ -230,32 +267,6 @@ size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int ld
 #else
     (void)lda;
     return 0;
-#endif
-}
-
-bool lu_decomposition(float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
-    LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
-#if LINALG_HAS_MKL
-    return detail::lu_mkl_f32(m, lda, pivot, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::lu_blas_f32(m, lda, pivot, workspace, workspace_size);
-#else
-    return detail::lu_scalar_f32(m, lda, pivot, workspace, workspace_size);
-#endif
-}
-
-bool lu_decomposition(double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
-    LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
-#if LINALG_HAS_MKL
-    return detail::lu_mkl_f64(m, lda, pivot, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::lu_blas_f64(m, lda, pivot, workspace, workspace_size);
-#else
-    return detail::lu_scalar_f64(m, lda, pivot, workspace, workspace_size);
 #endif
 }
 

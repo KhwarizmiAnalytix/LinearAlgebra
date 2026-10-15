@@ -67,7 +67,7 @@ void vector_matrix_multiplication(int rows, int columns)
     }
 
     auto gemm_ws = gemm_workspace<value_t>(1, columns, rows);
-    linalg::matrix_multiplication(
+    linalg::detail::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(
         false,
         false,
         1,
@@ -138,7 +138,7 @@ void matrix_vector_multiplication(int rows, int columns)
     }
 
     auto gemm_ws = gemm_workspace<value_t>(rows, 1, columns);
-    linalg::matrix_multiplication(
+    linalg::detail::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(
         false,
         false,
         rows,
@@ -249,7 +249,7 @@ void matrix_multiplication_test(int rows, int columns, int depth, bool transpose
     }
 
     auto gemm_ws = gemm_workspace<value_t>(rows, columns, depth);
-    linalg::matrix_multiplication(
+    linalg::detail::matmul_backend<value_t, linalg::kMatmulActiveBackend>::apply(
         transpose_a,
         transpose_b,
         rows,

@@ -27,7 +27,7 @@ template <typename value_t> void test_pseudo_inverse_tall(std::size_t rows, std:
     const auto ws_size = linalg::pseudo_inverse_workspace_size(
         static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::pseudo_inverse(
+    linalg::detail::pseudo_inverse_backend<value_t, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A.begin(),

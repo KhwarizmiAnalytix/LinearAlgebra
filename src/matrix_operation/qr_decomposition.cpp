@@ -22,10 +22,29 @@ namespace linalg
 namespace detail
 {
 
+// Null/positivity checks shared by every qr_backend<T, Backend>::apply
+// below, so callers (tests included) get the same validation regardless of
+// which backend is active. There is no non-detail qr_decomposition()
+// wrapper to put this in any more — callers use
+// qr_backend<T, kActiveBackend>::apply directly.
+void check_qr_inputs(const void* A, const void* Q, const void* R, linalg_long rows, linalg_long columns,
+    linalg_long lda, linalg_long ldq, linalg_long ldr)
+{
+    LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_backend::apply: A, Q, and R must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0,
+        "qr_backend::apply: rows/columns/lda/ldq/ldr must be positive");
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// qr_decomposition() overloads below call — exactly one is ever built. No
-// GPU implementation exists for this op.
+// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
+// (include/common/backend.h). Each `apply` below is an explicit
+// specialization of the one member qr_decomposition.h declares (not of the
+// whole class), so it's defined exactly once, here, for whichever (T,
+// Backend) pair is active — mkl.h / lapacke.h stay out of the public
+// header. Other translation units only ever see the header's declaration
+// and link against this definition; they never instantiate a body of their
+// own, so there's nothing to silently get wrong by omission. No GPU
+// implementation exists for this op.
 #if LINALG_HAS_MKL || (LINALG_HAS_BLAS && LINALG_HAS_LAPACKE)
 
 namespace
@@ -148,16 +167,20 @@ size_t qr_mkl_workspace_size_f64(linalg_long rows, linalg_long columns)
     return qr_workspace_size_impl<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, rows, columns);
 }
 
-void qr_mkl_f32(linalg_long rows, linalg_long columns, const float* A, linalg_long lda, float* Q,
-    linalg_long ldq, float* R, linalg_long ldr, void* workspace, size_t workspace_size)
+template <>
+void qr_backend<float, linalg_backend::mkl>::apply(linalg_long rows, linalg_long columns, const float* A,
+    linalg_long lda, float* Q, linalg_long ldq, float* R, linalg_long ldr, void* workspace, size_t workspace_size)
 {
+    check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_lapacke_impl<float>(LAPACKE_sgeqrf_work, LAPACKE_sorgqr_work, "mkl", rows, columns, A, lda, Q,
         ldq, R, ldr, workspace, workspace_size);
 }
 
-void qr_mkl_f64(linalg_long rows, linalg_long columns, const double* A, linalg_long lda, double* Q,
-    linalg_long ldq, double* R, linalg_long ldr, void* workspace, size_t workspace_size)
+template <>
+void qr_backend<double, linalg_backend::mkl>::apply(linalg_long rows, linalg_long columns, const double* A,
+    linalg_long lda, double* Q, linalg_long ldq, double* R, linalg_long ldr, void* workspace, size_t workspace_size)
 {
+    check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_lapacke_impl<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, "mkl", rows, columns, A, lda,
         Q, ldq, R, ldr, workspace, workspace_size);
 }
@@ -174,16 +197,20 @@ size_t qr_blas_workspace_size_f64(linalg_long rows, linalg_long columns)
     return qr_workspace_size_impl<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, rows, columns);
 }
 
-void qr_blas_f32(linalg_long rows, linalg_long columns, const float* A, linalg_long lda, float* Q,
-    linalg_long ldq, float* R, linalg_long ldr, void* workspace, size_t workspace_size)
+template <>
+void qr_backend<float, linalg_backend::blas_lapacke>::apply(linalg_long rows, linalg_long columns, const float* A,
+    linalg_long lda, float* Q, linalg_long ldq, float* R, linalg_long ldr, void* workspace, size_t workspace_size)
 {
+    check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_lapacke_impl<float>(LAPACKE_sgeqrf_work, LAPACKE_sorgqr_work, "blas_lapack", rows, columns, A,
         lda, Q, ldq, R, ldr, workspace, workspace_size);
 }
 
-void qr_blas_f64(linalg_long rows, linalg_long columns, const double* A, linalg_long lda, double* Q,
-    linalg_long ldq, double* R, linalg_long ldr, void* workspace, size_t workspace_size)
+template <>
+void qr_backend<double, linalg_backend::blas_lapacke>::apply(linalg_long rows, linalg_long columns, const double* A,
+    linalg_long lda, double* Q, linalg_long ldq, double* R, linalg_long ldr, void* workspace, size_t workspace_size)
 {
+    check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_lapacke_impl<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, "blas_lapack", rows, columns,
         A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 }
@@ -354,31 +381,35 @@ size_t qr_scalar_workspace_size_f64(linalg_long rows, linalg_long columns)
     return qr_householder_workspace_size_impl<double>(rows, columns);
 }
 
-void qr_scalar_f32(linalg_long rows,
-    linalg_long                columns,
-    const float*                 A,
-    linalg_long                 lda,
-    float*                       Q,
-    linalg_long                 ldq,
-    float*                       R,
-    linalg_long                 ldr,
-    void*                       workspace,
-    size_t                      workspace_size)
+template <>
+void qr_backend<float, linalg_backend::native>::apply(linalg_long rows,
+    linalg_long                                                   columns,
+    const float*                                                    A,
+    linalg_long                                                    lda,
+    float*                                                          Q,
+    linalg_long                                                    ldq,
+    float*                                                          R,
+    linalg_long                                                    ldr,
+    void*                                                          workspace,
+    size_t                                                         workspace_size)
 {
+    check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_householder(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 }
 
-void qr_scalar_f64(linalg_long rows,
-    linalg_long                columns,
-    const double*                A,
-    linalg_long                 lda,
-    double*                      Q,
-    linalg_long                 ldq,
-    double*                      R,
-    linalg_long                 ldr,
-    void*                       workspace,
-    size_t                      workspace_size)
+template <>
+void qr_backend<double, linalg_backend::native>::apply(linalg_long rows,
+    linalg_long                                                    columns,
+    const double*                                                    A,
+    linalg_long                                                    lda,
+    double*                                                          Q,
+    linalg_long                                                    ldq,
+    double*                                                          R,
+    linalg_long                                                    ldr,
+    void*                                                          workspace,
+    size_t                                                         workspace_size)
 {
+    check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_householder(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 }
 
@@ -405,52 +436,6 @@ size_t qr_decomposition_workspace_size(const double* /*type_tag*/, linalg_long r
     return detail::qr_blas_workspace_size_f64(rows, columns);
 #else
     return detail::qr_scalar_workspace_size_f64(rows, columns);
-#endif
-}
-
-//-----------------------------------------------------------------------------
-void qr_decomposition(linalg_long rows,
-    linalg_long                   columns,
-    const float*                    A,
-    linalg_long                   lda,
-    float*                          Q,
-    linalg_long                   ldq,
-    float*                          R,
-    linalg_long                   ldr,
-    void*                           workspace,
-    size_t                          workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_decomposition: A, Q, and R must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0, "qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
-#if LINALG_HAS_MKL
-    detail::qr_mkl_f32(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    detail::qr_blas_f32(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#else
-    detail::qr_scalar_f32(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#endif
-}
-
-//-----------------------------------------------------------------------------
-void qr_decomposition(linalg_long rows,
-    linalg_long                   columns,
-    const double*                   A,
-    linalg_long                   lda,
-    double*                         Q,
-    linalg_long                   ldq,
-    double*                         R,
-    linalg_long                   ldr,
-    void*                           workspace,
-    size_t                          workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && Q != nullptr && R != nullptr, "qr_decomposition: A, Q, and R must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldq != 0 && ldr != 0, "qr_decomposition: rows/columns/lda/ldq/ldr must be positive");
-#if LINALG_HAS_MKL
-    detail::qr_mkl_f64(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    detail::qr_blas_f64(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
-#else
-    detail::qr_scalar_f64(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 #endif
 }
 

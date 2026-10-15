@@ -34,7 +34,7 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
     }
     frob_expected = std::sqrt(frob_expected);
 
-    const auto frob = linalg::matrix_norm(
+    const auto frob = linalg::detail::matrix_norm_backend<value_t, linalg::linalg_backend::native>::apply(
         M.begin(),
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -55,7 +55,7 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
         }
         one_expected = std::max(one_expected, s);
     }
-    const auto one = linalg::matrix_norm(
+    const auto one = linalg::detail::matrix_norm_backend<value_t, linalg::linalg_backend::native>::apply(
         M.begin(),
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -76,7 +76,7 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
         }
         inf_expected = std::max(inf_expected, s);
     }
-    const auto inf = linalg::matrix_norm(
+    const auto inf = linalg::detail::matrix_norm_backend<value_t, linalg::linalg_backend::native>::apply(
         M.begin(),
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
@@ -100,7 +100,7 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
     const auto svd_ws_size = linalg::svd_decomposition_workspace_size(
         static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> svd_ws(svd_ws_size);
-    linalg::svd_decomposition(
+    linalg::detail::svd_backend<value_t, linalg::kActiveBackend>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A_copy.begin(),
@@ -121,7 +121,7 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
     const auto two_ws_size = linalg::matrix_norm_workspace_size(static_cast<const value_t*>(nullptr),
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns), linalg::matrix_norm_type::TWO);
     std::vector<unsigned char> two_ws(two_ws_size);
-    const auto two = linalg::matrix_norm(
+    const auto two = linalg::detail::matrix_norm_backend<value_t, linalg::linalg_backend::native>::apply(
         M.begin(),
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),

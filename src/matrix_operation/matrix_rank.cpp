@@ -66,7 +66,7 @@ template <typename T> T* singular_values(const T* A, linalg_long rows, linalg_lo
         }
     }
 
-    linalg::svd_decomposition(rows, columns, bufs.A_copy, columns, bufs.S, bufs.U, k, bufs.VT,
+    linalg::detail::svd_backend<T, linalg::kActiveBackend>::apply(rows, columns, bufs.A_copy, columns, bufs.S, bufs.U, k, bufs.VT,
         columns, bufs.svd_workspace, svd_bytes);
     return bufs.S;
 }
@@ -119,6 +119,44 @@ template <typename T> T matrix_condition_number_impl(const T* A, linalg_long row
     return smax / smin;
 }
 
+template <>
+linalg_long matrix_rank_backend<float, linalg_backend::native>::apply(const float* A, linalg_long rows,
+    linalg_long columns, linalg_long lda, float tol, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr, "matrix_rank_backend::apply: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_rank_backend::apply: rows/columns/lda must be positive");
+    return matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size);
+}
+
+template <>
+linalg_long matrix_rank_backend<double, linalg_backend::native>::apply(const double* A, linalg_long rows,
+    linalg_long columns, linalg_long lda, double tol, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr, "matrix_rank_backend::apply: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_rank_backend::apply: rows/columns/lda must be positive");
+    return matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size);
+}
+
+template <>
+float matrix_condition_number_backend<float, linalg_backend::native>::apply(const float* A, linalg_long rows,
+    linalg_long columns, linalg_long lda, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr, "matrix_condition_number_backend::apply: A must not be null");
+    LOGGING_CHECK(
+        rows != 0 && columns != 0 && lda != 0, "matrix_condition_number_backend::apply: rows/columns/lda must be positive");
+    return matrix_condition_number_impl(A, rows, columns, lda, workspace, workspace_size);
+}
+
+template <>
+double matrix_condition_number_backend<double, linalg_backend::native>::apply(const double* A, linalg_long rows,
+    linalg_long columns, linalg_long lda, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr, "matrix_condition_number_backend::apply: A must not be null");
+    LOGGING_CHECK(
+        rows != 0 && columns != 0 && lda != 0, "matrix_condition_number_backend::apply: rows/columns/lda must be positive");
+    return matrix_condition_number_impl(A, rows, columns, lda, workspace, workspace_size);
+}
+
 }  // namespace detail
 
 size_t matrix_rank_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
@@ -129,42 +167,6 @@ size_t matrix_rank_workspace_size(const float* /*type_tag*/, linalg_long rows, l
 size_t matrix_rank_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
 {
     return detail::singular_values_workspace_size_impl<double>(rows, columns);
-}
-
-//-----------------------------------------------------------------------------
-linalg_long matrix_rank(const float* A, linalg_long rows, linalg_long columns, linalg_long lda,
-    float tol, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr, "matrix_rank: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_rank: rows/columns/lda must be positive");
-    return detail::matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size);
-}
-
-//-----------------------------------------------------------------------------
-linalg_long matrix_rank(const double* A, linalg_long rows, linalg_long columns, linalg_long lda,
-    double tol, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr, "matrix_rank: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_rank: rows/columns/lda must be positive");
-    return detail::matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size);
-}
-
-//-----------------------------------------------------------------------------
-float matrix_condition_number(const float* A, linalg_long rows, linalg_long columns, linalg_long lda,
-    void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr, "matrix_condition_number: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_condition_number: rows/columns/lda must be positive");
-    return detail::matrix_condition_number_impl(A, rows, columns, lda, workspace, workspace_size);
-}
-
-//-----------------------------------------------------------------------------
-double matrix_condition_number(const double* A, linalg_long rows, linalg_long columns, linalg_long lda,
-    void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr, "matrix_condition_number: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_condition_number: rows/columns/lda must be positive");
-    return detail::matrix_condition_number_impl(A, rows, columns, lda, workspace, workspace_size);
 }
 
 }  // namespace linalg

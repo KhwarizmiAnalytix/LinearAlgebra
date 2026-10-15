@@ -23,9 +23,29 @@ namespace linalg
 namespace detail
 {
 
+// Null/positivity checks shared by every transpose_backend<T, Backend>::
+// apply below, so callers (tests included) get the same validation
+// regardless of which backend is active. There is no non-detail
+// matrix_transpose() wrapper to put this in any more — callers use
+// transpose_backend<T, kTransposeActiveBackend>::apply directly.
+void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
+{
+    LOGGING_CHECK(m != nullptr, "transpose_backend::apply: m must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0, "transpose_backend::apply: rows and columns must be positive");
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// matrix_transpose() overloads below call — exactly one is ever built.
+// gated by the same #if/#elif/#else that determines
+// linalg::kTransposeActiveBackend (include/matrix_operation/
+// matrix_transpose.h — this op's own backend axis, selected by
+// LINALG_HAS_BLAS alone rather than LINALG_HAS_BLAS && LINALG_HAS_LAPACKE,
+// since it only needs cblas_?copy). Each `apply` below is an explicit
+// specialization of the one member matrix_transpose.h declares (not of the
+// whole class), so it's defined exactly once, here, for whichever (T,
+// Backend) pair is active — mkl.h / cblas.h stay out of the public header.
+// Other translation units only ever see the header's declaration and link
+// against this definition; they never instantiate a body of their own, so
+// there's nothing to silently get wrong by omission.
 #if LINALG_HAS_MKL
 
 size_t transpose_mkl_workspace_size(linalg_long /*rows*/, linalg_long /*columns*/)
@@ -33,13 +53,19 @@ size_t transpose_mkl_workspace_size(linalg_long /*rows*/, linalg_long /*columns*
     return 0;
 }
 
-void transpose_mkl_f32(linalg_long rows, linalg_long columns, float* m, void* /*workspace*/, size_t /*workspace_size*/)
+template <>
+void transpose_backend<float, linalg_backend::mkl>::apply(
+    linalg_long rows, linalg_long columns, float* m, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    check_transpose_inputs(m, rows, columns);
     mkl_simatcopy('R', 'T', rows, columns, 1.F, m, columns, rows);
 }
 
-void transpose_mkl_f64(linalg_long rows, linalg_long columns, double* m, void* /*workspace*/, size_t /*workspace_size*/)
+template <>
+void transpose_backend<double, linalg_backend::mkl>::apply(
+    linalg_long rows, linalg_long columns, double* m, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    check_transpose_inputs(m, rows, columns);
     mkl_dimatcopy('R', 'T', rows, columns, 1., m, columns, rows);
 }
 
@@ -71,8 +97,11 @@ size_t transpose_blas_workspace_size_f64(linalg_long rows, linalg_long columns)
     return transpose_blas_workspace_size_impl<double>(rows, columns);
 }
 
-void transpose_blas_f32(linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
+template <>
+void transpose_backend<float, linalg_backend::blas_lapacke>::apply(
+    linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
 {
+    check_transpose_inputs(m, rows, columns);
     LOGGING_CHECK(workspace_size >= transpose_blas_workspace_size_f32(rows, columns),
         "matrix_transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -95,8 +124,11 @@ void transpose_blas_f32(linalg_long rows, linalg_long columns, float* m, void* w
     std::copy(scratch, scratch + rows * columns, m);
 }
 
-void transpose_blas_f64(linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
+template <>
+void transpose_backend<double, linalg_backend::blas_lapacke>::apply(
+    linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
 {
+    check_transpose_inputs(m, rows, columns);
     LOGGING_CHECK(workspace_size >= transpose_blas_workspace_size_f64(rows, columns),
         "matrix_transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -178,13 +210,19 @@ size_t transpose_scalar_workspace_size_f64(linalg_long rows, linalg_long columns
     return transpose_scalar_workspace_size_impl(rows, columns);
 }
 
-void transpose_scalar_f32(linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
+template <>
+void transpose_backend<float, linalg_backend::native>::apply(
+    linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
 {
+    check_transpose_inputs(m, rows, columns);
     transpose_scalar_impl(rows, columns, m, workspace, workspace_size);
 }
 
-void transpose_scalar_f64(linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
+template <>
+void transpose_backend<double, linalg_backend::native>::apply(
+    linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
 {
+    check_transpose_inputs(m, rows, columns);
     transpose_scalar_impl(rows, columns, m, workspace, workspace_size);
 }
 
@@ -211,32 +249,6 @@ size_t matrix_transpose_workspace_size(const double* /*type_tag*/, linalg_long r
     return detail::transpose_blas_workspace_size_f64(rows, columns);
 #else
     return detail::transpose_scalar_workspace_size_f64(rows, columns);
-#endif
-}
-
-void matrix_transpose(linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
-#if LINALG_HAS_MKL
-    detail::transpose_mkl_f32(rows, columns, m, workspace, workspace_size);
-#elif LINALG_HAS_BLAS
-    detail::transpose_blas_f32(rows, columns, m, workspace, workspace_size);
-#else
-    detail::transpose_scalar_f32(rows, columns, m, workspace, workspace_size);
-#endif
-}
-
-void matrix_transpose(linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(m != nullptr, "matrix_transpose: m must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "matrix_transpose: rows and columns must be positive");
-#if LINALG_HAS_MKL
-    detail::transpose_mkl_f64(rows, columns, m, workspace, workspace_size);
-#elif LINALG_HAS_BLAS
-    detail::transpose_blas_f64(rows, columns, m, workspace, workspace_size);
-#else
-    detail::transpose_scalar_f64(rows, columns, m, workspace, workspace_size);
 #endif
 }
 

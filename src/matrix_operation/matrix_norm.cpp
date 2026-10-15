@@ -109,7 +109,7 @@ template <typename T> T norm_two(const T* A, linalg_long rows, linalg_long colum
         }
     }
 
-    linalg::svd_decomposition(rows, columns, bufs.A_copy, columns, bufs.S, bufs.U, k, bufs.VT,
+    linalg::detail::svd_backend<T, linalg::kActiveBackend>::apply(rows, columns, bufs.A_copy, columns, bufs.S, bufs.U, k, bufs.VT,
         columns, bufs.svd_workspace, svd_bytes);
 
     T best = T(0);
@@ -150,6 +150,24 @@ template <typename T> T matrix_norm_impl(const T* A, linalg_long rows, linalg_lo
     }
 }
 
+template <>
+float matrix_norm_backend<float, linalg_backend::native>::apply(const float* A, linalg_long rows,
+    linalg_long columns, linalg_long lda, matrix_norm_type type, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr, "matrix_norm_backend::apply: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_norm_backend::apply: rows/columns/lda must be positive");
+    return matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
+}
+
+template <>
+double matrix_norm_backend<double, linalg_backend::native>::apply(const double* A, linalg_long rows,
+    linalg_long columns, linalg_long lda, matrix_norm_type type, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr, "matrix_norm_backend::apply: A must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_norm_backend::apply: rows/columns/lda must be positive");
+    return matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
+}
+
 }  // namespace detail
 
 size_t matrix_norm_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns,
@@ -162,24 +180,6 @@ size_t matrix_norm_workspace_size(const double* /*type_tag*/, linalg_long rows, 
     matrix_norm_type type)
 {
     return detail::matrix_norm_workspace_size_impl<double>(rows, columns, type);
-}
-
-//-----------------------------------------------------------------------------
-float matrix_norm(const float* A, linalg_long rows, linalg_long columns, linalg_long lda,
-    matrix_norm_type type, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr, "matrix_norm: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_norm: rows/columns/lda must be positive");
-    return detail::matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
-}
-
-//-----------------------------------------------------------------------------
-double matrix_norm(const double* A, linalg_long rows, linalg_long columns, linalg_long lda,
-    matrix_norm_type type, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr, "matrix_norm: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0, "matrix_norm: rows/columns/lda must be positive");
-    return detail::matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
 }
 
 }  // namespace linalg

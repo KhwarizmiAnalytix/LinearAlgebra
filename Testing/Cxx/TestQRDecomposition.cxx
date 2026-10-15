@@ -31,7 +31,7 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
         static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
 
-    linalg::qr_decomposition(
+    linalg::detail::qr_backend<value_t, linalg::kActiveBackend>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A.begin(),

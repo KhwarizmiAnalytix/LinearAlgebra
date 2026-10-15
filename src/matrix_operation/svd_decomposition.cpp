@@ -24,10 +24,30 @@ namespace linalg
 namespace detail
 {
 
+// Null/positivity checks shared by every svd_backend<T, Backend>::apply
+// below, so callers (tests included) get the same validation regardless of
+// which backend is active. There is no non-detail svd_decomposition()
+// wrapper to put this in any more — callers use
+// svd_backend<T, kActiveBackend>::apply directly.
+void check_svd_inputs(const void* A, const void* S, const void* U, const void* VT, linalg_long rows,
+    linalg_long columns, linalg_long lda, linalg_long ldu, linalg_long ldv)
+{
+    LOGGING_CHECK(
+        A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_backend::apply: A, S, U, and VT must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0,
+        "svd_backend::apply: rows/columns/lda/ldu/ldv must be positive");
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// svd_decomposition() overloads below call — exactly one is ever built. No
-// GPU implementation exists for this op.
+// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
+// (include/common/backend.h). Each `apply` below is an explicit
+// specialization of the one member svd_decomposition.h declares (not of the
+// whole class), so it's defined exactly once, here, for whichever (T,
+// Backend) pair is active — mkl.h / lapacke.h stay out of the public
+// header. Other translation units only ever see the header's declaration
+// and link against this definition; they never instantiate a body of their
+// own, so there's nothing to silently get wrong by omission. No GPU
+// implementation exists for this op.
 #if LINALG_HAS_MKL || (LINALG_HAS_BLAS && LINALG_HAS_LAPACKE)
 
 namespace
@@ -136,16 +156,22 @@ size_t svd_mkl_workspace_size_f64(linalg_long rows, linalg_long columns)
     return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);
 }
 
-void svd_mkl_f32(linalg_long rows, linalg_long columns, float* A, linalg_long lda, float* S,
-    float* U, linalg_long ldu, float* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+template <>
+void svd_backend<float, linalg_backend::mkl>::apply(linalg_long rows, linalg_long columns, float* A,
+    linalg_long lda, float* S, float* U, linalg_long ldu, float* VT, linalg_long ldv, void* workspace,
+    size_t workspace_size)
 {
+    check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd_lapacke_impl<float>(
         LAPACKE_sgesvd_work, "mkl", rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
 
-void svd_mkl_f64(linalg_long rows, linalg_long columns, double* A, linalg_long lda, double* S,
-    double* U, linalg_long ldu, double* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+template <>
+void svd_backend<double, linalg_backend::mkl>::apply(linalg_long rows, linalg_long columns, double* A,
+    linalg_long lda, double* S, double* U, linalg_long ldu, double* VT, linalg_long ldv, void* workspace,
+    size_t workspace_size)
 {
+    check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd_lapacke_impl<double>(
         LAPACKE_dgesvd_work, "mkl", rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
@@ -162,16 +188,22 @@ size_t svd_blas_workspace_size_f64(linalg_long rows, linalg_long columns)
     return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);
 }
 
-void svd_blas_f32(linalg_long rows, linalg_long columns, float* A, linalg_long lda, float* S,
-    float* U, linalg_long ldu, float* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+template <>
+void svd_backend<float, linalg_backend::blas_lapacke>::apply(linalg_long rows, linalg_long columns, float* A,
+    linalg_long lda, float* S, float* U, linalg_long ldu, float* VT, linalg_long ldv, void* workspace,
+    size_t workspace_size)
 {
+    check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd_lapacke_impl<float>(LAPACKE_sgesvd_work, "blas_lapack", rows, columns, A, lda, S, U, ldu, VT,
         ldv, workspace, workspace_size);
 }
 
-void svd_blas_f64(linalg_long rows, linalg_long columns, double* A, linalg_long lda, double* S,
-    double* U, linalg_long ldu, double* VT, linalg_long ldv, void* workspace, size_t workspace_size)
+template <>
+void svd_backend<double, linalg_backend::blas_lapacke>::apply(linalg_long rows, linalg_long columns, double* A,
+    linalg_long lda, double* S, double* U, linalg_long ldu, double* VT, linalg_long ldv, void* workspace,
+    size_t workspace_size)
 {
+    check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd_lapacke_impl<double>(LAPACKE_dgesvd_work, "blas_lapack", rows, columns, A, lda, S, U, ldu,
         VT, ldv, workspace, workspace_size);
 }
@@ -657,33 +689,37 @@ size_t svd_scalar_workspace_size_f64(linalg_long rows, linalg_long columns)
     return svd_scalar_workspace_size_impl<double>(rows, columns);
 }
 
-void svd_scalar_f32(linalg_long rows,
-    linalg_long                 columns,
-    float*                        A,
-    linalg_long                 lda,
-    float*                        S,
-    float*                        U,
-    linalg_long                 ldu,
-    float*                        VT,
-    linalg_long                 ldv,
-    void*                        workspace,
-    size_t                       workspace_size)
+template <>
+void svd_backend<float, linalg_backend::native>::apply(linalg_long rows,
+    linalg_long                                                    columns,
+    float*                                                           A,
+    linalg_long                                                    lda,
+    float*                                                           S,
+    float*                                                           U,
+    linalg_long                                                    ldu,
+    float*                                                           VT,
+    linalg_long                                                    ldv,
+    void*                                                           workspace,
+    size_t                                                          workspace_size)
 {
+    check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd(rows, columns, A, lda, S, VT, ldu, U, ldv, workspace, workspace_size);
 }
 
-void svd_scalar_f64(linalg_long rows,
-    linalg_long                 columns,
-    double*                       A,
-    linalg_long                 lda,
-    double*                       S,
-    double*                       U,
-    linalg_long                 ldu,
-    double*                       VT,
-    linalg_long                 ldv,
-    void*                        workspace,
-    size_t                       workspace_size)
+template <>
+void svd_backend<double, linalg_backend::native>::apply(linalg_long rows,
+    linalg_long                                                     columns,
+    double*                                                           A,
+    linalg_long                                                     lda,
+    double*                                                           S,
+    double*                                                           U,
+    linalg_long                                                     ldu,
+    double*                                                           VT,
+    linalg_long                                                     ldv,
+    void*                                                           workspace,
+    size_t                                                          workspace_size)
 {
+    check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd(rows, columns, A, lda, S, VT, ldu, U, ldv, workspace, workspace_size);
 }
 
@@ -713,51 +749,4 @@ size_t svd_decomposition_workspace_size(const double* /*type_tag*/, linalg_long 
 #endif
 }
 
-//-----------------------------------------------------------------------------
-void svd_decomposition(linalg_long rows,
-    linalg_long                    columns,
-    float*                           A,
-    linalg_long                    lda,
-    float*                           S,
-    float*                           U,
-    linalg_long                    ldu,
-    float*                           VT,
-    linalg_long                    ldv,
-    void*                            workspace,
-    size_t                           workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_decomposition: A, S, U, and VT must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0, "svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
-#if LINALG_HAS_MKL
-    detail::svd_mkl_f32(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    detail::svd_blas_f32(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
-#else
-    detail::svd_scalar_f32(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
-#endif
-}
-
-//-----------------------------------------------------------------------------
-void svd_decomposition(linalg_long rows,
-    linalg_long                    columns,
-    double*                          A,
-    linalg_long                    lda,
-    double*                          S,
-    double*                          U,
-    linalg_long                    ldu,
-    double*                          VT,
-    linalg_long                    ldv,
-    void*                            workspace,
-    size_t                           workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr, "svd_decomposition: A, S, U, and VT must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0, "svd_decomposition: rows/columns/lda/ldu/ldv must be positive");
-#if LINALG_HAS_MKL
-    detail::svd_mkl_f64(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    detail::svd_blas_f64(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
-#else
-    detail::svd_scalar_f64(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
-#endif
-}
 }  // namespace linalg

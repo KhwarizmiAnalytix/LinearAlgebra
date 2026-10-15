@@ -52,7 +52,8 @@ constexpr double kPade13[] = {
 template <typename T>
 void mat_mul(const T* a, const T* b, linalg_int n, T* c, void* gemm_ws, size_t gemm_bytes)
 {
-    linalg::matrix_multiplication(false, false, n, n, n, a, n, b, n, c, n, gemm_ws, gemm_bytes);
+    linalg::detail::matmul_backend<T, linalg::kMatmulActiveBackend>::apply(
+        false, false, n, n, n, a, n, b, n, c, n, gemm_ws, gemm_bytes);
 }
 
 // dst += c * src, both n x n and tightly packed.
@@ -260,7 +261,8 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
     }
 
     const double norm1 = static_cast<double>(
-        linalg::matrix_norm(A, static_cast<linalg_long>(n), static_cast<linalg_long>(n),
+        linalg::detail::matrix_norm_backend<T, linalg::linalg_backend::native>::apply(A,
+            static_cast<linalg_long>(n), static_cast<linalg_long>(n),
             static_cast<linalg_long>(n), linalg::matrix_norm_type::ONE, nullptr, 0));
 
     int degree = 13;
@@ -326,8 +328,8 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
         numerator[static_cast<std::size_t>(i)] = bufs.V[static_cast<std::size_t>(i)] + bufs.U[static_cast<std::size_t>(i)];
     }
 
-    linalg::matrix_invert(denom, bufs.pivot, n, linalg::linear_solver_type::LU_LINEAR_SOLVER, bufs.invert_ws,
-        bufs.invert_bytes);
+    linalg::detail::invert_backend<T, linalg::kActiveBackend>::apply(denom, bufs.pivot, n,
+        linalg::linear_solver_type::LU_LINEAR_SOLVER, bufs.invert_ws, bufs.invert_bytes);
 
     T* R   = bufs.s3;
     T* tmp = A;
@@ -349,6 +351,25 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
 }
 
 }  // namespace
+
+template <>
+void matrix_exponential_backend<float, linalg_backend::native>::apply(
+    const float* A, linalg_int n, linalg_int lda, float* result, linalg_int ldc, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr && result != nullptr, "matrix_exponential_backend::apply: A and result must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0, "matrix_exponential_backend::apply: n/lda/ldc must be positive");
+    matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
+}
+
+template <>
+void matrix_exponential_backend<double, linalg_backend::native>::apply(
+    const double* A, linalg_int n, linalg_int lda, double* result, linalg_int ldc, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr && result != nullptr, "matrix_exponential_backend::apply: A and result must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0, "matrix_exponential_backend::apply: n/lda/ldc must be positive");
+    matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
+}
+
 }  // namespace detail
 
 size_t matrix_exponential_workspace_size(const float* /*type_tag*/, linalg_int n)
@@ -359,24 +380,6 @@ size_t matrix_exponential_workspace_size(const float* /*type_tag*/, linalg_int n
 size_t matrix_exponential_workspace_size(const double* /*type_tag*/, linalg_int n)
 {
     return detail::matrix_exponential_workspace_size_impl<double>(n);
-}
-
-//-----------------------------------------------------------------------------
-void matrix_exponential(const float* A, linalg_int n, linalg_int lda, float* result, linalg_int ldc, void* workspace,
-    size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && result != nullptr, "matrix_exponential: A and result must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0, "matrix_exponential: n/lda/ldc must be positive");
-    detail::matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
-}
-
-//-----------------------------------------------------------------------------
-void matrix_exponential(const double* A, linalg_int n, linalg_int lda, double* result, linalg_int ldc, void* workspace,
-    size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && result != nullptr, "matrix_exponential: A and result must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0, "matrix_exponential: n/lda/ldc must be positive");
-    detail::matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
 }
 
 }  // namespace linalg

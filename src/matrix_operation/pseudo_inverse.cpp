@@ -67,7 +67,7 @@ void pseudo_inverse_impl(linalg_long rows, linalg_long columns, const T* A, lina
         }
     }
 
-    linalg::svd_decomposition(rows, columns, bufs.A_copy, columns, bufs.S, bufs.U, k, bufs.VT,
+    linalg::detail::svd_backend<T, linalg::kActiveBackend>::apply(rows, columns, bufs.A_copy, columns, bufs.S, bufs.U, k, bufs.VT,
         columns, bufs.svd_workspace, svd_bytes);
 
     T smax = T(0);
@@ -98,6 +98,27 @@ void pseudo_inverse_impl(linalg_long rows, linalg_long columns, const T* A, lina
     }
 }
 
+template <>
+void pseudo_inverse_backend<float, linalg_backend::native>::apply(linalg_long rows, linalg_long columns,
+    const float* A, linalg_long lda, float* Ainv, linalg_long ldai, float tol, void* workspace, size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr && Ainv != nullptr, "pseudo_inverse_backend::apply: A and Ainv must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
+        "pseudo_inverse_backend::apply: rows/columns/lda/ldai must be positive");
+    pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
+}
+
+template <>
+void pseudo_inverse_backend<double, linalg_backend::native>::apply(linalg_long rows, linalg_long columns,
+    const double* A, linalg_long lda, double* Ainv, linalg_long ldai, double tol, void* workspace,
+    size_t workspace_size)
+{
+    LOGGING_CHECK(A != nullptr && Ainv != nullptr, "pseudo_inverse_backend::apply: A and Ainv must not be null");
+    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
+        "pseudo_inverse_backend::apply: rows/columns/lda/ldai must be positive");
+    pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
+}
+
 }  // namespace detail
 
 size_t pseudo_inverse_workspace_size(const float* /*type_tag*/, linalg_long rows, linalg_long columns)
@@ -108,24 +129,6 @@ size_t pseudo_inverse_workspace_size(const float* /*type_tag*/, linalg_long rows
 size_t pseudo_inverse_workspace_size(const double* /*type_tag*/, linalg_long rows, linalg_long columns)
 {
     return detail::pseudo_inverse_workspace_size_impl<double>(rows, columns);
-}
-
-//-----------------------------------------------------------------------------
-void pseudo_inverse(linalg_long rows, linalg_long columns, const float* A, linalg_long lda,
-    float* Ainv, linalg_long ldai, float tol, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && Ainv != nullptr, "pseudo_inverse: A and Ainv must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0, "pseudo_inverse: rows/columns/lda/ldai must be positive");
-    detail::pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
-}
-
-//-----------------------------------------------------------------------------
-void pseudo_inverse(linalg_long rows, linalg_long columns, const double* A, linalg_long lda,
-    double* Ainv, linalg_long ldai, double tol, void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(A != nullptr && Ainv != nullptr, "pseudo_inverse: A and Ainv must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0, "pseudo_inverse: rows/columns/lda/ldai must be positive");
-    detail::pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 }  // namespace linalg

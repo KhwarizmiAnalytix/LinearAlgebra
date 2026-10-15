@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <include/logging.h>
+#include "include/common/backend.h"
 #include "include/common/narrow.h"
 
 #if LINALG_HAS_MKL
@@ -23,33 +24,63 @@ namespace linalg
 namespace detail
 {
 
+// Null/positivity checks shared by every cholesky_backend<T, Backend>::apply
+// below, so callers (linear_solver.cpp, matrix_inversion.cpp, this file's
+// own scalar path) get the same validation regardless of which backend is
+// active. There is no non-detail cholesky_decomposition() wrapper to put
+// this in any more — callers use cholesky_backend<T, kActiveBackend>::apply
+// directly.
+void check_cholesky_inputs(const void* C, linalg_int lda)
+{
+    LOGGING_CHECK(C != nullptr, "cholesky_backend::apply: C must not be null");
+    LOGGING_CHECK(lda > 0, "cholesky_backend::apply: lda must be positive", lda);
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// cholesky_decomposition() overloads below call — exactly one is ever built.
+// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
+// (include/common/backend.h). Each `apply` below is an explicit
+// specialization of the one member cholesky_decomposition.h declares (not
+// of the whole class), so it's defined exactly once, here, for whichever
+// (T, Backend) pair is active — mkl.h / lapacke.h stay out of the public
+// header. Other translation units only ever see the header's declaration
+// and link against this definition; they never instantiate a body of their
+// own, so there's nothing to silently get wrong by omission.
 #if LINALG_HAS_MKL
 
-bool cholesky_mkl_f32(float* C, linalg_int lda, cholesky_decomposition_enum type)
+template <>
+bool cholesky_backend<float, linalg_backend::mkl>::apply(
+    float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    check_cholesky_inputs(C, lda);
     linalg_int n = lda;
     return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
-bool cholesky_mkl_f64(double* C, linalg_int lda, cholesky_decomposition_enum type)
+template <>
+bool cholesky_backend<double, linalg_backend::mkl>::apply(
+    double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    check_cholesky_inputs(C, lda);
     linalg_int n = lda;
     return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
 #elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
-bool cholesky_blas_f32(float* C, linalg_int lda, cholesky_decomposition_enum type)
+template <>
+bool cholesky_backend<float, linalg_backend::blas_lapacke>::apply(
+    float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    check_cholesky_inputs(C, lda);
     const auto n = detail::checked_narrow<int>(lda);
     return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
-bool cholesky_blas_f64(double* C, linalg_int lda, cholesky_decomposition_enum type)
+template <>
+bool cholesky_backend<double, linalg_backend::blas_lapacke>::apply(
+    double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    check_cholesky_inputs(C, lda);
     const auto n = detail::checked_narrow<int>(lda);
     return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
@@ -145,8 +176,11 @@ linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda
 
 }  // namespace
 
-bool cholesky_scalar_f32(float* C, linalg_int lda, cholesky_decomposition_enum type)
+template <>
+bool cholesky_backend<float, linalg_backend::native>::apply(
+    float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    check_cholesky_inputs(C, lda);
     linalg_int n = lda;
     switch (type)
     {
@@ -161,8 +195,11 @@ bool cholesky_scalar_f32(float* C, linalg_int lda, cholesky_decomposition_enum t
     }
 }
 
-bool cholesky_scalar_f64(double* C, linalg_int lda, cholesky_decomposition_enum type)
+template <>
+bool cholesky_backend<double, linalg_backend::native>::apply(
+    double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    check_cholesky_inputs(C, lda);
     linalg_int n = lda;
     switch (type)
     {
@@ -179,9 +216,9 @@ bool cholesky_scalar_f64(double* C, linalg_int lda, cholesky_decomposition_enum 
 
 #endif
 
-// Reverse-mode adjoint of cholesky_decomposition: no vendor library (LAPACK/
-// cuSOLVER) exposes this, so it always runs the scalar implementation
-// directly, regardless of which backend cholesky_decomposition itself used.
+// Reverse-mode adjoint of cholesky_backend<T, Backend>::apply: no vendor
+// library (LAPACK/cuSOLVER) exposes this, so it always runs the scalar
+// implementation directly, regardless of which backend is active.
 enum class aad_matrix_order : std::uint8_t
 {
     row_major,
@@ -303,34 +340,6 @@ void cholesky_decomposition_aad_impl(
 }
 
 }  // namespace detail
-
-//-----------------------------------------------------------------------------
-bool cholesky_decomposition(float* C, linalg_int lda, linalg::cholesky_decomposition_enum type)
-{
-    LOGGING_CHECK(C != nullptr, "cholesky_decomposition: C must not be null");
-    LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
-#if LINALG_HAS_MKL
-    return detail::cholesky_mkl_f32(C, lda, type);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::cholesky_blas_f32(C, lda, type);
-#else
-    return detail::cholesky_scalar_f32(C, lda, type);
-#endif
-}
-
-//-----------------------------------------------------------------------------
-bool cholesky_decomposition(double* C, linalg_int lda, linalg::cholesky_decomposition_enum type)
-{
-    LOGGING_CHECK(C != nullptr, "cholesky_decomposition: C must not be null");
-    LOGGING_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
-#if LINALG_HAS_MKL
-    return detail::cholesky_mkl_f64(C, lda, type);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::cholesky_blas_f64(C, lda, type);
-#else
-    return detail::cholesky_scalar_f64(C, lda, type);
-#endif
-}
 
 //-----------------------------------------------------------------------------
 bool cholesky_decomposition_aad(float*  C_aad,

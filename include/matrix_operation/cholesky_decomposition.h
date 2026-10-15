@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "include/common/backend.h"
 #include "include/common/linear_algebra_export.h"
 #include "include/common/types.h"
 
@@ -14,26 +15,46 @@ enum class cholesky_decomposition_enum : char
     UPPER_TRIANGULAR = 'U'
 };
 
-// Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapack /
-// mkl) is a compile-time choice fixed by LINALG_HAS_MKL / LINALG_HAS_BLAS
-// (MKL takes precedence over BLAS over the scalar fallback) — there is no
-// runtime dispatch or per-call backend override. For device (CUDA) pointers,
-// see linalg::gpu::cholesky_decomposition in
-// include/matrix_operation_gpu/cholesky_decomposition_gpu.h.
-// cholesky_decomposition_aad (reverse-mode adjoint) has no vendor-library
-// equivalent and always runs the scalar implementation.
-LINALG_API bool cholesky_decomposition(
-    float* L, linalg_int lda, linalg::cholesky_decomposition_enum type);
+namespace detail
+{
 
+// Host-memory-only CPU entry point. The CPU backend (scalar / blas_lapacke /
+// mkl) is a compile-time choice fixed by linalg::kActiveBackend
+// (include/common/backend.h) — MKL takes precedence over BLAS+LAPACKE over
+// the scalar fallback, with no runtime dispatch or per-call override.
+//
+// `apply` is declared here but deliberately has NO body: this class template
+// is never specialized as a whole, only this one member is, via an explicit
+// member specialization defined once in cholesky_decomposition.cpp (for
+// whichever backend LINALG_HAS_MKL / LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+// selects — mkl.h / lapacke.h stay out of this public header). Every caller
+// — including this file, linear_solver.cpp, matrix_inversion.cpp, and
+// tests — sees only this declaration and calls
+// `cholesky_backend<T, kActiveBackend>::apply(...)`; the actual function
+// body is resolved by the linker against the one definition in
+// cholesky_decomposition.cpp, so LINALG_API matters here (it must cross the
+// shared-library boundary to reach the test binary) and there is no inline
+// fallback body to silently instantiate per call site — calling this for a
+// (T, Backend) nobody defined is a link error, not silently wrong behavior.
+// For device (CUDA) pointers, see linalg::gpu::cholesky_decomposition in
+// include/matrix_operation_gpu/cholesky_decomposition_gpu.h.
+template <typename T, linalg_backend Backend>
+struct cholesky_backend
+{
+    LINALG_API static bool apply(T* C, linalg_int lda, cholesky_decomposition_enum type);
+};
+
+}  // namespace detail
+
+// cholesky_decomposition_aad (reverse-mode adjoint) has no vendor-library
+// equivalent and always runs the scalar implementation, regardless of which
+// backend cholesky_backend<T, kActiveBackend> resolves to.
 LINALG_API bool cholesky_decomposition_aad(
     float*                              L_aad,
     const float*                        L,
     linalg_int                          lda,
     linalg::cholesky_decomposition_enum type,
     float*                              A_aad);
-
-LINALG_API bool cholesky_decomposition(
-    double* L, linalg_int lda, linalg::cholesky_decomposition_enum type);
 
 LINALG_API bool cholesky_decomposition_aad(
     double*                             L_aad,

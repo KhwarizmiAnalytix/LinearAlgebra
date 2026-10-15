@@ -112,7 +112,7 @@ void test_lu(double tolerance)
     const auto lu_ws_size = linalg::lu_decomposition_workspace_size(
         static_cast<const value_t*>(nullptr), static_cast<linalg_int>(n));
     std::vector<unsigned char> lu_ws(lu_ws_size);
-    linalg::lu_decomposition(
+    linalg::detail::lu_backend<value_t, linalg::kActiveBackend>::apply(
         a1.data(), static_cast<linalg_int>(n), pivot.data(), lu_ws.data(), lu_ws_size);
 
     dense_matrix<value_t> L(n, n);
@@ -157,8 +157,9 @@ void test_lu(double tolerance)
     const auto invert_ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> invert_ws(invert_ws_size);
-    linalg::matrix_invert(IA.data(), pivot.data(), static_cast<linalg_int>(n),
-        linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, invert_ws.data(), invert_ws_size);
+    linalg::detail::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(), pivot.data(),
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, invert_ws.data(),
+        invert_ws_size);
 
     const auto det_ws_size = linalg::matrix_determinant_workspace_size(static_cast<const value_t*>(nullptr),
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
@@ -188,7 +189,7 @@ void test_lu(double tolerance)
     const auto solve_ws_size = linalg::linear_solver_workspace_size(static_cast<const value_t*>(nullptr),
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> solve_ws(solve_ws_size);
-    linalg::linear_solver(
+    linalg::detail::solver_backend<value_t, linalg::kActiveBackend>::apply(
         a1.data(),
         pivot.data(),
         static_cast<linalg_int>(n),

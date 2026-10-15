@@ -24,9 +24,26 @@ namespace linalg
 namespace detail
 {
 
+// Null checks shared by every invert_backend<T, Backend>::apply below, so
+// callers (tests included) get the same validation regardless of which
+// backend is active. There is no non-detail matrix_invert() wrapper to put
+// this in any more — callers use invert_backend<T, kActiveBackend>::apply
+// directly.
+void check_invert_inputs(const void* m, linalg_int lda)
+{
+    LOGGING_CHECK(m != nullptr, "invert_backend::apply: m must not be null");
+    LOGGING_CHECK(lda > 0, "invert_backend::apply: lda must be positive", lda);
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// matrix_invert() overloads below call — exactly one is ever built. No GPU
+// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
+// (include/common/backend.h). Each `apply` below is an explicit
+// specialization of the one member matrix_inversion.h declares (not of the
+// whole class), so it's defined exactly once, here, for whichever (T,
+// Backend) pair is active — mkl.h / lapacke.h stay out of the public
+// header. Other translation units only ever see the header's declaration
+// and link against this definition; they never instantiate a body of their
+// own, so there's nothing to silently get wrong by omission. No GPU
 // implementation exists for this op.
 #if LINALG_HAS_MKL
 
@@ -75,9 +92,11 @@ size_t invert_mkl_workspace_size_f64(linalg_int lda, linear_solver_type type)
     return invert_mkl_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type);
 }
 
-void invert_mkl_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
+template <>
+void invert_backend<float, linalg_backend::mkl>::apply(float* m, linalg_int* pivot, linalg_int lda,
+    linear_solver_type type, void* workspace, size_t workspace_size)
 {
+    check_invert_inputs(m, lda);
     LOGGING_CHECK(workspace_size >= invert_mkl_workspace_size_f32(lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -90,7 +109,7 @@ void invert_mkl_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_t
             lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda));
         const auto lwork = getri_lwork<float>(LAPACKE_sgetri_work, n);
         auto*      work  = arena.next<float>(static_cast<size_t>(lwork));
-        if (lu_decomposition(m, lda, pivot, lu_ws,
+        if (lu_backend<float, kActiveBackend>::apply(m, lda, pivot, lu_ws,
                 lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda)))
         {
             LAPACKE_sgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
@@ -98,7 +117,7 @@ void invert_mkl_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_t
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        if (cholesky_backend<float, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
         }
@@ -118,9 +137,11 @@ void invert_mkl_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_t
     }
 }
 
-void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
+template <>
+void invert_backend<double, linalg_backend::mkl>::apply(double* m, linalg_int* pivot, linalg_int lda,
+    linear_solver_type type, void* workspace, size_t workspace_size)
 {
+    check_invert_inputs(m, lda);
     LOGGING_CHECK(workspace_size >= invert_mkl_workspace_size_f64(lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -133,7 +154,7 @@ void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_
             lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda));
         const auto lwork = getri_lwork<double>(LAPACKE_dgetri_work, n);
         auto*      work  = arena.next<double>(static_cast<size_t>(lwork));
-        if (lu_decomposition(m, lda, pivot, lu_ws,
+        if (lu_backend<double, kActiveBackend>::apply(m, lda, pivot, lu_ws,
                 lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda)))
         {
             LAPACKE_dgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
@@ -141,7 +162,7 @@ void invert_mkl_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        if (cholesky_backend<double, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
         }
@@ -218,9 +239,11 @@ size_t invert_blas_workspace_size_f64(linalg_int lda, linear_solver_type type)
     return invert_blas_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type);
 }
 
-void invert_blas_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
+template <>
+void invert_backend<float, linalg_backend::blas_lapacke>::apply(float* m, linalg_int* pivot, linalg_int lda,
+    linear_solver_type type, void* workspace, size_t workspace_size)
 {
+    check_invert_inputs(m, lda);
     LOGGING_CHECK(workspace_size >= invert_blas_workspace_size_f32(lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -234,7 +257,7 @@ void invert_blas_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_
         auto*      ipiv  = arena.next<lapack_int>(static_cast<size_t>(lda));
         const auto lwork = getri_lwork<float>(LAPACKE_sgetri_work, n);
         auto*      work  = arena.next<float>(static_cast<size_t>(lwork));
-        if (lu_decomposition(m, lda, pivot, lu_ws,
+        if (lu_backend<float, kActiveBackend>::apply(m, lda, pivot, lu_ws,
                 lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda)))
         {
             to_lapack_pivots(pivot, lda, ipiv);
@@ -243,7 +266,7 @@ void invert_blas_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        if (cholesky_backend<float, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
         }
@@ -265,9 +288,11 @@ void invert_blas_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_
     }
 }
 
-void invert_blas_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
+template <>
+void invert_backend<double, linalg_backend::blas_lapacke>::apply(double* m, linalg_int* pivot, linalg_int lda,
+    linear_solver_type type, void* workspace, size_t workspace_size)
 {
+    check_invert_inputs(m, lda);
     LOGGING_CHECK(workspace_size >= invert_blas_workspace_size_f64(lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -281,7 +306,7 @@ void invert_blas_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver
         auto*      ipiv  = arena.next<lapack_int>(static_cast<size_t>(lda));
         const auto lwork = getri_lwork<double>(LAPACKE_dgetri_work, n);
         auto*      work  = arena.next<double>(static_cast<size_t>(lwork));
-        if (lu_decomposition(m, lda, pivot, lu_ws,
+        if (lu_backend<double, kActiveBackend>::apply(m, lda, pivot, lu_ws,
                 lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda)))
         {
             to_lapack_pivots(pivot, lda, ipiv);
@@ -290,7 +315,7 @@ void invert_blas_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        if (cholesky_backend<double, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', n, m, n);
         }
@@ -469,7 +494,7 @@ void matrix_invert_scalar_impl(T* m, linalg_int* pivot, linalg_int lda, linear_s
         auto* inv_m = arena.next<double>(n * n);
         auto* work  = arena.next<double>(n);
         if (type == linear_solver_type::LU_UPFRONT_LINEAR_SOLVER ||
-            lu_decomposition(m, lda, pivot, nullptr, 0))
+            lu_backend<T, kActiveBackend>::apply(m, lda, pivot, nullptr, 0))
         {
             lu_invert(m, pivot, lda, inv_m, work);
         }
@@ -480,7 +505,7 @@ void matrix_invert_scalar_impl(T* m, linalg_int* pivot, linalg_int lda, linear_s
     {
         auto* work = arena.next<T>(n);
         if (type == linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER ||
-            cholesky_decomposition(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+            cholesky_backend<T, kActiveBackend>::apply(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_invert(m, lda, work);
         }
@@ -493,15 +518,19 @@ void matrix_invert_scalar_impl(T* m, linalg_int* pivot, linalg_int lda, linear_s
 
 }  // namespace
 
-void invert_scalar_f32(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
+template <>
+void invert_backend<float, linalg_backend::native>::apply(float* m, linalg_int* pivot, linalg_int lda,
+    linear_solver_type type, void* workspace, size_t workspace_size)
 {
+    check_invert_inputs(m, lda);
     matrix_invert_scalar_impl(m, pivot, lda, type, workspace, workspace_size);
 }
 
-void invert_scalar_f64(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
+template <>
+void invert_backend<double, linalg_backend::native>::apply(double* m, linalg_int* pivot, linalg_int lda,
+    linear_solver_type type, void* workspace, size_t workspace_size)
 {
+    check_invert_inputs(m, lda);
     matrix_invert_scalar_impl(m, pivot, lda, type, workspace, workspace_size);
 }
 
@@ -558,7 +587,7 @@ T matrix_determinant_helper(
     {
         LOGGING_CHECK(workspace_size >= matrix_determinant_workspace_size_helper<T>(lda, type),
             "matrix_determinant: workspace_size too small");
-        if (lu_decomposition(m, lda, pivot, workspace, workspace_size))
+        if (lu_backend<T, kActiveBackend>::apply(m, lda, pivot, workspace, workspace_size))
         {
             ret = lu_determinant(m, lda);
         }
@@ -570,7 +599,7 @@ T matrix_determinant_helper(
 
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
-        if (cholesky_decomposition(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        if (cholesky_backend<T, kActiveBackend>::apply(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             ret = cholesky_determinant(m, lda);
         }
@@ -605,36 +634,6 @@ size_t matrix_invert_workspace_size(const double* /*type_tag*/, linalg_int lda, 
     return detail::invert_blas_workspace_size_f64(lda, type);
 #else
     return detail::invert_scalar_workspace_size<double>(lda, type);
-#endif
-}
-
-//-----------------------------------------------------------------------------
-void matrix_invert(float* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(m != nullptr, "matrix_invert: m must not be null");
-    LOGGING_CHECK(lda > 0, "matrix_invert: lda must be positive", lda);
-#if LINALG_HAS_MKL
-    detail::invert_mkl_f32(m, pivot, lda, type, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    detail::invert_blas_f32(m, pivot, lda, type, workspace, workspace_size);
-#else
-    detail::invert_scalar_f32(m, pivot, lda, type, workspace, workspace_size);
-#endif
-}
-
-//-----------------------------------------------------------------------------
-void matrix_invert(double* m, linalg_int* pivot, linalg_int lda, linear_solver_type type,
-    void* workspace, size_t workspace_size)
-{
-    LOGGING_CHECK(m != nullptr, "matrix_invert: m must not be null");
-    LOGGING_CHECK(lda > 0, "matrix_invert: lda must be positive", lda);
-#if LINALG_HAS_MKL
-    detail::invert_mkl_f64(m, pivot, lda, type, workspace, workspace_size);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    detail::invert_blas_f64(m, pivot, lda, type, workspace, workspace_size);
-#else
-    detail::invert_scalar_f64(m, pivot, lda, type, workspace, workspace_size);
 #endif
 }
 

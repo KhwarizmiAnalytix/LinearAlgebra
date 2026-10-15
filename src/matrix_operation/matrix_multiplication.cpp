@@ -33,11 +33,34 @@ namespace linalg
 namespace detail
 {
 
+// Null/positivity checks shared by every matmul_backend<T, Backend>::apply
+// below, so callers (tests included) get the same validation regardless of
+// which backend is active. There is no non-detail matrix_multiplication()
+// wrapper to put this in any more — callers use
+// matmul_backend<T, kMatmulActiveBackend>::apply directly.
+void check_matmul_inputs(const void* a, const void* b, const void* c, linalg_int rows, linalg_int columns,
+    linalg_int depth, linalg_int lda, linalg_int ldb, linalg_int ldc)
+{
+    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matmul_backend::apply: a, b, and c must not be null");
+    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
+        "matmul_backend::apply: rows/columns/depth/lda/ldb/ldc must be positive");
+}
+
 // Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that also picks which body the public
-// matrix_multiplication() overloads below call — exactly one is ever built.
+// gated by the same #if/#elif/#else that determines
+// linalg::kMatmulActiveBackend (include/matrix_operation/
+// matrix_multiplication.h — this op's own backend axis, selected by
+// LINALG_HAS_BLAS alone rather than LINALG_HAS_BLAS && LINALG_HAS_LAPACKE,
+// since it only needs cblas_?gemm). Each `apply` below is an explicit
+// specialization of the one member matrix_multiplication.h declares (not
+// of the whole class), so it's defined exactly once, here, for whichever
+// (T, Backend) pair is active — mkl.h / cblas.h stay out of the public
+// header. Other translation units only ever see the header's declaration
+// and link against this definition; they never instantiate a body of their
+// own, so there's nothing to silently get wrong by omission.
 #if LINALG_HAS_MKL
-void matmul_mkl_f32(bool transpose_a,
+template <>
+void matmul_backend<float, linalg_backend::mkl>::apply(bool transpose_a,
     bool                 transpose_b,
     linalg_int         rows,
     linalg_int         columns,
@@ -47,8 +70,11 @@ void matmul_mkl_f32(bool transpose_a,
     float const*         b,
     linalg_int         ldb,
     float*               c,
-    linalg_int         ldc)
+    linalg_int         ldc,
+    void*              /*workspace*/,
+    size_t             /*workspace_size*/)
 {
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
@@ -65,7 +91,8 @@ void matmul_mkl_f32(bool transpose_a,
         ldc);
 }
 
-void matmul_mkl_f64(bool transpose_a,
+template <>
+void matmul_backend<double, linalg_backend::mkl>::apply(bool transpose_a,
     bool                 transpose_b,
     linalg_int         rows,
     linalg_int         columns,
@@ -75,8 +102,11 @@ void matmul_mkl_f64(bool transpose_a,
     double const*        b,
     linalg_int         ldb,
     double*              c,
-    linalg_int         ldc)
+    linalg_int         ldc,
+    void*              /*workspace*/,
+    size_t             /*workspace_size*/)
 {
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
@@ -93,7 +123,8 @@ void matmul_mkl_f64(bool transpose_a,
         ldc);
 }
 #elif LINALG_HAS_BLAS
-void matmul_blas_f32(bool transpose_a,
+template <>
+void matmul_backend<float, linalg_backend::blas_lapacke>::apply(bool transpose_a,
     bool                  transpose_b,
     linalg_int          rows,
     linalg_int          columns,
@@ -103,8 +134,11 @@ void matmul_blas_f32(bool transpose_a,
     float const*          b,
     linalg_int          ldb,
     float*                c,
-    linalg_int          ldc)
+    linalg_int          ldc,
+    void*               /*workspace*/,
+    size_t              /*workspace_size*/)
 {
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     // macOS Accelerate deprecates the legacy LP64 cblas_* entry points in favor
     // of an ILP64 interface (ACCELERATE_NEW_LAPACK); switching would change the
     // integer width LAPACKE/checked_narrow assume throughout this codebase, so
@@ -132,7 +166,8 @@ void matmul_blas_f32(bool transpose_a,
 #endif
 }
 
-void matmul_blas_f64(bool transpose_a,
+template <>
+void matmul_backend<double, linalg_backend::blas_lapacke>::apply(bool transpose_a,
     bool                  transpose_b,
     linalg_int          rows,
     linalg_int          columns,
@@ -142,8 +177,11 @@ void matmul_blas_f64(bool transpose_a,
     double const*         b,
     linalg_int          ldb,
     double*               c,
-    linalg_int          ldc)
+    linalg_int          ldc,
+    void*               /*workspace*/,
+    size_t              /*workspace_size*/)
 {
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     // See the LP64-vs-ILP64 note in matmul_blas_f32 above.
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -1822,7 +1860,8 @@ void matrix_multiplication_seq(  // NOLINT
 }
 }  // namespace
 // C(i,j) =C[i*ldc + j] j belong to [0,columns] and i to [0,rows]
-void matmul_scalar_f32(bool transpose_a,
+template <>
+void matmul_backend<float, linalg_backend::native>::apply(bool transpose_a,
     bool                    transpose_b,
     linalg_int            rows,
     linalg_int            columns,
@@ -1836,6 +1875,7 @@ void matmul_scalar_f32(bool transpose_a,
     void*                   workspace,
     size_t                  workspace_size)
 {
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
 #if LINALG_HAS_VECTORIZATION
 
     if (transpose_a && transpose_b)
@@ -1954,7 +1994,8 @@ void matmul_scalar_f32(bool transpose_a,
 #endif
 }
 
-void matmul_scalar_f64(bool transpose_a,
+template <>
+void matmul_backend<double, linalg_backend::native>::apply(bool transpose_a,
     bool                    transpose_b,
     linalg_int            rows,
     linalg_int            columns,
@@ -1968,6 +2009,7 @@ void matmul_scalar_f64(bool transpose_a,
     void*                   workspace,
     size_t                  workspace_size)
 {
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     if (transpose_a && transpose_b)
     {
         matrix_multiplication_seq<double, true, true>(static_cast<linalg_int>(rows),
@@ -2057,66 +2099,6 @@ size_t matrix_multiplication_workspace_size(
     return 0;
 #else
     return detail::matmul_scalar_workspace_size<double>(rows, columns, depth);
-#endif
-}
-
-void matrix_multiplication(bool transpose_a,
-    bool                        transpose_b,
-    linalg_int                rows,
-    linalg_int                columns,
-    linalg_int                depth,
-    float const*                a,
-    linalg_int                lda,
-    float const*                b,
-    linalg_int                ldb,
-    float*                      c,
-    linalg_int                ldc,
-    void*                       workspace,
-    size_t                      workspace_size)
-{
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
-    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-#if LINALG_HAS_MKL
-    (void)workspace;
-    (void)workspace_size;
-    detail::matmul_mkl_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
-#elif LINALG_HAS_BLAS
-    (void)workspace;
-    (void)workspace_size;
-    detail::matmul_blas_f32(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
-#else
-    detail::matmul_scalar_f32(
-        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc, workspace, workspace_size);
-#endif
-}
-
-void matrix_multiplication(bool transpose_a,
-    bool                        transpose_b,
-    linalg_int                rows,
-    linalg_int                columns,
-    linalg_int                depth,
-    double const*               a,
-    linalg_int                lda,
-    double const*               b,
-    linalg_int                ldb,
-    double*                     c,
-    linalg_int                ldc,
-    void*                       workspace,
-    size_t                      workspace_size)
-{
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matrix_multiplication: a, b, and c must not be null");
-    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "matrix_multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
-#if LINALG_HAS_MKL
-    (void)workspace;
-    (void)workspace_size;
-    detail::matmul_mkl_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
-#elif LINALG_HAS_BLAS
-    (void)workspace;
-    (void)workspace_size;
-    detail::matmul_blas_f64(transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc);
-#else
-    detail::matmul_scalar_f64(
-        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc, workspace, workspace_size);
 #endif
 }
 
