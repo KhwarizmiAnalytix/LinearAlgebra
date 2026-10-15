@@ -12,17 +12,19 @@ package(default_visibility = ["//visibility:public"])
 # LINALG_HAS_MKL / LINALG_HAS_BLAS / LINALG_HAS_LU_PIVOTING reach the
 # compiler via linear_algebra_defines()'s select() below (//bazel:
 # linalg_enable_mkl / linalg_enable_blas / linalg_lu_pivoting), always
-# defined 0/1 (never conditionally-defined/#ifdef-style). Both
-# linalg_enable_mkl and linalg_enable_blas are define-only toggles: neither
+# defined 0/1 (never conditionally-defined/#ifdef-style). The same
+# linalg_enable_mkl / linalg_enable_blas settings also select() whether
+# src/matrix_operation/mkl/*.cpp / src/matrix_operation/blas/*.cpp are part
+# of linear_algebra_srcs; the #if LINALG_HAS_MKL / #if LINALG_HAS_BLAS guards
+# inside those files remain as a second line of defense. Neither setting
 # resolves mkl.h/cblas.h/lapacke.h or links an MKL/BLAS/LAPACK library the
 # way CMakeLists.txt's find_package(MKL)/find_package(BLAS)/find_path() do,
 # so a Bazel build with either set still depends on those headers/libs
 # already being on the toolchain's default search paths. LINALG_HAS_CUBLAS
 # (and its helper macros) has no Bazel toggle at all — CMake is this repo's
-# primary, exercised build system for the blas_lapack backend (compiled
-# directly into each op's .cpp under src/matrix_operation/, gated by #if
-# LINALG_HAS_MKL / LINALG_HAS_BLAS) and the cuBLAS/cuSOLVER GPU backend
-# (src/matrix_operation_gpu/ + include/matrix_operation_gpu/, not part of this glob).
+# primary, exercised build system for the mkl / blas_lapack backends and the
+# cuBLAS/cuSOLVER GPU backend (src/matrix_operation_gpu/ +
+# include/matrix_operation_gpu/, not part of this glob).
 
 filegroup(
     name = "linear_algebra_hdrs",
@@ -45,7 +47,13 @@ filegroup(
             "src/matrix_operation/*.cpp",
         ],
         allow_empty = True,
-    ),
+    ) + select({
+        "//bazel:linalg_enable_mkl": glob(["src/matrix_operation/mkl/*.cpp"], allow_empty = True),
+        "//conditions:default": [],
+    }) + select({
+        "//bazel:linalg_enable_blas": glob(["src/matrix_operation/blas/*.cpp"], allow_empty = True),
+        "//conditions:default": [],
+    }),
 )
 
 cc_library(

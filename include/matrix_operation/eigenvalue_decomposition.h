@@ -9,27 +9,6 @@
 namespace linalg
 {
 
-// `workspace` must point to at least
-// `symmetric_eigenvalue_decomposition_workspace_size(type_tag, n)` bytes of
-// caller-owned host memory (the library never allocates its own memory —
-// see include/common/workspace_arena.h).
-LINALG_API size_t symmetric_eigenvalue_decomposition_workspace_size(
-    const float* /*type_tag*/, linalg_int n);
-LINALG_API size_t symmetric_eigenvalue_decomposition_workspace_size(
-    const double* /*type_tag*/, linalg_int n);
-
-// `workspace` must point to at least
-// `eigenvalue_decomposition_workspace_size(type_tag, n, compute_eigenvectors)`
-// bytes. `compute_eigenvectors` must match whether the call passes a
-// non-null `eigenvectors` pointer.
-LINALG_API size_t eigenvalue_decomposition_workspace_size(
-    const float* /*type_tag*/, linalg_int n, bool compute_eigenvectors);
-LINALG_API size_t eigenvalue_decomposition_workspace_size(
-    const double* /*type_tag*/, linalg_int n, bool compute_eigenvectors);
-
-namespace detail
-{
-
 // Host-memory-only CPU entry point for real symmetric matrices: A = V * D *
 // V^T, with eigenvalues written to `eigenvalues` in ascending order (matches
 // LAPACK syev(d)'s convention) and the corresponding orthonormal
@@ -43,12 +22,13 @@ namespace detail
 // in include/matrix_operation_gpu/eigenvalue_decomposition_gpu.h — the
 // general (non-symmetric) backend below has no GPU counterpart.
 //
-// `apply` is declared here but deliberately has NO body: this class template
-// is never specialized as a whole, only this one member is, via an explicit
-// member specialization defined once in eigenvalue_decomposition.cpp (for
-// whichever backend LINALG_HAS_MKL / LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-// selects — mkl.h / lapacke.h stay out of this public header). Every caller
-// — including tests — sees only this declaration and calls
+// `apply` and `workspace_size` are declared here but deliberately have NO
+// body: this class template is never specialized as a whole, only these
+// members are, via explicit member specializations defined once in
+// eigenvalue_decomposition.cpp (for whichever backend LINALG_HAS_MKL /
+// LINALG_HAS_BLAS && LINALG_HAS_LAPACKE selects — mkl.h / lapacke.h stay
+// out of this public header). Every caller — including tests — sees only
+// this declaration and calls
 // `symmetric_eigen_backend<T, kActiveBackend>::apply(...)`; the actual
 // function body is resolved by the linker against the one definition in
 // eigenvalue_decomposition.cpp, so LINALG_API matters here (it must cross
@@ -56,18 +36,18 @@ namespace detail
 // inline fallback body to silently instantiate per call site — calling this
 // for a (T, Backend) nobody defined is a link error, not silently wrong
 // behavior.
-template <typename T, linalg_backend Backend>
-struct symmetric_eigen_backend
+template <typename T, linalg_backend Backend> struct symmetric_eigen_backend
 {
-    LINALG_API static bool apply(
-        const T*   A,
-        linalg_int n,
-        linalg_int lda,
-        T*         eigenvalues,
-        T*         eigenvectors,
-        linalg_int ldv,
-        void*      workspace,
-        size_t     workspace_size);
+    LINALG_API static bool apply(const T* A,
+        linalg_int                        n,
+        linalg_int                        lda,
+        T*                                eigenvalues,
+        T*                                eigenvectors,
+        linalg_int                        ldv,
+        void*                             workspace,
+        size_t                            workspace_size);
+
+    LINALG_API static size_t workspace_size(linalg_int n);
 };
 
 // Host-memory-only CPU entry point for general (non-symmetric) real square
@@ -94,21 +74,21 @@ struct symmetric_eigen_backend
 //
 // Declared/specialized the same way as symmetric_eigen_backend above —
 // callers use `general_eigen_backend<T, kActiveBackend>::apply(...)`.
-template <typename T, linalg_backend Backend>
-struct general_eigen_backend
+// `workspace_size` takes `compute_eigenvectors` because the scratch needed
+// differs between eigenvalue-only and eigenvector runs.
+template <typename T, linalg_backend Backend> struct general_eigen_backend
 {
-    LINALG_API static bool apply(
-        const T*   A,
-        linalg_int n,
-        linalg_int lda,
-        T*         eigenvalues_real,
-        T*         eigenvalues_imag,
-        T*         eigenvectors,
-        linalg_int ldv,
-        void*      workspace,
-        size_t     workspace_size);
-};
+    LINALG_API static bool apply(const T* A,
+        linalg_int                        n,
+        linalg_int                        lda,
+        T*                                eigenvalues_real,
+        T*                                eigenvalues_imag,
+        T*                                eigenvectors,
+        linalg_int                        ldv,
+        void*                             workspace,
+        size_t                            workspace_size);
 
-}  // namespace detail
+    LINALG_API static size_t workspace_size(linalg_int n, bool compute_eigenvectors);
+};
 
 }  // namespace linalg

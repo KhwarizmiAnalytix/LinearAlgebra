@@ -4,23 +4,11 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include <include/logging.h>
 
-#if LINALG_HAS_MKL
-#include <mkl.h>
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-// LAPACKE-dependent — see CMakeLists.txt and
-// cholesky_decomposition.cpp.
-#include <lapacke.h>
-
-#include "include/common/workspace_arena.h"
-#else
 #include <algorithm>
 
 #include "include/common/macros.h"
-#endif
 
 namespace linalg
-{
-namespace detail
 {
 
 // Null/positivity checks shared by every solver_backend<T, Backend>::apply
@@ -28,222 +16,16 @@ namespace detail
 // which backend is active. There is no non-detail linear_solver() wrapper
 // to put this in any more — callers use
 // solver_backend<T, kActiveBackend>::apply directly.
-void check_solver_inputs(const void* m, const void* x, linalg_int lda)
+static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 {
     LOGGING_CHECK(m != nullptr && x != nullptr, "solver_backend::apply: m and x must not be null");
     LOGGING_CHECK(lda > 0, "solver_backend::apply: lda must be positive", lda);
 }
 
-// Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
-// (include/common/backend.h). Each `apply` below is an explicit
-// specialization of the one member linear_solver.h declares (not of the
-// whole class), so it's defined exactly once, here, for whichever (T,
-// Backend) pair is active — mkl.h / lapacke.h stay out of the public
-// header. Other translation units only ever see the header's declaration
-// and link against this definition; they never instantiate a body of their
-// own, so there's nothing to silently get wrong by omission.
-#if LINALG_HAS_MKL
-
-// No scratch of its own: an ILP64 MKL build's lu_decomposition also needs
-// none (see lu_decomposition.cpp), so `workspace`/`workspace_size` here only
-// ever forward unchanged into the nested lu_decomposition call.
-size_t solver_mkl_workspace_size(linalg_int lda, linear_solver_type type)
-{
-    switch (type)
-    {
-    case linear_solver_type::LU_LINEAR_SOLVER:
-        return lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda);
-    default:
-        return 0;
-    }
-}
-
-template <>
-void solver_backend<float, linalg_backend::mkl>::apply(float* m, linalg_int* pivot, linalg_int lda, float* x,
-    linear_solver_type type, void* workspace, size_t workspace_size)
-{
-    check_solver_inputs(m, x, lda);
-    switch (type)
-    {
-    case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_backend<float, kActiveBackend>::apply(m, lda, pivot, workspace, workspace_size))
-        {
-            LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
-        }
-        break;
-    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_backend<float, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-        {
-            LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
-        }
-        break;
-    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
-        break;
-    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
-        break;
-    }
-}
-
-template <>
-void solver_backend<double, linalg_backend::mkl>::apply(double* m, linalg_int* pivot, linalg_int lda, double* x,
-    linear_solver_type type, void* workspace, size_t workspace_size)
-{
-    check_solver_inputs(m, x, lda);
-    switch (type)
-    {
-    case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_backend<double, kActiveBackend>::apply(m, lda, pivot, workspace, workspace_size))
-        {
-            LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
-        }
-        break;
-    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_backend<double, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-        {
-            LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
-        }
-        break;
-    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
-        break;
-    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
-        break;
-    }
-}
-
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
-namespace
-{
-// See lu_decomposition.cpp: a generic LAPACKE's lapack_int does not
-// necessarily match linalg_int, so the pivot buffer (already populated
-// with linalg_int-widened values by lu_decomposition's own blas backend)
-// is narrowed back down for this call. `ipiv` (n lapack_int) is
-// caller-owned scratch, carved from the arena below.
-void to_lapack_pivots(const linalg_int* pivot, linalg_int n, lapack_int* ipiv)
-{
-    for (linalg_int i = 0; i < n; ++i)
-    {
-        ipiv[i] = static_cast<lapack_int>(pivot[i]);
-    }
-}
-
-// Layout: lu_decomposition's own nested workspace (0 unless LU_LINEAR_SOLVER
-// needs to factor), then the `ipiv` narrowing buffer (needed whenever getrs
-// is reached, i.e. both LU_LINEAR_SOLVER and LU_UPFRONT_LINEAR_SOLVER).
-template <typename T>
-size_t solver_blas_workspace_size(linalg_int lda, linear_solver_type type)
-{
-    detail::workspace_arena arena;
-    switch (type)
-    {
-    case linear_solver_type::LU_LINEAR_SOLVER:
-        arena.next<unsigned char>(
-            lu_decomposition_workspace_size(static_cast<const T*>(nullptr), lda));
-        arena.next<lapack_int>(static_cast<size_t>(lda));
-        break;
-    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-        arena.next<lapack_int>(static_cast<size_t>(lda));
-        break;
-    default:
-        break;
-    }
-    return arena.total_size();
-}
-
-}  // namespace
-
-template <>
-void solver_backend<float, linalg_backend::blas_lapacke>::apply(float* m, linalg_int* pivot, linalg_int lda,
-    float* x, linear_solver_type type, void* workspace, size_t workspace_size)
-{
-    check_solver_inputs(m, x, lda);
-    LOGGING_CHECK(workspace_size >= solver_blas_workspace_size<float>(lda, type),
-        "linear_solver: workspace_size too small");
-    detail::workspace_arena arena(workspace, workspace_size);
-    const auto              n = static_cast<lapack_int>(lda);
-    switch (type)
-    {
-    case linear_solver_type::LU_LINEAR_SOLVER:
-    {
-        auto* lu_ws = arena.next<unsigned char>(
-            lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda));
-        auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
-        if (lu_backend<float, kActiveBackend>::apply(m, lda, pivot, lu_ws,
-                lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda)))
-        {
-            to_lapack_pivots(pivot, lda, ipiv);
-            LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
-        }
-        break;
-    }
-    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_backend<float, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-        {
-            LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
-        }
-        break;
-    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-    {
-        auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
-        to_lapack_pivots(pivot, lda, ipiv);
-        LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
-        break;
-    }
-    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
-        break;
-    }
-}
-
-template <>
-void solver_backend<double, linalg_backend::blas_lapacke>::apply(double* m, linalg_int* pivot, linalg_int lda,
-    double* x, linear_solver_type type, void* workspace, size_t workspace_size)
-{
-    check_solver_inputs(m, x, lda);
-    LOGGING_CHECK(workspace_size >= solver_blas_workspace_size<double>(lda, type),
-        "linear_solver: workspace_size too small");
-    detail::workspace_arena arena(workspace, workspace_size);
-    const auto              n = static_cast<lapack_int>(lda);
-    switch (type)
-    {
-    case linear_solver_type::LU_LINEAR_SOLVER:
-    {
-        auto* lu_ws = arena.next<unsigned char>(
-            lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda));
-        auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
-        if (lu_backend<double, kActiveBackend>::apply(m, lda, pivot, lu_ws,
-                lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda)))
-        {
-            to_lapack_pivots(pivot, lda, ipiv);
-            LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
-        }
-        break;
-    }
-    case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_backend<double, kActiveBackend>::apply(m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
-        {
-            LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
-        }
-        break;
-    case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-    {
-        auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
-        to_lapack_pivots(pivot, lda, ipiv);
-        LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
-        break;
-    }
-    case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
-        break;
-    }
-}
-
-#else
+// Only the native specializations are defined here. The mkl and blas_lapacke
+// specializations live in mkl/linear_solver_mkl.cpp and
+// blas/linear_solver_blas.cpp, which the build compiles only when
+// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS is on.
 
 namespace
 {
@@ -331,7 +113,8 @@ void linear_solver_scalar_impl(
 
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
-        if (cholesky_backend<T, kActiveBackend>::apply(m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+        if (cholesky_backend<T, kActiveBackend>::apply(
+                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_solve(m, lda, x);
         }
@@ -347,49 +130,42 @@ void linear_solver_scalar_impl(
 }  // namespace
 
 template <>
-void solver_backend<float, linalg_backend::native>::apply(float* m, linalg_int* pivot, linalg_int lda, float* x,
-    linear_solver_type type, void* /*workspace*/, size_t /*workspace_size*/)
+void solver_backend<float, linalg_backend::native>::apply(float* m,
+    linalg_int*                                                  pivot,
+    linalg_int                                                   lda,
+    float*                                                       x,
+    linear_solver_type                                           type,
+    void* /*workspace*/,
+    size_t /*workspace_size*/)
 {
     check_solver_inputs(m, x, lda);
     linear_solver_scalar_impl(m, pivot, lda, x, type);
 }
 
 template <>
-void solver_backend<double, linalg_backend::native>::apply(double* m, linalg_int* pivot, linalg_int lda, double* x,
-    linear_solver_type type, void* /*workspace*/, size_t /*workspace_size*/)
+void solver_backend<double, linalg_backend::native>::apply(double* m,
+    linalg_int*                                                    pivot,
+    linalg_int                                                     lda,
+    double*                                                        x,
+    linear_solver_type                                             type,
+    void* /*workspace*/,
+    size_t /*workspace_size*/)
 {
     check_solver_inputs(m, x, lda);
     linear_solver_scalar_impl(m, pivot, lda, x, type);
 }
 
-#endif
-
-}  // namespace detail
-
-size_t linear_solver_workspace_size(const float* /*type_tag*/, linalg_int lda, linear_solver_type type)
+template <>
+size_t solver_backend<float, linalg_backend::native>::workspace_size(
+    linalg_int /*lda*/, linear_solver_type /*type*/)
 {
-#if LINALG_HAS_MKL
-    return detail::solver_mkl_workspace_size(lda, type);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::solver_blas_workspace_size<float>(lda, type);
-#else
-    (void)lda;
-    (void)type;
     return 0;
-#endif
 }
 
-size_t linear_solver_workspace_size(const double* /*type_tag*/, linalg_int lda, linear_solver_type type)
+template <>
+size_t solver_backend<double, linalg_backend::native>::workspace_size(
+    linalg_int /*lda*/, linear_solver_type /*type*/)
 {
-#if LINALG_HAS_MKL
-    return detail::solver_mkl_workspace_size(lda, type);
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::solver_blas_workspace_size<double>(lda, type);
-#else
-    (void)lda;
-    (void)type;
     return 0;
-#endif
 }
-
 }  // namespace linalg

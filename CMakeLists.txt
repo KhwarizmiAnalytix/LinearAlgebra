@@ -446,6 +446,20 @@ set(linalg_sources "")
 file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
 file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
+# The mkl/ and blas/ backend sources under src/matrix_operation/ include
+# mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
+# above and only appended — and only compiled — when LINALG_ENABLE_MKL /
+# LINALG_ENABLE_BLAS turned on the matching backend above.
+list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(mkl|blas)/")
+if (LINALG_ENABLE_MKL)
+  file(GLOB linalg_mkl_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/mkl/*.cpp")
+  list(APPEND linalg_sources ${linalg_mkl_sources})
+endif ()
+if (LINALG_ENABLE_BLAS)
+  file(GLOB linalg_blas_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp")
+  list(APPEND linalg_sources ${linalg_blas_sources})
+endif ()
+
 # .cu sources (under src/matrix_operation_gpu/, mirroring every other
 # implementation file) need an nvcc toolchain, so they are only globbed in —
 # and only compilable — when LINALG_ENABLE_CUBLAS turned on CUDA above.

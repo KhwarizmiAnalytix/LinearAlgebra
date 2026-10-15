@@ -11,8 +11,6 @@
 
 namespace linalg
 {
-namespace detail
-{
 namespace
 {
 
@@ -31,10 +29,17 @@ constexpr double kTheta13 = 5.371920351148152e0;
 constexpr double kPade3[]  = {120., 60., 12., 1.};
 constexpr double kPade5[]  = {30240., 15120., 3360., 420., 30., 1.};
 constexpr double kPade7[]  = {17297280., 8648640., 1995840., 277200., 25200., 1512., 56., 1.};
-constexpr double kPade9[] = {
-    17643225600., 8821612800., 2075673600., 302702400., 30270240., 2162160., 110880., 3960., 90., 1.};
-constexpr double kPade13[] = {
-    64764752532480000.,
+constexpr double kPade9[]  = {17643225600.,
+     8821612800.,
+     2075673600.,
+     302702400.,
+     30270240.,
+     2162160.,
+     110880.,
+     3960.,
+     90.,
+     1.};
+constexpr double kPade13[] = {64764752532480000.,
     32382376266240000.,
     7771770303897600.,
     1187353796428800.,
@@ -52,13 +57,12 @@ constexpr double kPade13[] = {
 template <typename T>
 void mat_mul(const T* a, const T* b, linalg_int n, T* c, void* gemm_ws, size_t gemm_bytes)
 {
-    linalg::detail::matmul_backend<T, linalg::kMatmulActiveBackend>::apply(
+    linalg::matmul_backend<T, linalg::kMatmulActiveBackend>::apply(
         false, false, n, n, n, a, n, b, n, c, n, gemm_ws, gemm_bytes);
 }
 
 // dst += c * src, both n x n and tightly packed.
-template <typename T>
-void add_scaled(T* dst, const T* src, linalg_int n, double c)
+template <typename T> void add_scaled(T* dst, const T* src, linalg_int n, double c)
 {
     const linalg_int nn = n * n;
     const T          cc = static_cast<T>(c);
@@ -69,8 +73,7 @@ void add_scaled(T* dst, const T* src, linalg_int n, double c)
 }
 
 // dst += c * I, n x n and tightly packed.
-template <typename T>
-void add_scaled_identity(T* dst, linalg_int n, double c)
+template <typename T> void add_scaled_identity(T* dst, linalg_int n, double c)
 {
     const T cc = static_cast<T>(c);
     for (linalg_int i = 0; i < n; ++i)
@@ -79,8 +82,7 @@ void add_scaled_identity(T* dst, linalg_int n, double c)
     }
 }
 
-template <typename T>
-void zero(T* dst, linalg_int n)
+template <typename T> void zero(T* dst, linalg_int n)
 {
     std::fill(dst, dst + n * n, T(0));
 }
@@ -90,8 +92,19 @@ void zero(T* dst, linalg_int n)
 // precomputed even powers A2 = A*A, A4 = A2*A2, A6 = A2*A4 (A4/A6 may be
 // null when the chosen degree doesn't need them).
 template <typename T>
-void build_pade(const T* A, const T* A2, const T* A4, const T* A6, linalg_int n, int degree, T* U, T* V, T* s1, T* s2,
-    T* s3, void* gemm_ws, size_t gemm_bytes)
+void build_pade(const T* A,
+    const T*             A2,
+    const T*             A4,
+    const T*             A6,
+    linalg_int           n,
+    int                  degree,
+    T*                   U,
+    T*                   V,
+    T*                   s1,
+    T*                   s2,
+    T*                   s3,
+    void*                gemm_ws,
+    size_t               gemm_bytes)
 {
     const auto nn = static_cast<std::size_t>(n) * static_cast<std::size_t>(n);
     switch (degree)
@@ -191,8 +204,7 @@ void build_pade(const T* A, const T* A2, const T* A4, const T* A6, linalg_int n,
     }
 }
 
-template <typename T>
-struct exponential_layout
+template <typename T> struct exponential_layout
 {
     T*             A;
     T*             A2;
@@ -213,7 +225,7 @@ struct exponential_layout
 template <typename T>
 exponential_layout<T> exponential_plan(detail::workspace_arena& arena, linalg_int n)
 {
-    const size_t        nn = static_cast<size_t>(n) * static_cast<size_t>(n);
+    const size_t          nn = static_cast<size_t>(n) * static_cast<size_t>(n);
     exponential_layout<T> p;
     p.A            = arena.next<T>(nn);
     p.A2           = arena.next<T>(nn);
@@ -225,16 +237,15 @@ exponential_layout<T> exponential_plan(detail::workspace_arena& arena, linalg_in
     p.s2           = arena.next<T>(nn);
     p.s3           = arena.next<T>(nn);
     p.pivot        = arena.next<linalg_int>(static_cast<size_t>(n));
-    p.invert_bytes = linalg::matrix_invert_workspace_size(
-        static_cast<const T*>(nullptr), n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
-    p.invert_ws    = arena.next<unsigned char>(p.invert_bytes);
-    p.gemm_bytes   = linalg::matrix_multiplication_workspace_size(static_cast<const T*>(nullptr), n, n, n);
-    p.gemm_ws      = arena.next<unsigned char>(p.gemm_bytes);
+    p.invert_bytes = linalg::invert_backend<T, linalg::kActiveBackend>::workspace_size(
+        n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    p.invert_ws  = arena.next<unsigned char>(p.invert_bytes);
+    p.gemm_bytes = linalg::matmul_backend<T, linalg::kMatmulActiveBackend>::workspace_size(n, n, n);
+    p.gemm_ws    = arena.next<unsigned char>(p.gemm_bytes);
     return p;
 }
 
-template <typename T>
-size_t matrix_exponential_workspace_size_impl(linalg_int n)
+template <typename T> size_t matrix_exponential_workspace_size_impl(linalg_int n)
 {
     detail::workspace_arena arena;
     exponential_plan<T>(arena, n);
@@ -242,8 +253,13 @@ size_t matrix_exponential_workspace_size_impl(linalg_int n)
 }
 
 template <typename T>
-void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* result, linalg_int ldc, void* workspace,
-    size_t workspace_size)
+void matrix_exponential_impl(const T* A_in,
+    linalg_int                        n,
+    linalg_int                        lda,
+    T*                                result,
+    linalg_int                        ldc,
+    void*                             workspace,
+    size_t                            workspace_size)
 {
     const linalg_int nn = n * n;
     LOGGING_CHECK(workspace_size >= matrix_exponential_workspace_size_impl<T>(n),
@@ -260,10 +276,14 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
         }
     }
 
-    const double norm1 = static_cast<double>(
-        linalg::detail::matrix_norm_backend<T, linalg::linalg_backend::native>::apply(A,
-            static_cast<linalg_long>(n), static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n), linalg::matrix_norm_type::ONE, nullptr, 0));
+    const double norm1 =
+        static_cast<double>(linalg::matrix_norm_backend<T, linalg::linalg_backend::native>::apply(A,
+            static_cast<linalg_long>(n),
+            static_cast<linalg_long>(n),
+            static_cast<linalg_long>(n),
+            linalg::matrix_norm_type::ONE,
+            nullptr,
+            0));
 
     int degree = 13;
     int s      = 0;
@@ -317,19 +337,36 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
         mat_mul(A2, A4, n, A6, bufs.gemm_ws, bufs.gemm_bytes);
     }
 
-    build_pade(A, A2, degree >= 5 ? A4 : nullptr, degree >= 7 ? A6 : nullptr, n, degree, bufs.U, bufs.V, bufs.s1,
-        bufs.s2, bufs.s3, bufs.gemm_ws, bufs.gemm_bytes);
+    build_pade(A,
+        A2,
+        degree >= 5 ? A4 : nullptr,
+        degree >= 7 ? A6 : nullptr,
+        n,
+        degree,
+        bufs.U,
+        bufs.V,
+        bufs.s1,
+        bufs.s2,
+        bufs.s3,
+        bufs.gemm_ws,
+        bufs.gemm_bytes);
 
     T* denom     = bufs.s1;
     T* numerator = bufs.s2;
     for (linalg_int i = 0; i < nn; ++i)
     {
-        denom[static_cast<std::size_t>(i)]     = bufs.V[static_cast<std::size_t>(i)] - bufs.U[static_cast<std::size_t>(i)];
-        numerator[static_cast<std::size_t>(i)] = bufs.V[static_cast<std::size_t>(i)] + bufs.U[static_cast<std::size_t>(i)];
+        denom[static_cast<std::size_t>(i)] =
+            bufs.V[static_cast<std::size_t>(i)] - bufs.U[static_cast<std::size_t>(i)];
+        numerator[static_cast<std::size_t>(i)] =
+            bufs.V[static_cast<std::size_t>(i)] + bufs.U[static_cast<std::size_t>(i)];
     }
 
-    linalg::detail::invert_backend<T, linalg::kActiveBackend>::apply(denom, bufs.pivot, n,
-        linalg::linear_solver_type::LU_LINEAR_SOLVER, bufs.invert_ws, bufs.invert_bytes);
+    linalg::invert_backend<T, linalg::kActiveBackend>::apply(denom,
+        bufs.pivot,
+        n,
+        linalg::linear_solver_type::LU_LINEAR_SOLVER,
+        bufs.invert_ws,
+        bufs.invert_bytes);
 
     T* R   = bufs.s3;
     T* tmp = A;
@@ -353,33 +390,47 @@ void matrix_exponential_impl(const T* A_in, linalg_int n, linalg_int lda, T* res
 }  // namespace
 
 template <>
-void matrix_exponential_backend<float, linalg_backend::native>::apply(
-    const float* A, linalg_int n, linalg_int lda, float* result, linalg_int ldc, void* workspace, size_t workspace_size)
+void matrix_exponential_backend<float, linalg_backend::native>::apply(const float* A,
+    linalg_int                                                                     n,
+    linalg_int                                                                     lda,
+    float*                                                                         result,
+    linalg_int                                                                     ldc,
+    void*                                                                          workspace,
+    size_t                                                                         workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && result != nullptr, "matrix_exponential_backend::apply: A and result must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0, "matrix_exponential_backend::apply: n/lda/ldc must be positive");
+    LOGGING_CHECK(A != nullptr && result != nullptr,
+        "matrix_exponential_backend::apply: A and result must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0,
+        "matrix_exponential_backend::apply: n/lda/ldc must be positive");
     matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
 }
 
 template <>
-void matrix_exponential_backend<double, linalg_backend::native>::apply(
-    const double* A, linalg_int n, linalg_int lda, double* result, linalg_int ldc, void* workspace, size_t workspace_size)
+void matrix_exponential_backend<double, linalg_backend::native>::apply(const double* A,
+    linalg_int                                                                       n,
+    linalg_int                                                                       lda,
+    double*                                                                          result,
+    linalg_int                                                                       ldc,
+    void*                                                                            workspace,
+    size_t                                                                           workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && result != nullptr, "matrix_exponential_backend::apply: A and result must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0, "matrix_exponential_backend::apply: n/lda/ldc must be positive");
+    LOGGING_CHECK(A != nullptr && result != nullptr,
+        "matrix_exponential_backend::apply: A and result must not be null");
+    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0,
+        "matrix_exponential_backend::apply: n/lda/ldc must be positive");
     matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
 }
 
-}  // namespace detail
-
-size_t matrix_exponential_workspace_size(const float* /*type_tag*/, linalg_int n)
+template <>
+size_t matrix_exponential_backend<float, linalg_backend::native>::workspace_size(linalg_int n)
 {
-    return detail::matrix_exponential_workspace_size_impl<float>(n);
+    return matrix_exponential_workspace_size_impl<float>(n);
 }
 
-size_t matrix_exponential_workspace_size(const double* /*type_tag*/, linalg_int n)
+template <>
+size_t matrix_exponential_backend<double, linalg_backend::native>::workspace_size(linalg_int n)
 {
-    return detail::matrix_exponential_workspace_size_impl<double>(n);
+    return matrix_exponential_workspace_size_impl<double>(n);
 }
 
 }  // namespace linalg

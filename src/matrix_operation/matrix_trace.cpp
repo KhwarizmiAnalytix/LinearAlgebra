@@ -4,8 +4,6 @@
 
 namespace linalg
 {
-namespace detail
-{
 
 template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int lda)
 {
@@ -20,16 +18,17 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 }
 
 template <>
-float matrix_trace_backend<float, linalg_backend::native>::apply(const float* A, linalg_int n, linalg_int lda)
+float matrix_trace_backend<float, linalg_backend::native>::apply(
+    const float* A, linalg_int n, linalg_int lda)
 {
     return matrix_trace_impl(A, n, lda);
 }
 
 template <>
-double matrix_trace_backend<double, linalg_backend::native>::apply(const double* A, linalg_int n, linalg_int lda)
+double matrix_trace_backend<double, linalg_backend::native>::apply(
+    const double* A, linalg_int n, linalg_int lda)
 {
     return matrix_trace_impl(A, n, lda);
 }
 
-}  // namespace detail
 }  // namespace linalg

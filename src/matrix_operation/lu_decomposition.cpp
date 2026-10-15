@@ -4,28 +4,14 @@
 
 #include "include/common/backend.h"
 
-#if LINALG_HAS_MKL
-#include <mkl_lapacke.h>
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-// LAPACKE-dependent — see CMakeLists.txt and
-// cholesky_decomposition.cpp: Apple's Accelerate framework has no LAPACKE
-// wrapper, so this branch only compiles when real lapacke.h exists;
-// otherwise the #else below falls through to the scalar implementation.
-#include <lapacke.h>
-
-#include "include/common/workspace_arena.h"
-#else
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
 
 #include "include/common/macros.h"
-#endif
 
 namespace linalg
-{
-namespace detail
 {
 
 // Null/positivity checks shared by every lu_backend<T, Backend>::apply
@@ -33,118 +19,17 @@ namespace detail
 // same validation regardless of which backend is active. There is no
 // non-detail lu_decomposition() wrapper to put this in any more — callers
 // use lu_backend<T, kActiveBackend>::apply directly.
-void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
+static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 {
-    LOGGING_CHECK(m != nullptr && pivot != nullptr, "lu_backend::apply: m and pivot must not be null");
+    LOGGING_CHECK(
+        m != nullptr && pivot != nullptr, "lu_backend::apply: m and pivot must not be null");
     LOGGING_CHECK(lda > 0, "lu_backend::apply: lda must be positive", lda);
 }
 
-// Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
-// (include/common/backend.h). Each `apply` below is an explicit
-// specialization of the one member lu_decomposition.h declares (not of the
-// whole class), so it's defined exactly once, here, for whichever (T,
-// Backend) pair is active — mkl.h / lapacke.h stay out of the public
-// header. Other translation units only ever see the header's declaration
-// and link against this definition; they never instantiate a body of their
-// own, so there's nothing to silently get wrong by omission.
-#if LINALG_HAS_MKL
-
-// No scratch needed: an ILP64 MKL build has MKL_INT == linalg_int, so the
-// caller's pivot buffer is passed straight through to getrf.
-template <>
-bool lu_backend<float, linalg_backend::mkl>::apply(
-    float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
-{
-    check_lu_inputs(m, pivot, lda);
-    return LAPACKE_sgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
-}
-
-template <>
-bool lu_backend<double, linalg_backend::mkl>::apply(
-    double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
-{
-    check_lu_inputs(m, pivot, lda);
-    return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
-}
-
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
-namespace
-{
-// lapack_int (a generic LAPACKE's pivot element type, typically 32-bit even
-// on 64-bit platforms) does not necessarily match linalg_int (64-bit), so
-// the caller's pivot buffer can't be passed straight through — unlike the
-// mkl backend, which assumes an ILP64 MKL build where MKL_INT == linalg_int.
-// `ipiv` (n lapack_int) is caller-owned scratch, carved from `workspace`.
-size_t lu_blas_workspace_size(linalg_int lda)
-{
-    detail::workspace_arena arena;
-    arena.next<lapack_int>(static_cast<size_t>(lda));
-    return arena.total_size();
-}
-
-bool lu_blas_impl(lapack_int (*getrf)(int, lapack_int, lapack_int, void*, lapack_int, lapack_int*),
-    void*         m,
-    linalg_int  lda,
-    linalg_int* pivot,
-    void*       workspace,
-    size_t      workspace_size)
-{
-    LOGGING_CHECK(workspace_size >= lu_blas_workspace_size(lda), "lu_decomposition: workspace_size too small");
-    const auto              n = static_cast<lapack_int>(lda);
-    detail::workspace_arena arena(workspace, workspace_size);
-    lapack_int*              ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto               info = getrf(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
-    for (lapack_int i = 0; i < n; ++i)
-    {
-        pivot[i] = static_cast<linalg_int>(ipiv[i]);
-    }
-    return info == 0;
-}
-}  // namespace
-
-size_t lu_blas_workspace_size_f32(linalg_int lda)
-{
-    return lu_blas_workspace_size(lda);
-}
-
-size_t lu_blas_workspace_size_f64(linalg_int lda)
-{
-    return lu_blas_workspace_size(lda);
-}
-
-template <>
-bool lu_backend<float, linalg_backend::blas_lapacke>::apply(
-    float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
-{
-    check_lu_inputs(m, pivot, lda);
-    return lu_blas_impl(
-        [](int order, lapack_int r, lapack_int c, void* a, lapack_int ld, lapack_int* ip)
-        { return LAPACKE_sgetrf(order, r, c, static_cast<float*>(a), ld, ip); },
-        m,
-        lda,
-        pivot,
-        workspace,
-        workspace_size);
-}
-
-template <>
-bool lu_backend<double, linalg_backend::blas_lapacke>::apply(
-    double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
-{
-    check_lu_inputs(m, pivot, lda);
-    return lu_blas_impl(
-        [](int order, lapack_int r, lapack_int c, void* a, lapack_int ld, lapack_int* ip)
-        { return LAPACKE_dgetrf(order, r, c, static_cast<double*>(a), ld, ip); },
-        m,
-        lda,
-        pivot,
-        workspace,
-        workspace_size);
-}
-
-#else
+// Only the native specializations are defined here. The mkl and blas_lapacke
+// specializations live in mkl/lu_decomposition_mkl.cpp and
+// blas/lu_decomposition_blas.cpp, which the build compiles only when
+// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS is on.
 
 namespace
 {
@@ -240,34 +125,13 @@ bool lu_backend<double, linalg_backend::native>::apply(
     return lu_decomposition_scalar_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
 }
 
-#endif
-
-}  // namespace detail
-
-size_t lu_decomposition_workspace_size(const float* /*type_tag*/, linalg_int lda)
+template <> size_t lu_backend<float, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
 {
-#if LINALG_HAS_MKL
-    (void)lda;
     return 0;
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::lu_blas_workspace_size_f32(lda);
-#else
-    (void)lda;
-    return 0;
-#endif
 }
 
-size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int lda)
+template <> size_t lu_backend<double, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
 {
-#if LINALG_HAS_MKL
-    (void)lda;
     return 0;
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    return detail::lu_blas_workspace_size_f64(lda);
-#else
-    (void)lda;
-    return 0;
-#endif
 }
-
 }  // namespace linalg

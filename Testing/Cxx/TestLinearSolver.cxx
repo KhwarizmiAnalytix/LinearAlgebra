@@ -102,7 +102,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
     std::vector<value_t> b = matvec(A, x_ref);
 
     std::vector<value_t> x = b;
-    linalg::detail::solver_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
         R.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
@@ -116,7 +116,7 @@ void test_linear_solver(std::size_t dim, double tolerance)
 
     x        = b;
     auto R2  = A;
-    linalg::detail::solver_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
         R2.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
@@ -130,10 +130,10 @@ void test_linear_solver(std::size_t dim, double tolerance)
 
     x       = b;
     auto R3 = A;
-    const auto lu_ws_size = linalg::linear_solver_workspace_size(static_cast<const value_t*>(nullptr),
+    const auto lu_ws_size = linalg::solver_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
     std::vector<unsigned char> lu_ws(lu_ws_size);
-    linalg::detail::solver_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
         R3.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),

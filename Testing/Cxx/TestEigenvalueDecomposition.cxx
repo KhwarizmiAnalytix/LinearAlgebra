@@ -33,16 +33,14 @@ template <> struct EigenTolerance<double>
 template <typename value_t>
 std::vector<unsigned char> symmetric_eigen_workspace(linalg_int n)
 {
-    const auto bytes = linalg::symmetric_eigenvalue_decomposition_workspace_size(
-        static_cast<const value_t*>(nullptr), n);
+    const auto bytes = linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(n);
     return std::vector<unsigned char>(bytes);
 }
 
 template <typename value_t>
 std::vector<unsigned char> general_eigen_workspace(linalg_int n, bool compute_eigenvectors)
 {
-    const auto bytes = linalg::eigenvalue_decomposition_workspace_size(
-        static_cast<const value_t*>(nullptr), n, compute_eigenvectors);
+    const auto bytes = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(n, compute_eigenvectors);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -58,10 +56,10 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
     }
     dense_matrix<value_t> Q(n, n);
     dense_matrix<value_t> R(n, n);
-    const auto qr_ws_size = linalg::qr_decomposition_workspace_size(
-        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    const auto qr_ws_size = linalg::qr_backend<value_t, linalg::kActiveBackend>::workspace_size(
+        static_cast<linalg_long>(n), static_cast<linalg_long>(n));
     std::vector<unsigned char> qr_ws(qr_ws_size);
-    linalg::detail::qr_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::qr_backend<value_t, linalg::kActiveBackend>::apply(
         static_cast<linalg_long>(n),
         static_cast<linalg_long>(n),
         R0.begin(),
@@ -96,7 +94,7 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
     std::vector<value_t>  evals(n);
     dense_matrix<value_t> evecs(n, n);
     auto                  eigen_ws = symmetric_eigen_workspace<value_t>(static_cast<linalg_int>(n));
-    const bool            ok = linalg::detail::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    const bool            ok = linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::apply(
         A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), evals.data(), evecs.begin(),
         static_cast<linalg_int>(n), eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
@@ -158,10 +156,10 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
         Pinv.begin()[i] = P.begin()[i];
     }
     std::vector<linalg_int> pivot(n);
-    const auto invert_ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+    const auto invert_ws_size = linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
     std::vector<unsigned char> invert_ws(invert_ws_size);
-    linalg::detail::invert_backend<value_t, linalg::kActiveBackend>::apply(Pinv.begin(), pivot.data(),
+    linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(Pinv.begin(), pivot.data(),
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER, invert_ws.data(),
         invert_ws_size);
 
@@ -188,7 +186,7 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
     std::vector<value_t> er(n);
     std::vector<value_t> ei(n);
     auto                 eigen_ws = general_eigen_workspace<value_t>(static_cast<linalg_int>(n), false);
-    const bool           ok = linalg::detail::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    const bool           ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
         A.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n), er.data(), ei.data(), nullptr,
         static_cast<linalg_int>(n), eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
@@ -217,7 +215,7 @@ template <typename value_t> void test_general_eigen_complex_pair()
     value_t er[2];
     value_t ei[2];
     auto    eigen_ws = general_eigen_workspace<value_t>(2, false);
-    const bool ok = linalg::detail::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
         A.begin(), 2, 2, er, ei, nullptr, 2, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
@@ -243,7 +241,7 @@ template <typename value_t> void test_general_eigen_eigenvectors()
     value_t                ei[3];
     dense_matrix<value_t>  evecs(3, 3);
     auto                   eigen_ws = general_eigen_workspace<value_t>(3, true);
-    const bool ok = linalg::detail::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
         A.begin(), 3, 3, er, ei, evecs.begin(), 3, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
@@ -307,10 +305,10 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     // MKL's LAPACKE *geev call packs complex eigenvectors natively (see
     // eigenvalue_decomposition.h); only the portable scalar fallback, which
     // has no complex arithmetic, throws for this case.
-    EXPECT_NO_THROW((linalg::detail::general_eigen_backend<double, linalg::kActiveBackend>::apply(
+    EXPECT_NO_THROW((linalg::general_eigen_backend<double, linalg::kActiveBackend>::apply(
         A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
 #else
-    EXPECT_THROW((linalg::detail::general_eigen_backend<double, linalg::kActiveBackend>::apply(
+    EXPECT_THROW((linalg::general_eigen_backend<double, linalg::kActiveBackend>::apply(
         A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())), std::exception);
 #endif
 }

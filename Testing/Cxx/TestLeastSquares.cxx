@@ -50,10 +50,10 @@ template <typename value_t> void test_least_squares_overdetermined()
     }
 
     dense_matrix<value_t> X(columns, nrhs);
-    const auto ws_size = linalg::least_squares_solve_workspace_size(
-        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    const auto ws_size = linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::detail::least_squares_backend<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(nrhs),
@@ -101,10 +101,10 @@ template <typename value_t> void test_least_squares_underdetermined()
     }
 
     dense_matrix<value_t> X(columns, nrhs);
-    const auto ws_size = linalg::least_squares_solve_workspace_size(
-        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    const auto ws_size = linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::detail::least_squares_backend<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares_backend<value_t, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(nrhs),

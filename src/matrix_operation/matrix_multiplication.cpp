@@ -1,17 +1,7 @@
 #include "include/matrix_operation/matrix_multiplication.h"
 
 #include <include/logging.h>
-#include "include/common/narrow.h"
 
-#if LINALG_HAS_MKL
-#include <mkl.h>
-#elif LINALG_HAS_BLAS
-#if LINALG_HAS_ACCELERATE
-#include <Accelerate/Accelerate.h>
-#else
-#include <cblas.h>
-#endif
-#else
 #if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(push)
 #pragma warning(disable : 4244)
@@ -26,11 +16,8 @@
 #if LINALG_HAS_VECTORIZATION
 #include "include/common/packet.h"
 #endif
-#endif
 
 namespace linalg
-{
-namespace detail
 {
 
 // Null/positivity checks shared by every matmul_backend<T, Backend>::apply
@@ -38,174 +25,26 @@ namespace detail
 // which backend is active. There is no non-detail matrix_multiplication()
 // wrapper to put this in any more — callers use
 // matmul_backend<T, kMatmulActiveBackend>::apply directly.
-void check_matmul_inputs(const void* a, const void* b, const void* c, linalg_int rows, linalg_int columns,
-    linalg_int depth, linalg_int lda, linalg_int ldb, linalg_int ldc)
+static void check_matmul_inputs(const void* a,
+    const void*                             b,
+    const void*                             c,
+    linalg_int                              rows,
+    linalg_int                              columns,
+    linalg_int                              depth,
+    linalg_int                              lda,
+    linalg_int                              ldb,
+    linalg_int                              ldc)
 {
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "matmul_backend::apply: a, b, and c must not be null");
+    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr,
+        "matmul_backend::apply: a, b, and c must not be null");
     LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
         "matmul_backend::apply: rows/columns/depth/lda/ldb/ldc must be positive");
 }
 
-// Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that determines
-// linalg::kMatmulActiveBackend (include/matrix_operation/
-// matrix_multiplication.h — this op's own backend axis, selected by
-// LINALG_HAS_BLAS alone rather than LINALG_HAS_BLAS && LINALG_HAS_LAPACKE,
-// since it only needs cblas_?gemm). Each `apply` below is an explicit
-// specialization of the one member matrix_multiplication.h declares (not
-// of the whole class), so it's defined exactly once, here, for whichever
-// (T, Backend) pair is active — mkl.h / cblas.h stay out of the public
-// header. Other translation units only ever see the header's declaration
-// and link against this definition; they never instantiate a body of their
-// own, so there's nothing to silently get wrong by omission.
-#if LINALG_HAS_MKL
-template <>
-void matmul_backend<float, linalg_backend::mkl>::apply(bool transpose_a,
-    bool                 transpose_b,
-    linalg_int         rows,
-    linalg_int         columns,
-    linalg_int         depth,
-    float const*         a,
-    linalg_int         lda,
-    float const*         b,
-    linalg_int         ldb,
-    float*               c,
-    linalg_int         ldc,
-    void*              /*workspace*/,
-    size_t             /*workspace_size*/)
-{
-    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
-    cblas_sgemm(CblasRowMajor,
-        transpose_a ? CblasTrans : CblasNoTrans,
-        transpose_b ? CblasTrans : CblasNoTrans,
-        rows,
-        columns,
-        depth,
-        1.F,
-        a,
-        lda,
-        b,
-        ldb,
-        0.F,
-        c,
-        ldc);
-}
-
-template <>
-void matmul_backend<double, linalg_backend::mkl>::apply(bool transpose_a,
-    bool                 transpose_b,
-    linalg_int         rows,
-    linalg_int         columns,
-    linalg_int         depth,
-    double const*        a,
-    linalg_int         lda,
-    double const*        b,
-    linalg_int         ldb,
-    double*              c,
-    linalg_int         ldc,
-    void*              /*workspace*/,
-    size_t             /*workspace_size*/)
-{
-    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
-    cblas_dgemm(CblasRowMajor,
-        transpose_a ? CblasTrans : CblasNoTrans,
-        transpose_b ? CblasTrans : CblasNoTrans,
-        rows,
-        columns,
-        depth,
-        1.,
-        a,
-        lda,
-        b,
-        ldb,
-        0.,
-        c,
-        ldc);
-}
-#elif LINALG_HAS_BLAS
-template <>
-void matmul_backend<float, linalg_backend::blas_lapacke>::apply(bool transpose_a,
-    bool                  transpose_b,
-    linalg_int          rows,
-    linalg_int          columns,
-    linalg_int          depth,
-    float const*          a,
-    linalg_int          lda,
-    float const*          b,
-    linalg_int          ldb,
-    float*                c,
-    linalg_int          ldc,
-    void*               /*workspace*/,
-    size_t              /*workspace_size*/)
-{
-    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
-    // macOS Accelerate deprecates the legacy LP64 cblas_* entry points in favor
-    // of an ILP64 interface (ACCELERATE_NEW_LAPACK); switching would change the
-    // integer width LAPACKE/checked_narrow assume throughout this codebase, so
-    // we keep the legacy interface deliberately rather than as an oversight.
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-    cblas_sgemm(CblasRowMajor,
-        transpose_a ? CblasTrans : CblasNoTrans,
-        transpose_b ? CblasTrans : CblasNoTrans,
-        detail::checked_narrow<int>(rows),
-        detail::checked_narrow<int>(columns),
-        detail::checked_narrow<int>(depth),
-        1.F,
-        a,
-        detail::checked_narrow<int>(lda),
-        b,
-        detail::checked_narrow<int>(ldb),
-        0.F,
-        c,
-        detail::checked_narrow<int>(ldc));
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-}
-
-template <>
-void matmul_backend<double, linalg_backend::blas_lapacke>::apply(bool transpose_a,
-    bool                  transpose_b,
-    linalg_int          rows,
-    linalg_int          columns,
-    linalg_int          depth,
-    double const*         a,
-    linalg_int          lda,
-    double const*         b,
-    linalg_int          ldb,
-    double*               c,
-    linalg_int          ldc,
-    void*               /*workspace*/,
-    size_t              /*workspace_size*/)
-{
-    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
-    // See the LP64-vs-ILP64 note in matmul_blas_f32 above.
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-    cblas_dgemm(CblasRowMajor,
-        transpose_a ? CblasTrans : CblasNoTrans,
-        transpose_b ? CblasTrans : CblasNoTrans,
-        detail::checked_narrow<int>(rows),
-        detail::checked_narrow<int>(columns),
-        detail::checked_narrow<int>(depth),
-        1.,
-        a,
-        detail::checked_narrow<int>(lda),
-        b,
-        detail::checked_narrow<int>(ldb),
-        0.,
-        c,
-        detail::checked_narrow<int>(ldc));
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-}
-#else
+// Only the native specializations are defined here. The mkl and blas_lapacke
+// specializations live in mkl/matrix_multiplication_mkl.cpp and
+// blas/matrix_multiplication_blas.cpp, which the build compiles only when
+// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS is on.
 
 #define A(i, j) a[(i) * lda + (j)]
 #define B(i, j) b[(i) * ldb + (j)]
@@ -214,8 +53,7 @@ void matmul_backend<double, linalg_backend::blas_lapacke>::apply(bool transpose_
 namespace
 {
 template <typename value_t, bool ColMajor = true>
-constexpr const value_t& element(
-    value_t const* data, linalg_int i, linalg_int j, linalg_int ld)
+constexpr const value_t& element(value_t const* data, linalg_int i, linalg_int j, linalg_int ld)
 {
     if constexpr (ColMajor)
     {
@@ -402,18 +240,18 @@ linalg_int blocking_sizes(
 template <typename value_t,
     linalg_int Pack1,
     linalg_int Pack2,
-    bool         ColMajor,
-    bool         PanelMode = false>
+    bool       ColMajor,
+    bool       PanelMode = false>
 void pack_lhs(  // NOLINT
     value_t*       block_A,
     const value_t* data,
-    linalg_int   lda,
-    linalg_int   depth,
-    linalg_int   rows,
-    linalg_int   stride = 0,
-    linalg_int   offset = 0)
+    linalg_int     lda,
+    linalg_int     depth,
+    linalg_int     rows,
+    linalg_int     stride = 0,
+    linalg_int     offset = 0)
 {
-    using packet_t                             = typename packet<value_t>::packet_t;
+    using packet_t                         = typename packet<value_t>::packet_t;
     static constexpr linalg_int PacketSize = packet<value_t>::size;
 
     linalg_int count = 0;
@@ -429,8 +267,8 @@ void pack_lhs(  // NOLINT
         const linalg_int peeled_mc1 =
             Pack1 >= 1 * PacketSize ? (rows / (1 * PacketSize)) * (1 * PacketSize) : 0;
         const linalg_int peeled_mc0 = Pack2 >= 1 * PacketSize ? peeled_mc1
-                                        : Pack2 > 1             ? (rows / Pack2) * Pack2
-                                                                : 0;
+                                      : Pack2 > 1             ? (rows / Pack2) * Pack2
+                                                              : 0;
 
         linalg_int i = 0;
 
@@ -652,11 +490,11 @@ template <typename value_t, linalg_int nr, linalg_int PacketSize, bool ColMajor,
 void pack_rhs(  // NOLINT
     value_t*       blockB,
     const value_t* data,
-    linalg_int   ldb,
-    linalg_int   depth,
-    linalg_int   cols,
-    linalg_int   stride = 0,
-    linalg_int   offset = 0)
+    linalg_int     ldb,
+    linalg_int     depth,
+    linalg_int     cols,
+    linalg_int     stride = 0,
+    linalg_int     offset = 0)
 {
     using packet_t = typename packet<value_t>::packet_t;
 
@@ -680,7 +518,7 @@ void pack_rhs(  // NOLINT
                 const auto* const dm1 = &element<value_t, ColMajor>(data, 0, j2 + 1, ldb);
                 const auto* const dm2 = &element<value_t, ColMajor>(data, 0, j2 + 2, ldb);
                 const auto* const dm3 = &element<value_t, ColMajor>(data, 0, j2 + 3, ldb);
-                linalg_int      k   = 0;
+                linalg_int        k   = 0;
                 if constexpr ((PacketSize % 4) == 0)
                 {
                     for (; k < peeled_k; k += PacketSize)
@@ -692,8 +530,7 @@ void pack_rhs(  // NOLINT
                         packet<value_t>::loadu(dm2 + k, tmp[2]);
                         packet<value_t>::loadu(dm3 + k, tmp[3]);
 
-                        constexpr linalg_int Np =
-                            (PacketSize % 4) == 0 ? 4 : PacketSize;  // NOLINT
+                        constexpr linalg_int Np = (PacketSize % 4) == 0 ? 4 : PacketSize;  // NOLINT
 
                         packet<value_t>::template ptranspose<Np>(tmp);
                         packet<value_t>::storeu(tmp[0], blockB + count);
@@ -798,9 +635,9 @@ void pack_rhs(  // NOLINT
 
 template <typename value_t, linalg_int mr, linalg_int nr>
 void gemm(  // NOLINT
-    value_t*           res,
-    const value_t*     blockA,
-    const value_t*     blockB,
+    value_t*         res,
+    const value_t*   blockA,
+    const value_t*   blockB,
     linalg_int       ldc,
     linalg_int       rows,
     linalg_int       depth,
@@ -811,7 +648,7 @@ void gemm(  // NOLINT
     linalg_int       offsetA = 0,
     linalg_int       offsetB = 0)  // NOLINT
 {
-    using Traits = gemm_traits<value_t>;
+    using Traits   = gemm_traits<value_t>;
     using packet_t = typename packet<value_t>::packet_t;
     if (strideA == -1)
     {
@@ -827,15 +664,15 @@ void gemm(  // NOLINT
     static constexpr linalg_int lhs_2offset         = 2 * Traits::LhsProgress;
 
     const linalg_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
-    const linalg_int peeled_mc3 = mr >= lhs_3offset ? (rows / (lhs_3offset)) * (lhs_3offset) : 0;
+    const linalg_int peeled_mc3   = mr >= lhs_3offset ? (rows / (lhs_3offset)) * (lhs_3offset) : 0;
     const linalg_int peeled_mc2 =
         mr >= lhs_2offset ? peeled_mc3 + ((rows - peeled_mc3) / (lhs_2offset)) * (lhs_2offset) : 0;
     const linalg_int peeled_mc1 =
         mr >= 1 * Traits::LhsProgress ? (rows / Traits::LhsProgress) * (Traits::LhsProgress) : 0;
     // NOTE Such a large peeling factor is important for large matrices (~ +5% when >1000 on
     // Haswell)
-    static constexpr linalg_int pk = 8;
-    const linalg_int peeled_kc = depth & ~(pk - 1);
+    static constexpr linalg_int pk        = 8;
+    const linalg_int            peeled_kc = depth & ~(pk - 1);
 
     //---------- Process 3 * LhsProgress rows at once ----------
     // This corresponds to 3*LhsProgress x nr register blocks.
@@ -900,26 +737,26 @@ void gemm(  // NOLINT
 #define EIGEN_GEBP_ONESTEP(K)                                                                      \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                       \
-        packet<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                        \
-        packet<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                        \
-        packet<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                        \
-        packet<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                       \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                       \
-        packet<value_t>::fma(A2, B_0, C8, C8);                                                       \
-        packet<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
-        packet<value_t>::fma(A0, B_0, C1, C1);                                                       \
-        packet<value_t>::fma(A1, B_0, C5, C5);                                                       \
-        packet<value_t>::fma(A2, B_0, C9, C9);                                                       \
-        packet<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
-        packet<value_t>::fma(A0, B_0, C2, C2);                                                       \
-        packet<value_t>::fma(A1, B_0, C6, C6);                                                       \
-        packet<value_t>::fma(A2, B_0, C10, C10);                                                     \
-        packet<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress), B_0);                     \
-        packet<value_t>::fma(A0, B_0, C3, C3);                                                       \
-        packet<value_t>::fma(A1, B_0, C7, C7);                                                       \
-        packet<value_t>::fma(A2, B_0, C11, C11);                                                     \
+        packet<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                     \
+        packet<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                      \
+        packet<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                      \
+        packet<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                      \
+        packet<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
+        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
+        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
+        packet<value_t>::fma(A2, B_0, C8, C8);                                                     \
+        packet<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
+        packet<value_t>::fma(A0, B_0, C1, C1);                                                     \
+        packet<value_t>::fma(A1, B_0, C5, C5);                                                     \
+        packet<value_t>::fma(A2, B_0, C9, C9);                                                     \
+        packet<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
+        packet<value_t>::fma(A0, B_0, C2, C2);                                                     \
+        packet<value_t>::fma(A1, B_0, C6, C6);                                                     \
+        packet<value_t>::fma(A2, B_0, C10, C10);                                                   \
+        packet<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
+        packet<value_t>::fma(A0, B_0, C3, C3);                                                     \
+        packet<value_t>::fma(A1, B_0, C7, C7);                                                     \
+        packet<value_t>::fma(A2, B_0, C11, C11);                                                   \
     } while (false)
 
                         packet<value_t>::prefetch(blB);
@@ -1017,7 +854,7 @@ void gemm(  // NOLINT
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
-                    packet_t         A0, A1, A2;  // NOLINT
+                    packet_t       A0, A1, A2;  // NOLINT
 
                     for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
@@ -1025,13 +862,13 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                        \
-        packet<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                        \
-        packet<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                        \
-        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                             \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                       \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                       \
-        packet<value_t>::fma(A2, B_0, C8, C8);                                                       \
+        packet<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                      \
+        packet<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                      \
+        packet<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                      \
+        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                           \
+        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
+        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
+        packet<value_t>::fma(A2, B_0, C8, C8);                                                     \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -1083,8 +920,7 @@ void gemm(  // NOLINT
 
         for (linalg_int i1 = peeled_mc3; i1 < peeled_mc2; i1 += actual_panel_rows)
         {
-            const auto actual_panel_end =
-                std::min<linalg_int>(i1 + actual_panel_rows, peeled_mc2);
+            const auto actual_panel_end = std::min<linalg_int>(i1 + actual_panel_rows, peeled_mc2);
             for (linalg_int j2 = 0; j2 < packet_cols4; j2 += nr)
             {
                 for (linalg_int i = i1; i < actual_panel_end; i += lhs_2offset)
@@ -1132,18 +968,18 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                        \
-        packet<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                        \
+        packet<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                      \
+        packet<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                      \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
-        packet<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                       \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                       \
-        packet<value_t>::fma(A0, B1, C1, C1);                                                        \
-        packet<value_t>::fma(A1, B1, C5, C5);                                                        \
-        packet<value_t>::fma(A0, B2, C2, C2);                                                        \
-        packet<value_t>::fma(A1, B2, C6, C6);                                                        \
-        packet<value_t>::fma(A0, B3, C3, C3);                                                        \
-        packet<value_t>::fma(A1, B3, C7, C7);                                                        \
+        packet<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                        \
+        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
+        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
+        packet<value_t>::fma(A0, B1, C1, C1);                                                      \
+        packet<value_t>::fma(A1, B1, C5, C5);                                                      \
+        packet<value_t>::fma(A0, B2, C2, C2);                                                      \
+        packet<value_t>::fma(A1, B2, C6, C6);                                                      \
+        packet<value_t>::fma(A0, B3, C3, C3);                                                      \
+        packet<value_t>::fma(A1, B3, C7, C7);                                                      \
     } while (false)
 
                         packet<value_t>::prefetch(blB + (48 + 0));
@@ -1228,8 +1064,8 @@ void gemm(  // NOLINT
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
-                    packet_t         A0;
-                    packet_t         A1;
+                    packet_t       A0;
+                    packet_t       A1;
 
                     for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
@@ -1239,11 +1075,11 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                        \
-        packet<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                        \
-        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                             \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                       \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                       \
+        packet<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                      \
+        packet<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                      \
+        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                           \
+        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
+        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -1334,13 +1170,13 @@ void gemm(  // NOLINT
     {                                                                                              \
         LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX4");                                \
         LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!");                       \
-        packet<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress], A0);                        \
+        packet<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress], A0);                      \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
-        packet<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                       \
-        packet<value_t>::fma(A0, B1, C1, C1);                                                        \
-        packet<value_t>::fma(A0, B2, C2, C2);                                                        \
-        packet<value_t>::fma(A0, B3, C3, C3);                                                        \
+        packet<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                        \
+        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
+        packet<value_t>::fma(A0, B1, C1, C1);                                                      \
+        packet<value_t>::fma(A0, B2, C2, C2);                                                      \
+        packet<value_t>::fma(A0, B3, C3, C3);                                                      \
         LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX4");                                  \
     } while (false)
 
@@ -1406,7 +1242,7 @@ void gemm(  // NOLINT
                 auto* r0 = &element<value_t>(res, i, j2, ldc);
                 // performs "inner" products
                 const value_t* blB = &blockB[j2 * strideB + offsetB];
-                packet_t         A0;
+                packet_t       A0;
 
                 for (linalg_int k = 0; k < peeled_kc; k += pk)
                 {
@@ -1418,9 +1254,9 @@ void gemm(  // NOLINT
     {                                                                                              \
         LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX1");                                \
         LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!");                       \
-        packet<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress], A0);                            \
-        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                             \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                       \
+        packet<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress], A0);                          \
+        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                           \
+        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
         LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX1");                                  \
     } while (false);
 
@@ -1689,9 +1525,12 @@ void matrix_multiplication_seq(  // NOLINT
         LOGGING_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(rows, columns, depth),
             "matrix_multiplication: workspace_size too small");
         detail::workspace_arena arena(workspace, workspace_size);
-        value_t*                 block_A = arena.next<value_t>(count_a);
-        value_t*                 block_B = arena.next<value_t>(count_b);
-        value_t*                 result  = rows == columns ? c : arena.next<value_t>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+        value_t*                block_A = arena.next<value_t>(count_a);
+        value_t*                block_B = arena.next<value_t>(count_b);
+        value_t*                result =
+            rows == columns
+                               ? c
+                               : arena.next<value_t>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
 
         std::fill_n(result, rows * columns, 0.);
 
@@ -1862,18 +1701,18 @@ void matrix_multiplication_seq(  // NOLINT
 // C(i,j) =C[i*ldc + j] j belong to [0,columns] and i to [0,rows]
 template <>
 void matmul_backend<float, linalg_backend::native>::apply(bool transpose_a,
-    bool                    transpose_b,
-    linalg_int            rows,
-    linalg_int            columns,
-    linalg_int            depth,
-    float const*            a,
-    linalg_int            lda,
-    float const*            b,
-    linalg_int            ldb,
-    float*                  c,
-    linalg_int            ldc,
-    void*                   workspace,
-    size_t                  workspace_size)
+    bool                                                       transpose_b,
+    linalg_int                                                 rows,
+    linalg_int                                                 columns,
+    linalg_int                                                 depth,
+    float const*                                               a,
+    linalg_int                                                 lda,
+    float const*                                               b,
+    linalg_int                                                 ldb,
+    float*                                                     c,
+    linalg_int                                                 ldc,
+    void*                                                      workspace,
+    size_t                                                     workspace_size)
 {
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
 #if LINALG_HAS_VECTORIZATION
@@ -1996,18 +1835,18 @@ void matmul_backend<float, linalg_backend::native>::apply(bool transpose_a,
 
 template <>
 void matmul_backend<double, linalg_backend::native>::apply(bool transpose_a,
-    bool                    transpose_b,
-    linalg_int            rows,
-    linalg_int            columns,
-    linalg_int            depth,
-    double const*           a,
-    linalg_int            lda,
-    double const*           b,
-    linalg_int            ldb,
-    double*                 c,
-    linalg_int            ldc,
-    void*                   workspace,
-    size_t                  workspace_size)
+    bool                                                        transpose_b,
+    linalg_int                                                  rows,
+    linalg_int                                                  columns,
+    linalg_int                                                  depth,
+    double const*                                               a,
+    linalg_int                                                  lda,
+    double const*                                               b,
+    linalg_int                                                  ldb,
+    double*                                                     c,
+    linalg_int                                                  ldc,
+    void*                                                       workspace,
+    size_t                                                      workspace_size)
 {
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     if (transpose_a && transpose_b)
@@ -2072,39 +1911,21 @@ void matmul_backend<double, linalg_backend::native>::apply(bool transpose_a,
 #undef B
 #undef C
 
-#endif
-
-}  // namespace detail
-
-size_t matrix_multiplication_workspace_size(
-    const float* /*type_tag*/, linalg_int rows, linalg_int columns, linalg_int depth)
+template <>
+size_t matmul_backend<float, linalg_backend::native>::workspace_size(
+    linalg_int rows, linalg_int columns, linalg_int depth)
 {
-#if LINALG_HAS_MKL || LINALG_HAS_BLAS
-    (void)rows;
-    (void)columns;
-    (void)depth;
-    return 0;
-#else
-    return detail::matmul_scalar_workspace_size<float>(rows, columns, depth);
-#endif
+    return matmul_scalar_workspace_size<float>(rows, columns, depth);
 }
 
-size_t matrix_multiplication_workspace_size(
-    const double* /*type_tag*/, linalg_int rows, linalg_int columns, linalg_int depth)
+template <>
+size_t matmul_backend<double, linalg_backend::native>::workspace_size(
+    linalg_int rows, linalg_int columns, linalg_int depth)
 {
-#if LINALG_HAS_MKL || LINALG_HAS_BLAS
-    (void)rows;
-    (void)columns;
-    (void)depth;
-    return 0;
-#else
-    return detail::matmul_scalar_workspace_size<double>(rows, columns, depth);
-#endif
+    return matmul_scalar_workspace_size<double>(rows, columns, depth);
 }
 
 }  // namespace linalg
-#if !LINALG_HAS_MKL && !LINALG_HAS_BLAS
 #if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(pop)
-#endif
-#endif
+#endif  // _MSC_VER

@@ -109,10 +109,10 @@ void test_lu(double tolerance)
     }
 
     a1 = A;
-    const auto lu_ws_size = linalg::lu_decomposition_workspace_size(
-        static_cast<const value_t*>(nullptr), static_cast<linalg_int>(n));
+    const auto lu_ws_size = linalg::lu_backend<value_t, linalg::kActiveBackend>::workspace_size(
+        static_cast<linalg_int>(n));
     std::vector<unsigned char> lu_ws(lu_ws_size);
-    linalg::detail::lu_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::lu_backend<value_t, linalg::kActiveBackend>::apply(
         a1.data(), static_cast<linalg_int>(n), pivot.data(), lu_ws.data(), lu_ws_size);
 
     dense_matrix<value_t> L(n, n);
@@ -154,17 +154,18 @@ void test_lu(double tolerance)
 
     dense_matrix<value_t> IA = a1;
 
-    const auto invert_ws_size = linalg::matrix_invert_workspace_size(static_cast<const value_t*>(nullptr),
+    const auto invert_ws_size = linalg::invert_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> invert_ws(invert_ws_size);
-    linalg::detail::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(), pivot.data(),
+    linalg::invert_backend<value_t, linalg::kActiveBackend>::apply(IA.data(), pivot.data(),
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, invert_ws.data(),
         invert_ws_size);
 
-    const auto det_ws_size = linalg::matrix_determinant_workspace_size(static_cast<const value_t*>(nullptr),
+    const auto det_ws_size = linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::workspace_size(
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> det_ws(det_ws_size);
-    linalg::matrix_determinant(a1.data(), pivot.data(), static_cast<linalg_int>(n),
+    linalg::matrix_determinant_backend<value_t, linalg::linalg_backend::native>::apply(
+        a1.data(), pivot.data(), static_cast<linalg_int>(n),
         linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, det_ws.data(), det_ws_size);
 
     dense_matrix<value_t> Id(n, n);
@@ -186,10 +187,10 @@ void test_lu(double tolerance)
     EXPECT_LE(diff, tolerance);
 
     std::vector<value_t> x = b;
-    const auto solve_ws_size = linalg::linear_solver_workspace_size(static_cast<const value_t*>(nullptr),
+    const auto solve_ws_size = linalg::solver_backend<value_t, linalg::kActiveBackend>::workspace_size(
         static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> solve_ws(solve_ws_size);
-    linalg::detail::solver_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::solver_backend<value_t, linalg::kActiveBackend>::apply(
         a1.data(),
         pivot.data(),
         static_cast<linalg_int>(n),

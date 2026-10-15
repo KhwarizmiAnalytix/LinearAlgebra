@@ -2,22 +2,11 @@
 
 #include <cstdint>
 
-#include <include/logging.h>
 #include "include/common/backend.h"
-#include "include/common/narrow.h"
+#include <include/logging.h>
 
-#if LINALG_HAS_MKL
-#include <mkl.h>
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-// LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate
-// framework ships CBLAS but not the LAPACKE row-major C wrapper, so this
-// branch only compiles when a real lapacke.h was found; otherwise the #else
-// below falls through to the scalar implementation at compile time.
-#include <lapacke.h>
-#else
 #include <cmath>
 #include <stdexcept>
-#endif
 
 namespace linalg
 {
@@ -30,62 +19,18 @@ namespace detail
 // active. There is no non-detail cholesky_decomposition() wrapper to put
 // this in any more — callers use cholesky_backend<T, kActiveBackend>::apply
 // directly.
-void check_cholesky_inputs(const void* C, linalg_int lda)
+static void check_cholesky_inputs(const void* C, linalg_int lda)
 {
     LOGGING_CHECK(C != nullptr, "cholesky_backend::apply: C must not be null");
     LOGGING_CHECK(lda > 0, "cholesky_backend::apply: lda must be positive", lda);
 }
 
-// Backend implementation is compiled directly into this translation unit,
-// gated by the same #if/#elif/#else that determines linalg::kActiveBackend
-// (include/common/backend.h). Each `apply` below is an explicit
-// specialization of the one member cholesky_decomposition.h declares (not
-// of the whole class), so it's defined exactly once, here, for whichever
-// (T, Backend) pair is active — mkl.h / lapacke.h stay out of the public
-// header. Other translation units only ever see the header's declaration
-// and link against this definition; they never instantiate a body of their
-// own, so there's nothing to silently get wrong by omission.
-#if LINALG_HAS_MKL
+}  // namespace detail
 
-template <>
-bool cholesky_backend<float, linalg_backend::mkl>::apply(
-    float* C, linalg_int lda, cholesky_decomposition_enum type)
-{
-    check_cholesky_inputs(C, lda);
-    linalg_int n = lda;
-    return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
-}
-
-template <>
-bool cholesky_backend<double, linalg_backend::mkl>::apply(
-    double* C, linalg_int lda, cholesky_decomposition_enum type)
-{
-    check_cholesky_inputs(C, lda);
-    linalg_int n = lda;
-    return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
-}
-
-#elif LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-
-template <>
-bool cholesky_backend<float, linalg_backend::blas_lapacke>::apply(
-    float* C, linalg_int lda, cholesky_decomposition_enum type)
-{
-    check_cholesky_inputs(C, lda);
-    const auto n = detail::checked_narrow<int>(lda);
-    return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
-}
-
-template <>
-bool cholesky_backend<double, linalg_backend::blas_lapacke>::apply(
-    double* C, linalg_int lda, cholesky_decomposition_enum type)
-{
-    check_cholesky_inputs(C, lda);
-    const auto n = detail::checked_narrow<int>(lda);
-    return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
-}
-
-#else
+// Only the native specializations are defined here. The mkl and blas_lapacke
+// specializations live in mkl/cholesky_decomposition_mkl.cpp and
+// blas/cholesky_decomposition_blas.cpp, which the build compiles only when
+// LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS is on.
 
 namespace
 {
@@ -180,7 +125,7 @@ template <>
 bool cholesky_backend<float, linalg_backend::native>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
-    check_cholesky_inputs(C, lda);
+    detail::check_cholesky_inputs(C, lda);
     linalg_int n = lda;
     switch (type)
     {
@@ -199,7 +144,7 @@ template <>
 bool cholesky_backend<double, linalg_backend::native>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
-    check_cholesky_inputs(C, lda);
+    detail::check_cholesky_inputs(C, lda);
     linalg_int n = lda;
     switch (type)
     {
@@ -214,11 +159,11 @@ bool cholesky_backend<double, linalg_backend::native>::apply(
     }
 }
 
-#endif
-
-// Reverse-mode adjoint of cholesky_backend<T, Backend>::apply: no vendor
+// Reverse-mode adjoint of cholesky_backend<T, Backend>::apply_aad: no vendor
 // library (LAPACK/cuSOLVER) exposes this, so it always runs the scalar
 // implementation directly, regardless of which backend is active.
+namespace detail
+{
 enum class aad_matrix_order : std::uint8_t
 {
     row_major,
@@ -228,8 +173,7 @@ enum class aad_matrix_order : std::uint8_t
 template <typename T,
     cholesky_decomposition_enum part,
     aad_matrix_order            order = aad_matrix_order::row_major>
-void cholesky_decomposition_aad_impl(
-    linalg_int n, T* C_aad, const T* C, linalg_long lda, T* A_aad)
+void cholesky_decomposition_aad_impl(linalg_int n, T* C_aad, const T* C, linalg_long lda, T* A_aad)
 {
     if constexpr (order == aad_matrix_order::col_major)
     {
@@ -291,7 +235,7 @@ void cholesky_decomposition_aad_impl(
             const auto* const u_i = &C[i * lda];
 
             const auto* u_i_aad = &C_aad[i * lda];
-            auto* a_i_aad = &A_aad[i * lda];
+            auto*       a_i_aad = &A_aad[i * lda];
             {
                 // AAD: u_i[i] = std::sqrt(sum);
                 auto sum_aad = 0.5 * u_i_aad[i] / u_i[i];
@@ -342,46 +286,44 @@ void cholesky_decomposition_aad_impl(
 }  // namespace detail
 
 //-----------------------------------------------------------------------------
-bool cholesky_decomposition_aad(float*  C_aad,
-    const float*                        C,
-    linalg_int                        lda,
-    linalg::cholesky_decomposition_enum type,
-    float*                              A_aad)
+// apply_aad has no vendor-library equivalent: the mkl and blas_lapacke
+// specializations forward to these native ones.
+template <>
+bool cholesky_backend<float, linalg_backend::native>::apply_aad(
+    float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
     switch (type)
     {
     case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        detail::cholesky_decomposition_aad_impl<float, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<float,
+            cholesky_decomposition_enum::LOWER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
         return true;
     case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        detail::cholesky_decomposition_aad_impl<float, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<float,
+            cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
         return true;
     default:
         LOGGING_THROW("Unsupported enum type!");
     }
 }
 
-//-----------------------------------------------------------------------------
-bool cholesky_decomposition_aad(double* C_aad,
-    const double*                       C,
-    linalg_int                        lda,
-    linalg::cholesky_decomposition_enum type,
-    double*                             A_aad)
+template <>
+bool cholesky_backend<double, linalg_backend::native>::apply_aad(
+    double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
     switch (type)
     {
     case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        detail::cholesky_decomposition_aad_impl<double, cholesky_decomposition_enum::LOWER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<double,
+            cholesky_decomposition_enum::LOWER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
         return true;
     case cholesky_decomposition_enum::UPPER_TRIANGULAR:
-        detail::cholesky_decomposition_aad_impl<double, cholesky_decomposition_enum::UPPER_TRIANGULAR>(
-            lda, C_aad, C, lda, A_aad);
+        detail::cholesky_decomposition_aad_impl<double,
+            cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
         return true;
     default:
         LOGGING_THROW("Unsupported enum type!");
     }
 }
+
 }  // namespace linalg

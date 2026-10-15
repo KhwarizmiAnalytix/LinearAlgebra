@@ -53,10 +53,10 @@ void test_svd(std::size_t rows, std::size_t columns)
 
     const auto ldm = columns;
     const auto ldv = columns;
-    const auto ws_size = linalg::svd_decomposition_workspace_size(
-        static_cast<const value_t*>(nullptr), static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    const auto ws_size = linalg::svd_backend<value_t, linalg::kActiveBackend>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::detail::svd_backend<value_t, linalg::kActiveBackend>::apply(
+    linalg::svd_backend<value_t, linalg::kActiveBackend>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         M.begin(),

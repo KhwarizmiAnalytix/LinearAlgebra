@@ -8,8 +8,6 @@
 
 namespace linalg
 {
-namespace detail
-{
 
 // Host-memory-only CPU entry point. Sum of the diagonal of a square,
 // row-major n x n matrix. There is no vendor-library "trace" routine to
@@ -30,11 +28,9 @@ namespace detail
 // LINALG_API matters here (it must cross the shared-library boundary to
 // reach the test binary) and there is no inline fallback body to silently
 // instantiate per call site.
-template <typename T, linalg_backend Backend>
-struct matrix_trace_backend
+template <typename T, linalg_backend Backend> struct matrix_trace_backend
 {
     LINALG_API static T apply(const T* A, linalg_int n, linalg_int lda);
 };
 
-}  // namespace detail
 }  // namespace linalg
