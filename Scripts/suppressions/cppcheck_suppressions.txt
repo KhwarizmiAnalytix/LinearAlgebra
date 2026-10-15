@@ -5,3 +5,11 @@
 // the code paths those macros enable (checked_narrow, cpuinfo_cach, the
 // const element() overload).
 unusedFunction
+
+// lu_scalar_f32/lu_scalar_f64 always return true here because LU pivoting
+// (LINALG_HAS_LU_PIVOTING) is off by default: the scalar fallback's only
+// `return false` path (singular-matrix detection) is compiled out, so the
+// non-pivoting fallback intentionally reports unconditional success. This is
+// by design, not a bug — see src/matrix_operation/lu_decomposition.cpp.
+knownConditionTrueFalse:src/matrix_operation/lu_decomposition.cpp:245
+knownConditionTrueFalse:src/matrix_operation/lu_decomposition.cpp:258

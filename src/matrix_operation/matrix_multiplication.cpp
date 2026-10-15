@@ -105,6 +105,14 @@ void matmul_blas_f32(bool transpose_a,
     float*                c,
     linalg_int          ldc)
 {
+    // macOS Accelerate deprecates the legacy LP64 cblas_* entry points in favor
+    // of an ILP64 interface (ACCELERATE_NEW_LAPACK); switching would change the
+    // integer width LAPACKE/checked_narrow assume throughout this codebase, so
+    // we keep the legacy interface deliberately rather than as an oversight.
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
@@ -119,6 +127,9 @@ void matmul_blas_f32(bool transpose_a,
         0.F,
         c,
         detail::checked_narrow<int>(ldc));
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 void matmul_blas_f64(bool transpose_a,
@@ -133,6 +144,11 @@ void matmul_blas_f64(bool transpose_a,
     double*               c,
     linalg_int          ldc)
 {
+    // See the LP64-vs-ILP64 note in matmul_blas_f32 above.
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
@@ -147,6 +163,9 @@ void matmul_blas_f64(bool transpose_a,
         0.,
         c,
         detail::checked_narrow<int>(ldc));
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 }
 #else
 

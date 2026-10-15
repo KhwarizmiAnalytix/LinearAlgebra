@@ -77,11 +77,21 @@ void transpose_blas_f32(linalg_long rows, linalg_long columns, float* m, void* w
         "matrix_transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto*                   scratch = arena.next<float>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+    // See the LP64-vs-ILP64 note on matmul_blas_f32 in matrix_multiplication.cpp:
+    // macOS Accelerate deprecates these legacy LP64 entry points, but switching
+    // to ACCELERATE_NEW_LAPACK is a separate, wider integer-width change.
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     for (linalg_long i = 0; i < rows; ++i)
     {
         cblas_scopy(
             detail::checked_narrow<int>(columns), m + i * columns, 1, scratch + i, detail::checked_narrow<int>(rows));
     }
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     std::copy(scratch, scratch + rows * columns, m);
 }
 
@@ -91,11 +101,18 @@ void transpose_blas_f64(linalg_long rows, linalg_long columns, double* m, void* 
         "matrix_transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto*                   scratch = arena.next<double>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     for (linalg_long i = 0; i < rows; ++i)
     {
         cblas_dcopy(
             detail::checked_narrow<int>(columns), m + i * columns, 1, scratch + i, detail::checked_narrow<int>(rows));
     }
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     std::copy(scratch, scratch + rows * columns, m);
 }
 
