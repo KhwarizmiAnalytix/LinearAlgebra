@@ -138,6 +138,12 @@ option(LINALG_ENABLE_TESTING "Build LinearAlgebra test suite" ON)
 # Google Test integration for LinearAlgebra tests.
 option(LINALG_ENABLE_GTEST "Enable GoogleTest for LinearAlgebra" ON)
 
+# Google Benchmark integration for LinearAlgebra micro-benchmarks (vendored
+# submodule under ThirdParty/benchmark; see linalg_setup_benchmark() in
+# Cmake/LinearAlgebraDependencies.cmake). Off by default: no benchmark
+# targets exist yet.
+option(LINALG_ENABLE_BENCHMARK "Enable Google Benchmark for LinearAlgebra micro-benchmarks" OFF)
+
 # Icecream distributed compilation launcher (rarely needed; hidden by default).
 option(LINALG_ENABLE_ICECC "Use Icecream (icecc) distributed compiler for LinearAlgebra" OFF)
 mark_as_advanced(LINALG_ENABLE_ICECC)
@@ -364,6 +370,36 @@ endif ()
   list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
 endif ()
 
+# --- Optional cpuinfo backend (pytorch/cpuinfo), auto-detected ---
+# CPU cache-size introspection via find_package(cpuinfo) — no vendored copy,
+# no enable option: silently absent when not installed. When found,
+# LINALG_HAS_CPUINFO gates include/util/cpu_info.h's cpuinfo_cach() to read
+# real L1/L2/L3 sizes from pytorch/cpuinfo instead of its hardcoded
+# conservative defaults (used when the package is not installed).
+find_package(cpuinfo CONFIG QUIET)
+set(LINALG_HAS_CPUINFO OFF)
+if (TARGET cpuinfo::cpuinfo)
+  list(APPEND LINALG_DEPENDENCY_LIBS cpuinfo::cpuinfo)
+  set(LINALG_HAS_CPUINFO ON)
+elseif (TARGET cpuinfo)
+  list(APPEND LINALG_DEPENDENCY_LIBS cpuinfo)
+  set(LINALG_HAS_CPUINFO ON)
+endif ()
+
+# --- Optional Profiler backend (KhwarizmiAnalytix/Profiler), auto-detected ---
+# CPU/GPU profiling instrumentation via find_package(Profiler) — no vendored
+# copy, no enable option: silently absent when not installed. Not yet wired
+# into any call site; LINALG_HAS_PROFILER makes Profiler::Profiler available
+# for a future instrumentation follow-up when the package happens to be
+# present (e.g. built and installed from
+# https://github.com/KhwarizmiAnalytix/Profiler).
+find_package(Profiler CONFIG QUIET)
+set(LINALG_HAS_PROFILER OFF)
+if (TARGET Profiler::Profiler)
+  list(APPEND LINALG_DEPENDENCY_LIBS Profiler::Profiler)
+  set(LINALG_HAS_PROFILER ON)
+endif ()
+
 # --- Logging (required) ---
 # KhwarizmiAnalytix/Logging (ThirdParty/Logging, a nested submodule with its
 # own fmt/loguru/glog/spdlog/magic_enum submodules) provides logging::
@@ -475,6 +511,8 @@ target_compile_definitions(LinearAlgebra PUBLIC
   "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
   "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
   "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
+  "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
+  "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
   "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
   "LINALG_HAS_VECTORIZATION=$<BOOL:${LINALG_ENABLE_VECTORIZATION}>"
   "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
@@ -583,9 +621,12 @@ if(LINALG_STANDALONE)
   message("  Coverage             : ${LINALG_ENABLE_COVERAGE}")
   message("  Testing              : ${LINALG_ENABLE_TESTING}")
   message("  Gtest                : ${LINALG_ENABLE_GTEST}")
+  message("  Benchmark            : ${LINALG_ENABLE_BENCHMARK}")
   message("  MKL                  : ${LINALG_ENABLE_MKL}")
   message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
   message("  cuBLAS               : ${LINALG_ENABLE_CUBLAS}")
+  message("  Cpuinfo              : ${LINALG_HAS_CPUINFO}")
+  message("  Profiler             : ${LINALG_HAS_PROFILER}")
   message("  LU pivoting          : ${LINALG_LU_PIVOTING}")
   message("  Vectorization        : ${LINALG_ENABLE_VECTORIZATION}")
   message("  Vectorization ISA    : ${LINALG_VECTORIZATION_ISA}")

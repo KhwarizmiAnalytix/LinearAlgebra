@@ -1,9 +1,10 @@
 # =============================================================================
 # LinearAlgebra — test dependency resolution (standalone + embedded)
 # =============================================================================
-# Resolves Google Test without requiring an XSigma tree. MKL (optional,
-# LINALG_ENABLE_MKL) is resolved directly in the top-level CMakeLists.txt via
-# find_package(MKL), since it is a library dependency, not a test dependency.
+# Resolves Google Test and (optionally) Google Benchmark without requiring an
+# XSigma tree. MKL/BLAS/cuBLAS/cpuinfo (optional, LINALG_ENABLE_MKL/BLAS/
+# CUBLAS/CPUINFO) are resolved directly in the top-level CMakeLists.txt via
+# find_package(), since they are library dependencies, not test dependencies.
 # =============================================================================
 
 include_guard(GLOBAL)
@@ -55,4 +56,57 @@ function(linalg_setup_gtest)
         "Gtest::gtest=GTest::gtest|gtest"
         "Gtest::gtest_main=GTest::gtest_main|gtest_main"
     )
+endfunction()
+
+# -----------------------------------------------------------------------------
+# linalg_setup_benchmark: Google Benchmark for micro-benchmarks
+# -----------------------------------------------------------------------------
+function(linalg_setup_benchmark)
+    if(TARGET benchmark OR TARGET benchmark::benchmark)
+        return()
+    endif()
+    # Prefer the vendored submodule (pinned commit, known-good): some system
+    # benchmark packages (e.g. static Homebrew archives) mislink/crash when
+    # consumed via an IMPORTED target with a different toolchain.
+    set(_bench_src "")
+    if(EXISTS "${LINALG_THIRD_PARTY_DIR}/benchmark/CMakeLists.txt")
+        set(_bench_src "${LINALG_THIRD_PARTY_DIR}/benchmark")
+    elseif(XSIGMA_ENABLE_EXTERNAL)
+        find_package(benchmark QUIET)
+        if(benchmark_FOUND)
+            message(STATUS "Found external Google Benchmark")
+            return()
+        endif()
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        string(APPEND CMAKE_CXX_FLAGS " -Wno-c2y-extensions")
+    endif()
+    if(NOT DEFINED HAVE_STD_REGEX)
+        set(HAVE_STD_REGEX 1 CACHE INTERNAL "")
+    endif()
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark tests" FORCE)
+    set(BENCHMARK_ENABLE_EXCEPTIONS ON CACHE BOOL "Enable benchmark exceptions" FORCE)
+    set(BENCHMARK_ENABLE_LTO OFF CACHE BOOL "Disable benchmark LTO" FORCE)
+    set(BENCHMARK_USE_LIBCXX OFF CACHE BOOL "Disable benchmark libcxx" FORCE)
+    set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "Disable benchmark werror" FORCE)
+    set(BENCHMARK_FORCE_WERROR OFF CACHE BOOL "Disable benchmark force werror" FORCE)
+    set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "Disable benchmark install" FORCE)
+    set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs install" FORCE)
+    set(BENCHMARK_ENABLE_DOXYGEN OFF CACHE BOOL "Disable benchmark doxygen" FORCE)
+    set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable benchmark gtest tests" FORCE)
+    set(BENCHMARK_USE_BUNDLED_GTEST OFF CACHE BOOL "Don't use bundled gtest for benchmark" FORCE)
+    set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "Don't download dependencies" FORCE)
+    if(_bench_src)
+        add_subdirectory("${_bench_src}" "${CMAKE_BINARY_DIR}/ThirdParty/benchmark_build"
+                         EXCLUDE_FROM_ALL)
+    else()
+        include(FetchContent)
+        FetchContent_Declare(
+            benchmark
+            GIT_REPOSITORY https://github.com/google/benchmark.git
+            GIT_TAG v1.9.5
+        )
+        FetchContent_MakeAvailable(benchmark)
+    endif()
+    _set_third_party_folder_properties("benchmark" "${CMAKE_BINARY_DIR}/ThirdParty/benchmark_build")
 endfunction()

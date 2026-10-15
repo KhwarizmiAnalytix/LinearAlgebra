@@ -50,6 +50,22 @@ if(LinearAlgebra_HAS_CUBLAS)
   find_dependency(CUDAToolkit)
 endif()
 
+# --- Optional cpuinfo backend, auto-detected (LINALG_HAS_CPUINFO) ---
+# Only part of this package's link interface when find_package(cpuinfo)
+# succeeded for the installed LinearAlgebra's own build.
+set(LinearAlgebra_HAS_CPUINFO @LINALG_HAS_CPUINFO@)
+if(LinearAlgebra_HAS_CPUINFO)
+  find_dependency(cpuinfo)
+endif()
+
+# --- Optional Profiler backend, auto-detected (LINALG_HAS_PROFILER) ---
+# Only part of this package's link interface when find_package(Profiler)
+# succeeded for the installed LinearAlgebra's own build.
+set(LinearAlgebra_HAS_PROFILER @LINALG_HAS_PROFILER@)
+if(LinearAlgebra_HAS_PROFILER)
+  find_dependency(Profiler)
+endif()
+
 if(NOT TARGET LinearAlgebra::LinearAlgebra)
   include("${CMAKE_CURRENT_LIST_DIR}/LinearAlgebraTargets.cmake")
 endif()

@@ -4,3 +4,6 @@
 [submodule "ThirdParty/Logging"]
     path = ThirdParty/Logging
     url = https://github.com/KhwarizmiAnalytix/Logging.git
+[submodule "ThirdParty/benchmark"]
+	path = ThirdParty/benchmark
+	url = https://github.com/google/benchmark.git
