@@ -1,0 +1,138 @@
+// Benchmarks linalg::qr_decomposition<T, Backend>::apply for every backend
+// this build actually compiled in.
+//
+// The library never defaults to a backend — every linalg::*<T, Backend> call
+// requires Backend to be named explicitly. This benchmark mirrors that:
+// BM_QRDecomposition is templated on Backend too, and registered once per
+// backend gated on LINALG_HAS_MKL / LINALG_HAS_BLAS / LINALG_HAS_LAPACKE
+// (native is unconditional, the scalar fallback always builds) — see
+// Testing/Cxx/test_backend.h for the same per-backend coverage on the unit
+// test side, and BenchmarkCholeskyDecomposition.cxx for the sibling
+// benchmark this one is modeled on. A single run now reports all backends
+// present in this build, each row labeled with the backend that produced it.
+#include <cstddef>
+#include <cstdint>
+#include <random>
+#include <vector>
+
+#include <benchmark/benchmark.h>
+
+#include "include/common/backend.h"
+#include "include/common/types.h"
+#include "include/matrix_operation/qr_decomposition.h"
+
+namespace
+{
+
+const char* backend_name(linalg::linalg_backend backend)
+{
+    switch (backend)
+    {
+    case linalg::linalg_backend::mkl:
+        return "mkl";
+    case linalg::linalg_backend::blas_lapacke:
+        return "blas_lapacke";
+    default:
+        return "native";
+    }
+}
+
+template <typename T> std::vector<T> make_random_matrix(std::size_t rows, std::size_t columns, unsigned seed)
+{
+    std::mt19937                      rng(seed);
+    std::uniform_real_distribution<T> dist(static_cast<T>(-1), static_cast<T>(1));
+
+    std::vector<T> a(rows * columns);
+    for (auto& v : a)
+    {
+        v = dist(rng);
+    }
+    return a;
+}
+
+template <typename T, linalg::linalg_backend Backend>
+void BM_QRDecomposition(benchmark::State& state)
+{
+    const std::size_t    n = static_cast<std::size_t>(state.range(0));
+    const std::vector<T> a = make_random_matrix<T>(n, n, /*seed=*/42);
+
+    const size_t ws_size = linalg::qr_decomposition<T, Backend>::workspace_size(
+        static_cast<linalg_long>(n), static_cast<linalg_long>(n));
+    std::vector<std::byte> workspace(ws_size);
+
+    std::vector<T> q(n * n);
+    std::vector<T> r(n * n);
+
+    for (auto _ : state)
+    {
+        linalg::qr_decomposition<T, Backend>::apply(static_cast<linalg_long>(n),
+            static_cast<linalg_long>(n), a.data(), static_cast<linalg_long>(n), q.data(),
+            static_cast<linalg_long>(n), r.data(), static_cast<linalg_long>(n), workspace.data(),
+            ws_size);
+        benchmark::DoNotOptimize(q.data());
+        benchmark::DoNotOptimize(r.data());
+    }
+
+    state.SetLabel(backend_name(Backend));
+    state.SetComplexityN(static_cast<std::int64_t>(n));
+
+    // Economy QR factorization of a square n x n matrix costs ~2n^3 flops.
+    const double flops_per_iter = 2.0 * static_cast<double>(n) * static_cast<double>(n) *
+        static_cast<double>(n);
+    state.counters["FLOPS"] = benchmark::Counter(
+        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
+}
+
+}  // namespace
+
+BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::native)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::native)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::blas_lapacke)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::blas_lapacke)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+#endif
+
+#if LINALG_HAS_MKL
+BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::mkl)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::mkl)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+#endif
