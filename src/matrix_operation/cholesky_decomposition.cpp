@@ -85,22 +85,32 @@ linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda
     }
     else if constexpr (part == cholesky_decomposition_enum::UPPER_TRIANGULAR)
     {
+        // U with A = U^T * U has the same entries as L with A = L * L^T
+        // (L = U^T), so factor into the lower triangle first using the
+        // LOWER_TRIANGULAR recursion above -- every reduction there walks two
+        // rows contiguously (a_i[k], a_j[k]) instead of striding down two
+        // columns by `lda` per step, which is what directly indexing the
+        // upper triangle forces. The O(n^2) transpose below is far cheaper
+        // than paying that stride for the O(n^3) elimination itself.
         for (linalg_int i = 0; i < n; ++i)
         {
+            auto* a_i = &A[i * lda];
+
             for (linalg_int j = 0; j < i; ++j)
             {
-                T sum = A[j * lda + i];
+                auto* a_j = &A[j * lda];
+                T     sum = a_i[j];
                 for (linalg_int k = 0; k < j; ++k)
                 {
-                    sum -= A[k * lda + i] * A[k * lda + j];
+                    sum -= a_i[k] * a_j[k];
                 }
-                A[j * lda + i] = sum / A[j * lda + j];
+                a_i[j] = sum / a_j[j];
             }
 
-            T sum = A[i * lda + i];
+            T sum = a_i[i];
             for (linalg_int k = 0; k < i; ++k)
             {
-                sum -= A[k * lda + i] * A[k * lda + i];
+                sum -= a_i[k] * a_i[k];
             }
 
             if (sum <= 0)
@@ -108,7 +118,16 @@ linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda
                 return i + 1;  // Matrix is not positive-definite
             }
 
-            A[i * lda + i] = std::sqrt(sum);
+            a_i[i] = std::sqrt(sum);
+        }
+
+        for (linalg_int i = 0; i < n; ++i)
+        {
+            for (linalg_int j = 0; j < i; ++j)
+            {
+                A[j * lda + i] = A[i * lda + j];
+                A[i * lda + j] = 0.;
+            }
         }
     }
     else

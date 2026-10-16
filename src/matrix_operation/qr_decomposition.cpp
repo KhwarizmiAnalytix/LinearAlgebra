@@ -126,22 +126,22 @@ void qr_householder(linalg_long rows,
         }
         v[static_cast<std::size_t>(i)] -= alpha;
 
-        T vnorm = T(0);
+        // LAPACK/Eigen convention: leave v unnormalized and fold the
+        // normalization into a single scalar tau = 2 / (v^T v), so that
+        // H = I - tau*v*v^T equals I - 2*(v/||v||)*(v/||v||)^T without an
+        // extra O(rows) pass over v to compute ||v|| and divide by it.
+        T vTv = T(0);
         for (linalg_long r = i; r < rows; ++r)
         {
-            vnorm += v[static_cast<std::size_t>(r)] * v[static_cast<std::size_t>(r)];
+            vTv += v[static_cast<std::size_t>(r)] * v[static_cast<std::size_t>(r)];
         }
-        vnorm = std::sqrt(vnorm);
-        if (vnorm == T(0))
+        if (vTv == T(0))
         {
             continue;
         }
-        for (linalg_long r = i; r < rows; ++r)
-        {
-            v[static_cast<std::size_t>(r)] /= vnorm;
-        }
+        const T tau = T(2) / vTv;
 
-        // Apply H = I - 2*v*v^T to Rwork's columns [i, columns) over rows [i, rows).
+        // Apply H = I - tau*v*v^T to Rwork's columns [i, columns) over rows [i, rows).
         for (linalg_long j = i; j < columns; ++j)
         {
             T dot = T(0);
@@ -149,9 +149,10 @@ void qr_householder(linalg_long rows,
             {
                 dot += v[static_cast<std::size_t>(r)] * Rwork[r * columns + j];
             }
+            const T scale = tau * dot;
             for (linalg_long r = i; r < rows; ++r)
             {
-                Rwork[r * columns + j] -= T(2) * v[static_cast<std::size_t>(r)] * dot;
+                Rwork[r * columns + j] -= scale * v[static_cast<std::size_t>(r)];
             }
         }
 
@@ -163,9 +164,10 @@ void qr_householder(linalg_long rows,
             {
                 dot += Qwork[r * rows + c] * v[static_cast<std::size_t>(c)];
             }
+            const T scale = tau * dot;
             for (linalg_long c = i; c < rows; ++c)
             {
-                Qwork[r * rows + c] -= T(2) * dot * v[static_cast<std::size_t>(c)];
+                Qwork[r * rows + c] -= scale * v[static_cast<std::size_t>(c)];
             }
         }
     }

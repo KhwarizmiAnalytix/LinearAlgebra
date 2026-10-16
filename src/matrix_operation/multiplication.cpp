@@ -14,7 +14,7 @@
 #include "include/common/workspace_arena.h"
 #include "include/util/cpu_info.h"
 #if LINALG_HAS_VECTORIZATION
-#include "include/common/packet.h"
+#include "src/common/packet.h"
 #endif
 
 namespace linalg
