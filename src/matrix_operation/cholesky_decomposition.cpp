@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "include/common/backend.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <cmath>
 #include <stdexcept>
@@ -17,8 +17,8 @@ namespace detail
 // below, so callers (linear_solver.cpp, inversion.cpp, this file's
 // own scalar path) get the same validation regardless of which backend is
 // active. There is no non-detail cholesky_decomposition() wrapper to put
-// this in any more — callers use cholesky_decomposition<T, kActiveBackend>::apply
-// directly.
+// this in any more — callers use cholesky_decomposition<T, Backend>::apply
+// directly, naming Backend explicitly.
 static void check_cholesky_inputs(const void* C, linalg_int lda)
 {
     LOGGING_CHECK(C != nullptr, "cholesky_decomposition::apply: C must not be null");

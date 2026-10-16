@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/svd_decomposition.h"
 #include "gtest/gtest.h"
 
@@ -29,7 +30,8 @@ template <> struct SVDTolerance<double>
     static constexpr double tolerance = 5.e-13;
 };
 
-template <typename value_t> void test_svd(std::size_t rows, std::size_t columns)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_svd(std::size_t rows, std::size_t columns)
 {
     dense_matrix<value_t> M(rows, columns);
 
@@ -49,10 +51,10 @@ template <typename value_t> void test_svd(std::size_t rows, std::size_t columns)
 
     const auto ldm     = columns;
     const auto ldv     = columns;
-    const auto ws_size = linalg::svd_decomposition<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::svd_decomposition<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
+    linalg::svd_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         M.begin(),
         static_cast<linalg_long>(ldm),
@@ -84,20 +86,24 @@ template <typename value_t> void test_svd(std::size_t rows, std::size_t columns)
 
 TEST(Math, SVDDecomposition)
 {
-    std::size_t rows    = 6;
-    std::size_t columns = 5;
-    test_svd<float>(rows, columns);
-    test_svd<double>(rows, columns);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
 
-    rows    = 5;
-    columns = 6;
-    test_svd<float>(rows, columns);
-    test_svd<double>(rows, columns);
+        std::size_t rows    = 6;
+        std::size_t columns = 5;
+        test_svd<float, Backend>(rows, columns);
+        test_svd<double, Backend>(rows, columns);
 
-    rows    = 25;
-    columns = 11;
-    test_svd<float>(rows, columns);
-    test_svd<double>(rows, columns);
+        rows    = 5;
+        columns = 6;
+        test_svd<float, Backend>(rows, columns);
+        test_svd<double, Backend>(rows, columns);
+
+        rows    = 25;
+        columns = 11;
+        test_svd<float, Backend>(rows, columns);
+        test_svd<double, Backend>(rows, columns);
+    });
 }
 
 #if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS

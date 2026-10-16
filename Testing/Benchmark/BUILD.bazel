@@ -14,8 +14,8 @@ package(default_visibility = ["//visibility:public"])
         linkopts = linear_algebra_linkopts(),
         deps = [
             "//:LinearAlgebra",
-            "@com_google_benchmark//:benchmark",
-            "@com_google_benchmark//:benchmark_main",
+            "@google_benchmark//:benchmark",
+            "@google_benchmark//:benchmark_main",
         ],
     )
     for _src in glob(["Benchmark*.cxx"], allow_empty = True)

@@ -1,6 +1,6 @@
 #include "include/matrix_operation/multiplication.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(push)

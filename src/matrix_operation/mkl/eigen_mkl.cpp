@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/eigen.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <algorithm>
 #include <mkl.h>

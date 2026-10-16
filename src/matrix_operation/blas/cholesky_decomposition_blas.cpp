@@ -4,7 +4,7 @@
 
 #include "include/common/backend.h"
 #include "include/common/narrow.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 // LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate framework ships
 // CBLAS but not the LAPACKE row-major C wrapper, so this block only compiles
@@ -27,6 +27,16 @@ static void check_cholesky_inputs(const void* C, linalg_int lda)
     LOGGING_CHECK(lda > 0, "cholesky_decomposition::apply: lda must be positive", lda);
 }
 
+// LAPACKE_?potrf only validates its uplo argument by printing to stderr (xerbla) and
+// returning a nonzero info, not by throwing; reject an invalid enum here so this backend
+// throws the same way cholesky_decomposition.cpp's native specializations do.
+static void check_cholesky_type(cholesky_decomposition_enum type)
+{
+    LOGGING_CHECK(type == cholesky_decomposition_enum::LOWER_TRIANGULAR ||
+            type == cholesky_decomposition_enum::UPPER_TRIANGULAR,
+        "cholesky_decomposition::apply: Unsupported enum type!");
+}
+
 }  // namespace detail
 
 template <>
@@ -34,6 +44,7 @@ bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
     detail::check_cholesky_inputs(C, lda);
+    detail::check_cholesky_type(type);
     const auto n = detail::checked_narrow<int>(lda);
     return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
@@ -43,6 +54,7 @@ bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
     detail::check_cholesky_inputs(C, lda);
+    detail::check_cholesky_type(type);
     const auto n = detail::checked_narrow<int>(lda);
     return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }

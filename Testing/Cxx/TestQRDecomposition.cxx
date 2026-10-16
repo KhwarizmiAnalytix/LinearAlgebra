@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/qr_decomposition.h"
 #include "gtest/gtest.h"
 
@@ -11,7 +12,8 @@ namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_qr(std::size_t rows, std::size_t columns)
 {
     dense_matrix<value_t> A(rows, columns);
     for (std::size_t i = 0; i < rows; i++)
@@ -27,11 +29,11 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
     dense_matrix<value_t> Q(rows, k);
     dense_matrix<value_t> R(k, columns);
 
-    const auto ws_size = linalg::qr_decomposition<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto ws_size = linalg::qr_decomposition<value_t, Backend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
 
-    linalg::qr_decomposition<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
+    linalg::qr_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A.begin(),
         static_cast<linalg_long>(columns),
@@ -89,10 +91,13 @@ template <typename value_t> void test_qr(std::size_t rows, std::size_t columns)
 
 TEST(Math, QRDecomposition)
 {
-    test_qr<float>(6, 5);
-    test_qr<float>(5, 6);
-    test_qr<float>(4, 4);
-    test_qr<double>(6, 5);
-    test_qr<double>(5, 6);
-    test_qr<double>(4, 4);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_qr<float, Backend>(6, 5);
+        test_qr<float, Backend>(5, 6);
+        test_qr<float, Backend>(4, 4);
+        test_qr<double, Backend>(6, 5);
+        test_qr<double, Backend>(5, 6);
+        test_qr<double, Backend>(4, 4);
+    });
 }

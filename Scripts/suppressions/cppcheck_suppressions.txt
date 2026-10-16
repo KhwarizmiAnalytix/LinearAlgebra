@@ -13,3 +13,10 @@ unusedFunction
 // by design, not a bug — see src/matrix_operation/lu_decomposition.cpp.
 knownConditionTrueFalse:src/matrix_operation/lu_decomposition.cpp:245
 knownConditionTrueFalse:src/matrix_operation/lu_decomposition.cpp:258
+
+// workspace_arena::next<T>() reinterpret_casts the arena's unsigned char*
+// base into T* (float*/double*/etc.) to carve typed sub-buffers out of one
+// caller-owned byte buffer — the same pointer-slicing pattern Eigen's
+// aligned allocator and PyTorch's c10::alloc_cpu use to hand out typed
+// pointers into raw storage. The cast is the intended operation, not a bug.
+invalidPointerCast:include/common/workspace_arena.h:64

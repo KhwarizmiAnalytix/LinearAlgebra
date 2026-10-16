@@ -25,7 +25,7 @@
 
 #include <cstddef>
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {

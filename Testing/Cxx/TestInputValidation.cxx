@@ -1,5 +1,6 @@
 #include <vector>
 
+#include "test_backend.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/lu_decomposition.h"
@@ -21,43 +22,70 @@ TEST(Math, InputValidation)
     std::vector<double>     vec(3, 1.0);
     std::vector<linalg_int> pivot(4);
 
-    EXPECT_ANY_THROW((linalg::cholesky_decomposition<double, linalg::kActiveBackend>::apply(
-        static_cast<double*>(nullptr), 3, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)));
-    EXPECT_ANY_THROW((linalg::cholesky_decomposition<double, linalg::kActiveBackend>::apply(
-        buf.data(), 0, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)));
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
 
-    EXPECT_ANY_THROW((linalg::lu_decomposition<double, linalg::kActiveBackend>::apply(
-        static_cast<double*>(nullptr), 3, pivot.data(), nullptr, 0)));
-    EXPECT_ANY_THROW((linalg::lu_decomposition<double, linalg::kActiveBackend>::apply(
-        buf.data(), 0, pivot.data(), nullptr, 0)));
-    EXPECT_ANY_THROW((linalg::lu_decomposition<double, linalg::kActiveBackend>::apply(
-        buf.data(), 3, static_cast<linalg_int*>(nullptr), nullptr, 0)));
+        EXPECT_ANY_THROW((linalg::cholesky_decomposition<double, Backend>::apply(
+            static_cast<double*>(nullptr), 3, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)));
+        EXPECT_ANY_THROW((linalg::cholesky_decomposition<double, Backend>::apply(
+            buf.data(), 0, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)));
 
-    EXPECT_ANY_THROW((
-        linalg::linear_solver<double, linalg::kActiveBackend>::apply(static_cast<double*>(nullptr),
+        EXPECT_ANY_THROW((linalg::lu_decomposition<double, Backend>::apply(
+            static_cast<double*>(nullptr), 3, pivot.data(), nullptr, 0)));
+        EXPECT_ANY_THROW((linalg::lu_decomposition<double, Backend>::apply(
+            buf.data(), 0, pivot.data(), nullptr, 0)));
+        EXPECT_ANY_THROW((linalg::lu_decomposition<double, Backend>::apply(
+            buf.data(), 3, static_cast<linalg_int*>(nullptr), nullptr, 0)));
+
+        EXPECT_ANY_THROW((linalg::linear_solver<double, Backend>::apply(
+            static_cast<double*>(nullptr),
             pivot.data(),
             3,
             vec.data(),
             linalg::linear_solver_type::LU_LINEAR_SOLVER,
             nullptr,
             0)));
-    EXPECT_ANY_THROW((linalg::linear_solver<double, linalg::kActiveBackend>::apply(buf.data(),
-        pivot.data(),
-        0,
-        vec.data(),
-        linalg::linear_solver_type::LU_LINEAR_SOLVER,
-        nullptr,
-        0)));
+        EXPECT_ANY_THROW((linalg::linear_solver<double, Backend>::apply(buf.data(),
+            pivot.data(),
+            0,
+            vec.data(),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            nullptr,
+            0)));
 
-    EXPECT_ANY_THROW((
-        linalg::inversion<double, linalg::kActiveBackend>::apply(static_cast<double*>(nullptr),
+        EXPECT_ANY_THROW((linalg::inversion<double, Backend>::apply(static_cast<double*>(nullptr),
             pivot.data(),
             3,
             linalg::linear_solver_type::LU_LINEAR_SOLVER,
             nullptr,
             0)));
-    EXPECT_ANY_THROW((linalg::inversion<double, linalg::kActiveBackend>::apply(
-        buf.data(), pivot.data(), 0, linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0)));
+        EXPECT_ANY_THROW((linalg::inversion<double, Backend>::apply(
+            buf.data(), pivot.data(), 0, linalg::linear_solver_type::LU_LINEAR_SOLVER, nullptr, 0)));
+
+        EXPECT_ANY_THROW((linalg::svd_decomposition<double, Backend>::apply(3ULL,
+            3ULL,
+            static_cast<double*>(nullptr),
+            3ULL,
+            vec.data(),
+            buf.data(),
+            3ULL,
+            buf.data(),
+            3ULL,
+            nullptr,
+            0)));
+        EXPECT_ANY_THROW((linalg::svd_decomposition<double, Backend>::apply(0ULL,
+            3ULL,
+            buf.data(),
+            3ULL,
+            vec.data(),
+            buf.data(),
+            3ULL,
+            buf.data(),
+            3ULL,
+            nullptr,
+            0)));
+    });
+
     EXPECT_ANY_THROW(
         (linalg::determinant<double, linalg::linalg_backend::native>::apply(
             static_cast<double*>(nullptr),
@@ -87,18 +115,4 @@ TEST(Math, InputValidation)
         3ULL, 3ULL, static_cast<double*>(nullptr), nullptr, 0)));
     EXPECT_ANY_THROW((linalg::transpose<double, linalg::kTransposeActiveBackend>::apply(
         0ULL, 3ULL, buf.data(), nullptr, 0)));
-
-    EXPECT_ANY_THROW((linalg::svd_decomposition<double, linalg::kActiveBackend>::apply(3ULL,
-        3ULL,
-        static_cast<double*>(nullptr),
-        3ULL,
-        vec.data(),
-        buf.data(),
-        3ULL,
-        buf.data(),
-        3ULL,
-        nullptr,
-        0)));
-    EXPECT_ANY_THROW((linalg::svd_decomposition<double, linalg::kActiveBackend>::apply(
-        0ULL, 3ULL, buf.data(), 3ULL, vec.data(), buf.data(), 3ULL, buf.data(), 3ULL, nullptr, 0)));
 }

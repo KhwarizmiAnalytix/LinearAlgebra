@@ -241,7 +241,33 @@ disagreement between a backend and the reference fails a test.
       `#if` chain onto it, one op per pull request.
 - [ ] Add full-LAPACK Accelerate support through the binding layer, reusing
       the row-major ↔ column-major transpose/relabel approach proven in the
-      GPU ops.
+      GPU ops. Confirmed by compiling a probe against this build's actual
+      flags (`LINALG_HAS_ACCELERATE=1, LINALG_HAS_BLAS=1,
+      LINALG_HAS_LAPACKE=0`):
+  - GEMM/transpose already reach Accelerate today, with no further work:
+    [`multiplication.h`](../include/matrix_operation/multiplication.h) and
+    [`transpose.h`](../include/matrix_operation/transpose.h) each define
+    their own `kMatmulActiveBackend`/`kTransposeActiveBackend`, gated on
+    `LINALG_HAS_BLAS` alone, independent of the global `kActiveBackend`
+    ([`include/common/backend.h`](../include/common/backend.h)) that every
+    other op uses.
+  - Cholesky/LU/SVD/inversion/linear_solver stay on `native` on an
+    Accelerate-only macOS build because `kActiveBackend` requires
+    `LINALG_HAS_BLAS && LINALG_HAS_LAPACKE`, and each op's
+    `src/matrix_operation/blas/*.cpp` wraps its *entire* body in
+    `#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE` — when LAPACKE is absent the
+    `blas_lapacke` specialization isn't compiled at all, so there is no
+    existing fallback body to repurpose; the classic-Fortran-symbol path
+    needs new code per op, following the `kMatmulActiveBackend` precedent
+    (a per-op backend constant, not a change to the shared `kActiveBackend`).
+  - Until this lands, the supported way to get `blas_lapacke` for these five
+    ops on macOS is unchanged: install a LAPACKE-providing package (for
+    example `brew install openblas`). `CMakeLists.txt`'s `LINALG_ENABLE_BLAS`
+    block now probes `brew --prefix openblas` itself and appends the result
+    to `CMAKE_PREFIX_PATH` on Apple platforms, so `find_path(... lapacke.h)`
+    succeeds without a manual `-DCMAKE_PREFIX_PATH` — only a non-Homebrew
+    LAPACKE install still needs that passed explicitly, per the
+    `FATAL_ERROR` message / the comment at `CMakeLists.txt`:344-350.
 - [ ] Make scalar LU pivot by default: flip `LINALG_LU_PIVOTING` to `ON`,
       deprecate `OFF`, and standardize the pivot buffer on `n` entries,
       1-based, matching LAPACK.

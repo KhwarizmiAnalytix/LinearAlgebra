@@ -4,7 +4,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <mkl.h>
 
@@ -47,7 +47,7 @@ size_t invert_mkl_workspace_size_impl(
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        arena.next<unsigned char>(lu_decomposition<T, kActiveBackend>::workspace_size(lda));
+        arena.next<unsigned char>(lu_decomposition<T, linalg_backend::mkl>::workspace_size(lda));
         arena.next<T>(
             static_cast<size_t>(getri_lwork<T>(getri_work, static_cast<lapack_int>(lda))));
         break;
@@ -81,18 +81,18 @@ void inversion<float, linalg_backend::mkl>::apply(float* m,
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
         auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<float, kActiveBackend>::workspace_size(lda));
+            arena.next<unsigned char>(lu_decomposition<float, linalg_backend::mkl>::workspace_size(lda));
         const auto lwork = getri_lwork<float>(LAPACKE_sgetri_work, n);
         auto*      work  = arena.next<float>(static_cast<size_t>(lwork));
-        if (lu_decomposition<float, kActiveBackend>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<float, kActiveBackend>::workspace_size(lda)))
+        if (lu_decomposition<float, linalg_backend::mkl>::apply(
+                m, lda, pivot, lu_ws, lu_decomposition<float, linalg_backend::mkl>::workspace_size(lda)))
         {
             LAPACKE_sgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
         }
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<float, kActiveBackend>::apply(
+        if (cholesky_decomposition<float, linalg_backend::mkl>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
@@ -132,18 +132,18 @@ void inversion<double, linalg_backend::mkl>::apply(double* m,
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
         auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<double, kActiveBackend>::workspace_size(lda));
+            arena.next<unsigned char>(lu_decomposition<double, linalg_backend::mkl>::workspace_size(lda));
         const auto lwork = getri_lwork<double>(LAPACKE_dgetri_work, n);
         auto*      work  = arena.next<double>(static_cast<size_t>(lwork));
-        if (lu_decomposition<double, kActiveBackend>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<double, kActiveBackend>::workspace_size(lda)))
+        if (lu_decomposition<double, linalg_backend::mkl>::apply(
+                m, lda, pivot, lu_ws, lu_decomposition<double, linalg_backend::mkl>::workspace_size(lda)))
         {
             LAPACKE_dgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
         }
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<double, kActiveBackend>::apply(
+        if (cholesky_decomposition<double, linalg_backend::mkl>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);

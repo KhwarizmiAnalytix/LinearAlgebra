@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {
@@ -41,7 +41,7 @@ size_t matrix_determinant_workspace_size_helper(linalg_int lda, linear_solver_ty
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        return lu_decomposition<T, kActiveBackend>::workspace_size(lda);
+        return lu_decomposition<T, linalg_backend::native>::workspace_size(lda);
     default:
         return 0;
     }
@@ -62,7 +62,7 @@ T matrix_determinant_helper(T* m,
     {
         LOGGING_CHECK(workspace_size >= matrix_determinant_workspace_size_helper<T>(lda, type),
             "determinant: workspace_size too small");
-        if (lu_decomposition<T, kActiveBackend>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<T, linalg_backend::native>::apply(m, lda, pivot, workspace, workspace_size))
         {
             ret = lu_determinant(m, lda);
         }
@@ -74,7 +74,7 @@ T matrix_determinant_helper(T* m,
 
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
-        if (cholesky_decomposition<T, kActiveBackend>::apply(
+        if (cholesky_decomposition<T, linalg_backend::native>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             ret = cholesky_determinant(m, lda);

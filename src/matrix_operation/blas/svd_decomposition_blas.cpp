@@ -2,7 +2,7 @@
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 #include "include/matrix_operation/svd_decomposition.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include "include/common/workspace_arena.h"
 

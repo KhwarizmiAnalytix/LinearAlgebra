@@ -19,7 +19,7 @@
 
 #include <unordered_map>
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {

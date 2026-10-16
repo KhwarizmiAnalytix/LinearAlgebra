@@ -7,7 +7,7 @@
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/norm.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {
@@ -237,7 +237,7 @@ exponential_layout<T> exponential_plan(detail::workspace_arena& arena, linalg_in
     p.s2           = arena.next<T>(nn);
     p.s3           = arena.next<T>(nn);
     p.pivot        = arena.next<linalg_int>(static_cast<size_t>(n));
-    p.invert_bytes = linalg::inversion<T, linalg::kActiveBackend>::workspace_size(
+    p.invert_bytes = linalg::inversion<T, linalg::linalg_backend::native>::workspace_size(
         n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
     p.invert_ws  = arena.next<unsigned char>(p.invert_bytes);
     p.gemm_bytes = linalg::multiplication<T, linalg::kMatmulActiveBackend>::workspace_size(n, n, n);
@@ -361,7 +361,7 @@ void matrix_exponential_impl(const T* A_in,
             bufs.V[static_cast<std::size_t>(i)] + bufs.U[static_cast<std::size_t>(i)];
     }
 
-    linalg::inversion<T, linalg::kActiveBackend>::apply(denom,
+    linalg::inversion<T, linalg::linalg_backend::native>::apply(denom,
         bufs.pivot,
         n,
         linalg::linear_solver_type::LU_LINEAR_SOLVER,

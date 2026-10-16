@@ -8,7 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/transpose_gpu.h"
-#include <include/logging.h>
+#include "include/logging.h"
 #include "include/common/narrow.h"
 
 namespace linalg

@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/multiplication.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <mkl.h>
 

@@ -2,7 +2,7 @@
 
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/pseudo_inverse.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {

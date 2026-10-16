@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <algorithm>
 
@@ -15,7 +15,7 @@ namespace linalg
 // below, so callers (tests included) get the same validation regardless of
 // which backend is active. There is no non-detail linear_solver() wrapper
 // to put this in any more — callers use
-// linear_solver<T, kActiveBackend>::apply directly.
+// linear_solver<T, linalg_backend::native>::apply directly.
 static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 {
     LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
@@ -100,7 +100,7 @@ void linear_solver_scalar_impl(
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
         // Scalar lu_decomposition needs no scratch of its own.
-        if (lu_decomposition<T, kActiveBackend>::apply(m, lda, pivot, nullptr, 0))
+        if (lu_decomposition<T, linalg_backend::native>::apply(m, lda, pivot, nullptr, 0))
         {
             lu_solve(m, pivot, lda, x);
         }
@@ -113,7 +113,7 @@ void linear_solver_scalar_impl(
 
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
-        if (cholesky_decomposition<T, kActiveBackend>::apply(
+        if (cholesky_decomposition<T, linalg_backend::native>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_solve(m, lda, x);

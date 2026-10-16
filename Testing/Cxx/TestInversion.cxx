@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/determinant.h"
 #include "gtest/gtest.h"
@@ -71,7 +72,7 @@ double hmax_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>
     return max_error;
 }
 
-template <typename value_t> void test_inversion(std::size_t dim)
+template <typename value_t, linalg::linalg_backend Backend> void test_inversion(std::size_t dim)
 {
     dense_matrix<value_t> R(dim, dim);
     dense_matrix<value_t> Id(dim, dim);
@@ -97,10 +98,10 @@ template <typename value_t> void test_inversion(std::size_t dim)
     dense_matrix<value_t> IA = A;
     {
         const auto ws_size =
-            linalg::inversion<value_t, linalg::kActiveBackend>::workspace_size(
+            linalg::inversion<value_t, Backend>::workspace_size(
                 static_cast<linalg_int>(dim), linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::inversion<value_t, linalg::kActiveBackend>::apply(IA.data(),
+        linalg::inversion<value_t, Backend>::apply(IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
@@ -123,10 +124,10 @@ template <typename value_t> void test_inversion(std::size_t dim)
     IA = A;
     {
         const auto ws_size =
-            linalg::inversion<value_t, linalg::kActiveBackend>::workspace_size(
+            linalg::inversion<value_t, Backend>::workspace_size(
                 static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::inversion<value_t, linalg::kActiveBackend>::apply(IA.data(),
+        linalg::inversion<value_t, Backend>::apply(IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             linalg::linear_solver_type::LU_LINEAR_SOLVER,
@@ -164,7 +165,7 @@ template <typename value_t> void test_inversion(std::size_t dim)
             ws_size);
     }
 
-    EXPECT_ANY_THROW((linalg::inversion<value_t, linalg::kActiveBackend>::apply(IA.data(),
+    EXPECT_ANY_THROW((linalg::inversion<value_t, Backend>::apply(IA.data(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         (linalg::linear_solver_type)5,
@@ -185,9 +186,12 @@ template <typename value_t> void test_inversion(std::size_t dim)
 TEST(Math, MatrixInversion)
 {
     const std::size_t dim = 128 + 24 + 16 + 12 + 8 + 4 + 3 + 2 + 1;
-    test_inversion<double>(dim);
-    test_inversion<float>(dim);
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_inversion<double, Backend>(dim);
+        test_inversion<float, Backend>(dim);
 
-    test_inversion<double>(3);
-    test_inversion<float>(3);
+        test_inversion<double, Backend>(3);
+        test_inversion<float, Backend>(3);
+    });
 }

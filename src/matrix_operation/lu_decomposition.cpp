@@ -1,6 +1,6 @@
 #include "include/matrix_operation/lu_decomposition.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include "include/common/backend.h"
 
@@ -18,7 +18,7 @@ namespace linalg
 // below, so callers (linear_solver.cpp, inversion.cpp, tests) get the
 // same validation regardless of which backend is active. There is no
 // non-detail lu_decomposition() wrapper to put this in any more — callers
-// use lu_decomposition<T, kActiveBackend>::apply directly.
+// use lu_decomposition<T, Backend>::apply directly, naming Backend explicitly.
 static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 {
     LOGGING_CHECK(

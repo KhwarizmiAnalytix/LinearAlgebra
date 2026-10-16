@@ -75,12 +75,10 @@ cc_library(
         "//conditions:default": True,
     }),
     # Exception reporting (LOGGING_CHECK/LOGGING_THROW, see CLAUDE.md) is
-    # implemented in ThirdParty/Logging, included from every op as
-    # "ThirdParty/Logging/include/logging.h" (a path relative to this
-    # workspace's root, since Logging is vendored as a plain subdirectory
-    # here rather than a separate Bazel repository — see bazel/logging.bzl
-    # for why its own BUILD files still resolve correctly).
-    deps = ["//ThirdParty/Logging:Logging"],
+    # implemented in ThirdParty/Logging, wired as its own Bazel module
+    # (bazel_dep + local_path_override in MODULE.bazel, matching the sibling
+    # Solvers project) rather than a plain subdirectory of this workspace.
+    deps = ["@xsigma_logging//:Logging"],
     # Commit b09f66e replaced a PyTorch-style dispatch_stub function-pointer
     # registry (each backend self-registering via a static initializer, with
     # no other translation unit calling into it directly) with the current

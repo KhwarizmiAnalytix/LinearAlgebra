@@ -1,12 +1,14 @@
-// Benchmarks linalg::cholesky_decomposition<T, linalg::kActiveBackend>::apply.
+// Benchmarks linalg::cholesky_decomposition<T, Backend>::apply for every
+// backend this build actually compiled in.
 //
-// kActiveBackend is a compile-time choice (include/common/backend.h): a
-// single build only ever contains native, blas_lapacke, or mkl, never all
-// three. To compare them, configure/build this target once per backend
-// (LINALG_ENABLE_MKL=OFF/LINALG_ENABLE_BLAS=OFF for native, then
-// LINALG_ENABLE_BLAS=ON, then LINALG_ENABLE_MKL=ON) and compare the three
-// runs' output — each run labels its results with the backend that produced
-// them.
+// The library never defaults to a backend — every linalg::*<T, Backend> call
+// requires Backend to be named explicitly. This benchmark mirrors that:
+// BM_CholeskyDecomposition is templated on Backend too, and registered once
+// per backend gated on LINALG_HAS_MKL / LINALG_HAS_BLAS / LINALG_HAS_LAPACKE
+// (native is unconditional, the scalar fallback always builds) — see
+// Testing/Cxx/test_backend.h for the same per-backend coverage on the unit
+// test side. A single run now reports all backends present in this build,
+// each row labeled with the backend that produced it.
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -21,9 +23,9 @@
 namespace
 {
 
-const char* backend_name()
+const char* backend_name(linalg::linalg_backend backend)
 {
-    switch (linalg::kActiveBackend)
+    switch (backend)
     {
     case linalg::linalg_backend::mkl:
         return "mkl";
@@ -63,9 +65,10 @@ template <typename T> std::vector<T> make_spd_matrix(std::size_t n, unsigned see
     return a;
 }
 
-template <typename T> void BM_CholeskyDecomposition(benchmark::State& state)
+template <typename T, linalg::linalg_backend Backend>
+void BM_CholeskyDecomposition(benchmark::State& state)
 {
-    const std::size_t   n   = static_cast<std::size_t>(state.range(0));
+    const std::size_t    n   = static_cast<std::size_t>(state.range(0));
     const std::vector<T> spd = make_spd_matrix<T>(n, /*seed=*/42);
     std::vector<T>       work(n * n);
 
@@ -75,29 +78,65 @@ template <typename T> void BM_CholeskyDecomposition(benchmark::State& state)
         work = spd;
         state.ResumeTiming();
 
-        bool ok = linalg::cholesky_decomposition<T, linalg::kActiveBackend>::apply(work.data(),
+        bool ok = linalg::cholesky_decomposition<T, Backend>::apply(work.data(),
             static_cast<linalg_int>(n), linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
         benchmark::DoNotOptimize(ok);
     }
 
-    state.SetLabel(backend_name());
+    state.SetLabel(backend_name(Backend));
     state.SetComplexityN(static_cast<std::int64_t>(n));
 }
 
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
-
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
-
 }  // namespace
+
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::native)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::native)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::blas_lapacke)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::blas_lapacke)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+#endif
+
+#if LINALG_HAS_MKL
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::mkl)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::mkl)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond);
+#endif

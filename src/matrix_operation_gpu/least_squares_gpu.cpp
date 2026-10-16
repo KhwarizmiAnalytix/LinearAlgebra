@@ -8,7 +8,7 @@
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/multiplication_gpu.h"
 #include "include/matrix_operation_gpu/pseudo_inverse_gpu.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {

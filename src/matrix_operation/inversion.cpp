@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <algorithm>
 
@@ -15,7 +15,7 @@ namespace linalg
 // Null checks shared by every inversion<T, Backend>::apply below, so
 // callers (tests included) get the same validation regardless of which
 // backend is active. There is no non-detail matrix_invert() wrapper to put
-// this in any more — callers use inversion<T, kActiveBackend>::apply
+// this in any more — callers use inversion<T, linalg_backend::native>::apply
 // directly.
 static void check_invert_inputs(const void* m, linalg_int lda)
 {
@@ -187,7 +187,7 @@ void matrix_invert_scalar_impl(T* m,
         auto* inv_m = arena.next<double>(n * n);
         auto* work  = arena.next<double>(n);
         if (type == linear_solver_type::LU_UPFRONT_LINEAR_SOLVER ||
-            lu_decomposition<T, kActiveBackend>::apply(m, lda, pivot, nullptr, 0))
+            lu_decomposition<T, linalg_backend::native>::apply(m, lda, pivot, nullptr, 0))
         {
             lu_invert(m, pivot, lda, inv_m, work);
         }
@@ -198,7 +198,7 @@ void matrix_invert_scalar_impl(T* m,
     {
         auto* work = arena.next<T>(n);
         if (type == linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER ||
-            cholesky_decomposition<T, kActiveBackend>::apply(
+            cholesky_decomposition<T, linalg_backend::native>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_invert(m, lda, work);

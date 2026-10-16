@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/eigen.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/inversion.h"
@@ -29,26 +30,25 @@ template <> struct EigenTolerance<double>
     static constexpr double tolerance = 1.e-8;
 };
 
-template <typename value_t> std::vector<unsigned char> symmetric_eigen_workspace(linalg_int n)
+template <typename value_t, linalg::linalg_backend Backend>
+std::vector<unsigned char> symmetric_eigen_workspace(linalg_int n)
 {
-    const auto bytes =
-        linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(n);
+    const auto bytes = linalg::symmetric_eigen_backend<value_t, Backend>::workspace_size(n);
     return std::vector<unsigned char>(bytes);
 }
 
-template <typename value_t>
+template <typename value_t, linalg::linalg_backend Backend>
 std::vector<unsigned char> general_eigen_workspace(linalg_int n, bool compute_eigenvectors)
 {
     const auto bytes =
-        linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::workspace_size(
-            n, compute_eigenvectors);
+        linalg::general_eigen_backend<value_t, Backend>::workspace_size(n, compute_eigenvectors);
     return std::vector<unsigned char>(bytes);
 }
 
 // Symmetric case: A = Q * diag(known eigenvalues) * Q^T for a random
 // orthogonal Q (built from qr_decomposition). Eigenvalues must come back
 // sorted ascending and V^T * A * V must reconstruct the diagonal.
-template <typename value_t> void test_symmetric_eigen(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend> void test_symmetric_eigen(std::size_t n)
 {
     dense_matrix<value_t> R0(n, n);
     for (std::size_t i = 0; i < n * n; i++)
@@ -57,10 +57,10 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
     }
     dense_matrix<value_t> Q(n, n);
     dense_matrix<value_t> R(n, n);
-    const auto qr_ws_size = linalg::qr_decomposition<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto qr_ws_size = linalg::qr_decomposition<value_t, Backend>::workspace_size(
         static_cast<linalg_long>(n), static_cast<linalg_long>(n));
     std::vector<unsigned char> qr_ws(qr_ws_size);
-    linalg::qr_decomposition<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(n),
+    linalg::qr_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(n),
         static_cast<linalg_long>(n),
         R0.begin(),
         static_cast<linalg_long>(n),
@@ -93,9 +93,8 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
 
     std::vector<value_t>  evals(n);
     dense_matrix<value_t> evecs(n, n);
-    auto                  eigen_ws = symmetric_eigen_workspace<value_t>(static_cast<linalg_int>(n));
-    const bool            ok =
-        linalg::symmetric_eigen_backend<value_t, linalg::kActiveBackend>::apply(A.begin(),
+    auto       eigen_ws = symmetric_eigen_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    const bool ok = linalg::symmetric_eigen_backend<value_t, Backend>::apply(A.begin(),
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),
             evals.data(),
@@ -146,7 +145,8 @@ template <typename value_t> void test_symmetric_eigen(std::size_t n)
 
 // General (non-symmetric) case with a known real spectrum: A = P * D * P^-1
 // for a diagonally-dominant (hence invertible) random P.
-template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_general_eigen_real_spectrum(std::size_t n)
 {
     dense_matrix<value_t> P(n, n);
     for (std::size_t i = 0; i < n; i++)
@@ -164,11 +164,10 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
         Pinv.begin()[i] = P.begin()[i];
     }
     std::vector<linalg_int> pivot(n);
-    const auto              invert_ws_size =
-        linalg::inversion<value_t, linalg::kActiveBackend>::workspace_size(
-            static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
+    const auto              invert_ws_size = linalg::inversion<value_t, Backend>::workspace_size(
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_LINEAR_SOLVER);
     std::vector<unsigned char> invert_ws(invert_ws_size);
-    linalg::inversion<value_t, linalg::kActiveBackend>::apply(Pinv.begin(),
+    linalg::inversion<value_t, Backend>::apply(Pinv.begin(),
         pivot.data(),
         static_cast<linalg_int>(n),
         linalg::linear_solver_type::LU_LINEAR_SOLVER,
@@ -197,8 +196,8 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
 
     std::vector<value_t> er(n);
     std::vector<value_t> ei(n);
-    auto       eigen_ws = general_eigen_workspace<value_t>(static_cast<linalg_int>(n), false);
-    const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(A.begin(),
+    auto eigen_ws = general_eigen_workspace<value_t, Backend>(static_cast<linalg_int>(n), false);
+    const bool ok = linalg::general_eigen_backend<value_t, Backend>::apply(A.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         er.data(),
@@ -222,7 +221,7 @@ template <typename value_t> void test_general_eigen_real_spectrum(std::size_t n)
 
 // Complex-conjugate pair: a 2x2 rotation-scale block [[a,-b],[b,a]] has
 // eigenvalues a +- b*i exactly.
-template <typename value_t> void test_general_eigen_complex_pair()
+template <typename value_t, linalg::linalg_backend Backend> void test_general_eigen_complex_pair()
 {
     const value_t         a = static_cast<value_t>(1.5);
     const value_t         b = static_cast<value_t>(2.0);
@@ -234,8 +233,8 @@ template <typename value_t> void test_general_eigen_complex_pair()
 
     value_t    er[2];
     value_t    ei[2];
-    auto       eigen_ws = general_eigen_workspace<value_t>(2, false);
-    const bool ok       = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    auto       eigen_ws = general_eigen_workspace<value_t, Backend>(2, false);
+    const bool ok       = linalg::general_eigen_backend<value_t, Backend>::apply(
         A.begin(), 2, 2, er, ei, nullptr, 2, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
@@ -254,7 +253,7 @@ template <typename value_t> void test_general_eigen_complex_pair()
 
 // Real-eigenvector residual check on a lower-triangular matrix (eigenvalues
 // are exactly its diagonal entries).
-template <typename value_t> void test_general_eigen_eigenvectors()
+template <typename value_t, linalg::linalg_backend Backend> void test_general_eigen_eigenvectors()
 {
     dense_matrix<value_t> A(3, 3);
     A(0, 0) = 2;
@@ -266,8 +265,8 @@ template <typename value_t> void test_general_eigen_eigenvectors()
     value_t               er[3];
     value_t               ei[3];
     dense_matrix<value_t> evecs(3, 3);
-    auto                  eigen_ws = general_eigen_workspace<value_t>(3, true);
-    const bool ok = linalg::general_eigen_backend<value_t, linalg::kActiveBackend>::apply(
+    auto                  eigen_ws = general_eigen_workspace<value_t, Backend>(3, true);
+    const bool ok = linalg::general_eigen_backend<value_t, Backend>::apply(
         A.begin(), 3, 3, er, ei, evecs.begin(), 3, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
@@ -291,28 +290,40 @@ template <typename value_t> void test_general_eigen_eigenvectors()
 
 TEST(Math, SymmetricEigenvalueDecomposition)
 {
-    test_symmetric_eigen<float>(5);
-    test_symmetric_eigen<double>(5);
-    test_symmetric_eigen<double>(8);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_symmetric_eigen<float, Backend>(5);
+        test_symmetric_eigen<double, Backend>(5);
+        test_symmetric_eigen<double, Backend>(8);
+    });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionRealSpectrum)
 {
-    test_general_eigen_real_spectrum<float>(4);
-    test_general_eigen_real_spectrum<double>(4);
-    test_general_eigen_real_spectrum<double>(6);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_general_eigen_real_spectrum<float, Backend>(4);
+        test_general_eigen_real_spectrum<double, Backend>(4);
+        test_general_eigen_real_spectrum<double, Backend>(6);
+    });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionComplexPair)
 {
-    test_general_eigen_complex_pair<float>();
-    test_general_eigen_complex_pair<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_general_eigen_complex_pair<float, Backend>();
+        test_general_eigen_complex_pair<double, Backend>();
+    });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionEigenvectors)
 {
-    test_general_eigen_eigenvectors<float>();
-    test_general_eigen_eigenvectors<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_general_eigen_eigenvectors<float, Backend>();
+        test_general_eigen_eigenvectors<double, Backend>();
+    });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
@@ -323,19 +334,26 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     A(1, 0) = 1;
     A(1, 1) = 0;
 
-    double er[2];
-    double ei[2];
-    double evecs[4];
-    auto   eigen_ws = general_eigen_workspace<double>(2, true);
-#if LINALG_HAS_MKL
-    // MKL's LAPACKE *geev call packs complex eigenvectors natively (see
-    // eigen.h); only the portable scalar fallback, which
-    // has no complex arithmetic, throws for this case.
-    EXPECT_NO_THROW((linalg::general_eigen_backend<double, linalg::kActiveBackend>::apply(
-        A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
-#else
-    EXPECT_THROW((linalg::general_eigen_backend<double, linalg::kActiveBackend>::apply(
-                     A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())),
-        std::exception);
-#endif
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+
+        double er[2];
+        double ei[2];
+        double evecs[4];
+        auto   eigen_ws = general_eigen_workspace<double, Backend>(2, true);
+        // mkl's and blas_lapacke's LAPACKE *geev call packs complex
+        // eigenvectors natively (see eigen.h); only the portable scalar
+        // fallback, which has no complex arithmetic, throws for this case.
+        if (Backend == linalg::linalg_backend::native)
+        {
+            EXPECT_THROW((linalg::general_eigen_backend<double, Backend>::apply(
+                             A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())),
+                std::exception);
+        }
+        else
+        {
+            EXPECT_NO_THROW((linalg::general_eigen_backend<double, Backend>::apply(
+                A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
+        }
+    });
 }

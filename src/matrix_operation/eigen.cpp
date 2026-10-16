@@ -1,6 +1,6 @@
 #include "include/matrix_operation/eigen.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include "include/common/workspace_arena.h"
 #include <algorithm>
@@ -18,7 +18,7 @@ namespace detail
 // validation regardless of which backend is active. There is no
 // non-detail symmetric_eigenvalue_decomposition() wrapper to put this in
 // any more — callers use
-// symmetric_eigen_backend<T, kActiveBackend>::apply directly.
+// symmetric_eigen_backend<T, Backend>::apply directly, naming Backend explicitly.
 static void check_symmetric_eigen_inputs(const void* A,
     const void*                                      eigenvalues,
     const void*                                      eigenvectors,
@@ -34,7 +34,8 @@ static void check_symmetric_eigen_inputs(const void* A,
 
 // Same, for every general_eigen_backend<T, Backend>::apply below. There is
 // no non-detail eigen() wrapper to put this in any more
-// — callers use general_eigen_backend<T, kActiveBackend>::apply directly.
+// — callers use general_eigen_backend<T, Backend>::apply directly, naming
+// Backend explicitly.
 static void check_general_eigen_inputs(const void* A,
     const void*                                    eigenvalues_real,
     const void*                                    eigenvalues_imag,

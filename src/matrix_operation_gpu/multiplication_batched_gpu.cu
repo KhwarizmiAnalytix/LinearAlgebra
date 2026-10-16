@@ -4,7 +4,7 @@
 
 #include <cuda_runtime.h>
 
-#include <include/logging.h>
+#include "include/logging.h"
 #include "include/common/narrow.h"
 
 // One thread per output element, one z-block of the launch grid per matrix.

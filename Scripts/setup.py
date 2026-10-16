@@ -467,6 +467,7 @@ class LinearAlgebraFlags:
             "cppcheck",
             "benchmark",
             "isa",
+            "vectorization",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -498,6 +499,8 @@ class LinearAlgebraFlags:
             "enable Google Benchmark micro-benchmarks (LINALG_ENABLE_BENCHMARK)",
             "SIMD ISA override: scalar, sse2, avx, avx2, avx512, neon "
             "(bare tokens also accepted)",
+            "enable the SIMD-vectorized scalar GEMM fallback "
+            "(LINALG_ENABLE_VECTORIZATION; default ON; token disables it)",
         ]
 
     def __build_cmake_flag(self):
@@ -527,6 +530,7 @@ class LinearAlgebraFlags:
             "lto": "LINALG_LTO_MODE",
             "benchmark": "LINALG_ENABLE_BENCHMARK",
             "isa": "LINALG_VECTORIZATION_ISA",
+            "vectorization": "LINALG_ENABLE_VECTORIZATION",
             # "cppcheck" runs via Scripts/helpers/cppcheck.py after the build; no
             # CMakeLists.txt option consumes it (avoid an unused-var warning).
         }
@@ -552,6 +556,7 @@ class LinearAlgebraFlags:
                 "lto": "",  # empty = let CMake compute the smart per-compiler default
                 "sanitizer_enum": "address",
                 "isa": "",  # empty = let CMake pick the platform default
+                "vectorization": self.ON,  # LINALG_ENABLE_VECTORIZATION default ON
             }
         )
 
@@ -633,7 +638,7 @@ class LinearAlgebraFlags:
                 self.__value["cxxstd"] = std_version
                 print_status(f"Setting C++ standard to C++{std_version}", "INFO")
             elif arg in self.__key:
-                if arg in ("gtest", "cache"):
+                if arg in ("gtest", "cache", "vectorization"):
                     # CMake default ON: providing the token turns it OFF.
                     self.__value[arg] = self.OFF
                 elif arg == "lto":

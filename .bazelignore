@@ -5,3 +5,4 @@ ThirdParty/googletest
 ThirdParty/loguru
 ThirdParty/magic_enum
 ThirdParty/spdlog
+ThirdParty/Logging

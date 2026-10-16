@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/norm.h"
 #include "include/matrix_operation/svd_decomposition.h"
 #include "gtest/gtest.h"
@@ -12,7 +13,8 @@ namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename value_t> void test_norms(std::size_t rows, std::size_t columns)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_norms(std::size_t rows, std::size_t columns)
 {
     dense_matrix<value_t> M(rows, columns);
     for (std::size_t i = 0; i < rows; i++)
@@ -97,10 +99,10 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
     std::vector<value_t>  S(k);
     dense_matrix<value_t> U(rows, k);
     dense_matrix<value_t> VT(k, columns);
-    const auto svd_ws_size = linalg::svd_decomposition<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto svd_ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> svd_ws(svd_ws_size);
-    linalg::svd_decomposition<value_t, linalg::kActiveBackend>::apply(static_cast<linalg_long>(rows),
+    linalg::svd_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         A_copy.begin(),
         static_cast<linalg_long>(columns),
@@ -137,8 +139,11 @@ template <typename value_t> void test_norms(std::size_t rows, std::size_t column
 
 TEST(Math, MatrixNorm)
 {
-    test_norms<float>(6, 5);
-    test_norms<float>(5, 6);
-    test_norms<double>(6, 5);
-    test_norms<double>(5, 6);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_norms<float, Backend>(6, 5);
+        test_norms<float, Backend>(5, 6);
+        test_norms<double, Backend>(6, 5);
+        test_norms<double, Backend>(5, 6);
+    });
 }

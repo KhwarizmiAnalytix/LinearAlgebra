@@ -122,6 +122,12 @@ class LoggingBazelConfiguration:
         self.args = args
         self.build_type = "debug"
         self.cxx_standard: Optional[str] = None
+        # ThirdParty/Logging's own Testing/ tree and its nested vendored Google
+        # Benchmark copy are excluded from "//..." via .bazelignore (its tools/
+        # package needs a "tools_pip_deps" pip-extension repo that only exists in
+        # Logging's own, standalone MODULE.bazel, not registered here); a negative
+        # target pattern can't do this instead, since Bazel must still load a
+        # subtree's packages to resolve "-//path/..." itself.
         self.targets: list[str] = ["//..."]
         self.run_tests = False
         self.run_build = False
@@ -339,13 +345,23 @@ class LoggingBazelConfiguration:
 
         return flags
 
-    def build_bazel_command(self, action: str) -> list[str]:
-        """Build the Bazel command with all configurations."""
+    def build_bazel_command(self, action: str, extra_flags: Optional[list[str]] = None) -> list[str]:
+        """Build the Bazel command with all configurations.
+
+        `extra_flags` (e.g. --test_output=...) must land before the targets:
+        self.targets includes "-//..." negative patterns, and Bazel requires
+        every flag to precede the "--" end-of-options marker that introduces
+        those ("Negative target patterns can only appear after the end of
+        options marker").
+        """
         cmd = bazel_prefix()
         if self.use_batch:
             cmd.append("--batch")
         cmd.append(action)
         cmd.extend(self._config_flags())
+        if extra_flags:
+            cmd.extend(extra_flags)
+        cmd.append("--")
         cmd.extend(self.targets)
         return cmd
 
@@ -472,10 +488,10 @@ class LoggingBazelConfiguration:
             return
         print_status("Running Bazel tests...", "INFO")
         self._shutdown_bazel_for_batch()
-        cmd = self.build_bazel_command("test")
-        cmd.append("--test_output=all" if self.verbose_tests else "--test_output=errors")
+        test_flags = ["--test_output=all" if self.verbose_tests else "--test_output=errors"]
         if self.verbose_tests:
-            cmd.append("--verbose_failures")
+            test_flags.append("--verbose_failures")
+        cmd = self.build_bazel_command("test", extra_flags=test_flags)
         print_status(f"Running: {' '.join(cmd)}", "INFO")
         try:
             start_time = time.time()
@@ -498,8 +514,8 @@ class LoggingBazelConfiguration:
             return
         print_status("Running Bazel coverage...", "INFO")
         self._shutdown_bazel_for_batch()
-        cmd = self.build_bazel_command("coverage")
-        cmd.append("--test_output=all" if self.verbose_tests else "--test_output=errors")
+        coverage_flags = ["--test_output=all" if self.verbose_tests else "--test_output=errors"]
+        cmd = self.build_bazel_command("coverage", extra_flags=coverage_flags)
         print_status(f"Running: {' '.join(cmd)}", "INFO")
         try:
             start_time = time.time()

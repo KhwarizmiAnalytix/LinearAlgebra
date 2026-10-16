@@ -3,7 +3,7 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
 #include "include/common/backend.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <mkl.h>
 

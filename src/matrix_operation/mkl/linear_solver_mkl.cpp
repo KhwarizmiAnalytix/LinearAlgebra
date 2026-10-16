@@ -4,7 +4,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include <mkl.h>
 
@@ -35,13 +35,13 @@ void linear_solver<float, linalg_backend::mkl>::apply(float* m,
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_decomposition<float, kActiveBackend>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<float, linalg_backend::mkl>::apply(m, lda, pivot, workspace, workspace_size))
         {
             LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
         }
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<float, kActiveBackend>::apply(
+        if (cholesky_decomposition<float, linalg_backend::mkl>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
@@ -69,13 +69,13 @@ void linear_solver<double, linalg_backend::mkl>::apply(double* m,
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_decomposition<double, kActiveBackend>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<double, linalg_backend::mkl>::apply(m, lda, pivot, workspace, workspace_size))
         {
             LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
         }
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<double, kActiveBackend>::apply(
+        if (cholesky_decomposition<double, linalg_backend::mkl>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
@@ -97,7 +97,7 @@ size_t linear_solver<float, linalg_backend::mkl>::workspace_size(
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        return lu_decomposition<float, kActiveBackend>::workspace_size(lda);
+        return lu_decomposition<float, linalg_backend::mkl>::workspace_size(lda);
     default:
         return 0;
     }
@@ -110,7 +110,7 @@ size_t linear_solver<double, linalg_backend::mkl>::workspace_size(
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        return lu_decomposition<double, kActiveBackend>::workspace_size(lda);
+        return lu_decomposition<double, linalg_backend::mkl>::workspace_size(lda);
     default:
         return 0;
     }

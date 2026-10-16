@@ -3,7 +3,7 @@
 #include "include/matrix_operation/multiplication.h"
 
 #include "include/common/narrow.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #if LINALG_HAS_ACCELERATE
 #include <Accelerate/Accelerate.h>

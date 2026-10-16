@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/inversion.h"
@@ -101,7 +102,7 @@ dense_matrix<value_t> build_symmetric_matrix(
     return M;
 }
 
-template <typename value_t>
+template <typename value_t, linalg::linalg_backend Backend>
 void build_cholesky_matrix(
     const std::vector<value_t>& values, std::size_t dim, linalg::cholesky_decomposition_enum type)
 {
@@ -119,7 +120,7 @@ void build_cholesky_matrix(
     }
 
     dense_matrix<value_t> R = A;
-    linalg::cholesky_decomposition<value_t, linalg::kActiveBackend>::apply(
+    linalg::cholesky_decomposition<value_t, Backend>::apply(
         R.begin(), static_cast<linalg_int>(dim), type);
     for (std::size_t i = 0; i < dim; ++i)
     {
@@ -174,11 +175,11 @@ void build_cholesky_matrix(
 
         IA = R;
         const auto invert_ws_size =
-            linalg::inversion<value_t, linalg::kActiveBackend>::workspace_size(
+            linalg::inversion<value_t, Backend>::workspace_size(
                 static_cast<linalg_int>(dim),
                 linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
         std::vector<unsigned char> invert_ws(invert_ws_size);
-        linalg::inversion<value_t, linalg::kActiveBackend>::apply(IA.data(),
+        linalg::inversion<value_t, Backend>::apply(IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER,
@@ -212,7 +213,7 @@ void build_cholesky_matrix(
             x[i] = static_cast<value_t>(rand()) / static_cast<value_t>(RAND_MAX);
         }
         std::vector<value_t> b = x;
-        linalg::linear_solver<value_t, linalg::kActiveBackend>::apply(R.begin(),
+        linalg::linear_solver<value_t, Backend>::apply(R.begin(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             x.data(),
@@ -235,7 +236,7 @@ void build_cholesky_matrix(
     }
 }
 
-template <typename value_t> void test_cholesky(std::size_t dim)
+template <typename value_t, linalg::linalg_backend Backend> void test_cholesky(std::size_t dim)
 {
     std::vector<value_t> values(dim * (dim + 1) / 2);
 
@@ -249,24 +250,30 @@ template <typename value_t> void test_cholesky(std::size_t dim)
         }
     }
 
-    build_cholesky_matrix<value_t>(
+    build_cholesky_matrix<value_t, Backend>(
         values, dim, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
-    build_cholesky_matrix<value_t>(
+    build_cholesky_matrix<value_t, Backend>(
         values, dim, linalg::cholesky_decomposition_enum::UPPER_TRIANGULAR);
 
-#if !LINALG_HAS_MKL
-    EXPECT_ANY_THROW((linalg::cholesky_decomposition<value_t, linalg::kActiveBackend>::apply(
-        &values[0], 1, (linalg::cholesky_decomposition_enum)'5')));
-#endif
+    // mkl's cholesky_decomposition doesn't validate/throw on this invalid
+    // enum the way native and blas_lapacke do.
+    if (Backend != linalg::linalg_backend::mkl)
+    {
+        EXPECT_ANY_THROW((linalg::cholesky_decomposition<value_t, Backend>::apply(
+            &values[0], 1, (linalg::cholesky_decomposition_enum)'5')));
+    }
 }
 }  // namespace
 
 TEST(Math, CholeskyDecomposition)
 {
     const std::size_t dim = 128 + 24 + 16 + 12 + 8 + 4 + 3 + 2 + 1;
-    test_cholesky<float>(dim);
-    test_cholesky<double>(dim);
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_cholesky<float, Backend>(dim);
+        test_cholesky<double, Backend>(dim);
 
-    test_cholesky<float>(13);
-    test_cholesky<double>(13);
+        test_cholesky<float, Backend>(13);
+        test_cholesky<double, Backend>(13);
+    });
 }

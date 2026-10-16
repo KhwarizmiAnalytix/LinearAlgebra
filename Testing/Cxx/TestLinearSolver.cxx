@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/linear_solver.h"
 #include "gtest/gtest.h"
 
@@ -69,7 +70,8 @@ value_t hmax_abs_diff(const std::vector<value_t>& a, const std::vector<value_t>&
     return max_error;
 }
 
-template <typename value_t> void test_linear_solver(std::size_t dim, double tolerance)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_linear_solver(std::size_t dim, double tolerance)
 {
     dense_matrix<value_t> R(dim, dim);
 
@@ -100,7 +102,7 @@ template <typename value_t> void test_linear_solver(std::size_t dim, double tole
     std::vector<value_t> b = matvec(A, x_ref);
 
     std::vector<value_t> x = b;
-    linalg::linear_solver<value_t, linalg::kActiveBackend>::apply(R.begin(),
+    linalg::linear_solver<value_t, Backend>::apply(R.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
@@ -113,7 +115,7 @@ template <typename value_t> void test_linear_solver(std::size_t dim, double tole
 
     x       = b;
     auto R2 = A;
-    linalg::linear_solver<value_t, linalg::kActiveBackend>::apply(R2.begin(),
+    linalg::linear_solver<value_t, Backend>::apply(R2.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
@@ -126,10 +128,10 @@ template <typename value_t> void test_linear_solver(std::size_t dim, double tole
 
     x                     = b;
     auto       R3         = A;
-    const auto lu_ws_size = linalg::linear_solver<value_t, linalg::kActiveBackend>::workspace_size(
+    const auto lu_ws_size = linalg::linear_solver<value_t, Backend>::workspace_size(
         static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_LINEAR_SOLVER);
     std::vector<unsigned char> lu_ws(lu_ws_size);
-    linalg::linear_solver<value_t, linalg::kActiveBackend>::apply(R3.begin(),
+    linalg::linear_solver<value_t, Backend>::apply(R3.begin(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         x.data(),
@@ -145,6 +147,9 @@ template <typename value_t> void test_linear_solver(std::size_t dim, double tole
 TEST(Math, LinearSolver)
 {
     const std::size_t dim = 128 + 24 + 16 + 12 + 8 + 4 + 3 + 2 + 1;
-    test_linear_solver<float>(dim, 1.e-2);
-    test_linear_solver<double>(dim, 1.e-10);
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_linear_solver<float, Backend>(dim, 1.e-2);
+        test_linear_solver<double, Backend>(dim, 1.e-10);
+    });
 }

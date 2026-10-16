@@ -1,6 +1,6 @@
 #include "include/matrix_operation/svd_decomposition.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -16,7 +16,7 @@ namespace linalg
 // below, so callers (tests included) get the same validation regardless of
 // which backend is active. There is no non-detail svd_decomposition()
 // wrapper to put this in any more — callers use
-// svd_decomposition<T, kActiveBackend>::apply directly.
+// svd_decomposition<T, Backend>::apply directly, naming Backend explicitly.
 static void check_svd_inputs(const void* A,
     const void*                          S,
     const void*                          U,

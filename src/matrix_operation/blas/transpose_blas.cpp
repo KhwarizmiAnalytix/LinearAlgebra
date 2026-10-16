@@ -3,7 +3,7 @@
 #include "include/matrix_operation/transpose.h"
 
 #include "include/common/narrow.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include "include/common/workspace_arena.h"
 

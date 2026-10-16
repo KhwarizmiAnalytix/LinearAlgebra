@@ -1,6 +1,6 @@
 #include "include/matrix_operation/qr_decomposition.h"
 
-#include <include/logging.h>
+#include "include/logging.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -14,7 +14,7 @@ namespace linalg
 // below, so callers (tests included) get the same validation regardless of
 // which backend is active. There is no non-detail qr_decomposition()
 // wrapper to put this in any more — callers use
-// qr_decomposition<T, kActiveBackend>::apply directly.
+// qr_decomposition<T, Backend>::apply directly, naming Backend explicitly.
 static void check_qr_inputs(const void* A,
     const void*                         Q,
     const void*                         R,

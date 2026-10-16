@@ -6,7 +6,7 @@
 
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/svd_decomposition.h"
-#include <include/logging.h>
+#include "include/logging.h"
 
 namespace linalg
 {
@@ -40,7 +40,7 @@ template <typename T>
 size_t pseudo_inverse_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
     const auto svd_bytes =
-        linalg::svd_decomposition<T, linalg::kActiveBackend>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     pseudo_inverse_plan<T>(arena, rows, columns, svd_bytes);
     return arena.total_size();
@@ -59,7 +59,7 @@ void pseudo_inverse_impl(linalg_long rows,
 {
     const linalg_long k = std::min(rows, columns);
     const auto        svd_bytes =
-        linalg::svd_decomposition<T, linalg::kActiveBackend>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
 
     LOGGING_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
         "pseudo_inverse: workspace_size too small");
@@ -74,7 +74,7 @@ void pseudo_inverse_impl(linalg_long rows,
         }
     }
 
-    linalg::svd_decomposition<T, linalg::kActiveBackend>::apply(rows,
+    linalg::svd_decomposition<T, linalg::linalg_backend::native>::apply(rows,
         columns,
         bufs.A_copy,
         columns,

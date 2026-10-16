@@ -276,7 +276,72 @@ if(LINALG_ENABLE_MKL)
 endif()
 
 # --- Optional vendor-neutral BLAS/LAPACK backend ---
+set(LINALG_BLAS_USE_ACCELERATE OFF)
+set(LINALG_BLAS_HAS_LAPACKE OFF)
 if(LINALG_ENABLE_BLAS)
+    # Package managers that install OpenBLAS outside the compiler's default
+    # search path leave find_package(BLAS) to silently resolve to whatever
+    # the platform ships instead (e.g. Accelerate on Apple, which has no
+    # lapacke.h), so the blas_lapack backend's LAPACKE-dependent ops
+    # (cholesky/lu/svd/inversion/linear_solver) fall back to scalar. Probe
+    # each manager's own prefix query / env var — PyTorch's
+    # cmake/Modules/FindOpenBLAS.cmake takes the same approach — and append
+    # any hit to CMAKE_PREFIX_PATH (not CMAKE_FIND_ROOT_PATH, which would
+    # also constrain *what* can be found) so find_package/find_path below
+    # pick OpenBLAS up on their own, with no manual -DCMAKE_PREFIX_PATH
+    # needed on macOS, Linux, or Windows. A user-supplied CMAKE_PREFIX_PATH
+    # entry always wins ties, since list order is find preference and these
+    # are appended, not prepended.
+    if(NOT DEFINED ENV{LINALG_NO_AUTO_BLAS_PREFIX})
+        set(LINALG_BLAS_PREFIX_CANDIDATES "")
+
+        # Homebrew (macOS) / Linuxbrew (Linux) OpenBLAS keg: both are
+        # keg-only, i.e. deliberately unlinked from the default prefix so
+        # they don't shadow a system BLAS.
+        find_program(LINALG_BREW_EXECUTABLE brew)
+        if(LINALG_BREW_EXECUTABLE)
+            execute_process(
+                COMMAND "${LINALG_BREW_EXECUTABLE}" --prefix openblas
+                OUTPUT_VARIABLE LINALG_HOMEBREW_OPENBLAS_PREFIX
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+                RESULT_VARIABLE LINALG_HOMEBREW_OPENBLAS_RESULT
+            )
+            if(LINALG_HOMEBREW_OPENBLAS_RESULT EQUAL 0)
+                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "${LINALG_HOMEBREW_OPENBLAS_PREFIX}")
+            endif()
+        endif()
+        mark_as_advanced(LINALG_BREW_EXECUTABLE)
+
+        # Conda-forge's openblas package (macOS/Linux/Windows): headers and
+        # library sit under the active environment's own prefix — Library/
+        # on Windows, the prefix root elsewhere — never the compiler default.
+        if(DEFINED ENV{CONDA_PREFIX})
+            if(WIN32)
+                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}/Library")
+            else()
+                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}")
+            endif()
+        endif()
+
+        # vcpkg's openblas port, for a VCPKG_ROOT set without the vcpkg
+        # toolchain file (which would otherwise have already wired
+        # CMAKE_PREFIX_PATH itself before this file ran).
+        if(DEFINED ENV{VCPKG_ROOT} AND DEFINED VCPKG_TARGET_TRIPLET)
+            list(APPEND LINALG_BLAS_PREFIX_CANDIDATES
+                 "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}")
+        endif()
+
+        foreach(LINALG_BLAS_PREFIX_CANDIDATE IN LISTS LINALG_BLAS_PREFIX_CANDIDATES)
+            if(LINALG_BLAS_PREFIX_CANDIDATE AND IS_DIRECTORY "${LINALG_BLAS_PREFIX_CANDIDATE}")
+                list(APPEND CMAKE_PREFIX_PATH "${LINALG_BLAS_PREFIX_CANDIDATE}")
+                message(STATUS "LinearAlgebra: found candidate OpenBLAS prefix ${LINALG_BLAS_PREFIX_CANDIDATE}")
+            endif()
+        endforeach()
+        unset(LINALG_BLAS_PREFIX_CANDIDATES)
+        unset(LINALG_BLAS_PREFIX_CANDIDATE)
+    endif()
+
     find_package(BLAS REQUIRED)
     find_package(LAPACK REQUIRED)
     # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
@@ -311,7 +376,6 @@ if(LINALG_ENABLE_BLAS)
     unset(_linalg_find_framework_save)
     mark_as_advanced(LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR)
 
-    set(LINALG_BLAS_USE_ACCELERATE OFF)
     set(LINALG_BLAS_INCLUDE_DIRS "")
     if(LINALG_CBLAS_INCLUDE_DIR MATCHES "\\.framework")
         # On macOS, the generic cblas.h search above commonly lands on
@@ -348,7 +412,6 @@ if(LINALG_ENABLE_BLAS)
     # linear_solver) are therefore only compiled when real lapacke.h is found;
     # otherwise each op's dispatcher .cpp falls through to the scalar backend
     # at compile time via #if LINALG_HAS_LAPACKE.
-    set(LINALG_BLAS_HAS_LAPACKE OFF)
     if(LINALG_LAPACKE_INCLUDE_DIR)
         list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
         set(LINALG_BLAS_HAS_LAPACKE ON)
@@ -649,6 +712,7 @@ endif()
 if(LINALG_STANDALONE)
     message("")
     message("******** LinearAlgebra module (CMake flags) ********")
+    message("  Shared libs          : ${BUILD_SHARED_LIBS}")
     message("  Cxx standard         : ${LINALG_CXX_STANDARD}")
     message("  Cache                : ${LINALG_ENABLE_CACHE}")
     message("  Cache backend        : ${LINALG_CACHE_BACKEND}")
@@ -660,10 +724,13 @@ if(LINALG_STANDALONE)
     message("  Benchmark            : ${LINALG_ENABLE_BENCHMARK}")
     message("  MKL                  : ${LINALG_ENABLE_MKL}")
     message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
+    message("  Accelerate (BLAS)    : ${LINALG_BLAS_USE_ACCELERATE}")
+    message("  LAPACKE (BLAS)       : ${LINALG_BLAS_HAS_LAPACKE}")
     message("  cuBLAS               : ${LINALG_ENABLE_CUBLAS}")
     message("  Cpuinfo              : ${LINALG_HAS_CPUINFO}")
     message("  Profiler             : ${LINALG_HAS_PROFILER}")
     message("  LU pivoting          : ${LINALG_LU_PIVOTING}")
+    message("  Win32 warnings       : ${LINALG_DISPLAY_WIN32_WARNINGS}")
     message("  Vectorization        : ${LINALG_ENABLE_VECTORIZATION}")
     message("  Vectorization ISA    : ${LINALG_VECTORIZATION_ISA}")
     message("  Clang-tidy           : ${LINALG_ENABLE_CLANGTIDY}")

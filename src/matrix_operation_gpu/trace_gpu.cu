@@ -5,7 +5,7 @@
 #include <cuda_runtime_api.h>
 
 #include "include/common/cuda_workspace.h"
-#include <include/logging.h>
+#include "include/logging.h"
 #include "include/common/narrow.h"
 
 // Single-thread reduction: n is one matrix dimension, not a large array, so

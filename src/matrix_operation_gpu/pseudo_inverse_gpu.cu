@@ -10,7 +10,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include <include/logging.h>
+#include "include/logging.h"
 #include "include/common/narrow.h"
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns
