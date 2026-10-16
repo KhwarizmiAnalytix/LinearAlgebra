@@ -41,7 +41,7 @@ one consumer, not a required host.
   (below), built when `LINALG_ENABLE_CUBLAS=ON`.
 - `src/` — implementation (`.cpp`/`.cu`) files, mirroring `include/`'s
   layout (e.g. `include/matrix_operation/lu_decomposition.h` pairs with
-  `src/matrix_operation/lu_decomposition.cpp`, and
+  `src/matrix_operation/native/lu_decomposition_native.cpp`, and
   `include/matrix_operation_gpu/qr_decomposition_gpu.h` pairs with
   `src/matrix_operation_gpu/qr_decomposition_gpu.cu`).
 - `Testing/Cxx/` — GoogleTest unit tests.

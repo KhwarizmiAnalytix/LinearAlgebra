@@ -230,7 +230,7 @@ from `linalg::gpu::lu_decomposition`'s output, the same way
 **`inversion_gpu.h`/`.cpp`** (`linalg::gpu::matrix_invert`,
 `linalg::gpu::determinant`). cuSOLVER has no direct `getri`
 equivalent, so mirror the CPU op's actual strategy
-(`inversion.cpp` already computes the inverse via
+(`inversion_native.cpp` already computes the inverse via
 factor-then-solve-against-identity, not a dedicated inversion routine):
 `cusolverDnXgetrf` (via the corrected §5.2 path) followed by
 `cusolverDnXgetrs` with the identity matrix as the batched right-hand

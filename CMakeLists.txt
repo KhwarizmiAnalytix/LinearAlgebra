@@ -64,7 +64,8 @@ option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearA
 
 # Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...).
 # When both this and LINALG_ENABLE_MKL are ON, MKL takes precedence at
-# compile time (see e.g. multiplication.cpp's #if/#elif chain).
+# compile time (see the #if/#elif chain in
+# native/multiplication_native.cpp).
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
 # cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as separate
@@ -81,8 +82,9 @@ option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlge
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
 # Enables the scalar (non-MKL/BLAS) multiplication backend's blocked,
-# SIMD-vectorized GEMM (include/common/packet.h; multiplication.cpp's
-# LINALG_HAS_VECTORIZATION block) in place of its plain triple-loop fallback.
+# SIMD-vectorized GEMM (include/common/packet.h and the
+# LINALG_HAS_VECTORIZATION block in native/multiplication_native.cpp) in
+# place of its plain triple-loop fallback.
 option(LINALG_ENABLE_VECTORIZATION
        "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
 )
@@ -126,8 +128,9 @@ set_property(
              neon
 )
 
-# On MSVC, multiplication.cpp normally suppresses narrowing-conversion
-# warnings (C4244) around its non-MKL fallback; this re-enables them.
+# On MSVC, native/multiplication_native.cpp normally suppresses C4244
+# narrowing-conversion warnings around its non-MKL fallback; this re-enables
+# them.
 option(LINALG_DISPLAY_WIN32_WARNINGS "Do not suppress MSVC narrowing-conversion warnings" OFF)
 
 # Link-Time Optimization — disabled when LINALG_ENABLE_COVERAGE or LINALG_ENABLE_SANITIZER is ON
@@ -303,8 +306,7 @@ if(LINALG_ENABLE_BLAS)
             execute_process(
                 COMMAND "${LINALG_BREW_EXECUTABLE}" --prefix openblas
                 OUTPUT_VARIABLE LINALG_HOMEBREW_OPENBLAS_PREFIX
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET
+                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
                 RESULT_VARIABLE LINALG_HOMEBREW_OPENBLAS_RESULT
             )
             if(LINALG_HOMEBREW_OPENBLAS_RESULT EQUAL 0)
@@ -329,13 +331,17 @@ if(LINALG_ENABLE_BLAS)
         # CMAKE_PREFIX_PATH itself before this file ran).
         if(DEFINED ENV{VCPKG_ROOT} AND DEFINED VCPKG_TARGET_TRIPLET)
             list(APPEND LINALG_BLAS_PREFIX_CANDIDATES
-                 "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}")
+                 "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}"
+            )
         endif()
 
         foreach(LINALG_BLAS_PREFIX_CANDIDATE IN LISTS LINALG_BLAS_PREFIX_CANDIDATES)
             if(LINALG_BLAS_PREFIX_CANDIDATE AND IS_DIRECTORY "${LINALG_BLAS_PREFIX_CANDIDATE}")
                 list(APPEND CMAKE_PREFIX_PATH "${LINALG_BLAS_PREFIX_CANDIDATE}")
-                message(STATUS "LinearAlgebra: found candidate OpenBLAS prefix ${LINALG_BLAS_PREFIX_CANDIDATE}")
+                message(
+                    STATUS
+                        "LinearAlgebra: found candidate OpenBLAS prefix ${LINALG_BLAS_PREFIX_CANDIDATE}"
+                )
             endif()
         endforeach()
         unset(LINALG_BLAS_PREFIX_CANDIDATES)
@@ -521,6 +527,8 @@ set(linalg_sources "")
 file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
 file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
+# Native CPU implementation files under matrix_operation/native/ are included
+# by the recursive glob above.
 # The mkl/ and blas/ backend sources under src/matrix_operation/ include
 # mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /

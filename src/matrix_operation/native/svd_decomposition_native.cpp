@@ -462,37 +462,36 @@ inline void svd(  // NOLINT
         S[i] = S_[i * dim[1] + i];
     }
     if (dim[1] == columns)
-    {  // Set U
+    {  // A was factored directly: U_ holds left vectors, V_ holds VT.
+        for (linalg_long i = 0; i < rows; i++)
+        {
+            for (linalg_long j = 0; j < columns; j++)
+            {
+                U[j + ldu * i] = U_[j + i * rows];
+            }
+        }
         for (linalg_long i = 0; i < columns; i++)
         {
             for (linalg_long j = 0; j < columns; j++)
             {
-                U[j + ldu * i] = V_[j + i * columns] * static_cast<T>(S[i] < 0.0 ? -1.0 : 1.0);
-            }
-        }
-
-        for (linalg_long i = 0; i < rows; i++)
-        {
-            for (linalg_long j = 0; j < columns; j++)
-            {
-                VT[j + ldv * i] = U_[j + i * rows];
+                VT[j + ldv * i] = V_[j + i * columns] * static_cast<T>(S[i] < 0.0 ? -1.0 : 1.0);
             }
         }
     }
     else
-    {
-        for (linalg_long i = 0; i < rows; i++)
-        {
-            for (linalg_long j = 0; j < columns; j++)
-            {
-                U[j + ldv * i] = U_[i + j * columns] * static_cast<T>(S[i] < 0.0 ? -1.0 : 1.0);
-            }
-        }
+    {  // A was transposed before the factorization, so the factors swap roles.
         for (linalg_long i = 0; i < rows; i++)
         {
             for (linalg_long j = 0; j < rows; j++)
             {
-                VT[j + ldu * i] = V_[i + j * rows];
+                U[j + ldu * i] = V_[i + j * rows];
+            }
+        }
+        for (linalg_long i = 0; i < rows; i++)
+        {
+            for (linalg_long j = 0; j < columns; j++)
+            {
+                VT[j + ldv * i] = U_[i + j * columns] * static_cast<T>(S[i] < 0.0 ? -1.0 : 1.0);
             }
         }
     }
@@ -519,7 +518,7 @@ void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
     size_t                                                         workspace_size)
 {
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
-    svd(rows, columns, A, lda, S, VT, ldu, U, ldv, workspace, workspace_size);
+    svd(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
 
 template <>
@@ -536,7 +535,7 @@ void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
     size_t                                                          workspace_size)
 {
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
-    svd(rows, columns, A, lda, S, VT, ldu, U, ldv, workspace, workspace_size);
+    svd(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
 
 template <>

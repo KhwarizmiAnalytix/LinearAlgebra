@@ -3,11 +3,11 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
+#include "include/matrix_operation/determinant.h"
+#include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/matrix_operation/inversion.h"
-#include "include/matrix_operation/determinant.h"
+#include "test_backend.h"
 #include "gtest/gtest.h"
 
 namespace
@@ -104,13 +104,16 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
         {
             A(i, j) = static_cast<value_t>(std::fabs(rand() / static_cast<double>(RAND_MAX)));
         }
-        A(i, i) = 1.;
+        // Diagonally dominant (off-diagonals are each < 1, so their row sum is < n - 1 < n):
+        // keeps A's conditioning independent of the unseeded, shared rand() stream's position,
+        // which otherwise shifts with how many random draws earlier tests in the binary made.
+        A(i, i) = static_cast<value_t>(n);
         b[i]    = static_cast<value_t>(rand()) / static_cast<value_t>(RAND_MAX);
     }
 
-    a1                    = A;
-    const auto lu_ws_size = linalg::lu_decomposition<value_t, Backend>::workspace_size(
-        static_cast<linalg_int>(n));
+    a1 = A;
+    const auto lu_ws_size =
+        linalg::lu_decomposition<value_t, Backend>::workspace_size(static_cast<linalg_int>(n));
     std::vector<unsigned char> lu_ws(lu_ws_size);
     linalg::lu_decomposition<value_t, Backend>::apply(
         a1.data(), static_cast<linalg_int>(n), pivot.data(), lu_ws.data(), lu_ws_size);
@@ -133,8 +136,8 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
     // mkl/blas_lapacke always pivot (LAPACKE getrf); the scalar native path
     // only does when LINALG_HAS_LU_PIVOTING is on.
     constexpr bool kBackendPivots = Backend == linalg::linalg_backend::mkl ||
-                                     Backend == linalg::linalg_backend::blas_lapacke ||
-                                     LINALG_HAS_LU_PIVOTING;
+                                    Backend == linalg::linalg_backend::blas_lapacke ||
+                                    LINALG_HAS_LU_PIVOTING;
     if (kBackendPivots)
     {
         for (linalg_int i = static_cast<linalg_int>(n) - 1; i >= 0; --i)
@@ -160,9 +163,8 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
 
     dense_matrix<value_t> IA = a1;
 
-    const auto invert_ws_size =
-        linalg::inversion<value_t, Backend>::workspace_size(
-            static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    const auto invert_ws_size = linalg::inversion<value_t, Backend>::workspace_size(
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> invert_ws(invert_ws_size);
     linalg::inversion<value_t, Backend>::apply(IA.data(),
         pivot.data(),
@@ -200,10 +202,9 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
     diff = hmax_abs(result);
     EXPECT_LE(diff, tolerance);
 
-    std::vector<value_t> x = b;
-    const auto           solve_ws_size =
-        linalg::linear_solver<value_t, Backend>::workspace_size(
-            static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    std::vector<value_t> x             = b;
+    const auto           solve_ws_size = linalg::linear_solver<value_t, Backend>::workspace_size(
+        static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> solve_ws(solve_ws_size);
     linalg::linear_solver<value_t, Backend>::apply(a1.data(),
         pivot.data(),
@@ -220,9 +221,11 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
 
 TEST(Math, LUDecomposition)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
-        test_lu<float, Backend>(2.e-5);
-        test_lu<double, Backend>(4.e-14);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            test_lu<float, Backend>(2.e-5);
+            test_lu<double, Backend>(4.e-14);
+        });
 }

@@ -28,8 +28,7 @@ template <> struct ExpTolerance<double>
 template <typename value_t> std::vector<unsigned char> exp_workspace(linalg_int n)
 {
     const auto bytes =
-        linalg::exponential<value_t, linalg::linalg_backend::native>::workspace_size(
-            n);
+        linalg::exponential<value_t, linalg::linalg_backend::native>::workspace_size(n);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -148,7 +147,7 @@ template <typename value_t> void test_rotation_generator(double theta)
 // exp(A) computed against a directly-summed, high-order Taylor series
 // (independent of the scaling-and-squaring/Pade implementation under test)
 // for a general, moderate-norm random matrix.
-template <typename value_t> void test_against_taylor_series(std::size_t n)
+template <typename value_t> void test_against_taylor_series(std::size_t n, double scale = 1.0)
 {
     dense_matrix<value_t> A(n, n);
     for (std::size_t i = 0; i < n; ++i)
@@ -156,8 +155,11 @@ template <typename value_t> void test_against_taylor_series(std::size_t n)
         for (std::size_t j = 0; j < n; ++j)
         {
             // Keep ||A||_1 modest so the truncated series below converges
-            // to double-precision accuracy well within kTaylorTerms.
-            A(i, j) = static_cast<value_t>((1. * rand() / RAND_MAX - 0.5));
+            // to double-precision accuracy well within kTaylorTerms. `scale`
+            // lets callers target a specific ||A||_1 range to exercise a
+            // particular degree bracket (T1/T2/T4/T8/T12/T18) of the
+            // Bader-Blanes-Casas algorithm under test.
+            A(i, j) = static_cast<value_t>(scale * (1. * rand() / RAND_MAX - 0.5));
         }
     }
 
@@ -302,6 +304,21 @@ TEST(Math, MatrixExponential)
 
     test_against_taylor_series<float>(5);
     test_against_taylor_series<double>(6);
+
+    // Double theta thresholds (degree: upper bound on ||A||_1) are
+    // T1: 2.22e-16, T2: 2.58e-8, T4: 3.40e-4, T8: 4.99e-2, T12: 3.00e-1,
+    // T18 (scale-and-square beyond): 1.09e0. These magnitudes keep ||A||_1
+    // comfortably inside each bracket in turn, so every degree path
+    // (T2/T4/T8/T12 in particular, not otherwise exercised above) is
+    // checked against the independent Taylor-series reference.
+    test_against_taylor_series<double>(3, 1e-8);    // T2 bracket
+    test_against_taylor_series<double>(3, 1e-4);    // T4 bracket
+    test_against_taylor_series<double>(3, 1e-2);    // T8 bracket
+    test_against_taylor_series<double>(3, 1.5e-1);  // T12 bracket
+    test_against_taylor_series<float>(3, 1e-8);     // T1 bracket (float)
+    test_against_taylor_series<float>(3, 3e-4);     // T2 bracket (float)
+    test_against_taylor_series<float>(3, 1e-2);     // T4 bracket (float)
+    test_against_taylor_series<float>(3, 3e-1);     // T8 bracket (float)
 
     test_inverse_property<float>(5);
     test_inverse_property<double>(6);

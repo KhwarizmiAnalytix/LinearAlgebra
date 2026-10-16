@@ -1,7 +1,5 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
-#include <cstdint>
-
 #include "include/common/backend.h"
 #include "include/common/linalg_checks.h"
 
@@ -40,84 +38,17 @@ static void check_cholesky_inputs(const void* C, linalg_int lda)
 namespace
 {
 
-enum class matrix_order : std::uint8_t
-{
-    row_major,
-    col_major
-};
-
-template <typename T,
-    cholesky_decomposition_enum part,
-    matrix_order                order = matrix_order::row_major>
-linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda)
-{
-    if constexpr (order == matrix_order::col_major)
-    {
-        throw std::runtime_error("Column-major order is not supported in this implementation.");
-    }
-
-    if constexpr (part == cholesky_decomposition_enum::LOWER_TRIANGULAR)  // NOLINT
-    {
-        for (linalg_int i = 0; i < n; ++i)
-        {
-            auto* a_i = &A[i * lda];
-
-            for (linalg_int j = 0; j < i; ++j)
-            {
-                auto* a_j = &A[j * lda];
-                T     sum = a_i[j];
-                for (linalg_int k = 0; k < j; ++k)
-                {
-                    sum -= a_i[k] * a_j[k];
-                }
-                a_i[j] = sum / a_j[j];
-                a_j[i] = 0.;
-            }
-
-            T sum = a_i[i];
-            for (linalg_int k = 0; k < i; ++k)
-            {
-                sum -= a_i[k] * a_i[k];
-            }
-
-            if (sum <= 0)
-            {
-                return i + 1;  // Matrix is not positive-definite
-            }
-
-            a_i[i] = std::sqrt(sum);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Invalid MatrixPart specified");
-    }
-
-    return 0;  // Success
-}
-
-// Right-looking blocked Cholesky, the same shape PyTorch's CPU path gets for free by
-// calling LAPACK's (recursive, blocked) potrf, and that Eigen's LLT (Eigen/src/Cholesky/
-// LLT.h) implements directly: factor a kCholeskyBlockSize-wide diagonal block with the
-// unblocked kernel above, solve the panel below it against that block (forward
-// substitution against L11), then fold the panel's outer product into the trailing
-// submatrix before moving to the next block. Blocking keeps each diagonal block --
-// and every panel row solved against it -- resident in cache instead of walking the
-// full matrix row by row, and turns the trailing-submatrix reduction into
-// kCholeskyBlockSize-length, fixed-trip-count inner products the compiler can
-// auto-vectorize, instead of one growing-length reduction per (i, j) pair. Degenerates
-// to exactly the unblocked kernel above when n <= kCholeskyBlockSize. Produces L with
-// A = L * L^T; the apply() specializations below reuse it for UPPER_TRIANGULAR too,
-// by factoring into the lower triangle and transposing, for the same row-contiguous-
-// access reason the old UPPER branch here did.
-inline constexpr linalg_int kCholeskyBlockSize = 64;
-
-// Dot product of two length-`len` contiguous rows, used below for the panel solve's
-// forward-substitution reduction and the trailing submatrix's rank update -- the two
-// inner loops blocking turns into fixed-shape reductions worth vectorizing explicitly.
-// Uses linalg::packet<T> (src/common/packet.h), the same Eigen-derived SIMD abstraction
-// multiplication.cpp's native GEMM kernel is built on, instead of hoping the compiler
-// auto-vectorizes a scalar loop.
+// Dot product of two length-`len` contiguous rows, used below by the unblocked
+// diagonal-block kernel's own forward-substitution and norm reductions, and by
+// the blocked kernel for the panel solve's forward-substitution reduction and
+// the trailing submatrix's rank update -- blocking turns all of these into
+// fixed-shape reductions worth vectorizing explicitly. Uses linalg::packet<T>
+// (src/common/packet.h), the same Eigen-derived SIMD abstraction
+// multiplication.cpp's native GEMM kernel is built on, instead of hoping the
+// compiler auto-vectorizes a scalar loop. Four independent accumulators,
+// combined via tree reduction before the horizontal predux, hide FMA latency
+// on the loop-carried dependency a single accumulator would create -- the
+// same fix lu_decomposition_native.cpp's lu_dot applies, for the same reason.
 template <typename T>
 inline T cholesky_dot(const T* x, const T* y, linalg_int len)
 {
@@ -125,10 +56,36 @@ inline T cholesky_dot(const T* x, const T* y, linalg_int len)
     using P                    = packet<T>;
     constexpr linalg_int width = P::size;
 
-    typename P::packet_t acc;
-    P::set(static_cast<T>(0), acc);
+    typename P::packet_t acc0, acc1, acc2, acc3;
+    P::set(static_cast<T>(0), acc0);
+    P::set(static_cast<T>(0), acc1);
+    P::set(static_cast<T>(0), acc2);
+    P::set(static_cast<T>(0), acc3);
 
     linalg_int c = 0;
+    for (; c + 4 * width <= len; c += 4 * width)
+    {
+        typename P::packet_t px0, px1, px2, px3;
+        typename P::packet_t py0, py1, py2, py3;
+        P::loadu(x + c, px0);
+        P::loadu(x + c + width, px1);
+        P::loadu(x + c + 2 * width, px2);
+        P::loadu(x + c + 3 * width, px3);
+        P::loadu(y + c, py0);
+        P::loadu(y + c + width, py1);
+        P::loadu(y + c + 2 * width, py2);
+        P::loadu(y + c + 3 * width, py3);
+        P::fma(px0, py0, acc0, acc0);
+        P::fma(px1, py1, acc1, acc1);
+        P::fma(px2, py2, acc2, acc2);
+        P::fma(px3, py3, acc3, acc3);
+    }
+
+    typename P::packet_t acc01, acc23, acc;
+    P::add(acc0, acc1, acc01);
+    P::add(acc2, acc3, acc23);
+    P::add(acc01, acc23, acc);
+
     for (; c + width <= len; c += width)
     {
         typename P::packet_t px;
@@ -154,6 +111,57 @@ inline T cholesky_dot(const T* x, const T* y, linalg_int len)
 #endif
 }
 
+// Unblocked, row-major Cholesky of the lower triangle (A = L * L^T): the base
+// case the blocked kernel below falls back to for one kCholeskyBlockSize-wide
+// diagonal block (or the whole matrix, when n <= kCholeskyBlockSize). Only
+// ever instantiated for LOWER_TRIANGULAR, row-major -- the apply()
+// specializations below get UPPER_TRIANGULAR by factoring into the lower
+// triangle and transposing, and this file has no col-major caller -- so
+// neither is a template parameter here.
+template <typename T>
+linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda)
+{
+    for (linalg_int i = 0; i < n; ++i)
+    {
+        auto* a_i = &A[i * lda];
+
+        for (linalg_int j = 0; j < i; ++j)
+        {
+            auto* a_j = &A[j * lda];
+            const T sum = a_i[j] - cholesky_dot(a_i, a_j, j);
+            a_i[j]      = sum / a_j[j];
+            a_j[i]      = static_cast<T>(0);
+        }
+
+        const T sum = a_i[i] - cholesky_dot(a_i, a_i, i);
+
+        if (sum <= 0)
+        {
+            return i + 1;  // Matrix is not positive-definite
+        }
+
+        a_i[i] = std::sqrt(sum);
+    }
+
+    return 0;  // Success
+}
+
+// Right-looking blocked Cholesky, the same shape PyTorch's CPU path gets for free by
+// calling LAPACK's (recursive, blocked) potrf, and that Eigen's LLT (Eigen/src/Cholesky/
+// LLT.h) implements directly: factor a kCholeskyBlockSize-wide diagonal block with the
+// unblocked kernel above, solve the panel below it against that block (forward
+// substitution against L11), then fold the panel's outer product into the trailing
+// submatrix before moving to the next block. Blocking keeps each diagonal block --
+// and every panel row solved against it -- resident in cache instead of walking the
+// full matrix row by row, and turns the trailing-submatrix reduction into
+// kCholeskyBlockSize-length, fixed-trip-count inner products the compiler can
+// auto-vectorize, instead of one growing-length reduction per (i, j) pair. Degenerates
+// to exactly the unblocked kernel above when n <= kCholeskyBlockSize. Produces L with
+// A = L * L^T; the apply() specializations below reuse it for UPPER_TRIANGULAR too,
+// by factoring into the lower triangle and transposing, for the same row-contiguous-
+// access reason the old UPPER branch here did.
+inline constexpr linalg_int kCholeskyBlockSize = 64;
+
 template <typename T>
 linalg_int cholesky_decomposition_blocked_lower(linalg_int n, T* A, linalg_int lda)
 {
@@ -162,8 +170,7 @@ linalg_int cholesky_decomposition_blocked_lower(linalg_int n, T* A, linalg_int l
         const linalg_int bs  = std::min(kCholeskyBlockSize, n - k);
         T* const         l11 = &A[k * lda + k];
 
-        const linalg_int rc = cholesky_decomposition_scalar_impl<T,
-            cholesky_decomposition_enum::LOWER_TRIANGULAR>(bs, l11, lda);
+        const linalg_int rc = cholesky_decomposition_scalar_impl<T>(bs, l11, lda);
         if (rc != 0)
         {
             return k + rc;
@@ -268,22 +275,12 @@ bool cholesky_decomposition<double, linalg_backend::native>::apply(
 // implementation directly, regardless of which backend is active.
 namespace detail
 {
-enum class aad_matrix_order : std::uint8_t
-{
-    row_major,
-    col_major
-};
-
-template <typename T,
-    cholesky_decomposition_enum part,
-    aad_matrix_order            order = aad_matrix_order::row_major>
+// Row-major only -- this file has no col-major caller -- so unlike `part`
+// (both LOWER_TRIANGULAR and UPPER_TRIANGULAR are real, used instantiations
+// below), layout is not a template parameter here.
+template <typename T, cholesky_decomposition_enum part>
 void cholesky_decomposition_aad_impl(linalg_int n, T* C_aad, const T* C, linalg_long lda, T* A_aad)
 {
-    if constexpr (order == aad_matrix_order::col_major)
-    {
-        throw std::runtime_error("Column-major order is not supported in this implementation.");
-    }
-
     if constexpr (part == cholesky_decomposition_enum::LOWER_TRIANGULAR)  // NOLINT
     {
         for (linalg_int i = n - 1; i >= 0; --i)

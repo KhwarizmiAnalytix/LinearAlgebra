@@ -1,6 +1,7 @@
 # Standalone LinearAlgebra library. Include root is the repository root; public headers live
 # under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h"), implementation
-# files under the mirrored src/ tree (e.g. src/matrix_operation/lu_decomposition.cpp).
+# files under the mirrored src/ tree (e.g.
+# src/matrix_operation/native/lu_decomposition_native.cpp).
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
@@ -45,6 +46,7 @@ filegroup(
         [
             "src/common/*.cpp",
             "src/matrix_operation/*.cpp",
+            "src/matrix_operation/native/*.cpp",
         ],
         allow_empty = True,
     ) + select({

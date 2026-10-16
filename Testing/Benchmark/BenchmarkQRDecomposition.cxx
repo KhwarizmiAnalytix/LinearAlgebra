@@ -37,7 +37,8 @@ const char* backend_name(linalg::linalg_backend backend)
     }
 }
 
-template <typename T> std::vector<T> make_random_matrix(std::size_t rows, std::size_t columns, unsigned seed)
+template <typename T>
+std::vector<T> make_random_matrix(std::size_t rows, std::size_t columns, unsigned seed)
 {
     std::mt19937                      rng(seed);
     std::uniform_real_distribution<T> dist(static_cast<T>(-1), static_cast<T>(1));
@@ -66,8 +67,14 @@ void BM_QRDecomposition(benchmark::State& state)
     for (auto _ : state)
     {
         linalg::qr_decomposition<T, Backend>::apply(static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n), a.data(), static_cast<linalg_long>(n), q.data(),
-            static_cast<linalg_long>(n), r.data(), static_cast<linalg_long>(n), workspace.data(),
+            static_cast<linalg_long>(n),
+            a.data(),
+            static_cast<linalg_long>(n),
+            q.data(),
+            static_cast<linalg_long>(n),
+            r.data(),
+            static_cast<linalg_long>(n),
+            workspace.data(),
             ws_size);
         benchmark::DoNotOptimize(q.data());
         benchmark::DoNotOptimize(r.data());
@@ -77,10 +84,11 @@ void BM_QRDecomposition(benchmark::State& state)
     state.SetComplexityN(static_cast<std::int64_t>(n));
 
     // Economy QR factorization of a square n x n matrix costs ~2n^3 flops.
-    const double flops_per_iter = 2.0 * static_cast<double>(n) * static_cast<double>(n) *
-        static_cast<double>(n);
-    state.counters["FLOPS"] = benchmark::Counter(
-        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
+    const double flops_per_iter =
+        2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n);
+    state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
 }
 
 }  // namespace
@@ -91,7 +99,8 @@ BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::native)
     ->Arg(256)
     ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::native)
     ->Arg(64)
@@ -99,7 +108,8 @@ BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::native)
     ->Arg(256)
     ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::blas_lapacke)
@@ -108,7 +118,8 @@ BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::blas_lapac
     ->Arg(256)
     ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::blas_lapacke)
     ->Arg(64)
@@ -116,7 +127,8 @@ BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::blas_lapa
     ->Arg(256)
     ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->Threads(1);
 #endif
 
 #if LINALG_HAS_MKL
