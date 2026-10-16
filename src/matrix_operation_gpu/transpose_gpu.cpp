@@ -7,7 +7,7 @@
 
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 namespace linalg
@@ -42,9 +42,9 @@ size_t matrix_transpose_workspace_size(const double* /*type_tag*/, linalg_long r
 void transpose(linalg_long rows, linalg_long columns, float* m, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
-    LOGGING_CHECK(m != nullptr, "transpose: m must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "transpose: rows and columns must be positive");
-    LOGGING_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const float*>(nullptr), rows, columns),
+    LINALG_CHECK(m != nullptr, "transpose: m must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0, "transpose: rows and columns must be positive");
+    LINALG_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const float*>(nullptr), rows, columns),
         "transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     float*                  scratch =
@@ -55,9 +55,9 @@ void transpose(linalg_long rows, linalg_long columns, float* m, void* workspace,
 void transpose(linalg_long rows, linalg_long columns, double* m, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
-    LOGGING_CHECK(m != nullptr, "transpose: m must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "transpose: rows and columns must be positive");
-    LOGGING_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const double*>(nullptr), rows, columns),
+    LINALG_CHECK(m != nullptr, "transpose: m must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0, "transpose: rows and columns must be positive");
+    LINALG_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const double*>(nullptr), rows, columns),
         "transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     double*                 scratch =
@@ -83,8 +83,8 @@ template <typename T, typename GeamFn>
 void transpose_device_impl(
     GeamFn geam, linalg_long rows, linalg_long columns, T* m, T* scratch, cudaStream_t stream)
 {
-    LOGGING_CHECK(m != nullptr && scratch != nullptr, "transpose_device: m and scratch must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "transpose_device: rows and columns must be positive");
+    LINALG_CHECK(m != nullptr && scratch != nullptr, "transpose_device: m and scratch must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0, "transpose_device: rows and columns must be positive");
     const auto r = checked_narrow<int>(rows);
     const auto c = checked_narrow<int>(columns);
 
@@ -100,7 +100,7 @@ void transpose_device_impl(
     // and produces a genuine (rows x columns, ld=rows) column-major result in
     // `scratch` — which is bit-identical to the desired row-major
     // (columns x rows, ld=rows) transposed output.
-    LOGGING_CHECK(geam(handle, CUBLAS_OP_T, CUBLAS_OP_T, r, c, &alpha, m, c, &beta, m, c, scratch, r) ==
+    LINALG_CHECK(geam(handle, CUBLAS_OP_T, CUBLAS_OP_T, r, c, &alpha, m, c, &beta, m, c, scratch, r) ==
             CUBLAS_STATUS_SUCCESS,
         "cublasSgeam/Dgeam failed");
 
@@ -109,7 +109,7 @@ void transpose_device_impl(
         sizeof(T) * static_cast<size_t>(r) * static_cast<size_t>(c),
         cudaMemcpyDeviceToDevice,
         stream);
-    LOGGING_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
+    LINALG_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
 }
 
 }  // namespace

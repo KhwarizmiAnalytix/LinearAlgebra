@@ -10,7 +10,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns
@@ -113,17 +113,17 @@ void pseudo_inverse_impl(AmaxFn amax,
 {
     if (A == nullptr || Ainv == nullptr)
     {
-        LOGGING_THROW("pseudo_inverse: A and Ainv must not be null");
+        LINALG_THROW("pseudo_inverse: A and Ainv must not be null");
     }
     if (rows == 0 || columns == 0)
     {
-        LOGGING_THROW("pseudo_inverse: rows and columns must be positive");
+        LINALG_THROW("pseudo_inverse: rows and columns must be positive");
     }
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
     if (detail::checked_narrow<int>(lda) != c || detail::checked_narrow<int>(ldai) != r)
     {
-        LOGGING_THROW(
+        LINALG_THROW(
             "linalg::gpu::pseudo_inverse requires tightly packed lda/ldai (lda == columns, ldai == "
             "rows)");
     }
@@ -131,7 +131,7 @@ void pseudo_inverse_impl(AmaxFn amax,
     const auto k         = std::min(r, c);
     const auto svd_bytes = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
 
-    LOGGING_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
         "pseudo_inverse: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = pseudo_inverse_plan<T>(arena, r, c, k, svd_bytes);
@@ -140,20 +140,20 @@ void pseudo_inverse_impl(AmaxFn amax,
         bufs.VT, columns, bufs.svd_info, bufs.svd_workspace, svd_bytes, stream);
 
     int svd_status = -1;
-    LOGGING_CHECK(cudaMemcpyAsync(&svd_status, bufs.svd_info, sizeof(int), cudaMemcpyDeviceToHost,
+    LINALG_CHECK(cudaMemcpyAsync(&svd_status, bufs.svd_info, sizeof(int), cudaMemcpyDeviceToHost,
                       stream) == cudaSuccess &&
             cudaStreamSynchronize(stream) == cudaSuccess,
         "cudaMemcpyAsync/cudaStreamSynchronize failed");
-    LOGGING_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed inside pseudo_inverse", svd_status);
+    LINALG_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed inside pseudo_inverse", svd_status);
 
     auto cublas_handle = detail::cublas_handle_for_current_device();
     detail::set_stream(cublas_handle, stream);
     int idx_1based = 1;
-    LOGGING_CHECK(
+    LINALG_CHECK(
         amax(cublas_handle, k, bufs.S, 1, &idx_1based) == CUBLAS_STATUS_SUCCESS, "cublasI*amax failed");
 
     T smax = T(0);
-    LOGGING_CHECK(cudaMemcpyAsync(&smax, bufs.S + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost,
+    LINALG_CHECK(cudaMemcpyAsync(&smax, bufs.S + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost,
                       stream) == cudaSuccess &&
             cudaStreamSynchronize(stream) == cudaSuccess,
         "cudaMemcpyAsync/cudaStreamSynchronize failed");
@@ -165,7 +165,7 @@ void pseudo_inverse_impl(AmaxFn amax,
     const dim3 block(16, 16);
     pinv_combine_kernel<T>
         <<<grid_2d(c, r, block), block, 0, stream>>>(bufs.U, bufs.S, bufs.VT, eff_tol, r, c, k, Ainv);
-    LOGGING_CHECK(cudaGetLastError() == cudaSuccess, "pinv_combine_kernel launch failed");
+    LINALG_CHECK(cudaGetLastError() == cudaSuccess, "pinv_combine_kernel launch failed");
 }
 
 }  // namespace

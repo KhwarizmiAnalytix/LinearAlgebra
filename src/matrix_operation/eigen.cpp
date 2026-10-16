@@ -1,6 +1,6 @@
 #include "include/matrix_operation/eigen.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include "include/common/workspace_arena.h"
 #include <algorithm>
@@ -26,9 +26,9 @@ static void check_symmetric_eigen_inputs(const void* A,
     linalg_int                                       lda,
     linalg_int                                       ldv)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr,
+    LINALG_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr,
         "symmetric_eigen_backend::apply: A, eigenvalues, and eigenvectors must not be null");
-    LOGGING_CHECK(
+    LINALG_CHECK(
         n > 0 && lda > 0 && ldv > 0, "symmetric_eigen_backend::apply: n/lda/ldv must be positive");
 }
 
@@ -44,9 +44,9 @@ static void check_general_eigen_inputs(const void* A,
     linalg_int                                     lda,
     linalg_int                                     ldv)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
+    LINALG_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
         "general_eigen_backend::apply: A, eigenvalues_real, and eigenvalues_imag must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0),
+    LINALG_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0),
         "general_eigen_backend::apply: n/lda/ldv must be positive");
 }
 
@@ -678,7 +678,7 @@ bool symmetric_eigen_backend<float, linalg_backend::native>::apply(const float* 
     size_t                                                                      workspace_size)
 {
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
-    LOGGING_CHECK(workspace_size >= jacobi_workspace_size<float>(n),
+    LINALG_CHECK(workspace_size >= jacobi_workspace_size<float>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = jacobi_plan<float>(arena, n);
@@ -697,7 +697,7 @@ bool symmetric_eigen_backend<double, linalg_backend::native>::apply(const double
     size_t                                                                        workspace_size)
 {
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
-    LOGGING_CHECK(workspace_size >= jacobi_workspace_size<double>(n),
+    LINALG_CHECK(workspace_size >= jacobi_workspace_size<double>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = jacobi_plan<double>(arena, n);
@@ -717,7 +717,7 @@ bool general_eigen_scalar_impl(const T* A,
     size_t                              workspace_size)
 {
     const bool compute_eigenvectors = eigenvectors != nullptr;
-    LOGGING_CHECK(workspace_size >= general_scalar_workspace_size<T>(n, compute_eigenvectors),
+    LINALG_CHECK(workspace_size >= general_scalar_workspace_size<T>(n, compute_eigenvectors),
         "eigen: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = general_scalar_plan<T>(arena, n, compute_eigenvectors);
@@ -747,7 +747,7 @@ bool general_eigen_scalar_impl(const T* A,
     const T eps = std::numeric_limits<T>::epsilon();
     for (linalg_int i = 0; i < n; ++i)
     {
-        LOGGING_CHECK(!(std::fabs(eigenvalues_imag[i]) >
+        LINALG_CHECK(!(std::fabs(eigenvalues_imag[i]) >
                           eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10)),
             "eigen: scalar fallback cannot compute eigenvectors for a complex "
             "eigenvalue (index "

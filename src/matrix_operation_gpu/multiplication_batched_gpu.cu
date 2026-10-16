@@ -4,7 +4,7 @@
 
 #include <cuda_runtime.h>
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // One thread per output element, one z-block of the launch grid per matrix.
@@ -58,11 +58,11 @@ void launch(linalg_int dim,
 {
     if (a == nullptr || b == nullptr || c == nullptr)
     {
-        LOGGING_THROW("batched_matrix_multiplication: a, b, and c must not be null");
+        LINALG_THROW("batched_matrix_multiplication: a, b, and c must not be null");
     }
     if (dim <= 0 || count <= 0)
     {
-        LOGGING_THROW("batched_matrix_multiplication: dim and count must be positive");
+        LINALG_THROW("batched_matrix_multiplication: dim and count must be positive");
     }
     const auto d = detail::checked_narrow<int>(dim);
     const auto n = detail::checked_narrow<int>(count);
@@ -74,7 +74,7 @@ void launch(linalg_int dim,
 
     if (cudaGetLastError() != cudaSuccess)
     {
-        LOGGING_THROW("batched_matrix_multiplication kernel launch failed");
+        LINALG_THROW("batched_matrix_multiplication kernel launch failed");
     }
 }
 

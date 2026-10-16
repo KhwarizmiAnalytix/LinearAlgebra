@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/eigen.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <algorithm>
 #include <lapacke.h>
@@ -27,9 +27,9 @@ static void check_symmetric_eigen_inputs(const void* A,
     linalg_int                                       lda,
     linalg_int                                       ldv)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr,
+    LINALG_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr,
         "symmetric_eigen_backend::apply: A, eigenvalues, and eigenvectors must not be null");
-    LOGGING_CHECK(
+    LINALG_CHECK(
         n > 0 && lda > 0 && ldv > 0, "symmetric_eigen_backend::apply: n/lda/ldv must be positive");
 }
 
@@ -41,9 +41,9 @@ static void check_general_eigen_inputs(const void* A,
     linalg_int                                     lda,
     linalg_int                                     ldv)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
+    LINALG_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
         "general_eigen_backend::apply: A, eigenvalues_real, and eigenvalues_imag must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0),
+    LINALG_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0),
         "general_eigen_backend::apply: n/lda/ldv must be positive");
 }
 
@@ -82,7 +82,7 @@ bool symmetric_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const f
     size_t workspace_size)
 {
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
-    LOGGING_CHECK(workspace_size >= symmetric_eigen_blas_workspace_size<float>(n),
+    LINALG_CHECK(workspace_size >= symmetric_eigen_blas_workspace_size<float>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto*      buf = arena.next<float>(static_cast<size_t>(n) * static_cast<size_t>(n));
@@ -110,7 +110,7 @@ bool symmetric_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const 
     size_t     workspace_size)
 {
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
-    LOGGING_CHECK(workspace_size >= symmetric_eigen_blas_workspace_size<double>(n),
+    LINALG_CHECK(workspace_size >= symmetric_eigen_blas_workspace_size<double>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto*      buf = arena.next<double>(static_cast<size_t>(n) * static_cast<size_t>(n));
@@ -141,7 +141,7 @@ bool general_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const flo
     detail::check_general_eigen_inputs(
         A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
     const bool compute_eigenvectors = eigenvectors != nullptr;
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= general_eigen_blas_workspace_size<float>(n, compute_eigenvectors),
         "eigen: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -205,7 +205,7 @@ bool general_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const do
     detail::check_general_eigen_inputs(
         A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
     const bool compute_eigenvectors = eigenvectors != nullptr;
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= general_eigen_blas_workspace_size<double>(n, compute_eigenvectors),
         "eigen: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);

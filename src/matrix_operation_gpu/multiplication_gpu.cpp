@@ -5,7 +5,7 @@
 #include <cublas_v2.h>
 
 #include "include/common/cuda_handle.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 namespace linalg
@@ -33,8 +33,8 @@ void multiplication(bool transpose_a,
     linalg_int                ldc,
     cudaStream_t                stream)
 {
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "multiplication: a, b, and c must not be null");
-    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
+    LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr, "multiplication: a, b, and c must not be null");
+    LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     const float alpha  = 1.F;
     const float beta   = 0.F;
     auto        handle = detail::cublas_handle_for_current_device();
@@ -54,7 +54,7 @@ void multiplication(bool transpose_a,
             c,
             detail::checked_narrow<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cublasSgemm failed");
+        LINALG_THROW("cublasSgemm failed");
     }
 }
 
@@ -71,8 +71,8 @@ void multiplication(bool transpose_a,
     linalg_int                ldc,
     cudaStream_t                stream)
 {
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr, "multiplication: a, b, and c must not be null");
-    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
+    LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr, "multiplication: a, b, and c must not be null");
+    LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     const double alpha  = 1.;
     const double beta   = 0.;
     auto         handle = detail::cublas_handle_for_current_device();
@@ -92,7 +92,7 @@ void multiplication(bool transpose_a,
             c,
             detail::checked_narrow<int>(ldc)) != CUBLAS_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cublasDgemm failed");
+        LINALG_THROW("cublasDgemm failed");
     }
 }
 

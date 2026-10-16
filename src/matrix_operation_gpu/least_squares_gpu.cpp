@@ -8,7 +8,7 @@
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/multiplication_gpu.h"
 #include "include/matrix_operation_gpu/pseudo_inverse_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -58,14 +58,14 @@ void least_squares_solve_impl(linalg_long rows,
     size_t                                   workspace_size,
     cudaStream_t                             stream)
 {
-    LOGGING_CHECK(A != nullptr && B != nullptr && X != nullptr, "least_squares_solve: A, B, and X must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && nrhs != 0, "least_squares_solve: rows/columns/nrhs must be positive");
-    LOGGING_CHECK(!(lda != columns) && !(ldb != nrhs) && !(ldx != nrhs), "linalg::gpu::least_squares_solve requires tightly packed lda/ldb/ldx (lda == "
+    LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr, "least_squares_solve: A, B, and X must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0, "least_squares_solve: rows/columns/nrhs must be positive");
+    LINALG_CHECK(!(lda != columns) && !(ldb != nrhs) && !(ldx != nrhs), "linalg::gpu::least_squares_solve requires tightly packed lda/ldb/ldx (lda == "
                      "columns, ldb == nrhs, ldx == nrhs)");
 
     const auto pinv_bytes =
         pseudo_inverse_workspace_size(static_cast<const T*>(nullptr), rows, columns);
-    LOGGING_CHECK(workspace_size >= least_squares_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= least_squares_workspace_size_impl<T>(rows, columns),
         "least_squares_solve: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = least_squares_plan<T>(arena, rows, columns, pinv_bytes);

@@ -2,7 +2,7 @@
 
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/pseudo_inverse.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -50,7 +50,7 @@ void least_squares_solve_impl(linalg_long rows,
 {
     const auto pinv_bytes =
         pseudo_inverse<T, linalg_backend::native>::workspace_size(rows, columns);
-    LOGGING_CHECK(workspace_size >= least_squares_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= least_squares_workspace_size_impl<T>(rows, columns),
         "least_squares_solve: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = least_squares_plan<T>(arena, rows, columns, pinv_bytes);
@@ -94,9 +94,9 @@ void least_squares<float, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && B != nullptr && X != nullptr,
+    LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
+    LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
     least_squares_solve_impl(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
@@ -115,9 +115,9 @@ void least_squares<double, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && B != nullptr && X != nullptr,
+    LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
+    LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
     least_squares_solve_impl(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);

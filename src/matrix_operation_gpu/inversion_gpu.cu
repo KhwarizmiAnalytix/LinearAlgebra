@@ -8,7 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/transpose_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // File-scope (not namespaced) __global__ templates, matching the usual CUDA
@@ -177,7 +177,7 @@ size_t lu_invert_workspace_size(BufferSizeFn buffer_size, linalg_int lda)
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     int        lwork  = 0;
-    LOGGING_CHECK(buffer_size(handle, n, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, n, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*getrf_bufferSize failed");
     detail::workspace_arena arena;
     lu_invert_plan<T>(arena, lwork, n);
@@ -191,7 +191,7 @@ size_t cholesky_invert_workspace_size(BufferSizeFn buffer_size, linalg_int lda)
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto fill    = CUBLAS_FILL_MODE_UPPER;
     int        lwork   = 0;
-    LOGGING_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*potrf_bufferSize failed");
     detail::workspace_arena arena;
     cholesky_invert_plan<T>(arena, lwork, n);
@@ -204,7 +204,7 @@ size_t lu_determinant_workspace_size(BufferSizeFn buffer_size, linalg_int lda)
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     int        lwork  = 0;
-    LOGGING_CHECK(buffer_size(handle, n, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, n, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*getrf_bufferSize failed");
     detail::workspace_arena arena;
     lu_determinant_plan<T>(arena, lwork, n);
@@ -218,7 +218,7 @@ size_t cholesky_determinant_workspace_size(BufferSizeFn buffer_size, linalg_int 
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto fill    = CUBLAS_FILL_MODE_UPPER;
     int        lwork   = 0;
-    LOGGING_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*potrf_bufferSize failed");
     detail::workspace_arena arena;
     cholesky_determinant_plan<T>(arena, lwork);
@@ -254,12 +254,12 @@ void lu_invert(BufferSizeFn buffer_size,
     int lwork = 0;
     if (buffer_size(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*getrf_bufferSize failed");
+        LINALG_THROW("cusolverDn*getrf_bufferSize failed");
     }
 
     detail::workspace_arena sizing;
     lu_invert_plan<T>(sizing, lwork, n);
-    LOGGING_CHECK(workspace_size >= sizing.total_size(), "lu_invert: workspace_size too small");
+    LINALG_CHECK(workspace_size >= sizing.total_size(), "lu_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = lu_invert_plan<T>(arena, lwork, n);
 
@@ -267,7 +267,7 @@ void lu_invert(BufferSizeFn buffer_size,
     fill_identity_kernel<T><<<square_grid(n, block), block, 0, stream>>>(n, bufs.identity);
     if (cudaGetLastError() != cudaSuccess)
     {
-        LOGGING_THROW("fill_identity_kernel launch failed");
+        LINALG_THROW("fill_identity_kernel launch failed");
     }
 
     // See lu_decomposition_gpu.cpp: transpose first so getrf factors A, not
@@ -277,14 +277,14 @@ void lu_invert(BufferSizeFn buffer_size,
     const auto status = getrf(handle, n, n, m, n, bufs.workspace, bufs.dev_ipiv, info);
     if (status != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*getrf failed");
+        LINALG_THROW("cusolverDn*getrf failed");
     }
 
     const auto solve_status =
         getrs(handle, CUBLAS_OP_N, n, n, m, n, bufs.dev_ipiv, bufs.identity, n, info);
     if (solve_status != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*getrs failed");
+        LINALG_THROW("cusolverDn*getrs failed");
     }
 
     // `identity` now holds A^-1 column-major; transpose to row-major, then
@@ -295,7 +295,7 @@ void lu_invert(BufferSizeFn buffer_size,
         cudaMemcpyAsync(m, bufs.identity, sizeof(T) * nn, cudaMemcpyDeviceToDevice, stream);
     if (copy_status != cudaSuccess)
     {
-        LOGGING_THROW("cudaMemcpyAsync failed");
+        LINALG_THROW("cudaMemcpyAsync failed");
     }
 }
 
@@ -324,12 +324,12 @@ void cholesky_invert(BufferSizeFn buffer_size,
     int lwork = 0;
     if (buffer_size(handle, fill, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*potrf_bufferSize failed");
+        LINALG_THROW("cusolverDn*potrf_bufferSize failed");
     }
 
     detail::workspace_arena sizing;
     cholesky_invert_plan<T>(sizing, lwork, n);
-    LOGGING_CHECK(workspace_size >= sizing.total_size(), "cholesky_invert: workspace_size too small");
+    LINALG_CHECK(workspace_size >= sizing.total_size(), "cholesky_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = cholesky_invert_plan<T>(arena, lwork, n);
 
@@ -337,19 +337,19 @@ void cholesky_invert(BufferSizeFn buffer_size,
     fill_identity_kernel<T><<<square_grid(n, block), block, 0, stream>>>(n, bufs.identity);
     if (cudaGetLastError() != cudaSuccess)
     {
-        LOGGING_THROW("fill_identity_kernel launch failed");
+        LINALG_THROW("fill_identity_kernel launch failed");
     }
 
     const auto status = potrf(handle, fill, n, m, n, bufs.workspace, lwork, info);
     if (status != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*potrf failed");
+        LINALG_THROW("cusolverDn*potrf failed");
     }
 
     const auto solve_status = potrs(handle, fill, n, n, m, n, bufs.identity, n, info);
     if (solve_status != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*potrs failed");
+        LINALG_THROW("cusolverDn*potrs failed");
     }
 
     detail::transpose_device(lda, lda, bufs.identity, bufs.transpose_scratch, stream);
@@ -358,7 +358,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
         cudaMemcpyAsync(m, bufs.identity, sizeof(T) * nn, cudaMemcpyDeviceToDevice, stream);
     if (copy_status != cudaSuccess)
     {
-        LOGGING_THROW("cudaMemcpyAsync failed");
+        LINALG_THROW("cudaMemcpyAsync failed");
     }
 }
 
@@ -388,12 +388,12 @@ T lu_determinant(BufferSizeFn buffer_size,
     int lwork = 0;
     if (buffer_size(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*getrf_bufferSize failed");
+        LINALG_THROW("cusolverDn*getrf_bufferSize failed");
     }
 
     detail::workspace_arena sizing;
     lu_determinant_plan<T>(sizing, lwork, n);
-    LOGGING_CHECK(workspace_size >= sizing.total_size(), "lu_determinant: workspace_size too small");
+    LINALG_CHECK(workspace_size >= sizing.total_size(), "lu_determinant: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = lu_determinant_plan<T>(arena, lwork, n);
 
@@ -402,7 +402,7 @@ T lu_determinant(BufferSizeFn buffer_size,
     const auto status = getrf(handle, n, n, m, n, bufs.workspace, bufs.dev_ipiv, bufs.dev_info);
     if (status != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*getrf failed");
+        LINALG_THROW("cusolverDn*getrf failed");
     }
 
     lu_determinant_kernel<T><<<1, 1, 0, stream>>>(m, bufs.dev_ipiv, n, bufs.dev_det);
@@ -415,11 +415,11 @@ T lu_determinant(BufferSizeFn buffer_size,
 
     if (launch_err != cudaSuccess)
     {
-        LOGGING_THROW("lu_determinant_kernel launch failed");
+        LINALG_THROW("lu_determinant_kernel launch failed");
     }
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return det;
 }
@@ -441,12 +441,12 @@ T cholesky_determinant(BufferSizeFn buffer_size,
     int lwork = 0;
     if (buffer_size(handle, fill, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*potrf_bufferSize failed");
+        LINALG_THROW("cusolverDn*potrf_bufferSize failed");
     }
 
     detail::workspace_arena sizing;
     cholesky_determinant_plan<T>(sizing, lwork);
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= sizing.total_size(), "cholesky_determinant: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = cholesky_determinant_plan<T>(arena, lwork);
@@ -454,7 +454,7 @@ T cholesky_determinant(BufferSizeFn buffer_size,
     const auto status = potrf(handle, fill, n, m, n, bufs.workspace, lwork, bufs.dev_info);
     if (status != CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*potrf failed");
+        LINALG_THROW("cusolverDn*potrf failed");
     }
 
     cholesky_determinant_kernel<T><<<1, 1, 0, stream>>>(m, n, bufs.dev_det);
@@ -467,11 +467,11 @@ T cholesky_determinant(BufferSizeFn buffer_size,
 
     if (launch_err != cudaSuccess)
     {
-        LOGGING_THROW("cholesky_determinant_kernel launch failed");
+        LINALG_THROW("cholesky_determinant_kernel launch failed");
     }
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return det;
 }
@@ -489,7 +489,7 @@ size_t matrix_invert_workspace_size(const float* /*type_tag*/, linalg_int lda, l
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_invert_workspace_size<float>(cusolverDnSpotrf_bufferSize, lda);
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -504,7 +504,7 @@ size_t matrix_invert_workspace_size(const double* /*type_tag*/, linalg_int lda, 
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_invert_workspace_size<double>(cusolverDnDpotrf_bufferSize, lda);
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -513,11 +513,11 @@ void matrix_invert(float* m, linalg_int lda, int* info, linear_solver_type type,
 {
     if (m == nullptr || info == nullptr)
     {
-        LOGGING_THROW("matrix_invert: m and info must not be null");
+        LINALG_THROW("matrix_invert: m and info must not be null");
     }
     if (lda <= 0)
     {
-        LOGGING_THROW("matrix_invert: lda must be positive", lda);
+        LINALG_THROW("matrix_invert: lda must be positive", lda);
     }
     switch (type)
     {
@@ -532,7 +532,7 @@ void matrix_invert(float* m, linalg_int lda, int* info, linear_solver_type type,
             info, workspace, workspace_size, stream);
         break;
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -541,11 +541,11 @@ void matrix_invert(double* m, linalg_int lda, int* info, linear_solver_type type
 {
     if (m == nullptr || info == nullptr)
     {
-        LOGGING_THROW("matrix_invert: m and info must not be null");
+        LINALG_THROW("matrix_invert: m and info must not be null");
     }
     if (lda <= 0)
     {
-        LOGGING_THROW("matrix_invert: lda must be positive", lda);
+        LINALG_THROW("matrix_invert: lda must be positive", lda);
     }
     switch (type)
     {
@@ -560,7 +560,7 @@ void matrix_invert(double* m, linalg_int lda, int* info, linear_solver_type type
             info, workspace, workspace_size, stream);
         break;
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -576,7 +576,7 @@ size_t matrix_determinant_workspace_size(
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant_workspace_size<float>(cusolverDnSpotrf_bufferSize, lda);
     }
-    LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 size_t matrix_determinant_workspace_size(
@@ -591,7 +591,7 @@ size_t matrix_determinant_workspace_size(
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant_workspace_size<double>(cusolverDnDpotrf_bufferSize, lda);
     }
-    LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 float determinant(float* m, linalg_int lda, linear_solver_type type, void* workspace,
@@ -599,11 +599,11 @@ float determinant(float* m, linalg_int lda, linear_solver_type type, void* works
 {
     if (m == nullptr)
     {
-        LOGGING_THROW("determinant: m must not be null");
+        LINALG_THROW("determinant: m must not be null");
     }
     if (lda <= 0)
     {
-        LOGGING_THROW("determinant: lda must be positive", lda);
+        LINALG_THROW("determinant: lda must be positive", lda);
     }
     switch (type)
     {
@@ -616,7 +616,7 @@ float determinant(float* m, linalg_int lda, linear_solver_type type, void* works
         return cholesky_determinant(cusolverDnSpotrf_bufferSize, cusolverDnSpotrf, m, lda,
             workspace, workspace_size, stream);
     }
-    LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 double determinant(double* m, linalg_int lda, linear_solver_type type, void* workspace,
@@ -624,11 +624,11 @@ double determinant(double* m, linalg_int lda, linear_solver_type type, void* wor
 {
     if (m == nullptr)
     {
-        LOGGING_THROW("determinant: m must not be null");
+        LINALG_THROW("determinant: m must not be null");
     }
     if (lda <= 0)
     {
-        LOGGING_THROW("determinant: lda must be positive", lda);
+        LINALG_THROW("determinant: lda must be positive", lda);
     }
     switch (type)
     {
@@ -641,7 +641,7 @@ double determinant(double* m, linalg_int lda, linear_solver_type type, void* wor
         return cholesky_determinant(cusolverDnDpotrf_bufferSize, cusolverDnDpotrf, m, lda,
             workspace, workspace_size, stream);
     }
-    LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+    LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
 }  // namespace gpu

@@ -4,7 +4,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp.
@@ -21,8 +21,8 @@ namespace linalg
 // internal-linkage copy so linking several backends cannot clash.
 static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 {
-    LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
-    LOGGING_CHECK(lda > 0, "linear_solver::apply: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
+    LINALG_CHECK(lda > 0, "linear_solver::apply: lda must be positive", lda);
 }
 
 namespace
@@ -73,7 +73,7 @@ void linear_solver<float, linalg_backend::blas_lapacke>::apply(float* m,
     size_t                                                             workspace_size)
 {
     check_solver_inputs(m, x, lda);
-    LOGGING_CHECK(workspace_size >= solver_blas_workspace_size<float>(lda, type),
+    LINALG_CHECK(workspace_size >= solver_blas_workspace_size<float>(lda, type),
         "linear_solver: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              n = static_cast<lapack_int>(lda);
@@ -122,7 +122,7 @@ void linear_solver<double, linalg_backend::blas_lapacke>::apply(double* m,
     size_t                                                               workspace_size)
 {
     check_solver_inputs(m, x, lda);
-    LOGGING_CHECK(workspace_size >= solver_blas_workspace_size<double>(lda, type),
+    LINALG_CHECK(workspace_size >= solver_blas_workspace_size<double>(lda, type),
         "linear_solver: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              n = static_cast<lapack_int>(lda);

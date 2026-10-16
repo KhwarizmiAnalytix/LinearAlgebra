@@ -1,14 +1,14 @@
 #include "include/matrix_operation/trace.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
 
 template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int lda)
 {
-    LOGGING_CHECK(A != nullptr, "trace::apply: A must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0, "trace::apply: n/lda must be positive");
+    LINALG_CHECK(A != nullptr, "trace::apply: A must not be null");
+    LINALG_CHECK(n > 0 && lda > 0, "trace::apply: n/lda must be positive");
     T sum = T(0);
     for (linalg_int i = 0; i < n; ++i)
     {

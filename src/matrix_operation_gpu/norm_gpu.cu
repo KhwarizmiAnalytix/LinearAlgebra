@@ -9,7 +9,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // One thread per column/row, looping serially over the other dimension —
@@ -68,7 +68,7 @@ T norm_frobenius(Nrm2Fn nrm2, const T* A, linalg_long rows, linalg_long columns,
     const auto n       = detail::checked_narrow<int>(rows) * detail::checked_narrow<int>(columns);
     if (nrm2(handle, n, A, 1, &result) != CUBLAS_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cublasX?nrm2 failed");
+        LINALG_THROW("cublasX?nrm2 failed");
     }
     return result;
 }
@@ -84,14 +84,14 @@ T reduce_max(AmaxFn amax, const T* values, int n, cudaStream_t stream)
     int idx_1based = 1;
     if (amax(handle, n, values, 1, &idx_1based) != CUBLAS_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cublasI*amax failed");
+        LINALG_THROW("cublasI*amax failed");
     }
     T result = T(0);
     if (cudaMemcpyAsync(&result, values + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost, stream) !=
             cudaSuccess ||
         cudaStreamSynchronize(stream) != cudaSuccess)
     {
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return result;
 }
@@ -124,7 +124,7 @@ size_t matrix_norm_workspace_size_impl(linalg_long rows, linalg_long columns, no
         break;
     }
     default:
-        LOGGING_THROW("unsupported norm_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported norm_type", static_cast<linalg_int>(type));
     }
     return arena.total_size();
 }
@@ -136,7 +136,7 @@ T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void*
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
 
-    LOGGING_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, norm_type::ONE),
+    LINALG_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, norm_type::ONE),
         "norm: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     T*                        col_sums = arena.next<T>(static_cast<size_t>(c));
@@ -144,7 +144,7 @@ T norm_one(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void*
     const dim3 block(256);
     const dim3 grid((static_cast<unsigned>(c) + block.x - 1) / block.x);
     abs_col_sum_kernel<T><<<grid, block, 0, stream>>>(A, r, c, col_sums);
-    LOGGING_CHECK(cudaGetLastError() == cudaSuccess, "abs_col_sum_kernel launch failed");
+    LINALG_CHECK(cudaGetLastError() == cudaSuccess, "abs_col_sum_kernel launch failed");
     return reduce_max(amax, col_sums, c, stream);
 }
 
@@ -155,7 +155,7 @@ T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, 
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
 
-    LOGGING_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, norm_type::INFINITY_NORM),
+    LINALG_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, norm_type::INFINITY_NORM),
         "norm: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     T*                        row_sums = arena.next<T>(static_cast<size_t>(r));
@@ -163,7 +163,7 @@ T norm_infinity(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, 
     const dim3 block(256);
     const dim3 grid((static_cast<unsigned>(r) + block.x - 1) / block.x);
     abs_row_sum_kernel<T><<<grid, block, 0, stream>>>(A, r, c, row_sums);
-    LOGGING_CHECK(cudaGetLastError() == cudaSuccess, "abs_row_sum_kernel launch failed");
+    LINALG_CHECK(cudaGetLastError() == cudaSuccess, "abs_row_sum_kernel launch failed");
     return reduce_max(amax, row_sums, r, stream);
 }
 
@@ -174,7 +174,7 @@ T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void*
     const auto k         = std::min(rows, columns);
     const auto svd_bytes = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
 
-    LOGGING_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, norm_type::TWO),
+    LINALG_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, norm_type::TWO),
         "norm: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     T*                        S    = arena.next<T>(static_cast<size_t>(k));
@@ -190,9 +190,9 @@ T norm_two(AmaxFn amax, const T* A, linalg_long rows, linalg_long columns, void*
     const auto info_copy_status =
         cudaMemcpyAsync(&svd_status, info, sizeof(int), cudaMemcpyDeviceToHost, stream);
     const auto sync_status = cudaStreamSynchronize(stream);
-    LOGGING_CHECK(!(info_copy_status != cudaSuccess) && !(sync_status != cudaSuccess),
+    LINALG_CHECK(!(info_copy_status != cudaSuccess) && !(sync_status != cudaSuccess),
         "cudaMemcpyAsync/cudaStreamSynchronize failed");
-    LOGGING_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed", svd_status);
+    LINALG_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed", svd_status);
 
     const T result = reduce_max(amax, S, detail::checked_narrow<int>(k), stream);
     return (result < T(0)) ? -result : result;
@@ -212,15 +212,15 @@ T matrix_norm_impl(Nrm2Fn nrm2,
 {
     if (A == nullptr)
     {
-        LOGGING_THROW("norm: A must not be null");
+        LINALG_THROW("norm: A must not be null");
     }
     if (rows == 0 || columns == 0)
     {
-        LOGGING_THROW("norm: rows and columns must be positive");
+        LINALG_THROW("norm: rows and columns must be positive");
     }
     if (static_cast<linalg_long>(lda) != columns)
     {
-        LOGGING_THROW("linalg::gpu::norm requires tightly packed lda (lda == columns)");
+        LINALG_THROW("linalg::gpu::norm requires tightly packed lda (lda == columns)");
     }
 
     switch (type)
@@ -234,7 +234,7 @@ T matrix_norm_impl(Nrm2Fn nrm2,
     case norm_type::TWO:
         return norm_two(amax, A, rows, columns, workspace, workspace_size, stream);
     default:
-        LOGGING_THROW("unsupported norm_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported norm_type", static_cast<linalg_int>(type));
     }
 }
 

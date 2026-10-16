@@ -7,7 +7,7 @@
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/norm.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -262,7 +262,7 @@ void matrix_exponential_impl(const T* A_in,
     size_t                            workspace_size)
 {
     const linalg_int nn = n * n;
-    LOGGING_CHECK(workspace_size >= matrix_exponential_workspace_size_impl<T>(n),
+    LINALG_CHECK(workspace_size >= matrix_exponential_workspace_size_impl<T>(n),
         "exponential: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = exponential_plan<T>(arena, n);
@@ -398,9 +398,9 @@ void exponential<float, linalg_backend::native>::apply(const float* A,
     void*                                                                          workspace,
     size_t                                                                         workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && result != nullptr,
+    LINALG_CHECK(A != nullptr && result != nullptr,
         "exponential::apply: A and result must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0,
+    LINALG_CHECK(n > 0 && lda > 0 && ldc > 0,
         "exponential::apply: n/lda/ldc must be positive");
     matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
 }
@@ -414,9 +414,9 @@ void exponential<double, linalg_backend::native>::apply(const double* A,
     void*                                                                            workspace,
     size_t                                                                           workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && result != nullptr,
+    LINALG_CHECK(A != nullptr && result != nullptr,
         "exponential::apply: A and result must not be null");
-    LOGGING_CHECK(n > 0 && lda > 0 && ldc > 0,
+    LINALG_CHECK(n > 0 && lda > 0 && ldc > 0,
         "exponential::apply: n/lda/ldc must be positive");
     matrix_exponential_impl(A, n, lda, result, ldc, workspace, workspace_size);
 }

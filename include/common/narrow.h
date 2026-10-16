@@ -1,6 +1,6 @@
 #pragma once
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <type_traits>
 
@@ -10,7 +10,7 @@
 // used to narrow with a plain `static_cast<int>`, silently truncating any
 // value that overflows `int` (see docs/backend_roadmap.md §2.1 item 2).
 // `checked_narrow` keeps the same cast but reports overflow through
-// LOGGING_THROW instead of truncating it.
+// LINALG_THROW instead of truncating it.
 namespace linalg
 {
 namespace detail
@@ -23,7 +23,7 @@ To checked_narrow(From value)
         "checked_narrow requires integral types");
 
     const auto narrowed = static_cast<To>(value);
-    LOGGING_CHECK(static_cast<From>(narrowed) == value,
+    LINALG_CHECK(static_cast<From>(narrowed) == value,
         "checked_narrow: value {} does not fit in target type", value);
     return narrowed;
 }

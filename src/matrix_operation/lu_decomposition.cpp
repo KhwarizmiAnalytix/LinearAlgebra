@@ -1,6 +1,6 @@
 #include "include/matrix_operation/lu_decomposition.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include "include/common/backend.h"
 
@@ -9,7 +9,7 @@
 #include <limits>
 #include <utility>
 
-#include "include/common/macros.h"
+#include "include/common/linalg_macros.h"
 
 namespace linalg
 {
@@ -21,9 +21,9 @@ namespace linalg
 // use lu_decomposition<T, Backend>::apply directly, naming Backend explicitly.
 static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 {
-    LOGGING_CHECK(
+    LINALG_CHECK(
         m != nullptr && pivot != nullptr, "lu_decomposition::apply: m and pivot must not be null");
-    LOGGING_CHECK(lda > 0, "lu_decomposition::apply: lda must be positive", lda);
+    LINALG_CHECK(lda > 0, "lu_decomposition::apply: lda must be positive", lda);
 }
 
 // Only the native specializations are defined here. The mkl and blas_lapacke

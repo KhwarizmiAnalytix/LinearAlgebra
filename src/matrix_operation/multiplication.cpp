@@ -1,6 +1,6 @@
 #include "include/matrix_operation/multiplication.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS
 #pragma warning(push)
@@ -10,7 +10,7 @@
 #include <cmath>
 #include <limits>
 
-#include "include/common/macros.h"
+#include "include/common/linalg_macros.h"
 #include "include/common/workspace_arena.h"
 #include "include/util/cpu_info.h"
 #if LINALG_HAS_VECTORIZATION
@@ -35,9 +35,9 @@ static void check_matmul_inputs(const void* a,
     linalg_int                              ldb,
     linalg_int                              ldc)
 {
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr,
+    LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr,
         "multiplication::apply: a, b, and c must not be null");
-    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
+    LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
         "multiplication::apply: rows/columns/depth/lda/ldb/ldc must be positive");
 }
 
@@ -1522,7 +1522,7 @@ void matrix_multiplication_seq(  // NOLINT
         const size_t count_a = static_cast<size_t>(mc) * static_cast<size_t>(kc);
         const size_t count_b = static_cast<size_t>(kc) * static_cast<size_t>(nc);
 
-        LOGGING_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(rows, columns, depth),
+        LINALG_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(rows, columns, depth),
             "multiplication: workspace_size too small");
         detail::workspace_arena arena(workspace, workspace_size);
         value_t*                block_A = arena.next<value_t>(count_a);

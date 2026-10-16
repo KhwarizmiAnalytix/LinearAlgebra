@@ -2,7 +2,7 @@
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 #include "include/matrix_operation/svd_decomposition.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -26,9 +26,9 @@ static void check_svd_inputs(const void* A,
     linalg_long                          ldu,
     linalg_long                          ldv)
 {
-    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr,
+    LINALG_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr,
         "svd_decomposition::apply: A, S, U, and VT must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0,
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0,
         "svd_decomposition::apply: rows/columns/lda/ldu/ldv must be positive");
 }
 
@@ -123,7 +123,7 @@ void svd_lapacke_impl(GesvdWorkFn gesvd_work,
     const auto c     = static_cast<lapack_int>(columns);
     const auto lwork = svd_lwork<T>(gesvd_work, r, c, rows > columns);
 
-    LOGGING_CHECK(workspace_size >= svd_workspace_size_impl<T>(gesvd_work, rows, columns),
+    LINALG_CHECK(workspace_size >= svd_workspace_size_impl<T>(gesvd_work, rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = svd_plan<T>(arena, lwork);
@@ -145,7 +145,7 @@ void svd_lapacke_impl(GesvdWorkFn gesvd_work,
             static_cast<lapack_int>(ldv),
             bufs.work,
             lwork);
-        LOGGING_CHECK(info == 0, "{} SVD was unsuccessful", backend_name);
+        LINALG_CHECK(info == 0, "{} SVD was unsuccessful", backend_name);
     }
     else
     {
@@ -164,7 +164,7 @@ void svd_lapacke_impl(GesvdWorkFn gesvd_work,
             static_cast<lapack_int>(ldv),
             bufs.work,
             lwork);
-        LOGGING_CHECK(info == 0, "{} SVD was unsuccessful", backend_name);
+        LINALG_CHECK(info == 0, "{} SVD was unsuccessful", backend_name);
     }
 }
 
@@ -187,7 +187,7 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
     const auto r     = static_cast<lapack_int>(rows);
     const auto c     = static_cast<lapack_int>(columns);
     const auto lwork = svd_lwork<float>(LAPACKE_sgesvd_work, r, c, rows > columns);
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= svd_workspace_size_impl<float>(LAPACKE_sgesvd_work, rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -209,7 +209,7 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
             static_cast<lapack_int>(ldv),
             bufs.work,
             lwork);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
+        LINALG_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
     else
     {
@@ -228,7 +228,7 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
             static_cast<lapack_int>(ldv),
             bufs.work,
             lwork);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
+        LINALG_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
 }
 
@@ -249,7 +249,7 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
     const auto r     = static_cast<lapack_int>(rows);
     const auto c     = static_cast<lapack_int>(columns);
     const auto lwork = svd_lwork<double>(LAPACKE_dgesvd_work, r, c, rows > columns);
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -271,7 +271,7 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
             static_cast<lapack_int>(ldv),
             bufs.work,
             lwork);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
+        LINALG_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
     else
     {
@@ -290,7 +290,7 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
             static_cast<lapack_int>(ldv),
             bufs.work,
             lwork);
-        LOGGING_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
+        LINALG_CHECK(info == 0, "blas_lapack SVD was unsuccessful");
     }
 }
 

@@ -1,6 +1,6 @@
 #include "include/matrix_operation/tridiagonal_operations.h"
 
-#include "include/common/macros.h"
+#include "include/common/linalg_macros.h"
 
 namespace linalg::tridiagonal_operations
 {

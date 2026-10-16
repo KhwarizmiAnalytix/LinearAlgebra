@@ -5,7 +5,7 @@
 #include <cuda_runtime_api.h>
 
 #include "include/common/cuda_workspace.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // Single-thread reduction: n is one matrix dimension, not a large array, so
@@ -47,17 +47,17 @@ T matrix_trace_impl(const T* A, linalg_int n, linalg_int lda, void* workspace,
 {
     if (A == nullptr)
     {
-        LOGGING_THROW("trace: A must not be null");
+        LINALG_THROW("trace: A must not be null");
     }
     if (n <= 0)
     {
-        LOGGING_THROW("trace: n must be positive");
+        LINALG_THROW("trace: n must be positive");
     }
     if (lda != n)
     {
-        LOGGING_THROW("linalg::gpu::trace requires tightly packed lda (lda == n)");
+        LINALG_THROW("linalg::gpu::trace requires tightly packed lda (lda == n)");
     }
-    LOGGING_CHECK(workspace_size >= matrix_trace_workspace_size_impl<T>(),
+    LINALG_CHECK(workspace_size >= matrix_trace_workspace_size_impl<T>(),
         "trace: workspace_size too small");
 
     detail::workspace_arena arena(workspace, workspace_size);
@@ -72,11 +72,11 @@ T matrix_trace_impl(const T* A, linalg_int n, linalg_int lda, void* workspace,
 
     if (launch_err != cudaSuccess)
     {
-        LOGGING_THROW("trace_kernel launch failed");
+        LINALG_THROW("trace_kernel launch failed");
     }
     if (copy_status != cudaSuccess || sync_status != cudaSuccess)
     {
-        LOGGING_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
+        LINALG_THROW("cudaMemcpyAsync/cudaStreamSynchronize failed");
     }
     return sum;
 }

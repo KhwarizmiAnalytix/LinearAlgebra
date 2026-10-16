@@ -10,7 +10,7 @@
 
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -56,14 +56,14 @@ size_t singular_values_workspace_size_impl(linalg_long rows, linalg_long columns
 template <typename T> std::vector<T> download_singular_values(const T* A, linalg_long rows,
     linalg_long columns, linalg_long lda, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
-    LOGGING_CHECK(A != nullptr, "A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "rows and columns must be positive");
-    LOGGING_CHECK(!(static_cast<linalg_long>(lda) != columns), "requires tightly packed lda (lda == columns)");
+    LINALG_CHECK(A != nullptr, "A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0, "rows and columns must be positive");
+    LINALG_CHECK(!(static_cast<linalg_long>(lda) != columns), "requires tightly packed lda (lda == columns)");
 
     const auto k         = std::min(rows, columns);
     const auto svd_bytes = svd_decomposition_workspace_size(static_cast<const T*>(nullptr), rows, columns);
 
-    LOGGING_CHECK(workspace_size >= singular_values_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= singular_values_workspace_size_impl<T>(rows, columns),
         "rank/condition_number: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = singular_values_plan<T>(arena, rows, columns, svd_bytes);
@@ -78,8 +78,8 @@ template <typename T> std::vector<T> download_singular_values(const T* A, linalg
         cudaMemcpyAsync(host_s.data(), bufs.S, sizeof(T) * static_cast<size_t>(k), cudaMemcpyDeviceToHost, stream);
     const auto sync_status = cudaStreamSynchronize(stream);
 
-    LOGGING_CHECK(!(info_copy_status != cudaSuccess) && !(s_copy_status != cudaSuccess) && !(sync_status != cudaSuccess), "cudaMemcpyAsync/cudaStreamSynchronize failed");
-    LOGGING_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed", svd_status);
+    LINALG_CHECK(!(info_copy_status != cudaSuccess) && !(s_copy_status != cudaSuccess) && !(sync_status != cudaSuccess), "cudaMemcpyAsync/cudaStreamSynchronize failed");
+    LINALG_CHECK(svd_status == 0, "linalg::gpu::svd_decomposition failed", svd_status);
     return host_s;
 }
 

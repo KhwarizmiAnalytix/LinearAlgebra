@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "include/common/backend.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <cmath>
 #include <stdexcept>
@@ -21,8 +21,8 @@ namespace detail
 // directly, naming Backend explicitly.
 static void check_cholesky_inputs(const void* C, linalg_int lda)
 {
-    LOGGING_CHECK(C != nullptr, "cholesky_decomposition::apply: C must not be null");
-    LOGGING_CHECK(lda > 0, "cholesky_decomposition::apply: lda must be positive", lda);
+    LINALG_CHECK(C != nullptr, "cholesky_decomposition::apply: C must not be null");
+    LINALG_CHECK(lda > 0, "cholesky_decomposition::apply: lda must be positive", lda);
 }
 
 }  // namespace detail
@@ -136,7 +136,7 @@ bool cholesky_decomposition<float, linalg_backend::native>::apply(
         return cholesky_decomposition_scalar_impl<float,
                    cholesky_decomposition_enum::UPPER_TRIANGULAR>(n, C, n) == 0;
     default:
-        LOGGING_THROW("Unsupported enum type!");
+        LINALG_THROW("Unsupported enum type!");
     }
 }
 
@@ -155,7 +155,7 @@ bool cholesky_decomposition<double, linalg_backend::native>::apply(
         return cholesky_decomposition_scalar_impl<double,
                    cholesky_decomposition_enum::UPPER_TRIANGULAR>(n, C, n) == 0;
     default:
-        LOGGING_THROW("Unsupported enum type!");
+        LINALG_THROW("Unsupported enum type!");
     }
 }
 
@@ -303,7 +303,7 @@ bool cholesky_decomposition<float, linalg_backend::native>::apply_aad(
             cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
         return true;
     default:
-        LOGGING_THROW("Unsupported enum type!");
+        LINALG_THROW("Unsupported enum type!");
     }
 }
 
@@ -322,7 +322,7 @@ bool cholesky_decomposition<double, linalg_backend::native>::apply_aad(
             cholesky_decomposition_enum::UPPER_TRIANGULAR>(lda, C_aad, C, lda, A_aad);
         return true;
     default:
-        LOGGING_THROW("Unsupported enum type!");
+        LINALG_THROW("Unsupported enum type!");
     }
 }
 

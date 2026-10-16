@@ -1,6 +1,6 @@
 #include "include/matrix_operation/svd_decomposition.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -27,9 +27,9 @@ static void check_svd_inputs(const void* A,
     linalg_long                          ldu,
     linalg_long                          ldv)
 {
-    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr,
+    LINALG_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr,
         "svd_decomposition::apply: A, S, U, and VT must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0,
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldu != 0 && ldv != 0,
         "svd_decomposition::apply: rows/columns/lda/ldu/ldv must be positive");
 }
 
@@ -414,7 +414,7 @@ inline void svd(  // NOLINT
 {
     const linalg_long dim[2] = {std::max(rows, columns), std::min(rows, columns)};  // NOLINT
 
-    LOGGING_CHECK(workspace_size >= svd_scalar_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= svd_scalar_workspace_size_impl<T>(rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = svd_scalar_plan<T>(arena, rows, columns);

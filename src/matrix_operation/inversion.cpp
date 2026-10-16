@@ -2,11 +2,11 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <algorithm>
 
-#include "include/common/macros.h"
+#include "include/common/linalg_macros.h"
 #include "include/common/workspace_arena.h"
 
 namespace linalg
@@ -19,8 +19,8 @@ namespace linalg
 // directly.
 static void check_invert_inputs(const void* m, linalg_int lda)
 {
-    LOGGING_CHECK(m != nullptr, "inversion::apply: m must not be null");
-    LOGGING_CHECK(lda > 0, "inversion::apply: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr, "inversion::apply: m must not be null");
+    LINALG_CHECK(lda > 0, "inversion::apply: lda must be positive", lda);
 }
 
 // Only the native specializations are defined here. The mkl and blas_lapacke
@@ -175,7 +175,7 @@ void matrix_invert_scalar_impl(T* m,
     void*                         workspace,
     size_t                        workspace_size)
 {
-    LOGGING_CHECK(workspace_size >= invert_scalar_workspace_size<T>(lda, type),
+    LINALG_CHECK(workspace_size >= invert_scalar_workspace_size<T>(lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              n = static_cast<size_t>(lda);
@@ -206,7 +206,7 @@ void matrix_invert_scalar_impl(T* m,
         break;
     }
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 

@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/multiplication.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <mkl.h>
 
@@ -24,9 +24,9 @@ static void check_matmul_inputs(const void* a,
     linalg_int                              ldb,
     linalg_int                              ldc)
 {
-    LOGGING_CHECK(a != nullptr && b != nullptr && c != nullptr,
+    LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr,
         "multiplication::apply: a, b, and c must not be null");
-    LOGGING_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
+    LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
         "multiplication::apply: rows/columns/depth/lda/ldb/ldc must be positive");
 }
 

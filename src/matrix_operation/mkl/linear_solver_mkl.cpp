@@ -4,7 +4,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <mkl.h>
 
@@ -18,8 +18,8 @@ namespace linalg
 // internal-linkage copy so linking several backends cannot clash.
 static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 {
-    LOGGING_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
-    LOGGING_CHECK(lda > 0, "linear_solver::apply: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
+    LINALG_CHECK(lda > 0, "linear_solver::apply: lda must be positive", lda);
 }
 
 template <>

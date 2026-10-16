@@ -9,7 +9,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/transpose_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 namespace linalg
@@ -96,14 +96,14 @@ svd_layout<T> svd_plan(detail::workspace_arena& arena, int rows, int columns, in
 template <typename T, typename BufferSizeFn>
 size_t svd_workspace_size_impl(BufferSizeFn buffer_size, linalg_long rows, linalg_long columns)
 {
-    LOGGING_CHECK(rows != 0 && columns != 0, "svd_decomposition_workspace_size: rows and columns must be positive");
+    LINALG_CHECK(rows != 0 && columns != 0, "svd_decomposition_workspace_size: rows and columns must be positive");
     const auto r      = detail::checked_narrow<int>(rows);
     const auto c      = detail::checked_narrow<int>(columns);
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto eff_r  = (r >= c) ? r : c;
     const auto eff_c  = (r >= c) ? c : r;
     int        lwork  = 0;
-    LOGGING_CHECK(buffer_size(handle, eff_r, eff_c, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, eff_r, eff_c, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*gesvd_bufferSize failed");
     detail::workspace_arena arena;
     svd_plan<T>(arena, r, c, lwork);
@@ -152,7 +152,7 @@ void svd_core(GesvdFn gesvd,
     const auto rk = static_cast<size_t>(r) * static_cast<size_t>(k);
     const auto kc = static_cast<size_t>(k) * static_cast<size_t>(c);
 
-    LOGGING_CHECK(
+    LINALG_CHECK(
         cudaMemcpyAsync(bufs.a_work, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
@@ -163,14 +163,14 @@ void svd_core(GesvdFn gesvd,
 
     const auto status = gesvd(handle, 'S', 'S', r, c, bufs.a_work, r, S, bufs.u_work, r,
         bufs.vt_work, k, bufs.work, lwork, bufs.rwork, info);
-    LOGGING_CHECK(status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*gesvd failed", static_cast<int>(status));
+    LINALG_CHECK(status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*gesvd failed", static_cast<int>(status));
 
-    LOGGING_CHECK(cudaMemcpyAsync(U, bufs.u_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(cudaMemcpyAsync(U, bufs.u_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
     detail::transpose_device(static_cast<linalg_long>(k), rows, U, transpose_scratch, stream);
 
-    LOGGING_CHECK(cudaMemcpyAsync(VT, bufs.vt_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(cudaMemcpyAsync(VT, bufs.vt_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
     detail::transpose_device(columns, static_cast<linalg_long>(k), VT, transpose_scratch, stream);
@@ -197,24 +197,24 @@ void svd_impl(BufferSizeFn buffer_size,
     size_t                 workspace_size,
     cudaStream_t           stream)
 {
-    LOGGING_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr && info != nullptr, "svd_decomposition: A, S, U, VT, and info must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0, "svd_decomposition: rows and columns must be positive");
+    LINALG_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr && info != nullptr, "svd_decomposition: A, S, U, VT, and info must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0, "svd_decomposition: rows and columns must be positive");
 
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
     const auto k = std::min(r, c);
 
-    LOGGING_CHECK(!(detail::checked_narrow<int>(lda) != c) && !(detail::checked_narrow<int>(ldu) != k) && !(detail::checked_narrow<int>(ldv) != c), "linalg::gpu::svd_decomposition requires tightly packed lda/ldu/ldv "
+    LINALG_CHECK(!(detail::checked_narrow<int>(lda) != c) && !(detail::checked_narrow<int>(ldu) != k) && !(detail::checked_narrow<int>(ldv) != c), "linalg::gpu::svd_decomposition requires tightly packed lda/ldu/ldv "
                      "(lda == columns, ldu == min(rows, columns), ldv == columns)");
 
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto eff_r   = (r >= c) ? r : c;
     const auto eff_c   = (r >= c) ? c : r;
     int        lwork   = 0;
-    LOGGING_CHECK(buffer_size(handle, eff_r, eff_c, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, eff_r, eff_c, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*gesvd_bufferSize failed");
 
-    LOGGING_CHECK(workspace_size >= svd_workspace_size_impl<T>(buffer_size, rows, columns),
+    LINALG_CHECK(workspace_size >= svd_workspace_size_impl<T>(buffer_size, rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = svd_plan<T>(arena, r, c, lwork);
@@ -234,7 +234,7 @@ void svd_impl(BufferSizeFn buffer_size,
     // transpose-invariant).
     const auto rc = static_cast<size_t>(r) * static_cast<size_t>(c);
 
-    LOGGING_CHECK(
+    LINALG_CHECK(
         cudaMemcpyAsync(bufs.at, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) == cudaSuccess,
         "cudaMemcpyAsync failed");
     // at becomes row-major (columns x rows) = A^T.
@@ -250,14 +250,14 @@ void svd_impl(BufferSizeFn buffer_size,
     // u_prime is already row-major (svd_core's own output convention), so
     // this is a genuine transpose, not the column-/row-major
     // reinterpretation trick used elsewhere in this file.
-    LOGGING_CHECK(
+    LINALG_CHECK(
         cudaMemcpyAsync(VT, bufs.u_prime, sizeof(T) * ck, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
     detail::transpose_device(columns, static_cast<linalg_long>(k), VT, bufs.transpose_scratch, stream);
 
     // Caller's U (rows x k) = transpose(vt_prime (k x rows)).
-    LOGGING_CHECK(
+    LINALG_CHECK(
         cudaMemcpyAsync(U, bufs.vt_prime, sizeof(T) * kr, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");

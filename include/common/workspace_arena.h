@@ -25,7 +25,7 @@
 
 #include <cstddef>
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -60,7 +60,7 @@ public:
         {
             return nullptr;
         }
-        LOGGING_CHECK(offset_ <= capacity_, "workspace_arena: workspace too small");
+        LINALG_CHECK(offset_ <= capacity_, "workspace_arena: workspace too small");
         return reinterpret_cast<T*>(base_ + aligned_offset);
     }
 

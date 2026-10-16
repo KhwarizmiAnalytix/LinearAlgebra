@@ -3,7 +3,7 @@
 #include "include/matrix_operation/transpose.h"
 
 #include "include/common/narrow.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -24,8 +24,8 @@ namespace linalg
 // internal-linkage copy so linking several backends cannot clash.
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
-    LOGGING_CHECK(m != nullptr, "transpose::apply: m must not be null");
-    LOGGING_CHECK(
+    LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
+    LINALG_CHECK(
         rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
 }
 
@@ -51,7 +51,7 @@ void transpose<float, linalg_backend::blas_lapacke>::apply(
     linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
 {
     check_transpose_inputs(m, rows, columns);
-    LOGGING_CHECK(workspace_size >= transpose_blas_workspace_size_impl<float>(rows, columns),
+    LINALG_CHECK(workspace_size >= transpose_blas_workspace_size_impl<float>(rows, columns),
         "transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto* scratch = arena.next<float>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
@@ -81,7 +81,7 @@ void transpose<double, linalg_backend::blas_lapacke>::apply(
     linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
 {
     check_transpose_inputs(m, rows, columns);
-    LOGGING_CHECK(workspace_size >= transpose_blas_workspace_size_impl<double>(rows, columns),
+    LINALG_CHECK(workspace_size >= transpose_blas_workspace_size_impl<double>(rows, columns),
         "transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto* scratch = arena.next<double>(static_cast<size_t>(rows) * static_cast<size_t>(columns));

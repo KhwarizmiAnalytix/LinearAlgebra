@@ -1,6 +1,6 @@
 #include "include/matrix_operation/transpose.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -16,8 +16,8 @@ namespace linalg
 // transpose<T, kTransposeActiveBackend>::apply directly.
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
-    LOGGING_CHECK(m != nullptr, "transpose::apply: m must not be null");
-    LOGGING_CHECK(
+    LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
+    LINALG_CHECK(
         rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
 }
 
@@ -67,7 +67,7 @@ template <typename T>
 void transpose_scalar_impl(
     linalg_long rows, linalg_long columns, T* m, void* workspace, size_t workspace_size)
 {
-    LOGGING_CHECK(workspace_size >= transpose_scalar_workspace_size_impl(rows, columns),
+    LINALG_CHECK(workspace_size >= transpose_scalar_workspace_size_impl(rows, columns),
         "transpose: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     auto*                   visited =

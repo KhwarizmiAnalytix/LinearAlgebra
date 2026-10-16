@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -60,7 +60,7 @@ T matrix_determinant_helper(T* m,
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        LOGGING_CHECK(workspace_size >= matrix_determinant_workspace_size_helper<T>(lda, type),
+        LINALG_CHECK(workspace_size >= matrix_determinant_workspace_size_helper<T>(lda, type),
             "determinant: workspace_size too small");
         if (lu_decomposition<T, linalg_backend::native>::apply(m, lda, pivot, workspace, workspace_size))
         {
@@ -85,7 +85,7 @@ T matrix_determinant_helper(T* m,
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(m, lda);
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -114,8 +114,8 @@ float determinant<float, linalg_backend::native>::apply(float* m,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
-    LOGGING_CHECK(m != nullptr, "determinant::apply: m must not be null");
-    LOGGING_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
+    LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
     return matrix_determinant_helper(m, pivot, lda, type, workspace, workspace_size);
 }
 
@@ -127,8 +127,8 @@ double determinant<double, linalg_backend::native>::apply(double* m,
     void*                                                                        workspace,
     size_t                                                                       workspace_size)
 {
-    LOGGING_CHECK(m != nullptr, "determinant::apply: m must not be null");
-    LOGGING_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
+    LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
     return matrix_determinant_helper(m, pivot, lda, type, workspace, workspace_size);
 }
 

@@ -8,7 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/transpose_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 namespace linalg
@@ -44,12 +44,12 @@ symmetric_eigen_layout<T> symmetric_eigen_plan(detail::workspace_arena& arena, i
 template <typename T, typename BufferSizeFn>
 size_t symmetric_eigen_workspace_size_impl(BufferSizeFn buffer_size, linalg_int n)
 {
-    LOGGING_CHECK(n > 0, "symmetric_eigenvalue_decomposition_workspace_size: n must be positive");
+    LINALG_CHECK(n > 0, "symmetric_eigenvalue_decomposition_workspace_size: n must be positive");
     const auto nn     = detail::checked_narrow<int>(n);
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto fill   = CUBLAS_FILL_MODE_UPPER;
     int        lwork  = 0;
-    LOGGING_CHECK(buffer_size(handle, CUSOLVER_EIG_MODE_VECTOR, fill, nn, static_cast<T*>(nullptr), nn,
+    LINALG_CHECK(buffer_size(handle, CUSOLVER_EIG_MODE_VECTOR, fill, nn, static_cast<T*>(nullptr), nn,
                       static_cast<T*>(nullptr), &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*syevd_bufferSize failed");
     detail::workspace_arena arena;
@@ -76,11 +76,11 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     size_t                             workspace_size,
     cudaStream_t                       stream)
 {
-    LOGGING_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr && info != nullptr,
+    LINALG_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr && info != nullptr,
             "symmetric_eigenvalue_decomposition: A, eigenvalues, eigenvectors, and info must not be "
             "null");
-    LOGGING_CHECK(n > 0, "symmetric_eigenvalue_decomposition: n must be positive");
-    LOGGING_CHECK(!(lda != n) && !(ldv != n), "linalg::gpu::symmetric_eigenvalue_decomposition requires tightly packed "
+    LINALG_CHECK(n > 0, "symmetric_eigenvalue_decomposition: n must be positive");
+    LINALG_CHECK(!(lda != n) && !(ldv != n), "linalg::gpu::symmetric_eigenvalue_decomposition requires tightly packed "
                      "lda/ldv (both == n)");
 
     const auto nn      = detail::checked_narrow<int>(n);
@@ -98,22 +98,22 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
     if (buffer_size(handle, CUSOLVER_EIG_MODE_VECTOR, fill, nn, A, nn, eigenvalues, &lwork) !=
         CUSOLVER_STATUS_SUCCESS)
     {
-        LOGGING_THROW("cusolverDn*syevd_bufferSize failed");
+        LINALG_THROW("cusolverDn*syevd_bufferSize failed");
     }
 
-    LOGGING_CHECK(workspace_size >= symmetric_eigen_workspace_size_impl<T>(buffer_size, n),
+    LINALG_CHECK(workspace_size >= symmetric_eigen_workspace_size_impl<T>(buffer_size, n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = symmetric_eigen_plan<T>(arena, nn, lwork);
 
     const auto n2 = static_cast<size_t>(nn) * static_cast<size_t>(nn);
-    LOGGING_CHECK(cudaMemcpyAsync(bufs.work_a, A, sizeof(T) * n2, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(cudaMemcpyAsync(bufs.work_a, A, sizeof(T) * n2, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
 
     const auto status = syevd(handle, CUSOLVER_EIG_MODE_VECTOR, fill, nn, bufs.work_a, nn,
         eigenvalues, bufs.workspace, lwork, info);
-    LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDn*syevd failed");
+    LINALG_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDn*syevd failed");
 
     // work_a now holds the eigenvectors column-major (n x n); the CPU
     // convention wants them row-major, one eigenvector per column.
@@ -121,7 +121,7 @@ void symmetric_eigen_impl(BufferSizeFn buffer_size,
         bufs.transpose_scratch, stream);
     const auto copy_status =
         cudaMemcpyAsync(eigenvectors, bufs.work_a, sizeof(T) * n2, cudaMemcpyDeviceToDevice, stream);
-    LOGGING_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
+    LINALG_CHECK(!(copy_status != cudaSuccess), "cudaMemcpyAsync failed");
 }
 
 }  // namespace

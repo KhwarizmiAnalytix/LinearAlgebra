@@ -85,6 +85,12 @@ void BM_CholeskyDecomposition(benchmark::State& state)
 
     state.SetLabel(backend_name(Backend));
     state.SetComplexityN(static_cast<std::int64_t>(n));
+
+    // Cholesky factorization of an n x n SPD matrix costs ~n^3/3 flops.
+    const double flops_per_iter = static_cast<double>(n) * static_cast<double>(n) *
+        static_cast<double>(n) / 3.0;
+    state.counters["FLOPS"] = benchmark::Counter(
+        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
 }
 
 }  // namespace

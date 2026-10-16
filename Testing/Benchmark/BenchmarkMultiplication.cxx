@@ -81,6 +81,12 @@ void BM_Multiplication(benchmark::State& state)
 
     state.SetLabel(backend_name(Backend));
     state.SetComplexityN(static_cast<std::int64_t>(n));
+
+    // n x n * n x n matrix multiplication costs 2*n^3 flops (multiply-add pairs).
+    const double flops_per_iter =
+        2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n);
+    state.counters["FLOPS"] = benchmark::Counter(
+        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
 }
 
 }  // namespace

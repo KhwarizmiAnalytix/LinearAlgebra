@@ -4,7 +4,7 @@
 
 #include "include/common/backend.h"
 #include "include/common/narrow.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 // LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate framework ships
 // CBLAS but not the LAPACKE row-major C wrapper, so this block only compiles
@@ -23,8 +23,8 @@ namespace detail
 // internal-linkage copy so linking several backends cannot clash.
 static void check_cholesky_inputs(const void* C, linalg_int lda)
 {
-    LOGGING_CHECK(C != nullptr, "cholesky_decomposition::apply: C must not be null");
-    LOGGING_CHECK(lda > 0, "cholesky_decomposition::apply: lda must be positive", lda);
+    LINALG_CHECK(C != nullptr, "cholesky_decomposition::apply: C must not be null");
+    LINALG_CHECK(lda > 0, "cholesky_decomposition::apply: lda must be positive", lda);
 }
 
 // LAPACKE_?potrf only validates its uplo argument by printing to stderr (xerbla) and
@@ -32,7 +32,7 @@ static void check_cholesky_inputs(const void* C, linalg_int lda)
 // throws the same way cholesky_decomposition.cpp's native specializations do.
 static void check_cholesky_type(cholesky_decomposition_enum type)
 {
-    LOGGING_CHECK(type == cholesky_decomposition_enum::LOWER_TRIANGULAR ||
+    LINALG_CHECK(type == cholesky_decomposition_enum::LOWER_TRIANGULAR ||
             type == cholesky_decomposition_enum::UPPER_TRIANGULAR,
         "cholesky_decomposition::apply: Unsupported enum type!");
 }

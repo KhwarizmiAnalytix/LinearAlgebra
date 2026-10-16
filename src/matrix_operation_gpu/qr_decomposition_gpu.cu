@@ -9,7 +9,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/transpose_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // R's strictly-below-diagonal entries are Householder-vector scratch left
@@ -75,18 +75,18 @@ template <typename T, typename GeqrfBufFn, typename OrgqrBufFn>
 size_t qr_workspace_size_impl(
     GeqrfBufFn geqrf_buffer_size, OrgqrBufFn orgqr_buffer_size, linalg_long rows, linalg_long columns)
 {
-    LOGGING_CHECK(rows != 0 && columns != 0, "qr_decomposition_workspace_size: rows and columns must be positive");
+    LINALG_CHECK(rows != 0 && columns != 0, "qr_decomposition_workspace_size: rows and columns must be positive");
     const auto r      = detail::checked_narrow<int>(rows);
     const auto c      = detail::checked_narrow<int>(columns);
     const auto k      = std::min(r, c);
     auto       handle = detail::cusolver_handle_for_current_device();
 
     int lwork_geqrf = 0;
-    LOGGING_CHECK(geqrf_buffer_size(handle, r, c, static_cast<T*>(nullptr), r, &lwork_geqrf) ==
+    LINALG_CHECK(geqrf_buffer_size(handle, r, c, static_cast<T*>(nullptr), r, &lwork_geqrf) ==
             CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*geqrf_bufferSize failed");
     int lwork_orgqr = 0;
-    LOGGING_CHECK(orgqr_buffer_size(handle, r, k, k, static_cast<T*>(nullptr), r,
+    LINALG_CHECK(orgqr_buffer_size(handle, r, k, k, static_cast<T*>(nullptr), r,
                       static_cast<T*>(nullptr), &lwork_orgqr) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*orgqr_bufferSize failed");
 
@@ -119,11 +119,11 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
 {
     if (A == nullptr || Q == nullptr || R == nullptr || info == nullptr)
     {
-        LOGGING_THROW("qr_decomposition: A, Q, R, and info must not be null");
+        LINALG_THROW("qr_decomposition: A, Q, R, and info must not be null");
     }
     if (rows == 0 || columns == 0)
     {
-        LOGGING_THROW("qr_decomposition: rows and columns must be positive");
+        LINALG_THROW("qr_decomposition: rows and columns must be positive");
     }
 
     const auto r = detail::checked_narrow<int>(rows);
@@ -132,7 +132,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
 
     if (detail::checked_narrow<int>(lda) != c || detail::checked_narrow<int>(ldq) != k || detail::checked_narrow<int>(ldr) != c)
     {
-        LOGGING_THROW("linalg::gpu::qr_decomposition requires tightly packed lda/ldq/ldr "
+        LINALG_THROW("linalg::gpu::qr_decomposition requires tightly packed lda/ldq/ldr "
                      "(lda == columns, ldq == min(rows, columns), ldr == columns)");
     }
 
@@ -144,21 +144,21 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     const auto kc = static_cast<size_t>(k) * static_cast<size_t>(c);
 
     int lwork_geqrf = 0;
-    LOGGING_CHECK(geqrf_buffer_size(handle, r, c, static_cast<const T*>(nullptr), r, &lwork_geqrf) ==
+    LINALG_CHECK(geqrf_buffer_size(handle, r, c, static_cast<const T*>(nullptr), r, &lwork_geqrf) ==
             CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*geqrf_bufferSize failed");
     int lwork_orgqr = 0;
-    LOGGING_CHECK(orgqr_buffer_size(handle, r, k, k, static_cast<const T*>(nullptr), r,
+    LINALG_CHECK(orgqr_buffer_size(handle, r, k, k, static_cast<const T*>(nullptr), r,
                       static_cast<const T*>(nullptr), &lwork_orgqr) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*orgqr_bufferSize failed");
 
-    LOGGING_CHECK(workspace_size >= qr_workspace_size_impl<T>(
+    LINALG_CHECK(workspace_size >= qr_workspace_size_impl<T>(
                                          geqrf_buffer_size, orgqr_buffer_size, rows, columns),
         "qr_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = qr_plan<T>(arena, r, c, k, lwork_geqrf, lwork_orgqr);
 
-    LOGGING_CHECK(cudaMemcpyAsync(bufs.a_work, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(cudaMemcpyAsync(bufs.a_work, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
     // Same identity svd_decomposition_gpu.cpp relies on: transposing the
@@ -168,14 +168,14 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
 
     const auto geqrf_status =
         geqrf(handle, r, c, bufs.a_work, r, bufs.tau, bufs.work_geqrf, lwork_geqrf, info);
-    LOGGING_CHECK(geqrf_status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*geqrf failed");
+    LINALG_CHECK(geqrf_status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*geqrf failed");
 
     // Extract R: the top k rows of a_work (column-major, r x c, lda = r),
     // across all c columns, into a tightly-packed column-major (k x c)
     // buffer — a genuine strided 2D copy (column-major storage means each
     // source column's first k elements are contiguous with each other but
     // not with the next column's).
-    LOGGING_CHECK(cudaMemcpy2DAsync(bufs.r_work,
+    LINALG_CHECK(cudaMemcpy2DAsync(bufs.r_work,
                       sizeof(T) * static_cast<size_t>(k),
                       bufs.a_work,
                       sizeof(T) * static_cast<size_t>(r),
@@ -193,10 +193,10 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
 
     const dim3 block(16, 16);
     zero_qr_lower_triangle_kernel<T><<<grid_2d(c, k, block), block, 0, stream>>>(bufs.r_work, k, c);
-    LOGGING_CHECK(
+    LINALG_CHECK(
         cudaGetLastError() == cudaSuccess, "zero_qr_lower_triangle_kernel launch failed");
 
-    LOGGING_CHECK(cudaMemcpyAsync(R, bufs.r_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(cudaMemcpyAsync(R, bufs.r_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
 
@@ -206,15 +206,15 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     // column-by-column), so no strided copy is needed here.
     const auto orgqr_status =
         orgqr(handle, r, k, k, bufs.a_work, r, bufs.tau, bufs.work_orgqr, lwork_orgqr, info);
-    LOGGING_CHECK(orgqr_status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*orgqr failed");
+    LINALG_CHECK(orgqr_status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*orgqr failed");
 
-    LOGGING_CHECK(cudaMemcpyAsync(bufs.q_work, bufs.a_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice,
+    LINALG_CHECK(cudaMemcpyAsync(bufs.q_work, bufs.a_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice,
                       stream) == cudaSuccess,
         "cudaMemcpyAsync failed");
     // Same reinterpret-then-transpose identity used for R above.
     detail::transpose_device(static_cast<linalg_long>(k), rows, bufs.q_work, bufs.transpose_scratch, stream);
 
-    LOGGING_CHECK(
+    LINALG_CHECK(
         cudaMemcpyAsync(Q, bufs.q_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");

@@ -8,7 +8,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/transpose_gpu.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 namespace linalg
@@ -44,11 +44,11 @@ lu_decomposition_layout<T> lu_decomposition_plan(detail::workspace_arena& arena,
 
 size_t lu_decomposition_workspace_size(const float* /*type_tag*/, linalg_int lda)
 {
-    LOGGING_CHECK(lda > 0, "lu_decomposition_workspace_size: lda must be positive", lda);
+    LINALG_CHECK(lda > 0, "lu_decomposition_workspace_size: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     int        lwork  = 0;
-    LOGGING_CHECK(cusolverDnSgetrf_bufferSize(handle, n, n, nullptr, n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(cusolverDnSgetrf_bufferSize(handle, n, n, nullptr, n, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDnSgetrf_bufferSize failed");
     detail::workspace_arena arena;
     lu_decomposition_plan<float>(arena, lwork, n);
@@ -57,11 +57,11 @@ size_t lu_decomposition_workspace_size(const float* /*type_tag*/, linalg_int lda
 
 size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int lda)
 {
-    LOGGING_CHECK(lda > 0, "lu_decomposition_workspace_size: lda must be positive", lda);
+    LINALG_CHECK(lda > 0, "lu_decomposition_workspace_size: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     int        lwork  = 0;
-    LOGGING_CHECK(cusolverDnDgetrf_bufferSize(handle, n, n, nullptr, n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(cusolverDnDgetrf_bufferSize(handle, n, n, nullptr, n, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDnDgetrf_bufferSize failed");
     detail::workspace_arena arena;
     lu_decomposition_plan<double>(arena, lwork, n);
@@ -71,16 +71,16 @@ size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int ld
 void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
-    LOGGING_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
-    LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
+    LINALG_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 
     int lwork = 0;
-    LOGGING_CHECK(!(cusolverDnSgetrf_bufferSize(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDnSgetrf_bufferSize failed");
+    LINALG_CHECK(!(cusolverDnSgetrf_bufferSize(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDnSgetrf_bufferSize failed");
 
-    LOGGING_CHECK(workspace_size >= lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda),
+    LINALG_CHECK(workspace_size >= lu_decomposition_workspace_size(static_cast<const float*>(nullptr), lda),
         "lu_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = lu_decomposition_plan<float>(arena, lwork, n);
@@ -96,7 +96,7 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* wor
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 
     const auto status = cusolverDnSgetrf(handle, n, n, m, n, bufs.workspace, pivot, info);
-    LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDnSgetrf failed");
+    LINALG_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDnSgetrf failed");
 
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 }
@@ -104,16 +104,16 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* wor
 void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
-    LOGGING_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
-    LOGGING_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
+    LINALG_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream);
 
     int lwork = 0;
-    LOGGING_CHECK(!(cusolverDnDgetrf_bufferSize(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDnDgetrf_bufferSize failed");
+    LINALG_CHECK(!(cusolverDnDgetrf_bufferSize(handle, n, n, m, n, &lwork) != CUSOLVER_STATUS_SUCCESS), "cusolverDnDgetrf_bufferSize failed");
 
-    LOGGING_CHECK(workspace_size >= lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda),
+    LINALG_CHECK(workspace_size >= lu_decomposition_workspace_size(static_cast<const double*>(nullptr), lda),
         "lu_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = lu_decomposition_plan<double>(arena, lwork, n);
@@ -123,7 +123,7 @@ void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, void* wo
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 
     const auto status = cusolverDnDgetrf(handle, n, n, m, n, bufs.workspace, pivot, info);
-    LOGGING_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDnDgetrf failed");
+    LINALG_CHECK(!(status != CUSOLVER_STATUS_SUCCESS), "cusolverDnDgetrf failed");
 
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 }

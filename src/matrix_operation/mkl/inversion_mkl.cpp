@@ -4,7 +4,7 @@
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <mkl.h>
 
@@ -20,8 +20,8 @@ namespace linalg
 // internal-linkage copy so linking several backends cannot clash.
 static void check_invert_inputs(const void* m, linalg_int lda)
 {
-    LOGGING_CHECK(m != nullptr, "inversion::apply: m must not be null");
-    LOGGING_CHECK(lda > 0, "inversion::apply: lda must be positive", lda);
+    LINALG_CHECK(m != nullptr, "inversion::apply: m must not be null");
+    LINALG_CHECK(lda > 0, "inversion::apply: lda must be positive", lda);
 }
 
 namespace
@@ -71,7 +71,7 @@ void inversion<float, linalg_backend::mkl>::apply(float* m,
     size_t                                                    workspace_size)
 {
     check_invert_inputs(m, lda);
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= invert_mkl_workspace_size_impl<float>(LAPACKE_sgetri_work, lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -109,7 +109,7 @@ void inversion<float, linalg_backend::mkl>::apply(float* m,
         LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
         break;
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -122,7 +122,7 @@ void inversion<double, linalg_backend::mkl>::apply(double* m,
     size_t                                                      workspace_size)
 {
     check_invert_inputs(m, lda);
-    LOGGING_CHECK(
+    LINALG_CHECK(
         workspace_size >= invert_mkl_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -160,7 +160,7 @@ void inversion<double, linalg_backend::mkl>::apply(double* m,
         LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
         break;
     default:
-        LOGGING_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
     }
 }
 

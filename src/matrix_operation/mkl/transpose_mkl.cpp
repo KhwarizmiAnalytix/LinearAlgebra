@@ -2,7 +2,7 @@
 
 #include "include/matrix_operation/transpose.h"
 
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 #include <mkl.h>
 
@@ -16,8 +16,8 @@ namespace linalg
 // internal-linkage copy so linking several backends cannot clash.
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
-    LOGGING_CHECK(m != nullptr, "transpose::apply: m must not be null");
-    LOGGING_CHECK(
+    LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
+    LINALG_CHECK(
         rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
 }
 

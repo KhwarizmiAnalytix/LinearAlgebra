@@ -5,7 +5,7 @@
 
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/svd_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -102,7 +102,7 @@ T norm_two(const T* A,
     const auto        svd_bytes =
         linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
 
-    LOGGING_CHECK(workspace_size >= norm_two_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= norm_two_workspace_size_impl<T>(rows, columns),
         "norm: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = norm_two_plan<T>(arena, rows, columns, svd_bytes);
@@ -167,7 +167,7 @@ T matrix_norm_impl(const T* A,
     case norm_type::TWO:
         return norm_two(A, rows, columns, lda, workspace, workspace_size);
     default:
-        LOGGING_THROW("unsupported norm_type", static_cast<linalg_int>(type));
+        LINALG_THROW("unsupported norm_type", static_cast<linalg_int>(type));
     }
 }
 
@@ -180,8 +180,8 @@ float norm<float, linalg_backend::native>::apply(const float* A,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
-    LOGGING_CHECK(A != nullptr, "norm::apply: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0,
+    LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
     return matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
 }
@@ -195,8 +195,8 @@ double norm<double, linalg_backend::native>::apply(const double* A,
     void*                                                                       workspace,
     size_t                                                                      workspace_size)
 {
-    LOGGING_CHECK(A != nullptr, "norm::apply: A must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0,
+    LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
     return matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
 }

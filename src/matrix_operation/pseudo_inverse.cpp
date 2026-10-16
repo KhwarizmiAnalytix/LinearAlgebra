@@ -6,7 +6,7 @@
 
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/svd_decomposition.h"
-#include "include/logging.h"
+#include "include/common/linalg_checks.h"
 
 namespace linalg
 {
@@ -61,7 +61,7 @@ void pseudo_inverse_impl(linalg_long rows,
     const auto        svd_bytes =
         linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
 
-    LOGGING_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
+    LINALG_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
         "pseudo_inverse: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = pseudo_inverse_plan<T>(arena, rows, columns, svd_bytes);
@@ -125,9 +125,9 @@ void pseudo_inverse<float, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && Ainv != nullptr,
+    LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
     pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
@@ -143,9 +143,9 @@ void pseudo_inverse<double, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                      workspace,
     size_t                                                                     workspace_size)
 {
-    LOGGING_CHECK(A != nullptr && Ainv != nullptr,
+    LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
-    LOGGING_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
     pseudo_inverse_impl(rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
