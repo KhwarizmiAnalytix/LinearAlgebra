@@ -99,6 +99,27 @@ void ptranspose_generic(typename packet<T>::packet_t* m)
     }
 }
 
+// Shared by every packet<T>::predux below (scalar and every ISA
+// specialization alike), the same way ptranspose_generic is shared for
+// transposes above: a horizontal sum of all lanes, used by
+// cholesky_decomposition.cpp's blocked trailing-submatrix update to reduce
+// a dot-product accumulator to a scalar. Trading the per-ISA horizontal-add
+// instructions a native implementation would use (haddps/vaddvq_f32/...)
+// for a portable, easy-to-verify storeu-then-sum — correctness over the
+// last bit of performance, exactly like ptranspose_generic's rationale.
+template <typename T>
+T predux_generic(typename packet<T>::packet_t v)
+{
+    T buf[packet<T>::size];
+    packet<T>::storeu(v, buf);
+    T sum = buf[0];
+    for (int i = 1; i < packet<T>::size; ++i)
+    {
+        sum += buf[i];
+    }
+    return sum;
+}
+
 // Primary template: scalar fallback, packet width 1. Correct on every
 // platform by construction — every operation below degenerates to the
 // plain scalar statement it would be without vectorization at all.
@@ -132,6 +153,7 @@ struct packet
 
     static void ploadquad(const T* ptr, packet_t& out) { out = *ptr; }
     static packet_t predux_downto4(packet_t v) { return v; }
+    static T        predux(packet_t v) { return v; }
 
     static void gather(const T* ptr, linalg_int stride, packet_t& out) { out = *ptr; (void)stride; }
     static void scatter(packet_t v, linalg_int stride, T* ptr) { *ptr = v; (void)stride; }
@@ -188,6 +210,7 @@ struct packet<float>
     // Only ever called when size > 4 (AVX/AVX-512-width packets); for a
     // native 4-wide packet it is already "downto 4", i.e. the identity.
     static packet_t predux_downto4(packet_t v) { return v; }
+    static float    predux(packet_t v) { return predux_generic<float>(v); }
 
     static void gather(const float* ptr, linalg_int stride, packet_t& out)
     {
@@ -247,6 +270,7 @@ struct packet<double>
     static void ploadquad(const double* ptr, packet_t& out) { out = vdupq_n_f64(*ptr); }
 
     static packet_t predux_downto4(packet_t v) { return v; }
+    static double   predux(packet_t v) { return predux_generic<double>(v); }
 
     static void gather(const double* ptr, linalg_int stride, packet_t& out)
     {
@@ -319,6 +343,7 @@ struct packet<float>
     static void ploadquad(const float* ptr, packet_t& out) { out = _mm_set1_ps(*ptr); }
 
     static packet_t predux_downto4(packet_t v) { return v; }
+    static float    predux(packet_t v) { return predux_generic<float>(v); }
 
     static void gather(const float* ptr, linalg_int stride, packet_t& out)
     {
@@ -381,6 +406,7 @@ struct packet<double>
     static void ploadquad(const double* ptr, packet_t& out) { out = _mm_set1_pd(*ptr); }
 
     static packet_t predux_downto4(packet_t v) { return v; }
+    static double   predux(packet_t v) { return predux_generic<double>(v); }
 
     static void gather(const double* ptr, linalg_int stride, packet_t& out)
     {
@@ -494,6 +520,8 @@ struct packet<float>
         return _mm_add_ps(_mm256_castps256_ps128(v), _mm256_extractf128_ps(v, 1));
     }
 
+    static float predux(packet_t v) { return predux_generic<float>(v); }
+
     static void gather(const float* ptr, linalg_int stride, packet_t& out)
     {
         alignas(32) float lanes[8];
@@ -579,6 +607,7 @@ struct packet<double>
     static void ploadquad(const double* ptr, packet_t& out) { out = _mm256_set1_pd(*ptr); }
 
     static packet_t predux_downto4(packet_t v) { return v; }
+    static double   predux(packet_t v) { return predux_generic<double>(v); }
 
     static void gather(const double* ptr, linalg_int stride, packet_t& out)
     {
@@ -668,6 +697,8 @@ struct packet<float>
         const __m256 s8  = _mm256_add_ps(lo8, hi8);
         return _mm_add_ps(_mm256_castps256_ps128(s8), _mm256_extractf128_ps(s8, 1));
     }
+
+    static float predux(packet_t v) { return predux_generic<float>(v); }
 
     static void gather(const float* ptr, linalg_int stride, packet_t& out)
     {
@@ -764,6 +795,8 @@ struct packet<double>
         return _mm256_add_pd(
             _mm512_castpd512_pd256(v), _mm512_extractf64x4_pd(v, 1));
     }
+
+    static double predux(packet_t v) { return predux_generic<double>(v); }
 
     static void gather(const double* ptr, linalg_int stride, packet_t& out)
     {
