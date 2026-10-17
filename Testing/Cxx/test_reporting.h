@@ -92,14 +92,11 @@ inline ::testing::AssertionResult report(const char* check,
     bool                                             passed,
     const std::string&                               expected,
     const std::string&                               actual,
-    const std::string&                               difference,
-    const std::string&                               tolerance = "n/a",
-    const std::string&                               condition = "n/a")
+    const std::string&                               difference)
 {
     const std::string message =
         std::string("method tested/check=") + check + "\ndetails: test=" + current_test_name() +
-        "\nexpected=" + expected + ", actual=" + actual + ", difference=" + difference +
-        ", tolerance=" + tolerance + ", condition=" + condition;
+        "\nexpected=" + expected + ", actual=" + actual + ", difference=" + difference;
     if (passed)
     {
         LOGGING_LOG_INFO("[PASS] {}\n{}", check, message);
@@ -120,9 +117,7 @@ template <typename Left, typename Right>
         actual == expected,
         value_string(expected),
         value_string(actual),
-        difference_string(actual, expected),
-        "n/a",
-        "actual == expected");
+        difference_string(actual, expected));
 }
 
 template <typename Left, typename Right>
@@ -135,9 +130,7 @@ template <typename Left, typename Right>
         actual < expected,
         value_string(expected),
         value_string(actual),
-        difference_string(actual, expected),
-        "n/a",
-        "actual < expected");
+        difference_string(actual, expected));
 }
 
 template <typename Left, typename Right>
@@ -150,9 +143,7 @@ template <typename Left, typename Right>
         actual <= expected,
         value_string(expected),
         value_string(actual),
-        difference_string(actual, expected),
-        "n/a",
-        "actual <= expected");
+        difference_string(actual, expected));
 }
 
 template <typename Left, typename Right>
@@ -165,9 +156,7 @@ template <typename Left, typename Right>
         actual > expected,
         value_string(expected),
         value_string(actual),
-        difference_string(actual, expected),
-        "n/a",
-        "actual > expected");
+        difference_string(actual, expected));
 }
 
 template <typename Actual, typename Expected, typename Tolerance>
@@ -183,13 +172,14 @@ template <typename Actual, typename Expected, typename Tolerance>
     std::ostringstream difference_output;
     difference_output << std::setprecision(std::numeric_limits<long double>::max_digits10)
                       << difference;
-    return report((std::string(actual_expression) + " ~= " + expected_expression).c_str(),
+    return report(
+        (std::string(actual_expression) + " ~= " + expected_expression + " (tol=" +
+            std::string(tolerance_expression) + "=" + value_string(tolerance) + ")")
+            .c_str(),
         difference <= static_cast<long double>(tolerance),
         value_string(expected),
         value_string(actual),
-        difference_output.str(),
-        std::string(tolerance_expression) + "=" + value_string(tolerance),
-        "absolute difference <= tolerance");
+        difference_output.str());
 }
 
 template <bool Expected>::testing::AssertionResult boolean(const char* expression, bool actual)

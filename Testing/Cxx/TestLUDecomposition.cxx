@@ -16,25 +16,6 @@ namespace
 using linalg_test::dense_matrix;
 
 template <typename value_t>
-dense_matrix<value_t> matmul(const dense_matrix<value_t>& a, const dense_matrix<value_t>& b)
-{
-    dense_matrix<value_t> c(a.rows(), b.cols());
-    for (std::size_t i = 0; i < a.rows(); ++i)
-    {
-        for (std::size_t j = 0; j < b.cols(); ++j)
-        {
-            value_t sum = 0;
-            for (std::size_t k = 0; k < a.cols(); ++k)
-            {
-                sum += a(i, k) * b(k, j);
-            }
-            c(i, j) = sum;
-        }
-    }
-    return c;
-}
-
-template <typename value_t>
 std::vector<value_t> matvec(const dense_matrix<value_t>& a, const std::vector<value_t>& x)
 {
     std::vector<value_t> r(a.rows());

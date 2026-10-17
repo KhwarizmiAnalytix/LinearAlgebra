@@ -3,7 +3,6 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/power.h"
 #include "gtest/gtest.h"
 #include "test_reporting.h"
@@ -18,24 +17,17 @@ template <typename> struct PowerTolerance
 
 template <> struct PowerTolerance<float>
 {
-    static constexpr double tolerance = 5.e-4;
+    static constexpr double tolerance = 1e-4;
 };
 
 template <> struct PowerTolerance<double>
 {
-    static constexpr double tolerance = 1.e-9;
+    static constexpr double tolerance = 1e-12;
 };
 
 template <typename value_t> std::vector<unsigned char> power_workspace(linalg_int n)
 {
     const auto bytes = linalg::power<value_t, linalg::linalg_backend::native>::workspace_size(n);
-    return std::vector<unsigned char>(bytes);
-}
-
-template <typename value_t> std::vector<unsigned char> gemm_workspace(linalg_int n)
-{
-    const auto bytes =
-        linalg::multiplication<value_t, linalg::linalg_backend::native>::workspace_size(n, n, n);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -58,13 +50,19 @@ template <typename value_t> double max_abs(const dense_matrix<value_t>& a, std::
 {
     double worst = 0.;
     for (std::size_t i = 0; i < n; ++i)
-    {
         for (std::size_t j = 0; j < n; ++j)
-        {
             worst = std::max(worst, std::fabs(static_cast<double>(a(i, j))));
-        }
-    }
     return worst;
+}
+
+// Relative max-element error: max|a-b| / max(1, max|b|).
+// Scale-independent — safe when reference entries span many orders of magnitude.
+template <typename value_t>
+double normalized_max_diff(
+    const dense_matrix<value_t>& result, const dense_matrix<value_t>& reference, std::size_t n)
+{
+    const double scale = std::max(1.0, max_abs(reference, n));
+    return max_abs_diff(result, reference, n) / scale;
 }
 
 template <typename value_t> dense_matrix<value_t> identity(std::size_t n)
@@ -91,28 +89,6 @@ dense_matrix<value_t> apply_power(const dense_matrix<value_t>& A, std::size_t n,
         ws.data(),
         ws.size());
     return R;
-}
-
-template <typename value_t>
-dense_matrix<value_t> matmul(
-    const dense_matrix<value_t>& a, const dense_matrix<value_t>& b, std::size_t n)
-{
-    dense_matrix<value_t> c(n, n);
-    auto                  gemm_ws = gemm_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
-        false,
-        static_cast<linalg_int>(n),
-        static_cast<linalg_int>(n),
-        static_cast<linalg_int>(n),
-        a.begin(),
-        static_cast<linalg_int>(n),
-        b.begin(),
-        static_cast<linalg_int>(n),
-        c.begin(),
-        static_cast<linalg_int>(n),
-        gemm_ws.data(),
-        gemm_ws.size());
-    return c;
 }
 
 template <typename value_t> dense_matrix<value_t> random_matrix(std::size_t n)
@@ -151,11 +127,11 @@ template <typename value_t> void test_identity_power(std::size_t n)
 template <typename value_t> void test_small_positive_powers(std::size_t n)
 {
     const auto A  = random_matrix<value_t>(n);
-    const auto A2 = matmul(A, A, n);
-    const auto A3 = matmul(A2, A, n);
+    const auto A2 = linalg_test::matmul(A, A);
+    const auto A3 = linalg_test::matmul(A2, A);
 
-    EXPECT_LT(max_abs_diff(apply_power(A, n, 2), A2, n), PowerTolerance<value_t>::tolerance);
-    EXPECT_LT(max_abs_diff(apply_power(A, n, 3), A3, n), PowerTolerance<value_t>::tolerance);
+    EXPECT_LT(normalized_max_diff(apply_power(A, n, 2), A2, n), PowerTolerance<value_t>::tolerance);
+    EXPECT_LT(normalized_max_diff(apply_power(A, n, 3), A3, n), PowerTolerance<value_t>::tolerance);
 }
 
 // A^k for a larger k, built by repeated multiplication, exercises the binary
@@ -165,13 +141,10 @@ template <typename value_t> void test_large_positive_power(std::size_t n, linalg
     const auto            A         = random_matrix<value_t>(n);
     dense_matrix<value_t> reference = identity<value_t>(n);
     for (linalg_int i = 0; i < k; ++i)
-    {
-        reference = matmul(reference, A, n);
-    }
+        reference = linalg_test::matmul(reference, A);
 
-    const double scale = std::max(1.0, max_abs(reference, n));
-    EXPECT_LT(max_abs_diff(apply_power(A, n, k), reference, n),
-        PowerTolerance<value_t>::tolerance * scale);
+    EXPECT_LT(normalized_max_diff(apply_power(A, n, k), reference, n),
+        PowerTolerance<value_t>::tolerance);
 }
 
 // A^-1 matches an explicit inverse computed via A^-1 * A == I.
@@ -179,18 +152,18 @@ template <typename value_t> void test_negative_one_power(std::size_t n)
 {
     const auto A    = random_matrix<value_t>(n);
     const auto Ainv = apply_power(A, n, -1);
-    const auto prod = matmul(Ainv, A, n);
+    const auto prod = linalg_test::matmul(Ainv, A);
     EXPECT_LT(max_abs_diff(prod, identity<value_t>(n), n), PowerTolerance<value_t>::tolerance);
 }
 
-// A^-k == (A^-1)^k.
+// A^(-k) * A^k == I: round-trips back to identity regardless of entry scale.
 template <typename value_t> void test_negative_power(std::size_t n, linalg_int k)
 {
-    const auto A         = random_matrix<value_t>(n);
-    const auto Ainv      = apply_power(A, n, -1);
-    const auto reference = apply_power(Ainv, n, k);
-    const auto R         = apply_power(A, n, -k);
-    EXPECT_LT(max_abs_diff(R, reference, n), PowerTolerance<value_t>::tolerance);
+    const auto A      = random_matrix<value_t>(n);
+    const auto Anegk  = apply_power(A, n, -k);
+    const auto Aposk  = apply_power(A, n,  k);
+    const auto result = linalg_test::matmul(Anegk, Aposk);
+    EXPECT_LT(max_abs_diff(result, identity<value_t>(n), n), PowerTolerance<value_t>::tolerance);
 }
 
 }  // namespace

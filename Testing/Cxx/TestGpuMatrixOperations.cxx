@@ -48,7 +48,8 @@ template <> struct GpuTolerance<float>
 
 template <> struct GpuTolerance<double>
 {
-    static constexpr double value = 1.e-9;
+    static constexpr double value  = 1.e-9;
+    static constexpr double coarse = 1.e-6;
 };
 
 // Minimal RAII CUDA device buffer: test-only, mirrors dense_matrix_test_helper's
@@ -101,38 +102,6 @@ dense_matrix<value_t> random_matrix(
         }
     }
     return M;
-}
-
-template <typename value_t>
-dense_matrix<value_t> matmul(const dense_matrix<value_t>& a, const dense_matrix<value_t>& b)
-{
-    dense_matrix<value_t> c(a.rows(), b.cols());
-    for (std::size_t i = 0; i < a.rows(); ++i)
-    {
-        for (std::size_t j = 0; j < b.cols(); ++j)
-        {
-            value_t sum = 0;
-            for (std::size_t k = 0; k < a.cols(); ++k)
-            {
-                sum += a(i, k) * b(k, j);
-            }
-            c(i, j) = sum;
-        }
-    }
-    return c;
-}
-
-template <typename value_t> dense_matrix<value_t> transpose(const dense_matrix<value_t>& a)
-{
-    dense_matrix<value_t> t(a.cols(), a.rows());
-    for (std::size_t i = 0; i < a.rows(); ++i)
-    {
-        for (std::size_t j = 0; j < a.cols(); ++j)
-        {
-            t(j, i) = a(i, j);
-        }
-    }
-    return t;
 }
 
 template <typename value_t>
@@ -888,7 +857,7 @@ TEST(MathGpu, MatrixRankAndConditionNumber)
     const auto cond = linalg::gpu::condition_number(
         dI.get(), (long long)n, (long long)n, (long long)n, dws.get(), ws_size);
     EXPECT_EQ(rank, (linalg_long)n);
-    EXPECT_NEAR(cond, 1.0, 1e-6);
+    EXPECT_NEAR(cond, 1.0, GpuTolerance<double>::coarse);
 
     // Rank-1 outer product.
     std::default_random_engine generator;
@@ -975,9 +944,9 @@ TEST(MathGpu, MatrixNorm)
     const auto inf_norm = linalg::gpu::norm(dA.get(), (long long)rows, (long long)columns,
         (long long)columns, linalg::norm_type::INFINITY_NORM, inf_dws.get(), inf_ws_size);
 
-    EXPECT_NEAR(frob, frob_expected, 1e-6);
-    EXPECT_NEAR(one, one_expected, 1e-6);
-    EXPECT_NEAR(inf_norm, inf_expected, 1e-6);
+    EXPECT_NEAR(frob, frob_expected, GpuTolerance<double>::coarse);
+    EXPECT_NEAR(one, one_expected, GpuTolerance<double>::coarse);
+    EXPECT_NEAR(inf_norm, inf_expected, GpuTolerance<double>::coarse);
 }
 
 TEST(MathGpu, MatrixTrace)
@@ -998,7 +967,7 @@ TEST(MathGpu, MatrixTrace)
     device_buffer<unsigned char> dws(ws_size);
     const auto trace =
         linalg::gpu::trace(dA.get(), (linalg_int)n, (linalg_int)n, dws.get(), ws_size);
-    EXPECT_NEAR(trace, expected, 1e-9);
+    EXPECT_NEAR(trace, expected, GpuTolerance<double>::value);
 }
 
 // Overdetermined, consistent system: the least-squares solution should
@@ -1071,7 +1040,7 @@ TEST(MathGpu, LeastSquares)
             max_error = std::fmax(max_error, std::fabs(X(i, j) - X_true(i, j)));
         }
     }
-    EXPECT_LT(max_error, 1e-6);
+    EXPECT_LT(max_error, GpuTolerance<double>::coarse);
 }
 
 // Every public linalg::gpu::* entry point throws (rather than exhibiting

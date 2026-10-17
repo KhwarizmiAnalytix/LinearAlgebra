@@ -128,19 +128,6 @@ dense_matrix<value_t> multiply(const dense_matrix<value_t>& a, const dense_matri
     return c;
 }
 
-template <typename value_t> dense_matrix<value_t> transpose(const dense_matrix<value_t>& a)
-{
-    dense_matrix<value_t> t(a.cols(), a.rows());
-    for (std::size_t i = 0; i < a.rows(); ++i)
-    {
-        for (std::size_t j = 0; j < a.cols(); ++j)
-        {
-            t(j, i) = a(i, j);
-        }
-    }
-    return t;
-}
-
 // Builds a triangular matrix (values placed either strictly-lower or
 // strictly-upper depending on `type`) from a packed value list, matching the
 // original test's construction.

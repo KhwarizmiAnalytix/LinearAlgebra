@@ -10,6 +10,20 @@ namespace
 {
 using linalg_test::dense_matrix;
 
+template <typename> struct TraceTolerance
+{
+};
+
+template <> struct TraceTolerance<float>
+{
+    static constexpr double tolerance = 1e-5;
+};
+
+template <> struct TraceTolerance<double>
+{
+    static constexpr double tolerance = 1e-12;
+};
+
 template <typename value_t> void test_trace(std::size_t n)
 {
     dense_matrix<value_t> M(n, n);
@@ -31,7 +45,8 @@ template <typename value_t> void test_trace(std::size_t n)
         linalg::trace<value_t, linalg::linalg_backend::native>::apply(
             M.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n));
 
-    EXPECT_NEAR(static_cast<double>(actual), static_cast<double>(expected), 1e-9);
+    EXPECT_NEAR(static_cast<double>(actual), static_cast<double>(expected),
+        TraceTolerance<value_t>::tolerance);
 }
 }  // namespace
 

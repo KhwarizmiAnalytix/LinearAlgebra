@@ -22,6 +22,9 @@
 #include <cstddef>
 #include <vector>
 
+#include "include/matrix_operation/multiplication.h"
+#include "include/matrix_operation/transpose.h"
+
 namespace linalg_test
 {
 
@@ -57,5 +60,47 @@ private:
     std::size_t    cols_;
     std::vector<T> data_;
 };
+
+template <typename T>
+dense_matrix<T> transpose(const dense_matrix<T>& a)
+{
+    dense_matrix<T> t(a);
+    const auto      ws_size = linalg::transpose<T, linalg::linalg_backend::native>::workspace_size(
+        static_cast<linalg_long>(a.rows()), static_cast<linalg_long>(a.cols()));
+    std::vector<unsigned char> ws(ws_size);
+    linalg::transpose<T, linalg::linalg_backend::native>::apply(
+        static_cast<linalg_long>(a.rows()),
+        static_cast<linalg_long>(a.cols()),
+        t.data(),
+        ws.data(),
+        ws.size());
+    return t;
+}
+
+template <typename T>
+dense_matrix<T> matmul(const dense_matrix<T>& a, const dense_matrix<T>& b)
+{
+    dense_matrix<T> c(a.rows(), b.cols());
+    const auto      ws_size =
+        linalg::multiplication<T, linalg::linalg_backend::native>::workspace_size(
+            static_cast<linalg_int>(a.rows()),
+            static_cast<linalg_int>(b.cols()),
+            static_cast<linalg_int>(a.cols()));
+    std::vector<unsigned char> ws(ws_size);
+    linalg::multiplication<T, linalg::linalg_backend::native>::apply(false,
+        false,
+        static_cast<linalg_int>(a.rows()),
+        static_cast<linalg_int>(b.cols()),
+        static_cast<linalg_int>(a.cols()),
+        a.data(),
+        static_cast<linalg_int>(a.cols()),
+        b.data(),
+        static_cast<linalg_int>(b.cols()),
+        c.data(),
+        static_cast<linalg_int>(c.cols()),
+        ws.data(),
+        ws.size());
+    return c;
+}
 
 }  // namespace linalg_test

@@ -83,6 +83,174 @@ void test_svd(std::size_t rows, std::size_t columns)
 
     EXPECT_LT(max_error, SVDTolerance<value_t>::tolerance);
 }
+
+// Singular values must be non-negative (PyTorch test_svd_singular_values_nonneg).
+template <typename value_t, linalg::linalg_backend Backend>
+void test_svd_singular_values_nonneg(std::size_t rows, std::size_t columns)
+{
+    dense_matrix<value_t> M(rows, columns);
+    for (std::size_t i = 0; i < rows; i++)
+    {
+        for (std::size_t j = 0; j < columns; j++)
+        {
+            M(i, j) = static_cast<value_t>(20. * rand() / RAND_MAX - 10.);
+        }
+    }
+
+    const std::size_t     k   = std::min(rows, columns);
+    std::vector<value_t>  S(k);
+    dense_matrix<value_t> U(rows, k);
+    dense_matrix<value_t> VT(k, columns);
+
+    const auto ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
+    linalg::svd_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        M.begin(),
+        static_cast<linalg_long>(columns),
+        S.data(),
+        U.begin(),
+        static_cast<linalg_long>(k),
+        VT.begin(),
+        static_cast<linalg_long>(columns),
+        ws.data(),
+        ws_size);
+
+    for (std::size_t i = 0; i < k; i++)
+    {
+        EXPECT_GE(static_cast<double>(S[i]), 0.0);
+    }
+}
+
+// U and VT must have orthonormal columns/rows respectively.
+// Mirrors torch.linalg.svd orthogonality assertions (PyTorch test_svd_orthogonality).
+template <typename value_t, linalg::linalg_backend Backend>
+void test_svd_orthogonality(std::size_t rows, std::size_t columns)
+{
+    dense_matrix<value_t> M(rows, columns);
+    for (std::size_t i = 0; i < rows; i++)
+    {
+        for (std::size_t j = 0; j < columns; j++)
+        {
+            M(i, j) = static_cast<value_t>(20. * rand() / RAND_MAX - 10.);
+        }
+    }
+
+    const std::size_t     k   = std::min(rows, columns);
+    std::vector<value_t>  S(k);
+    dense_matrix<value_t> U(rows, k);
+    dense_matrix<value_t> VT(k, columns);
+
+    const auto ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
+    linalg::svd_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        M.begin(),
+        static_cast<linalg_long>(columns),
+        S.data(),
+        U.begin(),
+        static_cast<linalg_long>(k),
+        VT.begin(),
+        static_cast<linalg_long>(columns),
+        ws.data(),
+        ws_size);
+
+    // U^T * U == I_k
+    value_t max_u_err = 0;
+    for (std::size_t i = 0; i < k; i++)
+    {
+        for (std::size_t j = 0; j < k; j++)
+        {
+            value_t dot = 0;
+            for (std::size_t r = 0; r < rows; r++)
+            {
+                dot += U(r, i) * U(r, j);
+            }
+            const value_t expected = (i == j) ? value_t(1) : value_t(0);
+            max_u_err = std::fmax(max_u_err, std::fabs(static_cast<double>(dot - expected)));
+        }
+    }
+    EXPECT_LT(max_u_err, SVDTolerance<value_t>::tolerance);
+
+    // VT * VT^T == I_k
+    value_t max_vt_err = 0;
+    for (std::size_t i = 0; i < k; i++)
+    {
+        for (std::size_t j = 0; j < k; j++)
+        {
+            value_t dot = 0;
+            for (std::size_t c = 0; c < columns; c++)
+            {
+                dot += VT(i, c) * VT(j, c);
+            }
+            const value_t expected = (i == j) ? value_t(1) : value_t(0);
+            max_vt_err = std::fmax(max_vt_err, std::fabs(static_cast<double>(dot - expected)));
+        }
+    }
+    EXPECT_LT(max_vt_err, SVDTolerance<value_t>::tolerance);
+}
+
+// Rank-deficient matrix: trailing singular values must be near zero.
+// Built as A = u * v^T (rank 1) to give a known spectrum.
+// Mirrors PyTorch test_svd_rank_deficient.
+template <typename value_t, linalg::linalg_backend Backend>
+void test_svd_rank_deficient()
+{
+    const std::size_t rows = 5, columns = 4;
+    const std::size_t k    = std::min(rows, columns);
+
+    std::vector<value_t> u(rows), v(columns);
+    for (std::size_t i = 0; i < rows; i++)
+    {
+        u[i] = static_cast<value_t>(i + 1);
+    }
+    for (std::size_t j = 0; j < columns; j++)
+    {
+        v[j] = static_cast<value_t>(j + 1);
+    }
+
+    dense_matrix<value_t> M(rows, columns);
+    for (std::size_t i = 0; i < rows; i++)
+    {
+        for (std::size_t j = 0; j < columns; j++)
+        {
+            M(i, j) = u[i] * v[j];
+        }
+    }
+
+    std::vector<value_t>  S(k);
+    dense_matrix<value_t> U(rows, k);
+    dense_matrix<value_t> VT(k, columns);
+
+    const auto ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
+    std::vector<unsigned char> ws(ws_size);
+    linalg::svd_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        M.begin(),
+        static_cast<linalg_long>(columns),
+        S.data(),
+        U.begin(),
+        static_cast<linalg_long>(k),
+        VT.begin(),
+        static_cast<linalg_long>(columns),
+        ws.data(),
+        ws_size);
+
+    // Only 1 singular value should be non-negligible; the rest must be near 0.
+    value_t smax = *std::max_element(S.begin(), S.end());
+    int     nonzero_count = 0;
+    for (std::size_t i = 0; i < k; i++)
+    {
+        if (S[i] > static_cast<value_t>(1e-3) * smax)
+        {
+            nonzero_count++;
+        }
+    }
+    EXPECT_EQ(nonzero_count, 1);
+}
 }  // namespace
 
 TEST(Math, SVDDecomposition)
@@ -104,6 +272,37 @@ TEST(Math, SVDDecomposition)
         columns = 11;
         test_svd<float, Backend>(rows, columns);
         test_svd<double, Backend>(rows, columns);
+    });
+}
+
+TEST(Math, SVDSingularValuesNonneg)
+{
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_svd_singular_values_nonneg<float, Backend>(6, 5);
+        test_svd_singular_values_nonneg<float, Backend>(5, 6);
+        test_svd_singular_values_nonneg<double, Backend>(6, 5);
+        test_svd_singular_values_nonneg<double, Backend>(5, 6);
+    });
+}
+
+TEST(Math, SVDOrthogonality)
+{
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_svd_orthogonality<float, Backend>(8, 5);
+        test_svd_orthogonality<float, Backend>(5, 8);
+        test_svd_orthogonality<double, Backend>(8, 5);
+        test_svd_orthogonality<double, Backend>(5, 8);
+    });
+}
+
+TEST(Math, SVDRankDeficient)
+{
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr auto Backend = decltype(backend)::value;
+        test_svd_rank_deficient<float, Backend>();
+        test_svd_rank_deficient<double, Backend>();
     });
 }
 

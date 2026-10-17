@@ -13,6 +13,20 @@ namespace
 {
 using linalg_test::dense_matrix;
 
+template <typename> struct QRTolerance
+{
+};
+
+template <> struct QRTolerance<float>
+{
+    static constexpr double tolerance = 1e-3;
+};
+
+template <> struct QRTolerance<double>
+{
+    static constexpr double tolerance = 1e-12;
+};
+
 template <typename value_t, linalg::linalg_backend Backend>
 void test_qr(std::size_t rows, std::size_t columns)
 {
@@ -59,7 +73,7 @@ void test_qr(std::size_t rows, std::size_t columns)
             max_error = std::max(max_error, static_cast<value_t>(std::fabs(A(i, j) - sum)));
         }
     }
-    EXPECT_LT(max_error, static_cast<value_t>(1e-3));
+    EXPECT_LT(max_error, static_cast<value_t>(QRTolerance<value_t>::tolerance));
 
     // Q should have orthonormal columns: Q^T * Q == I_k.
     value_t max_orth_error = 0;
@@ -77,7 +91,7 @@ void test_qr(std::size_t rows, std::size_t columns)
                 std::max(max_orth_error, static_cast<value_t>(std::fabs(sum - expected)));
         }
     }
-    EXPECT_LT(max_orth_error, static_cast<value_t>(1e-3));
+    EXPECT_LT(max_orth_error, static_cast<value_t>(QRTolerance<value_t>::tolerance));
 
     // R should be upper-triangular (zero strictly below the diagonal).
     for (std::size_t i = 0; i < k; i++)
