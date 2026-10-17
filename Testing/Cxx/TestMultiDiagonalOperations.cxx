@@ -5,16 +5,14 @@
 
 #include "gtest/gtest.h"
 #include "test_reporting.h"
-#include "include/matrix_operation/pentadiagonal_operations.h"
-#include "include/matrix_operation/tridiagonal_operations.h"
+#include "include/matrix_operation/banded_operations.h"
 
 namespace
 {
-using namespace linalg;
+using namespace linalg::banded_operations;
 
 constexpr double EPSILON = 1e-10;
 
-// Helper function to generate random-like test data
 void fill_test_data(std::vector<double>& vec, size_t seed = 1)
 {
     for (size_t i = 0; i < vec.size(); ++i)
@@ -23,8 +21,7 @@ void fill_test_data(std::vector<double>& vec, size_t seed = 1)
     }
 }
 
-// Test tridiagonal decomposition and solve
-TEST(MultiDiagonalOperationsTest, TridiagonalDecompositionAndSolve)
+TEST(BandedOperations, TridiagonalDecompositionAndSolve)
 {
     const size_t outer_dim = 2;
     const size_t dim       = 4;
@@ -34,27 +31,22 @@ TEST(MultiDiagonalOperationsTest, TridiagonalDecompositionAndSolve)
 
     std::vector<double> decomposed(3 * stride);
     std::vector<double> x(stride);
-    std::vector<double> result(stride);
 
     fill_test_data(decomposed, 1);
     fill_test_data(x, 2);
-    result = x;
 
-    EXPECT_NO_THROW(tridiagonal_operations::decomposition(
-        decomposed, outer_dim, dim, inner_dim, false));
-    EXPECT_NO_THROW(
-        tridiagonal_operations::solve_decomposed(x, decomposed, outer_dim, dim, inner_dim, false));
+    EXPECT_NO_THROW((decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim)));
+    EXPECT_NO_THROW((solve_decomposed<double, 3>(x, decomposed, outer_dim, dim, inner_dim)));
 }
 
-// Test tridiagonal multiply
-TEST(MultiDiagonalOperationsTest, TridiagonalMultiply)
+TEST(BandedOperations, TridiagonalMultiply)
 {
-    const size_t outer_dim = 2;
-    const size_t dim       = 4;
-    const size_t inner_dim = 3;
-    const size_t n         = dim * inner_dim;
-    const size_t stride    = outer_dim * n;
-    double      time_multiplier = 1.0;
+    const size_t outer_dim      = 2;
+    const size_t dim            = 4;
+    const size_t inner_dim      = 3;
+    const size_t n              = dim * inner_dim;
+    const size_t stride         = outer_dim * n;
+    double       time_multiplier = 1.0;
 
     std::vector<double> result(stride, 0.0);
     std::vector<double> in(stride);
@@ -63,10 +55,9 @@ TEST(MultiDiagonalOperationsTest, TridiagonalMultiply)
     fill_test_data(in, 1);
     fill_test_data(mat, 2);
 
-    EXPECT_NO_THROW(tridiagonal_operations::multiply(
-        result, in, mat, outer_dim, dim, inner_dim, time_multiplier, false));
+    EXPECT_NO_THROW(
+        (multiply<double, 3>(result, in, mat, outer_dim, dim, inner_dim, time_multiplier)));
 
-    // Verify that multiply produced non-zero results
     bool has_nonzero = false;
     for (size_t i = 0; i < stride; ++i)
     {
@@ -79,8 +70,7 @@ TEST(MultiDiagonalOperationsTest, TridiagonalMultiply)
     EXPECT_TRUE(has_nonzero);
 }
 
-// Test pentadiagonal decomposition and solve
-TEST(MultiDiagonalOperationsTest, PentadiagonalDecompositionAndSolve)
+TEST(BandedOperations, PentadiagonalDecompositionAndSolve)
 {
     const size_t outer_dim = 2;
     const size_t dim       = 4;
@@ -94,21 +84,18 @@ TEST(MultiDiagonalOperationsTest, PentadiagonalDecompositionAndSolve)
     fill_test_data(decomposed, 1);
     fill_test_data(x, 2);
 
-    EXPECT_NO_THROW(pentadiagonal_operations::decomposition(
-        decomposed, outer_dim, dim, inner_dim, false));
-    EXPECT_NO_THROW(
-        pentadiagonal_operations::solve_decomposed(x, decomposed, outer_dim, dim, inner_dim, false));
+    EXPECT_NO_THROW((decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim)));
+    EXPECT_NO_THROW((solve_decomposed<double, 5>(x, decomposed, outer_dim, dim, inner_dim)));
 }
 
-// Test pentadiagonal multiply
-TEST(MultiDiagonalOperationsTest, PentadiagonalMultiply)
+TEST(BandedOperations, PentadiagonalMultiply)
 {
-    const size_t outer_dim = 2;
-    const size_t dim       = 4;
-    const size_t inner_dim = 3;
-    const size_t n         = dim * inner_dim;
-    const size_t stride    = outer_dim * n;
-    double      time_multiplier = 0.5;
+    const size_t outer_dim      = 2;
+    const size_t dim            = 4;
+    const size_t inner_dim      = 3;
+    const size_t n              = dim * inner_dim;
+    const size_t stride         = outer_dim * n;
+    double       time_multiplier = 0.5;
 
     std::vector<double> result(stride, 0.0);
     std::vector<double> in(stride);
@@ -117,10 +104,9 @@ TEST(MultiDiagonalOperationsTest, PentadiagonalMultiply)
     fill_test_data(in, 1);
     fill_test_data(mat, 2);
 
-    EXPECT_NO_THROW(pentadiagonal_operations::multiply(
-        result, in, mat, outer_dim, dim, inner_dim, time_multiplier, false));
+    EXPECT_NO_THROW(
+        (multiply<double, 5>(result, in, mat, outer_dim, dim, inner_dim, time_multiplier)));
 
-    // Verify that multiply produced non-zero results
     bool has_nonzero = false;
     for (size_t i = 0; i < stride; ++i)
     {
@@ -133,13 +119,12 @@ TEST(MultiDiagonalOperationsTest, PentadiagonalMultiply)
     EXPECT_TRUE(has_nonzero);
 }
 
-// Test tridiagonal with various dimensions
-TEST(MultiDiagonalOperationsTest, TridiagonalVaryingDimensions)
+TEST(BandedOperations, TridiagonalVaryingDimensions)
 {
     std::vector<std::tuple<size_t, size_t, size_t>> test_cases = {
-        {1, 8, 1},    // outer_dim=1, dim=8, inner_dim=1
-        {4, 2, 5},    // outer_dim=4, dim=2, inner_dim=5
-        {2, 3, 2},    // outer_dim=2, dim=3, inner_dim=2
+        {1, 8, 1},
+        {4, 2, 5},
+        {2, 3, 2},
     };
 
     for (const auto& tc : test_cases)
@@ -153,19 +138,18 @@ TEST(MultiDiagonalOperationsTest, TridiagonalVaryingDimensions)
         std::vector<double> decomposed(3 * stride);
         fill_test_data(decomposed, 1);
 
-        EXPECT_NO_THROW(
-            tridiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false))
-            << "Failed for outer_dim=" << outer_dim << ", dim=" << dim << ", inner_dim=" << inner_dim;
+        EXPECT_NO_THROW((decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim)))
+            << "Failed for outer_dim=" << outer_dim << ", dim=" << dim
+            << ", inner_dim=" << inner_dim;
     }
 }
 
-// Test pentadiagonal with various dimensions
-TEST(MultiDiagonalOperationsTest, PentadiagonalVaryingDimensions)
+TEST(BandedOperations, PentadiagonalVaryingDimensions)
 {
     std::vector<std::tuple<size_t, size_t, size_t>> test_cases = {
-        {1, 8, 1},    // outer_dim=1, dim=8, inner_dim=1
-        {4, 2, 5},    // outer_dim=4, dim=2, inner_dim=5
-        {2, 3, 2},    // outer_dim=2, dim=3, inner_dim=2
+        {1, 8, 1},
+        {4, 2, 5},
+        {2, 3, 2},
     };
 
     for (const auto& tc : test_cases)
@@ -179,14 +163,13 @@ TEST(MultiDiagonalOperationsTest, PentadiagonalVaryingDimensions)
         std::vector<double> decomposed(5 * stride);
         fill_test_data(decomposed, 1);
 
-        EXPECT_NO_THROW(
-            pentadiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false))
-            << "Failed for outer_dim=" << outer_dim << ", dim=" << dim << ", inner_dim=" << inner_dim;
+        EXPECT_NO_THROW((decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim)))
+            << "Failed for outer_dim=" << outer_dim << ", dim=" << dim
+            << ", inner_dim=" << inner_dim;
     }
 }
 
-// Test error handling for wrong sizes
-TEST(MultiDiagonalOperationsTest, TridiagonalWrongSize)
+TEST(BandedOperations, TridiagonalWrongSize)
 {
     const size_t outer_dim = 1;
     const size_t dim       = 2;
@@ -194,26 +177,21 @@ TEST(MultiDiagonalOperationsTest, TridiagonalWrongSize)
     const size_t n         = dim * inner_dim;
     const size_t stride    = outer_dim * n;
 
-    // Wrong buffer size (should be 3*stride for tridiagonal)
     std::vector<double> decomposed(2 * stride);
 
-    EXPECT_THROW(
-        tridiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false),
+    EXPECT_THROW((decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim)),
         std::invalid_argument);
 }
 
-// Test error handling for wrong sizes in pentadiagonal
-TEST(MultiDiagonalOperationsTest, PentadiagonalWrongSize)
+TEST(BandedOperations, PentadiagonalWrongSize)
 {
     const size_t outer_dim = 1;
     const size_t dim       = 2;
     const size_t inner_dim = 1;
 
-    // Wrong buffer size (should be 5*stride for pentadiagonal)
     std::vector<double> decomposed(3);
 
-    EXPECT_THROW(
-        pentadiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false),
+    EXPECT_THROW((decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim)),
         std::invalid_argument);
 }
 

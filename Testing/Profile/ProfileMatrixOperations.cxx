@@ -33,7 +33,7 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/norm.h"
-#include "include/matrix_operation/pentadiagonal_operations.h"
+#include "include/matrix_operation/banded_operations.h"
 #include "include/matrix_operation/power.h"
 #include "include/matrix_operation/pseudo_inverse.h"
 #include "include/matrix_operation/qr_decomposition.h"
@@ -41,7 +41,6 @@
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/matrix_operation/trace.h"
 #include "include/matrix_operation/transpose.h"
-#include "include/matrix_operation/tridiagonal_operations.h"
 
 #if LINALG_HAS_CUBLAS
 #include <cuda_runtime_api.h>
@@ -328,17 +327,16 @@ void profile_scalar_only_ops(linalg_int n)
 
     const linalg_int tri_n = n;
 
-    // tridiagonal_operations — packed API: output holds 3*stride doubles,
-    // where stride = outer_dim * dim * inner_dim.
+    // banded_operations (3-band / tridiagonal) — output holds 3*stride entries.
     {
         const size_t outer_dim = 1;
         const size_t dim       = static_cast<size_t>(tri_n);
         const size_t inner_dim = 1;
         const size_t stride    = outer_dim * dim * inner_dim;
 
-        PROFILER_SCOPE("tridiagonal/decomposition");
+        PROFILER_SCOPE("banded/decomposition/3");
         std::vector<double> output(3 * stride, 0.5);
-        linalg::tridiagonal_operations::decomposition(output, outer_dim, dim, inner_dim, false);
+        linalg::banded_operations::decomposition<double, 3>(output, outer_dim, dim, inner_dim);
     }
 
     {
@@ -347,11 +345,11 @@ void profile_scalar_only_ops(linalg_int n)
         const size_t inner_dim = 1;
         const size_t stride    = outer_dim * dim * inner_dim;
 
-        PROFILER_SCOPE("tridiagonal/solve_decomposed");
+        PROFILER_SCOPE("banded/solve_decomposed/3");
         std::vector<double> decomposed(3 * stride, 0.5);
-        linalg::tridiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false);
+        linalg::banded_operations::decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim);
         std::vector<double> x(stride, 1.0);
-        linalg::tridiagonal_operations::solve_decomposed(x, decomposed, outer_dim, dim, inner_dim, false);
+        linalg::banded_operations::solve_decomposed<double, 3>(x, decomposed, outer_dim, dim, inner_dim);
     }
 
     {
@@ -360,23 +358,23 @@ void profile_scalar_only_ops(linalg_int n)
         const size_t inner_dim = 1;
         const size_t stride    = outer_dim * dim * inner_dim;
 
-        PROFILER_SCOPE("tridiagonal/multiply");
+        PROFILER_SCOPE("banded/multiply/3");
         std::vector<double> mat(3 * stride, 0.1);
         std::vector<double> in(stride, 1.0);
         std::vector<double> result(stride, 0.0);
-        linalg::tridiagonal_operations::multiply(result, in, mat, outer_dim, dim, inner_dim, 1.0, false);
+        linalg::banded_operations::multiply<double, 3>(result, in, mat, outer_dim, dim, inner_dim, 1.0);
     }
 
-    // pentadiagonal_operations — same packed convention, 5*stride doubles.
+    // banded_operations (5-band / pentadiagonal) — output holds 5*stride entries.
     {
         const size_t outer_dim = 1;
         const size_t dim       = static_cast<size_t>(tri_n);
         const size_t inner_dim = 1;
         const size_t stride    = outer_dim * dim * inner_dim;
 
-        PROFILER_SCOPE("pentadiagonal/decomposition");
+        PROFILER_SCOPE("banded/decomposition/5");
         std::vector<double> output(5 * stride, 0.5);
-        linalg::pentadiagonal_operations::decomposition(output, outer_dim, dim, inner_dim, false);
+        linalg::banded_operations::decomposition<double, 5>(output, outer_dim, dim, inner_dim);
     }
 
     {
@@ -385,11 +383,11 @@ void profile_scalar_only_ops(linalg_int n)
         const size_t inner_dim = 1;
         const size_t stride    = outer_dim * dim * inner_dim;
 
-        PROFILER_SCOPE("pentadiagonal/solve_decomposed");
+        PROFILER_SCOPE("banded/solve_decomposed/5");
         std::vector<double> decomposed(5 * stride, 0.5);
-        linalg::pentadiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false);
+        linalg::banded_operations::decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim);
         std::vector<double> x(stride, 1.0);
-        linalg::pentadiagonal_operations::solve_decomposed(x, decomposed, outer_dim, dim, inner_dim, false);
+        linalg::banded_operations::solve_decomposed<double, 5>(x, decomposed, outer_dim, dim, inner_dim);
     }
 
     {
@@ -398,11 +396,11 @@ void profile_scalar_only_ops(linalg_int n)
         const size_t inner_dim = 1;
         const size_t stride    = outer_dim * dim * inner_dim;
 
-        PROFILER_SCOPE("pentadiagonal/multiply");
+        PROFILER_SCOPE("banded/multiply/5");
         std::vector<double> mat(5 * stride, 0.1);
         std::vector<double> in(stride, 1.0);
         std::vector<double> result(stride, 0.0);
-        linalg::pentadiagonal_operations::multiply(result, in, mat, outer_dim, dim, inner_dim, 1.0, false);
+        linalg::banded_operations::multiply<double, 5>(result, in, mat, outer_dim, dim, inner_dim, 1.0);
     }
 }
 
