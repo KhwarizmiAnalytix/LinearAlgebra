@@ -10,30 +10,30 @@ namespace linalg
 // determinant just reads the diagonal of an already-decomposed
 // buffer — there is no vendor-library "determinant" routine to call into,
 // so this always runs directly against whatever lu_decomposition /
-// cholesky_decomposition already wrote into `m`.
-#define A(i, j) m[(i) * lda + (j)]
-
+// cholesky_decomposition already wrote into `m`. The diagonal entry (i, i)
+// is at i * (lda + 1); walking it via a running pointer stepped by that
+// stride avoids recomputing the multiply on every iteration.
 template <typename T> T lu_determinant(T* m, linalg_int lda)
 {
-    T det = m[0];
-    for (linalg_int i = 1; i < lda; ++i)
+    T        det  = m[0];
+    const T* diag = m + lda + 1;
+    for (linalg_int i = 1; i < lda; ++i, diag += lda + 1)
     {
-        det *= A(i, i);
+        det *= *diag;
     }
     return det;
 }
 
 template <typename T> T cholesky_determinant(T* m, linalg_int lda)
 {
-    T det = m[0];
-    for (linalg_int i = 1; i < lda; ++i)
+    T        det  = m[0];
+    const T* diag = m + lda + 1;
+    for (linalg_int i = 1; i < lda; ++i, diag += lda + 1)
     {
-        det *= A(i, i);
+        det *= *diag;
     }
     return det;
 }
-
-#undef A
 
 template <typename T>
 size_t matrix_determinant_workspace_size_helper(linalg_int lda, linear_solver_type type)
@@ -47,9 +47,12 @@ size_t matrix_determinant_workspace_size_helper(linalg_int lda, linear_solver_ty
     }
 }
 
+// m and pivot are __restrict: they're always two distinct caller-owned
+// buffers (determinant.h documents pivot as the LU pivot array, separate
+// from the matrix m).
 template <typename T>
-T matrix_determinant_helper(T* m,
-    linalg_int*                pivot,
+T matrix_determinant_helper(T* __restrict m,
+    linalg_int* __restrict     pivot,
     linalg_int                 lda,
     linear_solver_type         type,
     void*                      workspace,
@@ -107,8 +110,8 @@ size_t determinant<double, linalg_backend::native>::workspace_size(
 }
 
 template <>
-float determinant<float, linalg_backend::native>::apply(float* m,
-    linalg_int*                                                               pivot,
+float determinant<float, linalg_backend::native>::apply(float* __restrict m,
+    linalg_int* __restrict                                                    pivot,
     linalg_int                                                                lda,
     linear_solver_type                                                        type,
     void*                                                                     workspace,
@@ -120,8 +123,8 @@ float determinant<float, linalg_backend::native>::apply(float* m,
 }
 
 template <>
-double determinant<double, linalg_backend::native>::apply(double* m,
-    linalg_int*                                                                  pivot,
+double determinant<double, linalg_backend::native>::apply(double* __restrict m,
+    linalg_int* __restrict                                                       pivot,
     linalg_int                                                                   lda,
     linear_solver_type                                                           type,
     void*                                                                        workspace,

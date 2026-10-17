@@ -30,10 +30,12 @@ static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 namespace
 {
 
-#define A(i, j) m[(i) * lda + (j)]
-
+// m, pivot, and x are __restrict: linear_solver.h documents them as three
+// distinct caller-owned buffers (the matrix/factors, the pivot array, and
+// the in/out right-hand side), never aliasing each other.
 template <typename T>
-void lu_solve(T* m, LINALG_UNUSED const linalg_int* pivot, linalg_int lda, T* x)
+void lu_solve(T* __restrict m, LINALG_UNUSED const linalg_int* __restrict pivot, linalg_int lda,
+    T* __restrict x)
 {
 #if LINALG_HAS_LU_PIVOTING
     for (int i = 0; i < lda; i++)
@@ -41,12 +43,15 @@ void lu_solve(T* m, LINALG_UNUSED const linalg_int* pivot, linalg_int lda, T* x)
         std::swap(x[i], x[pivot[i] - 1]);
     }
 #endif
+    // row_i is hoisted once per i and indexed by j below, instead of m's
+    // row base (i * lda) being recomputed for every j.
     for (linalg_int i = 0; i < lda; i++)
     {
-        auto sum = x[i];  //
+        const T* const row_i = m + i * lda;
+        auto            sum  = x[i];  //
         for (linalg_int j = 0; j < i; ++j)
         {
-            sum -= A(i, j) * x[j];
+            sum -= row_i[j] * x[j];
         }
 
         x[i] = sum;
@@ -54,46 +59,54 @@ void lu_solve(T* m, LINALG_UNUSED const linalg_int* pivot, linalg_int lda, T* x)
 
     for (linalg_int i = lda - 1; i >= 0; i--)
     {
-        auto sum = x[i];  //
+        const T* const row_i = m + i * lda;
+        auto            sum  = x[i];  //
         for (linalg_int j = i + 1; j < lda; ++j)
         {
-            sum -= A(i, j) * x[j];
+            sum -= row_i[j] * x[j];
         }
 
-        x[i] = sum / A(i, i);
+        x[i] = sum / row_i[i];
     }
 }
 
-template <typename T> void cholesky_solve(T* m, linalg_int lda, T* x)
+// m and x are __restrict, same reasoning as lu_solve above.
+template <typename T> void cholesky_solve(T* __restrict m, linalg_int lda, T* __restrict x)
 {
+    // Forward substitution reads row i (contiguous): row_i is hoisted once
+    // per i, reused for every j.
     for (linalg_int i = 0; i < lda; i++)
     {
-        auto sum = x[i];
+        const T* const row_i = m + i * lda;
+        auto            sum  = x[i];
         for (linalg_int j = 0; j < i; ++j)
         {
-            sum -= A(i, j) * x[j];
+            sum -= row_i[j] * x[j];
         }
 
-        x[i] = sum / A(i, i);
+        x[i] = sum / row_i[i];
     }
 
+    // Back substitution reads column i (stride lda, since this walks the
+    // transposed triangle): col_ptr steps by lda per j instead of
+    // recomputing j * lda + i from scratch each time.
     for (linalg_int i = lda - 1; i >= 0; i--)
     {
-        auto sum = x[i];  //
-        for (linalg_int j = i + 1; j < lda; ++j)
+        auto     sum     = x[i];  //
+        const T* col_ptr = m + (i + 1) * lda + i;
+        for (linalg_int j = i + 1; j < lda; ++j, col_ptr += lda)
         {
-            sum -= A(j, i) * x[j];
+            sum -= (*col_ptr) * x[j];
         }
 
-        x[i] = sum / A(i, i);
+        x[i] = sum / m[i * lda + i];
     }
 }
 
-#undef A
-
+// m, pivot, and x are __restrict, same reasoning as lu_solve above.
 template <typename T>
-void linear_solver_scalar_impl(
-    T* m, linalg_int* pivot, linalg_int lda, T* x, linear_solver_type type)
+void linear_solver_scalar_impl(T* __restrict m, linalg_int* __restrict pivot, linalg_int lda,
+    T* __restrict x, linear_solver_type type)
 {
     switch (type)
     {
@@ -130,10 +143,10 @@ void linear_solver_scalar_impl(
 }  // namespace
 
 template <>
-void linear_solver<float, linalg_backend::native>::apply(float* m,
-    linalg_int*                                                 pivot,
+void linear_solver<float, linalg_backend::native>::apply(float* __restrict m,
+    linalg_int* __restrict                                      pivot,
     linalg_int                                                  lda,
-    float*                                                      x,
+    float* __restrict                                           x,
     linear_solver_type                                          type,
     void* /*workspace*/,
     size_t /*workspace_size*/)
@@ -143,10 +156,10 @@ void linear_solver<float, linalg_backend::native>::apply(float* m,
 }
 
 template <>
-void linear_solver<double, linalg_backend::native>::apply(double* m,
-    linalg_int*                                                   pivot,
+void linear_solver<double, linalg_backend::native>::apply(double* __restrict m,
+    linalg_int* __restrict                                        pivot,
     linalg_int                                                    lda,
-    double*                                                       x,
+    double* __restrict                                            x,
     linear_solver_type                                            type,
     void* /*workspace*/,
     size_t /*workspace_size*/)

@@ -38,8 +38,6 @@ static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 namespace
 {
 
-#define A(i, j) m[(i) * lda + (j)]
-
 // y[c] -= a * x[c] for c in [0, len), the axpy this blocked LU's panel
 // elimination, triangular solve, and rank-bs trailing update all reduce
 // to (see lu_decomposition_blocked_impl below). Vectorized via
@@ -61,7 +59,10 @@ namespace
 // per-iteration loop overhead (compare/increment/branch) over more work;
 // a hand-vectorized loop that always does only one packet_t per iteration
 // gives that back. Matching that unroll factor here recovers it.
-template <typename T> inline void lu_axpy_sub(T* y, const T* x, T a, linalg_long len)
+// y and x are __restrict: every call site below passes two different rows
+// of m (lu_panel_factor's r > i, the triangular solve's p < ii), so they
+// never alias.
+template <typename T> inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
     using P                     = packet<T>;
@@ -125,7 +126,10 @@ template <typename T> inline void lu_axpy_sub(T* y, const T* x, T a, linalg_long
 // dependency chain -- the CPU can't start iteration N+1's FMA until
 // iteration N's completes, stalling on FMA latency rather than throughput).
 // Combined at the end via tree reduction before the horizontal predux.
-template <typename T> inline T lu_dot(const T* x, const T* y, linalg_long len)
+// x and y are __restrict: this file's one call site always passes an m-row
+// (l21_row) against the local `packed` stack buffer -- two buffers that
+// never overlap.
+template <typename T> inline T lu_dot(const T* __restrict x, const T* __restrict y, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
     using P                     = packet<T>;
@@ -206,25 +210,29 @@ template <typename T> inline T lu_dot(const T* x, const T* y, linalg_long len)
 // dlaswp call that follows it -- eagerly swapping the full row on every
 // pivot found would touch trailing memory this panel has no other reason
 // to touch yet, once per row per panel column.
+// m and pivot are __restrict: they're always two distinct caller-owned
+// buffers (lu_decomposition.h documents pivot as a separate output array).
 template <typename T>
-bool lu_panel_factor(T*       m,
-    linalg_long               lda,
-    linalg_long               start,
-    linalg_long               width,
-    LINALG_UNUSED linalg_int* pivot,
-    LINALG_UNUSED T           tolerance)
+bool lu_panel_factor(T* __restrict       m,
+    linalg_long                          lda,
+    linalg_long                          start,
+    linalg_long                          width,
+    LINALG_UNUSED linalg_int* __restrict pivot,
+    LINALG_UNUSED T                      tolerance)
 {
     using size_type = linalg_long;
 
     for (size_type ii = 0; ii < width; ++ii)
     {
-        const size_type i = start + ii;
+        const size_type i       = start + ii;
+        T* const        row_i_f = m + i * lda;  // row i, full width -- read/written at several columns below
 #if LINALG_HAS_LU_PIVOTING
-        T         maxA = std::abs(A(i, i));
-        size_type imax = i;
-        for (size_type k = i + 1; k < lda; ++k)
+        T         maxA    = std::abs(row_i_f[i]);
+        size_type imax     = i;
+        const T*  col_ptr  = m + (i + 1) * lda + i;  // walks column i, one row at a time
+        for (size_type k = i + 1; k < lda; ++k, col_ptr += lda)
         {
-            const auto absA = std::fabs(A(k, i));
+            const auto absA = std::fabs(*col_ptr);
             if (absA > maxA)
             {
                 maxA = absA;
@@ -238,18 +246,25 @@ bool lu_panel_factor(T*       m,
         if (imax != i)
         {
             pivot[i] = pivot[imax];
+            // row_i_f and row_imax_f are safe to treat as non-aliasing
+            // here: this branch only runs when imax != i.
+            T* const __restrict row_imax_f = m + imax * lda;
             for (size_type j = 0; j < start + width; ++j)
             {
-                std::swap(A(i, j), A(imax, j));
+                std::swap(row_i_f[j], row_imax_f[j]);
             }
         }
 #endif
-        const auto norm = static_cast<T>(1. / A(i, i));
-        T* const   l_i  = &A(i, start);
+        // row_i_f[i] re-reads live memory (not a cached value), so this
+        // correctly sees the post-swap diagonal when a swap happened above.
+        const auto norm            = static_cast<T>(1. / row_i_f[i]);
+        T* const __restrict l_i    = row_i_f + start;
 
+        // l_i (row i) and l_r (row r, r > i always) never alias, so
+        // lu_axpy_sub's __restrict contract holds.
         for (size_type r = i + 1; r < lda; ++r)
         {
-            T* const l_r = &A(r, start);
+            T* const __restrict l_r = m + r * lda + start;
             l_r[ii] *= norm;
             lu_axpy_sub(l_r + ii + 1, l_i + ii + 1, l_r[ii], width - ii - 1);
         }
@@ -269,9 +284,10 @@ bool lu_panel_factor(T*       m,
 // column range -- here the untouched trailing one -- reproduces exactly
 // the permutation lu_panel_factor already applied to columns
 // [0, start+width).
+// m and pivot are __restrict, same reasoning as lu_panel_factor above.
 template <typename T>
-void lu_apply_pivots_to_trailing(
-    T* m, linalg_long lda, linalg_long start, linalg_long width, const linalg_int* pivot)
+void lu_apply_pivots_to_trailing(T* __restrict m, linalg_long lda, linalg_long start,
+    linalg_long width, const linalg_int* __restrict pivot)
 {
     using size_type = linalg_long;
 
@@ -280,9 +296,13 @@ void lu_apply_pivots_to_trailing(
         const size_type piv = static_cast<size_type>(pivot[i]) - 1;
         if (piv != i)
         {
+            // row_i and row_piv are safe to treat as non-aliasing: this
+            // branch only runs when piv != i.
+            T* const __restrict row_i   = m + i * lda;
+            T* const __restrict row_piv = m + piv * lda;
             for (size_type j = start + width; j < lda; ++j)
             {
-                std::swap(A(i, j), A(piv, j));
+                std::swap(row_i[j], row_piv[j]);
             }
         }
     }
@@ -308,8 +328,10 @@ inline constexpr linalg_long kLuBlockSize = 64;
 // kLuBlockSize * kLuPackTile is small and constant regardless of lda).
 inline constexpr linalg_long kLuPackTile = 128;
 
+// m and pivot are __restrict, same reasoning as lu_panel_factor above.
 template <typename T>
-bool lu_decomposition_blocked_impl(T* m, linalg_long lda, linalg_int* pivot, T tolerance)
+bool lu_decomposition_blocked_impl(
+    T* __restrict m, linalg_long lda, linalg_int* __restrict pivot, T tolerance)
 {
     using size_type = linalg_long;
 
@@ -343,19 +365,22 @@ bool lu_decomposition_blocked_impl(T* m, linalg_long lda, linalg_int* pivot, T t
         // forward substitution against the unit-lower-triangular L11
         // already factored in place above (L11's multipliers live strictly
         // below the panel diagonal).
+        // row_i (row k+ii) and row_p (row k+p, p < ii always) never alias,
+        // so lu_axpy_sub's __restrict contract holds.
         for (size_type ii = 0; ii < bs; ++ii)
         {
-            T* const row_i = &A(k + ii, k + bs);
+            T* const            row_full = m + (k + ii) * lda;  // row k+ii, full width
+            T* const __restrict row_i    = row_full + k + bs;
             for (size_type p = 0; p < ii; ++p)
             {
-                const T  l_ip  = A(k + ii, k + p);
-                T* const row_p = &A(k + p, k + bs);
+                const T              l_ip  = row_full[k + p];
+                T* const __restrict row_p = m + (k + p) * lda + k + bs;
                 lu_axpy_sub(row_i, row_p, l_ip, rest);
             }
         }
 
-        // Trailing update: A22 -= L21 * U12. L21 (&A(k+bs, k), width bs) is
-        // already row-contiguous, but U12's columns are not (U12 is stored
+        // Trailing update: A22 -= L21 * U12. L21 (m + (k+bs)*lda + k, width
+        // bs) is already row-contiguous, but U12's columns are not (U12 is stored
         // bs rows x rest columns, so a column is strided by lda) -- so a
         // per-output-element dot product of an L21 row against a U12
         // column cannot walk either operand contiguously without first
@@ -375,19 +400,31 @@ bool lu_decomposition_blocked_impl(T* m, linalg_long lda, linalg_int* pivot, T t
             const size_type cw = std::min(kLuPackTile, rest - col0);
             for (size_type c = 0; c < cw; ++c)
             {
-                for (size_type p = 0; p < bs; ++p)
+                // Walks column (k + bs + col0 + c) of m, one row at a time,
+                // via a +lda pointer step instead of recomputing
+                // p * lda + (k + bs + col0 + c) for every p.
+                const T* col_ptr = m + k * lda + (k + bs + col0 + c);
+                for (size_type p = 0; p < bs; ++p, col_ptr += lda)
                 {
-                    packed[c * bs + p] = A(k + p, k + bs + col0 + c);
+                    packed[c * bs + p] = *col_ptr;
                 }
             }
 
+            // l21_row (columns [k, k+bs)) and out_row (columns
+            // [k+bs+col0, ...), always >= k+bs) never overlap, even though
+            // both are rows of the same m, so both are safe to mark
+            // __restrict.
             for (size_type r = 0; r < rest; ++r)
             {
-                const T* const l21_row = &A(k + bs + r, k);
+                const T* const __restrict l21_row = m + (k + bs + r) * lda + k;
+                // out_row is hoisted once per r and reused for every c
+                // below instead of recomputing (k + bs + r) * lda + ... on
+                // each iteration.
+                T* const __restrict out_row = m + (k + bs + r) * lda + (k + bs + col0);
                 for (size_type c = 0; c < cw; ++c)
                 {
                     const T* const u12_col = &packed[c * bs];
-                    A(k + bs + r, k + bs + col0 + c) -= lu_dot(l21_row, u12_col, bs);
+                    out_row[c] -= lu_dot(l21_row, u12_col, bs);
                 }
             }
         }
@@ -395,21 +432,19 @@ bool lu_decomposition_blocked_impl(T* m, linalg_long lda, linalg_int* pivot, T t
     return true;
 }
 
-#undef A
-
 }  // namespace
 
 template <>
-bool lu_decomposition<float, linalg_backend::native>::apply(
-    float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+bool lu_decomposition<float, linalg_backend::native>::apply(float* __restrict m, linalg_int lda,
+    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
     check_lu_inputs(m, pivot, lda);
     return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<float>::epsilon());
 }
 
 template <>
-bool lu_decomposition<double, linalg_backend::native>::apply(
-    double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+bool lu_decomposition<double, linalg_backend::native>::apply(double* __restrict m, linalg_int lda,
+    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
     check_lu_inputs(m, pivot, lda);
     return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());

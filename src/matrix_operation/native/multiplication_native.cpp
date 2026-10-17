@@ -46,10 +46,6 @@ static void check_matmul_inputs(const void* a,
 // blas/matrix_multiplication_blas.cpp, which the build compiles only when
 // LINALG_ENABLE_MKL / LINALG_ENABLE_BLAS is on.
 
-#define A(i, j) a[(i) * lda + (j)]
-#define B(i, j) b[(i) * ldb + (j)]
-#define C(i, j) c[(i) * ldc + (j)]
-
 namespace
 {
 template <typename value_t, bool ColMajor = true>
@@ -242,9 +238,12 @@ template <typename value_t,
     linalg_int Pack2,
     bool       ColMajor,
     bool       PanelMode = false>
+// block_A (scratch carved from the caller's workspace arena) and data (a
+// view into the caller's a or b) are always distinct allocations, so both
+// are __restrict.
 void pack_lhs(  // NOLINT
-    value_t*       block_A,
-    const value_t* data,
+    value_t* __restrict       block_A,
+    const value_t* __restrict data,
     linalg_int     lda,
     linalg_int     depth,
     linalg_int     rows,
@@ -487,9 +486,10 @@ void pack_lhs(  // NOLINT
 }
 
 template <typename value_t, linalg_int nr, linalg_int PacketSize, bool ColMajor, bool PanelMode>
+// blockB and data never alias, same reasoning as pack_lhs above.
 void pack_rhs(  // NOLINT
-    value_t*       blockB,
-    const value_t* data,
+    value_t* __restrict       blockB,
+    const value_t* __restrict data,
     linalg_int     ldb,
     linalg_int     depth,
     linalg_int     cols,
@@ -634,10 +634,16 @@ void pack_rhs(  // NOLINT
 }
 
 template <typename value_t, linalg_int mr, linalg_int nr>
+// res (the result tile), blockA, and blockB (both packed scratch from the
+// workspace arena) are three mutually distinct buffers regardless of
+// whatever res ultimately aliases upstream (matrix_multiplication_seq's
+// `result` may equal its own `c` in the square case, but that's a
+// relationship outside this function entirely -- blockA/blockB are always
+// arena scratch, never res).
 void gemm(  // NOLINT
-    value_t*         res,
-    const value_t*   blockA,
-    const value_t*   blockB,
+    value_t* __restrict       res,
+    const value_t* __restrict blockA,
+    const value_t* __restrict blockB,
     linalg_int       ldc,
     linalg_int       rows,
     linalg_int       depth,
@@ -1488,19 +1494,25 @@ size_t matmul_scalar_workspace_size(linalg_int rows, linalg_int columns, linalg_
 #endif
 }
 
+// a and b are __restrict: read-only operands, never aliased by anything
+// else this function touches. c is deliberately NOT __restrict: below,
+// `result` is set equal to `c` itself when rows == columns (to transpose
+// into in place instead of allocating a second rows x columns buffer), so
+// c's memory is legitimately reached through another name within this
+// function.
 template <typename value_t, bool transpose_a, bool transpose_b>
 void matrix_multiplication_seq(  // NOLINT
-    linalg_int     rows,
-    linalg_int     columns,
-    linalg_int     depth,
-    value_t const* a,
-    linalg_int     lda,
-    value_t const* b,
-    linalg_int     ldb,
-    value_t*       c,
-    linalg_int     ldc,
-    void*          workspace,
-    size_t         workspace_size)
+    linalg_int                rows,
+    linalg_int                columns,
+    linalg_int                depth,
+    value_t const* __restrict a,
+    linalg_int                lda,
+    value_t const* __restrict b,
+    linalg_int                ldb,
+    value_t*                  c,
+    linalg_int                ldc,
+    void*                     workspace,
+    size_t                    workspace_size)
 {
 #if !LINALG_HAS_VECTORIZATION
     (void)workspace;
@@ -1622,18 +1634,22 @@ void matrix_multiplication_seq(  // NOLINT
 #endif
     {
         using size_type = linalg_int;
+        // c_i/a_i/b_k/a_k/alpha/beta below are all safe to mark __restrict
+        // relative to each other: this scalar fallback (unlike the blocked
+        // GEBP path above) never aliases c with anything else, and a/b/c
+        // are three distinct caller-owned buffers per multiplication.h.
         if constexpr (!transpose_a && !transpose_b)
         {
             for (size_type i = 0; i < rows; ++i)
             {
-                auto* c_i = &C(i, 0);
-                auto* a_i = &A(i, 0);
+                auto* __restrict c_i = c + i * ldc;
+                auto* __restrict a_i = a + i * lda;
                 std::fill_n(c_i, columns, static_cast<value_t>(0.));
 
                 for (size_type k = 0; k < depth; ++k)
                 {
-                    auto*      b_k      = &B(k, 0);
-                    const auto alpha_ik = a_i[k];
+                    auto* __restrict b_k      = b + k * ldb;
+                    const auto       alpha_ik = a_i[k];
                     for (size_type j = 0; j < columns; ++j)
                     {
                         c_i[j] += alpha_ik * b_k[j];
@@ -1644,15 +1660,15 @@ void matrix_multiplication_seq(  // NOLINT
         }
         else if constexpr (transpose_a && !transpose_b)
         {
-            std::fill_n(&C(0, 0), columns * rows, static_cast<value_t>(0.));
+            std::fill_n(c, columns * rows, static_cast<value_t>(0.));
             for (size_type k = 0; k < depth; ++k)
             {
-                auto* b_k = &B(k, 0);
-                auto* a_k = &A(k, 0);
+                auto* __restrict b_k = b + k * ldb;
+                auto* __restrict a_k = a + k * lda;
                 for (size_type i = 0; i < rows; ++i)
                 {
-                    const auto alpha_ki = a_k[i];
-                    auto*      c_i      = &C(i, 0);
+                    const auto       alpha_ki = a_k[i];
+                    auto* __restrict c_i      = c + i * ldc;
                     for (size_type j = 0; j < columns; ++j)
                     {
                         c_i[j] += alpha_ki * b_k[j];
@@ -1663,34 +1679,47 @@ void matrix_multiplication_seq(  // NOLINT
         }
         else if constexpr (!transpose_a && transpose_b)
         {
+            // alpha (row i of a) is fixed for the whole j loop below, so
+            // it's hoisted out of it instead of being recomputed from
+            // i * lda on every j.
             for (size_type i = 0; i < rows; ++i)
             {
+                auto* const __restrict       c_i   = c + i * ldc;
+                const auto* const __restrict alpha = a + i * lda;
                 for (size_type j = 0; j < columns; ++j)
                 {
-                    auto& c0                = C(i, j);
-                    c0                      = 0;
-                    const auto* const alpha = &A(i, 0);
-                    const auto* const beta  = &B(j, 0);
+                    const auto* const __restrict beta = b + j * ldb;
+                    value_t                       c0   = 0;
                     for (size_type k = 0; k < depth; ++k)
                     {
                         c0 += alpha[k] * beta[k];
                     }
+                    c_i[j] = c0;
                 }
             }
             return;
         }
         else
         {
+            // beta (row j of b) is fixed for the whole k loop below, so
+            // it's hoisted out of it instead of being recomputed from
+            // j * ldb on every k. a[k * lda + i] (column i of a) stays a
+            // per-element strided read: with both operands transposed,
+            // one of the two is necessarily non-contiguous here regardless
+            // of loop order, and this fallback (small/non-blocked matrices
+            // only -- see the blocked GEBP kernel above for the real hot
+            // path) isn't worth restructuring further for it.
             for (size_type i = 0; i < rows; ++i)
             {
                 for (size_type j = 0; j < columns; ++j)
                 {
-                    auto& c0 = C(i, j);
-                    c0       = 0;
+                    const auto* const __restrict beta = b + j * ldb;
+                    value_t                       c0   = 0;
                     for (size_type k = 0; k < depth; ++k)
                     {
-                        c0 += A(k, i) * B(j, k);
+                        c0 += a[k * lda + i] * beta[k];
                     }
+                    c[i * ldc + j] = c0;
                 }
             }
             return;
@@ -1705,9 +1734,9 @@ void multiplication<float, linalg_backend::native>::apply(bool transpose_a,
     linalg_int                                                 rows,
     linalg_int                                                 columns,
     linalg_int                                                 depth,
-    float const*                                               a,
+    float const* __restrict                                    a,
     linalg_int                                                 lda,
-    float const*                                               b,
+    float const* __restrict                                    b,
     linalg_int                                                 ldb,
     float*                                                     c,
     linalg_int                                                 ldc,
@@ -1839,9 +1868,9 @@ void multiplication<double, linalg_backend::native>::apply(bool transpose_a,
     linalg_int                                                  rows,
     linalg_int                                                  columns,
     linalg_int                                                  depth,
-    double const*                                               a,
+    double const* __restrict                                    a,
     linalg_int                                                  lda,
-    double const*                                               b,
+    double const* __restrict                                    b,
     linalg_int                                                  ldb,
     double*                                                     c,
     linalg_int                                                  ldc,
@@ -1906,10 +1935,6 @@ void multiplication<double, linalg_backend::native>::apply(bool transpose_a,
             workspace_size);
     }
 }
-
-#undef A
-#undef B
-#undef C
 
 template <>
 size_t multiplication<float, linalg_backend::native>::workspace_size(

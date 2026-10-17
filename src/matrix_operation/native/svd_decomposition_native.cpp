@@ -9,6 +9,10 @@
 #include <cmath>
 #include <cstring>
 
+#if LINALG_HAS_VECTORIZATION
+#include "src/common/packet.h"
+#endif
+
 namespace linalg
 {
 
@@ -41,51 +45,229 @@ static void check_svd_inputs(const void* A,
 namespace
 {
 
-#define U(i, j) U_[(i) * dim[0] + (j)]
-#define S(i, j) S_[(i) * dim[1] + (j)]
-#define V(i, j) V_[(i) * dim[1] + (j)]
+// Dot product of two contiguous length-`len` operands, used below to
+// compute a Householder dot-product against a row that is already
+// contiguous in S_/U_ (the row Householder's S_ update and every column
+// Householder's U_ update walk a row, not a strided column -- see SVD's
+// comments at each call site). Same linalg::packet<T> (src/common/
+// packet.h) SIMD abstraction, and the same 4-accumulator tree-reduction
+// shape, as lu_decomposition_native.cpp's lu_dot.
+// x and y are __restrict: every call site below passes a row of S_/U_
+// against house_vec, two buffers svd_scalar_plan carves as disjoint
+// sub-ranges of the caller's workspace arena, so they never alias.
+template <typename T> inline T svd_dot(const T* __restrict x, const T* __restrict y, linalg_long len)
+{
+#if LINALG_HAS_VECTORIZATION
+    using P                     = packet<T>;
+    constexpr linalg_long width = P::size;
 
+    typename P::packet_t acc0, acc1, acc2, acc3;
+    P::set(static_cast<T>(0), acc0);
+    P::set(static_cast<T>(0), acc1);
+    P::set(static_cast<T>(0), acc2);
+    P::set(static_cast<T>(0), acc3);
+
+    linalg_long c = 0;
+    for (; c + 4 * width <= len; c += 4 * width)
+    {
+        typename P::packet_t px0, px1, px2, px3;
+        typename P::packet_t py0, py1, py2, py3;
+        P::loadu(x + c, px0);
+        P::loadu(x + c + width, px1);
+        P::loadu(x + c + 2 * width, px2);
+        P::loadu(x + c + 3 * width, px3);
+        P::loadu(y + c, py0);
+        P::loadu(y + c + width, py1);
+        P::loadu(y + c + 2 * width, py2);
+        P::loadu(y + c + 3 * width, py3);
+        P::fma(px0, py0, acc0, acc0);
+        P::fma(px1, py1, acc1, acc1);
+        P::fma(px2, py2, acc2, acc2);
+        P::fma(px3, py3, acc3, acc3);
+    }
+
+    typename P::packet_t acc01, acc23, acc;
+    P::add(acc0, acc1, acc01);
+    P::add(acc2, acc3, acc23);
+    P::add(acc01, acc23, acc);
+
+    for (; c + width <= len; c += width)
+    {
+        typename P::packet_t px;
+        typename P::packet_t py;
+        P::loadu(x + c, px);
+        P::loadu(y + c, py);
+        P::fma(px, py, acc, acc);
+    }
+
+    T sum = P::predux(acc);
+    for (; c < len; ++c)
+    {
+        sum += x[c] * y[c];
+    }
+    return sum;
+#else
+    T sum = static_cast<T>(0);
+    for (linalg_long c = 0; c < len; ++c)
+    {
+        sum += x[c] * y[c];
+    }
+    return sum;
+#endif
+}
+
+// y[c] += alpha * x[c] for c in [0, len), both contiguous. Used both to
+// apply a Householder reflection to an already-contiguous row (row_k[j] -=
+// dot_prod * house_vec[j], i.e. alpha = -dot_prod, x = house_vec) and, via
+// loop interchange, to turn a strided column update into a sum of
+// contiguous row contributions (see the column-Householder S_/V_ updates
+// in SVD below: accumulating w[k] = sum_j house_vec[j] * row_j[k] one row
+// at a time is exactly `svd_axpy(w, row_j, house_vec[j], trailing)`).
+// Mirrors qr_decomposition_native.cpp's qr_axpy.
+// y and x are __restrict for the same reason as svd_dot above: call sites
+// pass disjoint rows of S_/U_/V_, the `w` scratch row, or house_vec, never
+// the same buffer for both.
+template <typename T> inline void svd_axpy(T* __restrict y, const T* __restrict x, T alpha, linalg_long len)
+{
+#if LINALG_HAS_VECTORIZATION
+    using P                     = packet<T>;
+    constexpr linalg_long width = P::size;
+
+    typename P::packet_t pa;
+    P::set(alpha, pa);
+
+    linalg_long c = 0;
+    for (; c + width <= len; c += width)
+    {
+        typename P::packet_t px;
+        typename P::packet_t py;
+        P::loadu(x + c, px);
+        P::loadu(y + c, py);
+        P::fma(pa, px, py, py);
+        P::storeu(py, y + c);
+    }
+    for (; c < len; ++c)
+    {
+        y[c] += alpha * x[c];
+    }
+#else
+    for (linalg_long c = 0; c < len; ++c)
+    {
+        y[c] += alpha * x[c];
+    }
+#endif
+}
+
+// GivensL/GivensR below are deliberately generic over which of U_/S_/V_ is
+// passed in (see their call sites in SVD below) with `dim` always the
+// *caller's* local dim array for that buffer, not a fixed global -- the old
+// U(i,j)/S(i,j)/V(i,j) macros captured that genericity by name (expanding
+// against whatever local variable happened to be called `S_`/`dim` in
+// scope), which is exactly the kind of implicit, name-dependent aliasing
+// that breaks silently if a parameter is ever renamed. Both are rewritten
+// below to index the parameters directly.
+
+// GivensL zeroes a subdiagonal pair by rotating rows m and m+1 together;
+// row_m/row_m1 are hoisted once (both rows are fixed for the whole loop,
+// only the column i varies) instead of recomputing m * dim[1] and
+// (m + 1) * dim[1] on every iteration. Both rows are contiguous (dim[1]
+// elements each), unlike GivensR's column pair below, so this is
+// vectorized via linalg::packet<T>: each lane independently computes the
+// same 2x2 rotation per lane -- out0 = c*S0 - s*S1, out1 = s*S0 + c*S1 --
+// expressed as two fma's per output since packet<T> has no standalone
+// multiply (only fma/add), matching the rest of this file's idiom.
 template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLINT
 {
     T r = sqrt(a * a + b * b);
     T c = a / r;
     T s = -b / r;
 
-#pragma omp parallel for
+    // row_m and row_m1 are always different rows (m + 1 != m), so safe to
+    // mark __restrict relative to each other.
+    T* const __restrict row_m  = S_ + m * dim[1];
+    T* const __restrict row_m1 = row_m + dim[1];
+
+#if LINALG_HAS_VECTORIZATION
+    using P                     = packet<T>;
+    constexpr linalg_long width = P::size;
+
+    typename P::packet_t vc, vs, vnegs, vzero;
+    P::set(c, vc);
+    P::set(s, vs);
+    P::set(-s, vnegs);
+    P::set(static_cast<T>(0), vzero);
+
+    linalg_long i = 0;
+    for (; i + width <= dim[1]; i += width)
+    {
+        typename P::packet_t vS0, vS1;
+        P::loadu(row_m + i, vS0);
+        P::loadu(row_m1 + i, vS1);
+
+        typename P::packet_t out0, out1, tmp0, tmp1;
+        P::fma(vc, vS0, vzero, tmp0);
+        P::fma(vnegs, vS1, tmp0, out0);
+        P::fma(vs, vS0, vzero, tmp1);
+        P::fma(vc, vS1, tmp1, out1);
+
+        P::storeu(out0, row_m + i);
+        P::storeu(out1, row_m1 + i);
+    }
+    for (; i < dim[1]; i++)
+    {
+        const T S0 = row_m[i];
+        const T S1 = row_m1[i];
+        row_m[i]   = c * S0 - s * S1;
+        row_m1[i]  = s * S0 + c * S1;
+    }
+#else
     for (linalg_int i = 0; i < static_cast<linalg_int>(dim[1]); i++)
     {
-        T S0 = S(m + 0, i);
-        T S1 = S(m + 1, i);
-        S(m, i) += S0 * (c - 1);
-        S(m, i) += S1 * (-s);
-
-        S(m + 1, i) += S0 * (s);
-        S(m + 1, i) += S1 * (c - 1);
+        const T S0 = row_m[i];
+        const T S1 = row_m1[i];
+        row_m[i]   = c * S0 - s * S1;
+        row_m1[i]  = s * S0 + c * S1;
     }
+#endif
 }
 
+// GivensR is GivensL's column counterpart (rotates columns m and m+1 of
+// row i together); row_i is hoisted once per i -- it's read/written at both
+// column m and m + 1 -- instead of recomputing i * dim[1] twice per
+// iteration. Left scalar, unlike GivensL above: each row only ever touches
+// two elements here (columns m and m + 1), so there is no same-row run of
+// contiguous elements for packet<T> to load/store over -- vectorizing
+// would mean gathering across the `dim[0]` rows instead, a different and
+// more involved transformation not worth it for this O(dim[0]) step.
 template <class T> void GivensR(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLINT
 {
     T r = sqrt(a * a + b * b);
     T c = a / r;
     T s = -b / r;
 
-#pragma omp parallel for
     for (linalg_int i = 0; i < static_cast<linalg_int>(dim[0]); i++)
     {
-        T S0 = S(i, m + 0);
-        T S1 = S(i, m + 1);
-        S(i, m) += S0 * (c - 1);
-        S(i, m) += S1 * (-s);
-
-        S(i, m + 1) += S0 * (s);
-        S(i, m + 1) += S1 * (c - 1);
+        T* const row_i = S_ + i * dim[1];
+        const T  S0    = row_i[m];
+        const T  S1    = row_i[m + 1];
+        row_i[m]       = c * S0 - s * S1;
+        row_i[m + 1]   = s * S0 + c * S1;
     }
 }
 
-// `house_vec` (max(dim[0],dim[1]) elements) is caller-owned scratch.
+// `house_vec` (max(dim[0],dim[1]) elements) and `w` (dim[1] elements, the
+// column-Householder row-accumulation scratch -- see its use below) are
+// caller-owned scratch. U_, S_, V_, house_vec, and w are __restrict:
+// svd_scalar_plan carves all five as separate, disjoint sub-ranges of the
+// caller's workspace arena (see svd() below), so they never overlap each
+// other. Locals derived from them inside this function are deliberately
+// left unmarked: several (e.g. row_n2 and row_k0 in the diagonalization
+// step below) can legitimately address the same row depending on loop
+// state, so blanket-marking every such view would be incorrect rather than
+// just unhelpful.
 template <class T>
-void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1)  // NOLINT
+void SVD(const linalg_long dim[2], T* __restrict U_, T* __restrict S_, T* __restrict V_,
+    T* __restrict house_vec, T* __restrict w, T eps = -1)  // NOLINT
 {
     assert(dim[0] >= dim[1]);
 
@@ -93,18 +275,20 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
         const auto n = std::min(dim[0], dim[1]);
         for (linalg_long i = 0; i < n; i++)
         {
-            // Column Householder
+            // Column Householder. S(i, i) is read twice below (the pivot
+            // magnitude and its sign); s_ii hoists that into one read. The
+            // j-loops walk column i of S_ (stride dim[1]), so col_ptr steps
+            // by dim[1] per iteration instead of each loop recomputing
+            // j * dim[1] + i from scratch.
             {
-                T x1 = S(i, i);
-                if (x1 < 0)
-                {
-                    x1 = -x1;
-                }
+                const T s_ii = S_[i * dim[1] + i];
+                T       x1   = s_ii < 0 ? -s_ii : s_ii;
 
-                T x_inv_norm = 0;
-                for (linalg_long j = i; j < dim[0]; j++)
+                T        x_inv_norm = 0;
+                const T* col_ptr    = S_ + i * dim[1] + i;
+                for (linalg_long j = i; j < dim[0]; j++, col_ptr += dim[1])
                 {
-                    x_inv_norm += S(j, i) * S(j, i);
+                    x_inv_norm += (*col_ptr) * (*col_ptr);
                 }
                 if (x_inv_norm > 0)
                 {
@@ -116,11 +300,12 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
                     T beta  = x_inv_norm / alpha;
 
                     house_vec[i] = -alpha;
-                    for (linalg_long j = i + 1; j < dim[0]; j++)
+                    col_ptr      = S_ + (i + 1) * dim[1] + i;
+                    for (linalg_long j = i + 1; j < dim[0]; j++, col_ptr += dim[1])
                     {
-                        house_vec[j] = -beta * S(j, i);
+                        house_vec[j] = -beta * (*col_ptr);
                     }
-                    if (S(i, i) < 0)
+                    if (s_ii < 0)
                     {
                         for (linalg_long j = i + 1; j < dim[0]; j++)
                         {
@@ -143,31 +328,47 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
                     }
                 }
             }
-#pragma omp parallel for
-            for (auto k = static_cast<linalg_int>(i); k < static_cast<linalg_int>(dim[1]); k++)
+            // Apply the column reflection to S_'s trailing columns
+            // [i, dim[1)). Per output column k this is a dot product and
+            // an update that both stride across rows of S_ (column k,
+            // stride dim[1]) -- exactly what qr_decomposition_native.cpp's
+            // forward pass avoids via a GEMV-then-GER loop interchange
+            // (see its function comment), applied here the same way:
+            // w[k - i] = sum_j house_vec[j] * S_[j][k] is accumulated one
+            // row of S_ at a time (contiguous, via svd_axpy), then S_[j][k]
+            // -= house_vec[j] * w[k - i] is applied the same way. house_vec
+            // rows that are exactly zero (common once the subcolumn below
+            // row i + 1 has already been eliminated) are skipped rather
+            // than axpy'd with a zero scalar.
             {
-                T dot_prod = 0;
+                const linalg_long trailing = dim[1] - i;
+                std::fill_n(w, static_cast<size_t>(trailing), static_cast<T>(0));
                 for (linalg_long j = i; j < dim[0]; j++)
                 {
-                    dot_prod += S(j, k) * house_vec[j];
+                    if (house_vec[j] != 0)
+                    {
+                        svd_axpy(w, S_ + j * dim[1] + i, house_vec[j], trailing);
+                    }
                 }
                 for (linalg_long j = i; j < dim[0]; j++)
                 {
-                    S(j, k) -= dot_prod * house_vec[j];
+                    if (house_vec[j] != 0)
+                    {
+                        svd_axpy(S_ + j * dim[1] + i, w, -house_vec[j], trailing);
+                    }
                 }
             }
-#pragma omp parallel for
+            // Apply the same column reflection to U_. Unlike S_ above,
+            // U_'s rows (row_k, contiguous since U_ is indexed
+            // [row * dim[0] + col]) already line up with house_vec, so no
+            // loop interchange is needed: each row's dot product and
+            // update are already contiguous, vectorized directly via
+            // svd_dot/svd_axpy.
             for (linalg_int k = 0; k < static_cast<linalg_int>(dim[0]); k++)
             {
-                T dot_prod = 0;
-                for (linalg_long j = i; j < dim[0]; j++)
-                {
-                    dot_prod += U(k, j) * house_vec[j];
-                }
-                for (linalg_long j = i; j < dim[0]; j++)
-                {
-                    U(k, j) -= dot_prod * house_vec[j];
-                }
+                T* const row_k    = U_ + k * dim[0];
+                const T  dot_prod = svd_dot(row_k + i, house_vec + i, dim[0] - i);
+                svd_axpy(row_k + i, house_vec + i, -dot_prod, dim[0] - i);
             }
 
             // Row Householder
@@ -175,18 +376,19 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
             {
                 continue;
             }
+            // Row Householder. row_i (S_'s row i, contiguous) is hoisted
+            // once and reused for every column access below, including the
+            // doubled read of S(i, i + 1) (s_i_i1).
             {
-                T x1 = S(i, i + 1);
-                if (x1 < 0)
-                {
-                    x1 = -x1;
-                }
+                T* const row_i  = S_ + i * dim[1];
+                const T  s_i_i1 = row_i[i + 1];
+                T        x1     = s_i_i1 < 0 ? -s_i_i1 : s_i_i1;
 
-                T x_inv_norm = 0;
-                for (linalg_long j = i + 1; j < dim[1]; j++)
-                {
-                    x_inv_norm += S(i, j) * S(i, j);
-                }
+                // row_i[i+1 .. dim[1]) is contiguous, unlike the column
+                // Householder's subcolumn norm above, so its self dot
+                // product is vectorized via svd_dot instead of a plain
+                // scalar accumulation.
+                T x_inv_norm = svd_dot(row_i + i + 1, row_i + i + 1, dim[1] - i - 1);
                 if (x_inv_norm > 0)
                 {
                     // Non-degenerate subrow: build the unit Householder
@@ -199,9 +401,9 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
                     house_vec[i + 1] = -alpha;
                     for (linalg_long j = i + 2; j < dim[1]; j++)
                     {
-                        house_vec[j] = -beta * S(i, j);
+                        house_vec[j] = -beta * row_i[j];
                     }
-                    if (S(i, i + 1) < 0)
+                    if (s_i_i1 < 0)
                     {
                         for (linalg_long j = i + 2; j < dim[1]; j++)
                         {
@@ -221,30 +423,39 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
                     }
                 }
             }
-#pragma omp parallel for
+            // Apply the row reflection to S_'s rows [i, dim[0)). Each
+            // row_k (S_'s row k) is already contiguous over the columns
+            // house_vec addresses, so -- unlike V_'s column update below
+            // -- no loop interchange is needed: dot product and update are
+            // both vectorized directly via svd_dot/svd_axpy.
             for (auto k = static_cast<linalg_int>(i); k < static_cast<linalg_int>(dim[0]); k++)
             {
-                T dot_prod = 0;
-                for (linalg_long j = i + 1; j < dim[1]; j++)
-                {
-                    dot_prod += S(k, j) * house_vec[j];
-                }
-                for (linalg_long j = i + 1; j < dim[1]; j++)
-                {
-                    S(k, j) -= dot_prod * house_vec[j];
-                }
+                T* const row_k    = S_ + k * dim[1];
+                const T  dot_prod = svd_dot(row_k + i + 1, house_vec + i + 1, dim[1] - i - 1);
+                svd_axpy(row_k + i + 1, house_vec + i + 1, -dot_prod, dim[1] - i - 1);
             }
-#pragma omp parallel for
-            for (linalg_int k = 0; k < static_cast<linalg_int>(dim[1]); k++)
+            // Apply the row reflection to V_'s columns [0, dim[1)), each
+            // of which strides across rows of V_ -- the same shape as the
+            // column Householder's S_ update above, so it uses the same
+            // GEMV-then-GER loop interchange: accumulate
+            // w[k] = sum_j house_vec[j] * V_[j][k] one row of V_ at a time
+            // (contiguous, via svd_axpy over the full dim[1] columns),
+            // then apply V_[j][k] -= house_vec[j] * w[k] the same way.
             {
-                T dot_prod = 0;
+                std::fill_n(w, static_cast<size_t>(dim[1]), static_cast<T>(0));
                 for (linalg_long j = i + 1; j < dim[1]; j++)
                 {
-                    dot_prod += V(j, k) * house_vec[j];
+                    if (house_vec[j] != 0)
+                    {
+                        svd_axpy(w, V_ + j * dim[1], house_vec[j], dim[1]);
+                    }
                 }
                 for (linalg_long j = i + 1; j < dim[1]; j++)
                 {
-                    V(j, k) -= dot_prod * house_vec[j];
+                    if (house_vec[j] != 0)
+                    {
+                        svd_axpy(V_ + j * dim[1], w, -house_vec[j], dim[1]);
+                    }
                 }
             }
         }
@@ -262,13 +473,16 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
     }
     while (k0 < dim[1] - 1)
     {  // Diagonalization
-        T S_max = 0.0;
-        for (linalg_long i = 0; i < dim[1]; i++)
+        // S_max walks the diagonal, stride dim[1] + 1, via a running
+        // pointer instead of recomputing i * dim[1] + i on every i.
+        T        S_max   = 0.0;
+        const T* diag_ptr = S_;
+        for (linalg_long i = 0; i < dim[1]; i++, diag_ptr += dim[1] + 1)
         {
-            S_max = (S_max > S(i, i) ? S_max : S(i, i));
+            S_max = (S_max > *diag_ptr ? S_max : *diag_ptr);
         }
 
-        while (k0 < dim[1] - 1 && fabs(S(k0, k0 + 1)) <= eps * S_max)
+        while (k0 < dim[1] - 1 && fabs(S_[k0 * dim[1] + k0 + 1]) <= eps * S_max)
         {
             k0++;
         }
@@ -278,7 +492,7 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
         }
 
         linalg_long n = k0 + 2;
-        while (n < dim[1] && fabs(S(n - 1, n)) > eps * S_max)
+        while (n < dim[1] && fabs(S_[(n - 1) * dim[1] + n]) > eps * S_max)
         {
             n++;
         }
@@ -286,17 +500,20 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
         T alpha = 0;
         T beta  = 0;
         {
-            // Compute mu
+            // Compute mu. row_n2 (row n - 2) is read at both column n - 2
+            // and n - 1 below, so it's hoisted once rather than recomputed
+            // for each.
             T C[2][2];  // NOLINT
 
-            auto s_n2_2 = S(n - 2, n - 2);
-            auto s_n2_1 = S(n - 2, n - 1);
-            auto s_n1_1 = S(n - 1, n - 1);
+            const T* const row_n2  = S_ + (n - 2) * dim[1];
+            const T        s_n2_2  = row_n2[n - 2];
+            const T        s_n2_1  = row_n2[n - 1];
+            const T        s_n1_1  = S_[(n - 1) * dim[1] + (n - 1)];
 
             C[0][0] = s_n2_2 * s_n2_2;
             if (n - k0 > 2)
             {
-                auto s_n3_2 = S(n - 3, n - 2);
+                const T s_n3_2 = S_[(n - 3) * dim[1] + (n - 2)];
                 C[0][0] += s_n3_2 * s_n3_2;
             }
             C[0][1] = s_n2_2 * s_n2_1;
@@ -314,8 +531,13 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
             T d2 = std::fabs(lambda2 - C[1][1]);
             T mu = (d1 < d2 ? lambda1 : lambda2);
 
-            alpha = S(k0, k0) * S(k0, k0) - mu;
-            beta  = S(k0, k0) * S(k0, k0 + 1);
+            // row_k0 (row k0) is read at columns k0 and k0 + 1; s_k0_k0
+            // itself is used twice (squared), so it's hoisted into one
+            // read too.
+            const T* const row_k0  = S_ + k0 * dim[1];
+            const T        s_k0_k0 = row_k0[k0];
+            alpha = s_k0_k0 * s_k0_k0 - mu;
+            beta  = s_k0_k0 * row_k0[k0 + 1];
         }
 
         for (linalg_long k = k0; k < n - 1; k++)
@@ -325,50 +547,56 @@ void SVD(const linalg_long dim[2], T* U_, T* S_, T* V_, T* house_vec, T eps = -1
             GivensR(S_, dim, k, alpha, beta);
             GivensL(V_, dimV, k, alpha, beta);
 
-            alpha = S(k, k);
-            beta  = S(k + 1, k);
+            // row_k (row k of S_, just rotated by the GivensR/GivensL pair
+            // above) is read at columns k, k + 1, and k + 2 below; hoisted
+            // once and reused for all three instead of recomputing
+            // k * dim[1] each time. It stays valid across the GivensL/
+            // GivensR calls between its first and later uses since it's
+            // only an address into S_'s storage, not a cached value.
+            const T* const row_k = S_ + k * dim[1];
+            alpha = row_k[k];
+            beta  = S_[(k + 1) * dim[1] + k];
             GivensL(S_, dim, k, alpha, beta);
             GivensR(U_, dimU, k, alpha, beta);
 
-            alpha = S(k, k + 1);
-            beta  = S(k, k + 2);
+            alpha = row_k[k + 1];
+            beta  = row_k[k + 2];
         }
 
         {  // rowsake S bi-diagonal again
             for (linalg_long i0 = k0; i0 < n - 1; i0++)
             {
+                T* const row_i0 = S_ + i0 * dim[1];
                 for (linalg_long i1 = 0; i1 < dim[1]; i1++)
                 {
                     if (i0 > i1 || i0 + 1 < i1)
                     {
-                        S(i0, i1) = 0;
+                        row_i0[i1] = 0;
                     }
                 }
             }
             for (linalg_long i0 = 0; i0 < dim[0]; i0++)
             {
+                T* const row_i0 = S_ + i0 * dim[1];
                 for (linalg_long i1 = k0; i1 < n - 1; i1++)
                 {
                     if (i0 > i1 || i0 + 1 < i1)
                     {
-                        S(i0, i1) = 0;
+                        row_i0[i1] = 0;
                     }
                 }
             }
             for (linalg_long i = 0; i < dim[1] - 1; i++)
             {
-                if (fabs(S(i, i + 1)) <= eps * S_max)
+                T* const entry = &S_[i * dim[1] + (i + 1)];
+                if (fabs(*entry) <= eps * S_max)
                 {
-                    S(i, i + 1) = 0;
+                    *entry = 0;
                 }
             }
         }
     }
 }
-
-#undef U
-#undef S
-#undef V
 
 template <typename T> struct svd_scalar_layout
 {
@@ -376,6 +604,7 @@ template <typename T> struct svd_scalar_layout
     T* V_;
     T* S_;
     T* house_vec;
+    T* w;
 };
 
 template <typename T>
@@ -388,6 +617,13 @@ svd_scalar_layout<T> svd_scalar_plan(
     p.V_        = arena.next<T>(static_cast<size_t>(dim[1]) * static_cast<size_t>(dim[1]));
     p.S_        = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
     p.house_vec = arena.next<T>(static_cast<size_t>(std::max(dim[0], dim[1])));
+    // Row-accumulation scratch for the column-Householder S_/V_ updates in
+    // SVD below (the GEMV-then-GER loop interchange that replaces a
+    // strided column dot-product/update with contiguous row axpy's --
+    // see those call sites). Sized to the wider of the two uses: up to
+    // dim[1] columns for S_'s trailing-column update, the full dim[1]
+    // columns for V_'s.
+    p.w = arena.next<T>(static_cast<size_t>(dim[1]));
     return p;
 }
 
@@ -398,19 +634,24 @@ template <typename T> size_t svd_scalar_workspace_size_impl(linalg_long rows, li
     return arena.total_size();
 }
 
+// A, S, U, and VT are __restrict: svd_decomposition.h documents them as
+// four distinct caller-owned buffers (A is read-only input; S, U, VT are
+// separate outputs), and this function never writes through one while
+// reading another's memory -- the arena-carved U_/S_/V_/house_vec scratch
+// is itself disjoint from all four (see svd_scalar_plan/SVD above).
 template <class T>
 inline void svd(  // NOLINT
     linalg_long rows,
     linalg_long columns,
-    T*          A,
-    linalg_long lda,
-    T*          S,
-    T*          U,
-    linalg_long ldu,
-    T*          VT,
-    linalg_long ldv,
-    void*       workspace,
-    size_t      workspace_size)
+    T* __restrict A,
+    linalg_long   lda,
+    T* __restrict S,
+    T* __restrict U,
+    linalg_long   ldu,
+    T* __restrict VT,
+    linalg_long   ldv,
+    void*         workspace,
+    size_t        workspace_size)
 {
     const linalg_long dim[2] = {std::max(rows, columns), std::min(rows, columns)};  // NOLINT
 
@@ -455,7 +696,7 @@ inline void svd(  // NOLINT
         V_[i * dim[1] + i] = 1;
     }
 
-    SVD<T>(dim, U_, S_, V_, bufs.house_vec, (T)-1);
+    SVD<T>(dim, U_, S_, V_, bufs.house_vec, bufs.w, (T)-1);
 
     for (linalg_long i = 0; i < dim[1]; i++)
     {  // Set S
@@ -507,12 +748,12 @@ inline void svd(  // NOLINT
 template <>
 void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                          columns,
-    float*                                                               A,
+    float* __restrict                                                   A,
     linalg_long                                                          lda,
-    float*                                                               S,
-    float*                                                               U,
+    float* __restrict                                                   S,
+    float* __restrict                                                   U,
     linalg_long                                                          ldu,
-    float*                                                               VT,
+    float* __restrict                                                   VT,
     linalg_long                                                          ldv,
     void*                                                                workspace,
     size_t                                                               workspace_size)
@@ -524,12 +765,12 @@ void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
 template <>
 void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                           columns,
-    double*                                                               A,
+    double* __restrict                                                   A,
     linalg_long                                                           lda,
-    double*                                                               S,
-    double*                                                               U,
+    double* __restrict                                                   S,
+    double* __restrict                                                   U,
     linalg_long                                                           ldu,
-    double*                                                               VT,
+    double* __restrict                                                   VT,
     linalg_long                                                           ldv,
     void*                                                                 workspace,
     size_t                                                                workspace_size)
