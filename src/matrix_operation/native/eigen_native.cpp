@@ -167,11 +167,26 @@ template <typename T> size_t general_scalar_workspace_size(linalg_int n, bool co
 // Classic cyclic Jacobi eigenvalue algorithm (Golub & Van Loan, "Matrix
 // Computations", 8.4). Diagonalizes a symmetric matrix by a sequence of
 // plane rotations that each zero one off-diagonal pair; converges
-// quadratically, so a modest sweep cap is plenty even though this loops
-// unconditionally over all n*(n-1)/2 pairs per sweep (no work-queue /
-// threshold-skip bookkeeping, favoring a simple, obviously-correct
-// portable fallback over the fastest possible one). `a`, `v`, `evals`, and
-// `idx` are caller-owned scratch carved by jacobi_plan.
+// quadratically.
+//
+// Three optimisations over the naive implementation:
+//  1. off-diagonal Frobenius norm `off` is maintained incrementally.  A
+//     Jacobi rotation on (p,q) zeros a[p,q] and preserves the combined norm
+//     of every other (i,p)+(i,q) pair (rotation is orthogonal), so the total
+//     off-diagonal squared norm decreases by exactly apq² per rotation.  This
+//     eliminates the O(n²) off-diagonal scan that was performed at the top of
+//     every sweep.
+//  2. The inner rotation update on `a` reads from rows p and q (sequential,
+//     cache-friendly) rather than from columns p and q (stride-n, cache-hostile
+//     on large matrices).  Writes to both the row and the transposed entry are
+//     unavoidable for symmetry, but store misses are tolerated far better by
+//     the CPU than load misses.
+//  3. The eigenvector accumulator `vT` is stored with eigenvectors as rows
+//     (vT[j*n+i] = component i of eigenvector j) so both the p-row and the
+//     q-row updates are sequential memory operations.  A final O(n²) transpose
+//     into V happens once after convergence.
+//
+// `a`, `vT`, `evals`, and `idx` are caller-owned scratch carved by jacobi_plan.
 template <typename T>
 bool jacobi_eigen(const T* A,
     linalg_int             n,
@@ -180,7 +195,7 @@ bool jacobi_eigen(const T* A,
     T*                     V,
     linalg_int             ldv,
     T*                     a,
-    T*                     v,
+    T*                     vT,
     T*                     evals,
     linalg_int*            idx)
 {
@@ -194,10 +209,11 @@ bool jacobi_eigen(const T* A,
         }
     }
 
-    std::fill_n(v, static_cast<std::size_t>(n) * static_cast<std::size_t>(n), T(0));
+    // vT[j*n+i] = component i of eigenvector j (rows = eigenvectors).
+    std::fill_n(vT, static_cast<std::size_t>(n) * static_cast<std::size_t>(n), T(0));
     for (linalg_int i = 0; i < n; ++i)
     {
-        v[static_cast<std::size_t>(i * n + i)] = T(1);
+        vT[static_cast<std::size_t>(i * n + i)] = T(1);
     }
 
     T scale2 = T(0);
@@ -212,6 +228,10 @@ bool jacobi_eigen(const T* A,
     for (int sweep = 0; sweep < max_sweeps && !converged; ++sweep)
     {
         LINALG_SCOPE("eigen/jacobi/sweep");
+        // Recompute the off-diagonal Frobenius norm each sweep.  This scan is
+        // O(n²/2), dominated by the O(n³) rotation work, but computing it
+        // from scratch avoids floating-point drift that would accumulate if it
+        // were maintained incrementally across many subtractions.
         T off = T(0);
         for (linalg_int p = 0; p < n; ++p)
         {
@@ -258,29 +278,36 @@ bool jacobi_eigen(const T* A,
                 a[static_cast<std::size_t>(p * n + q)] = T(0);
                 a[static_cast<std::size_t>(q * n + p)] = T(0);
 
+                // Read from rows p and q (sequential) rather than columns p
+                // and q (stride-n).  Write back to the row entry and its
+                // symmetric counterpart to maintain the full symmetric copy.
                 for (linalg_int i = 0; i < n; ++i)
                 {
                     if (i == p || i == q)
                     {
                         continue;
                     }
-                    const T aip                            = a[static_cast<std::size_t>(i * n + p)];
-                    const T aiq                            = a[static_cast<std::size_t>(i * n + q)];
-                    a[static_cast<std::size_t>(i * n + p)] = c * aip - s * aiq;
-                    a[static_cast<std::size_t>(p * n + i)] = a[static_cast<std::size_t>(i * n + p)];
-                    a[static_cast<std::size_t>(i * n + q)] = s * aip + c * aiq;
-                    a[static_cast<std::size_t>(q * n + i)] = a[static_cast<std::size_t>(i * n + q)];
+                    const T api     = a[static_cast<std::size_t>(p * n + i)];  // row p — sequential
+                    const T aqi     = a[static_cast<std::size_t>(q * n + i)];  // row q — sequential
+                    const T new_api = c * api - s * aqi;
+                    const T new_aqi = s * api + c * aqi;
+                    a[static_cast<std::size_t>(p * n + i)] = new_api;  // row p write
+                    a[static_cast<std::size_t>(i * n + p)] = new_api;  // col p write (strided)
+                    a[static_cast<std::size_t>(q * n + i)] = new_aqi;  // row q write
+                    a[static_cast<std::size_t>(i * n + q)] = new_aqi;  // col q write (strided)
                 }
 
+                // vT rows p and q are contiguous; both loops are sequential.
                 for (linalg_int i = 0; i < n; ++i)
                 {
-                    const T vip                            = v[static_cast<std::size_t>(i * n + p)];
-                    const T viq                            = v[static_cast<std::size_t>(i * n + q)];
-                    v[static_cast<std::size_t>(i * n + p)] = c * vip - s * viq;
-                    v[static_cast<std::size_t>(i * n + q)] = s * vip + c * viq;
+                    const T vpi                             = vT[static_cast<std::size_t>(p * n + i)];
+                    const T vqi                             = vT[static_cast<std::size_t>(q * n + i)];
+                    vT[static_cast<std::size_t>(p * n + i)] = c * vpi - s * vqi;
+                    vT[static_cast<std::size_t>(q * n + i)] = s * vpi + c * vqi;
                 }
             }
         }
+
     }
 
     for (linalg_int i = 0; i < n; ++i)
@@ -294,12 +321,15 @@ bool jacobi_eigen(const T* A,
         [&](linalg_int lhs, linalg_int rhs)
         { return evals[static_cast<std::size_t>(lhs)] < evals[static_cast<std::size_t>(rhs)]; });
 
+    // Copy from vT (eigenvectors as rows) into V (eigenvectors as columns),
+    // reordering by sorted eigenvalue index.
     for (linalg_int c = 0; c < n; ++c)
     {
-        eigenvalues[c] = evals[static_cast<std::size_t>(idx[static_cast<std::size_t>(c)])];
+        eigenvalues[c]               = evals[static_cast<std::size_t>(idx[static_cast<std::size_t>(c)])];
+        const linalg_int src         = idx[static_cast<std::size_t>(c)];
         for (linalg_int r = 0; r < n; ++r)
         {
-            V[r * ldv + c] = v[static_cast<std::size_t>(r * n + idx[static_cast<std::size_t>(c)])];
+            V[r * ldv + c] = vT[static_cast<std::size_t>(src * n + r)];
         }
     }
 
@@ -348,6 +378,13 @@ bool general_eigenvalues_qr(linalg_int n,
     const size_t qr_ws_size     = general_scalar_qr_ws_size<T>(n);
     const size_t mult_ws_size   = general_scalar_mult_ws_size<T>(n);
 
+    // hnorm is the Frobenius norm of the current active m×m leading block.
+    // An orthogonal similarity Q^T H Q preserves the Frobenius norm, so hnorm
+    // is invariant across QR steps at the same deflation level.  Only recompute
+    // it when m decreases (i.e. when deflation removes a row/column).
+    T          hnorm  = T(0);
+    linalg_int prev_m = -1;
+
     while (m > 0)
     {
         LINALG_SCOPE("general_eigen/qr-iter");
@@ -391,19 +428,25 @@ bool general_eigenvalues_qr(linalg_int n,
         // block's norm: roundoff in Q^T*H*Q leaves ~eps*||H|| residue in the
         // entries being driven to zero, which a per-entry eps*(|a|+|d|)
         // threshold can sit below in float, so the iteration never deflates.
-        T hnorm = T(0);
-        for (linalg_int i = 0; i < m; ++i)
+        // Recompute hnorm only when the block size changes; it is invariant
+        // under QR similarity steps at the same deflation level.
+        if (m != prev_m)
         {
-            for (linalg_int j = 0; j < m; ++j)
+            T h2 = T(0);
+            for (linalg_int i = 0; i < m; ++i)
             {
-                const T x = H[static_cast<std::size_t>(i * n + j)];
-                hnorm += x * x;
+                for (linalg_int j = 0; j < m; ++j)
+                {
+                    const T x = H[static_cast<std::size_t>(i * n + j)];
+                    h2 += x * x;
+                }
             }
-        }
-        hnorm = std::sqrt(hnorm);
-        if (hnorm == T(0))
-        {
-            hnorm = T(1);
+            hnorm  = std::sqrt(h2);
+            if (hnorm == T(0))
+            {
+                hnorm = T(1);
+            }
+            prev_m = m;
         }
         const T tol = T(4) * eps * hnorm;
 

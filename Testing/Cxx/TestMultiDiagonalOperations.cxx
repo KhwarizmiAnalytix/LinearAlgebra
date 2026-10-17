@@ -142,10 +142,13 @@ TEST(MultiDiagonalOperationsTest, TridiagonalVaryingDimensions)
         {2, 3, 2},    // outer_dim=2, dim=3, inner_dim=2
     };
 
-    for (const auto& [outer_dim, dim, inner_dim] : test_cases)
+    for (const auto& tc : test_cases)
     {
-        const size_t n      = dim * inner_dim;
-        const size_t stride = outer_dim * n;
+        const size_t outer_dim = std::get<0>(tc);
+        const size_t dim       = std::get<1>(tc);
+        const size_t inner_dim = std::get<2>(tc);
+        const size_t n         = dim * inner_dim;
+        const size_t stride    = outer_dim * n;
 
         std::vector<double> decomposed(3 * stride);
         fill_test_data(decomposed, 1);
@@ -165,10 +168,13 @@ TEST(MultiDiagonalOperationsTest, PentadiagonalVaryingDimensions)
         {2, 3, 2},    // outer_dim=2, dim=3, inner_dim=2
     };
 
-    for (const auto& [outer_dim, dim, inner_dim] : test_cases)
+    for (const auto& tc : test_cases)
     {
-        const size_t n      = dim * inner_dim;
-        const size_t stride = outer_dim * n;
+        const size_t outer_dim = std::get<0>(tc);
+        const size_t dim       = std::get<1>(tc);
+        const size_t inner_dim = std::get<2>(tc);
+        const size_t n         = dim * inner_dim;
+        const size_t stride    = outer_dim * n;
 
         std::vector<double> decomposed(5 * stride);
         fill_test_data(decomposed, 1);

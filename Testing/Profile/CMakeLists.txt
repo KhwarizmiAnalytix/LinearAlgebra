@@ -47,3 +47,39 @@ set_tests_properties(
     profile_linalg_matrix_operations
     PROPERTIES TIMEOUT 600 LABELS "Profile;Performance;LinearAlgebra"
 )
+
+# ---------------------------------------------------------------------------
+# Focused eigen profiler
+# ---------------------------------------------------------------------------
+
+add_executable(profile_linalg_eigen ProfileEigen.cxx)
+
+target_include_directories(
+    profile_linalg_eigen
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.." "${CMAKE_CURRENT_BINARY_DIR}/.."
+)
+
+target_link_libraries(
+    profile_linalg_eigen
+    PRIVATE LinearAlgebra::LinearAlgebra Profiler::Profiler
+)
+
+set_target_properties(
+    profile_linalg_eigen
+    PROPERTIES FOLDER "Profile" CXX_STANDARD ${LINALG_CXX_STANDARD} CXX_STANDARD_REQUIRED ON
+               CXX_EXTENSIONS OFF
+)
+
+if(COMMAND linalg_set_target_output_directories)
+    linalg_set_target_output_directories(profile_linalg_eigen)
+endif()
+
+add_test(
+    NAME profile_linalg_eigen
+    COMMAND profile_linalg_eigen 64
+    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+)
+set_tests_properties(
+    profile_linalg_eigen
+    PROPERTIES TIMEOUT 300 LABELS "Profile;Performance;LinearAlgebra"
+)
