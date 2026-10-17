@@ -9,6 +9,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for eigen.h (the native backend lives in
 // eigen.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -81,6 +83,7 @@ bool symmetric_eigen_backend<float, linalg_backend::mkl>::apply(const float* A,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
+    LINALG_SCOPE("eigen/mkl<float>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
     LINALG_CHECK(workspace_size >= symmetric_eigen_mkl_workspace_size<float>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
@@ -108,6 +111,7 @@ bool symmetric_eigen_backend<double, linalg_backend::mkl>::apply(const double* A
     void*                                                                      workspace,
     size_t                                                                     workspace_size)
 {
+    LINALG_SCOPE("eigen/mkl<double>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
     LINALG_CHECK(workspace_size >= symmetric_eigen_mkl_workspace_size<double>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
@@ -136,6 +140,7 @@ bool general_eigen_backend<float, linalg_backend::mkl>::apply(const float* A,
     void*                                                                  workspace,
     size_t                                                                 workspace_size)
 {
+    LINALG_SCOPE("general_eigen/mkl<float>");
     detail::check_general_eigen_inputs(
         A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
     const bool compute_eigenvectors = eigenvectors != nullptr;
@@ -201,6 +206,7 @@ bool general_eigen_backend<double, linalg_backend::mkl>::apply(const double* A,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
+    LINALG_SCOPE("general_eigen/mkl<double>");
     detail::check_general_eigen_inputs(
         A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
     const bool compute_eigenvectors = eigenvectors != nullptr;

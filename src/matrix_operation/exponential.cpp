@@ -13,6 +13,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 namespace
@@ -600,6 +602,7 @@ void exponential<float, linalg_backend::native>::apply(const float* A,
     void*                                                           workspace,
     size_t                                                          workspace_size)
 {
+    LINALG_SCOPE("exponential/native<float>");
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
@@ -616,6 +619,7 @@ void exponential<double, linalg_backend::native>::apply(const double* A,
     void*                                                             workspace,
     size_t                                                            workspace_size)
 {
+    LINALG_SCOPE("exponential/native<double>");
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
@@ -644,6 +648,7 @@ void exponential<float, linalg_backend::blas_lapacke>::apply(const float* A,
     void*                                                                        workspace,
     size_t                                                                       workspace_size)
 {
+    LINALG_SCOPE("exponential/blas_lapacke<float>");
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
@@ -660,6 +665,7 @@ void exponential<double, linalg_backend::blas_lapacke>::apply(const double* A,
     void*                                                                         workspace,
     size_t                                                                        workspace_size)
 {
+    LINALG_SCOPE("exponential/blas_lapacke<double>");
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
@@ -692,6 +698,7 @@ void exponential<float, linalg_backend::mkl>::apply(const float* A,
     void*                                                          workspace,
     size_t                                                         workspace_size)
 {
+    LINALG_SCOPE("exponential/mkl<float>");
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
@@ -708,6 +715,7 @@ void exponential<double, linalg_backend::mkl>::apply(const double* A,
     void*                                                           workspace,
     size_t                                                          workspace_size)
 {
+    LINALG_SCOPE("exponential/mkl<double>");
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");

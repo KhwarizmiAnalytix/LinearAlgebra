@@ -4,6 +4,8 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/common/linalg_checks.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -117,6 +119,7 @@ float determinant<float, linalg_backend::native>::apply(float* __restrict m,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("determinant/native<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
     return matrix_determinant_helper(m, pivot, lda, type, workspace, workspace_size);
@@ -130,6 +133,7 @@ double determinant<double, linalg_backend::native>::apply(double* __restrict m,
     void*                                                                        workspace,
     size_t                                                                       workspace_size)
 {
+    LINALG_SCOPE("determinant/native<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
     return matrix_determinant_helper(m, pivot, lda, type, workspace, workspace_size);

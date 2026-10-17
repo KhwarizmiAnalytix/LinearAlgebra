@@ -13,6 +13,8 @@
 #include <limits>
 #include <numeric>
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 namespace detail
@@ -581,6 +583,7 @@ bool symmetric_eigen_backend<float, linalg_backend::native>::apply(const float* 
     void*                                                                       workspace,
     size_t                                                                      workspace_size)
 {
+    LINALG_SCOPE("eigen/native<float>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
     LINALG_CHECK(workspace_size >= jacobi_workspace_size<float>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
@@ -600,6 +603,7 @@ bool symmetric_eigen_backend<double, linalg_backend::native>::apply(const double
     void*                                                                         workspace,
     size_t                                                                        workspace_size)
 {
+    LINALG_SCOPE("eigen/native<double>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
     LINALG_CHECK(workspace_size >= jacobi_workspace_size<double>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
@@ -680,6 +684,7 @@ bool general_eigen_backend<float, linalg_backend::native>::apply(const float* A,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("general_eigen/native<float>");
     detail::check_general_eigen_inputs(
         A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
     return general_eigen_scalar_impl(A,
@@ -704,6 +709,7 @@ bool general_eigen_backend<double, linalg_backend::native>::apply(const double* 
     void*                                                                       workspace,
     size_t                                                                      workspace_size)
 {
+    LINALG_SCOPE("general_eigen/native<double>");
     detail::check_general_eigen_inputs(
         A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
     return general_eigen_scalar_impl(A,

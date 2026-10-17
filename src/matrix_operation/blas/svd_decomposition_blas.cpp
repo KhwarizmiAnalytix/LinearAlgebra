@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <lapacke.h>
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS/LAPACKE specializations for svd_decomposition.h (the native backend lives in
 // svd_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -183,6 +185,7 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("svd_decomposition/blas_lapacke<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     const auto r     = static_cast<lapack_int>(rows);
     const auto c     = static_cast<lapack_int>(columns);
@@ -245,6 +248,7 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
     void*                                                                 workspace,
     size_t                                                                workspace_size)
 {
+    LINALG_SCOPE("svd_decomposition/blas_lapacke<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     const auto r     = static_cast<lapack_int>(rows);
     const auto c     = static_cast<lapack_int>(columns);

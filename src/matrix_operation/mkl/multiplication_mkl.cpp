@@ -6,6 +6,8 @@
 
 #include <mkl.h>
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for multiplication.h (the native backend lives in
 // multiplication.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -45,6 +47,7 @@ void multiplication<float, linalg_backend::mkl>::apply(bool transpose_a,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("multiplication/mkl<float>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
@@ -77,6 +80,7 @@ void multiplication<double, linalg_backend::mkl>::apply(bool transpose_a,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("multiplication/mkl<double>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,

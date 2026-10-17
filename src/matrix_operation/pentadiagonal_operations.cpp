@@ -2,6 +2,8 @@
 
 #include "include/common/linalg_macros.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg::pentadiagonal_operations
 {
 //-----------------------------------------------------------------------------
@@ -11,6 +13,7 @@ void decomposition(std::vector<double>& output,
     const size_t                        inner_dim,
     const bool                          parallelize)
 {
+    LINALG_SCOPE("pentadiagonal/decomposition");
     (void)parallelize;
     const auto n      = dim * inner_dim;
     const auto stride = outer_dim * n;
@@ -103,6 +106,7 @@ void solve_decomposed(std::vector<double>& x,
     const size_t                           inner_dim,
     const bool                             parallelize)
 {
+    LINALG_SCOPE("pentadiagonal/solve_decomposed");
     (void)parallelize;
     const int n             = (int)(inner_dim * dim);
     const int two_inner_dim = (int)(2 * inner_dim);
@@ -180,6 +184,7 @@ void multiply(std::vector<double>& result,
     double                         time_multiplier,
     const bool                     parallelize)
 {
+    LINALG_SCOPE("pentadiagonal/multiply");
     (void)parallelize;
     const auto n             = inner_dim * dim;
     const auto two_inner_dim = 2 * inner_dim;

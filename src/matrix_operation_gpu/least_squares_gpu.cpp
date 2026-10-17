@@ -10,6 +10,8 @@
 #include "include/matrix_operation_gpu/pseudo_inverse_gpu.h"
 #include "include/common/linalg_checks.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 namespace gpu
@@ -115,6 +117,7 @@ void least_squares_solve(linalg_long rows,
     size_t                             workspace_size,
     cudaStream_t                       stream)
 {
+    LINALG_SCOPE("least_squares/gpu<float>");
     least_squares_solve_impl(rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace,
         workspace_size, stream);
 }
@@ -132,6 +135,7 @@ void least_squares_solve(linalg_long rows,
     size_t                             workspace_size,
     cudaStream_t                       stream)
 {
+    LINALG_SCOPE("least_squares/gpu<double>");
     least_squares_solve_impl(rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace,
         workspace_size, stream);
 }

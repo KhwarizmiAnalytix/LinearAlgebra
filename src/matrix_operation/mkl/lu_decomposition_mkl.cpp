@@ -8,6 +8,8 @@
 
 #include <mkl_lapacke.h>
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for lu_decomposition.h (the native backend lives in
 // lu_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -29,6 +31,7 @@ template <>
 bool lu_decomposition<float, linalg_backend::mkl>::apply(
     float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("lu_decomposition/mkl<float>");
     check_lu_inputs(m, pivot, lda);
     return LAPACKE_sgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
 }
@@ -37,6 +40,7 @@ template <>
 bool lu_decomposition<double, linalg_backend::mkl>::apply(
     double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("lu_decomposition/mkl<double>");
     check_lu_inputs(m, pivot, lda);
     return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
 }

@@ -11,6 +11,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 namespace detail
@@ -257,6 +259,7 @@ template <>
 bool cholesky_decomposition<float, linalg_backend::native>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    LINALG_SCOPE("cholesky_decomposition/native<float>");
     detail::check_cholesky_inputs(C, lda);
     return cholesky_decomposition_apply_impl<float>(C, lda, type);
 }
@@ -265,6 +268,7 @@ template <>
 bool cholesky_decomposition<double, linalg_backend::native>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    LINALG_SCOPE("cholesky_decomposition/native<double>");
     detail::check_cholesky_inputs(C, lda);
     return cholesky_decomposition_apply_impl<double>(C, lda, type);
 }

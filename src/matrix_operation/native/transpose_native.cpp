@@ -6,6 +6,8 @@
 
 #include <algorithm>
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -80,6 +82,7 @@ template <>
 void transpose<float, linalg_backend::native>::apply(
     linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
 {
+    LINALG_SCOPE("transpose/native<float>");
     check_transpose_inputs(m, rows, columns);
     transpose_scalar_impl(rows, columns, m, workspace, workspace_size);
 }
@@ -88,6 +91,7 @@ template <>
 void transpose<double, linalg_backend::native>::apply(
     linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
 {
+    LINALG_SCOPE("transpose/native<double>");
     check_transpose_inputs(m, rows, columns);
     transpose_scalar_impl(rows, columns, m, workspace, workspace_size);
 }

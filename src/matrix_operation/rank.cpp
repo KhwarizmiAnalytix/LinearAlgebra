@@ -9,6 +9,8 @@
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/common/linalg_checks.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -131,6 +133,7 @@ linalg_long rank<float, linalg_backend::native>::apply(const float* A,
     void*                                                                          workspace,
     size_t                                                                         workspace_size)
 {
+    LINALG_SCOPE("rank/native<float>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
@@ -147,6 +150,7 @@ linalg_long rank<double, linalg_backend::native>::apply(const double* A,
     void*                                                                            workspace,
     size_t                                                                           workspace_size)
 {
+    LINALG_SCOPE("rank/native<double>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
@@ -179,6 +183,7 @@ linalg_long rank<float, linalg_backend::blas_lapacke>::apply(const float* A,
     void*                                                                               workspace,
     size_t                                                                              workspace_size)
 {
+    LINALG_SCOPE("rank/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
@@ -195,6 +200,7 @@ linalg_long rank<double, linalg_backend::blas_lapacke>::apply(const double* A,
     void*                                                                                workspace,
     size_t                                                                               workspace_size)
 {
+    LINALG_SCOPE("rank/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
@@ -229,6 +235,7 @@ linalg_long rank<float, linalg_backend::mkl>::apply(const float* A,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
+    LINALG_SCOPE("rank/mkl<float>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
@@ -245,6 +252,7 @@ linalg_long rank<double, linalg_backend::mkl>::apply(const double* A,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("rank/mkl<double>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");

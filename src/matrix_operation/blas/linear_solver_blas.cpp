@@ -12,6 +12,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS/LAPACKE specializations for linear_solver.h (the native backend lives in
 // linear_solver.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -72,6 +74,7 @@ void linear_solver<float, linalg_backend::blas_lapacke>::apply(float* m,
     void*                                                              workspace,
     size_t                                                             workspace_size)
 {
+    LINALG_SCOPE("linear_solver/blas_lapacke<float>");
     check_solver_inputs(m, x, lda);
     LINALG_CHECK(workspace_size >= solver_blas_workspace_size<float>(lda, type),
         "linear_solver: workspace_size too small");
@@ -121,6 +124,7 @@ void linear_solver<double, linalg_backend::blas_lapacke>::apply(double* m,
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("linear_solver/blas_lapacke<double>");
     check_solver_inputs(m, x, lda);
     LINALG_CHECK(workspace_size >= solver_blas_workspace_size<double>(lda, type),
         "linear_solver: workspace_size too small");

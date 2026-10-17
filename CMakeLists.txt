@@ -158,6 +158,10 @@ option(LINALG_ENABLE_GTEST "Enable GoogleTest for LinearAlgebra" ON)
 # targets exist yet.
 option(LINALG_ENABLE_BENCHMARK "Enable Google Benchmark for LinearAlgebra micro-benchmarks" OFF)
 
+# Profiler-instrumented profiling program for all matrix operations (CPU and GPU).
+# Requires Profiler::Profiler (auto-detected above via find_package(Profiler CONFIG QUIET)).
+option(LINALG_ENABLE_PROFILING "Build the Profiler-instrumented matrix operation profiling program" OFF)
+
 # Icecream distributed compilation launcher (rarely needed; hidden by default).
 option(LINALG_ENABLE_ICECC "Use Icecream (icecc) distributed compiler for LinearAlgebra" OFF)
 mark_as_advanced(LINALG_ENABLE_ICECC)
@@ -714,6 +718,18 @@ endif()
 if(LINALG_ENABLE_BENCHMARK)
     add_subdirectory(Testing/Benchmark)
 endif()
+if(LINALG_ENABLE_PROFILING)
+    if(LINALG_HAS_PROFILER)
+        add_subdirectory(Testing/Profile)
+    else()
+        message(
+            WARNING
+                "LINALG_ENABLE_PROFILING is ON but Profiler::Profiler was not found. "
+                "Build and install KhwarizmiAnalytix/Profiler and set CMAKE_PREFIX_PATH "
+                "to its install prefix, then re-configure."
+        )
+    endif()
+endif()
 if(LINALG_ENABLE_VALGRIND AND LINALG_ENABLE_TESTING)
     xsigma_apply_valgrind_timeouts()
 endif()
@@ -730,6 +746,7 @@ if(LINALG_STANDALONE)
     message("  Testing              : ${LINALG_ENABLE_TESTING}")
     message("  Gtest                : ${LINALG_ENABLE_GTEST}")
     message("  Benchmark            : ${LINALG_ENABLE_BENCHMARK}")
+    message("  Profiling            : ${LINALG_ENABLE_PROFILING}")
     message("  MKL                  : ${LINALG_ENABLE_MKL}")
     message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
     message("  Accelerate (BLAS)    : ${LINALG_BLAS_USE_ACCELERATE}")

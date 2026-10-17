@@ -17,6 +17,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -1743,6 +1745,7 @@ void multiplication<float, linalg_backend::native>::apply(bool transpose_a,
     void*                                                      workspace,
     size_t                                                     workspace_size)
 {
+    LINALG_SCOPE("multiplication/native<float>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
 #if LINALG_HAS_VECTORIZATION
 
@@ -1877,6 +1880,7 @@ void multiplication<double, linalg_backend::native>::apply(bool transpose_a,
     void*                                                       workspace,
     size_t                                                      workspace_size)
 {
+    LINALG_SCOPE("multiplication/native<double>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
     if (transpose_a && transpose_b)
     {

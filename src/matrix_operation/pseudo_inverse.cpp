@@ -12,6 +12,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -192,6 +194,7 @@ void pseudo_inverse<float, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("pseudo_inverse/native<float>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
@@ -211,6 +214,7 @@ void pseudo_inverse<double, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                      workspace,
     size_t                                                                     workspace_size)
 {
+    LINALG_SCOPE("pseudo_inverse/native<double>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
@@ -246,6 +250,7 @@ void pseudo_inverse<float, linalg_backend::blas_lapacke>::apply(linalg_long rows
     void*                                                                              workspace,
     size_t                                                                             workspace_size)
 {
+    LINALG_SCOPE("pseudo_inverse/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
@@ -265,6 +270,7 @@ void pseudo_inverse<double, linalg_backend::blas_lapacke>::apply(linalg_long row
     void*                                                                               workspace,
     size_t                                                                              workspace_size)
 {
+    LINALG_SCOPE("pseudo_inverse/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
@@ -302,6 +308,7 @@ void pseudo_inverse<float, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("pseudo_inverse/mkl<float>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
@@ -321,6 +328,7 @@ void pseudo_inverse<double, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                                      workspace,
     size_t                                                                     workspace_size)
 {
+    LINALG_SCOPE("pseudo_inverse/mkl<double>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,

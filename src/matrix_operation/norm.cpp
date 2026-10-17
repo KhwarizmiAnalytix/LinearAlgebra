@@ -8,6 +8,8 @@
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/common/linalg_checks.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -182,6 +184,7 @@ float norm<float, linalg_backend::native>::apply(const float* A,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
+    LINALG_SCOPE("norm/native<float>");
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
@@ -198,6 +201,7 @@ double norm<double, linalg_backend::native>::apply(const double* A,
     void*                                                                       workspace,
     size_t                                                                      workspace_size)
 {
+    LINALG_SCOPE("norm/native<double>");
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
@@ -230,6 +234,7 @@ float norm<float, linalg_backend::blas_lapacke>::apply(const float* A,
     void*                                                                             workspace,
     size_t                                                                            workspace_size)
 {
+    LINALG_SCOPE("norm/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
@@ -246,6 +251,7 @@ double norm<double, linalg_backend::blas_lapacke>::apply(const double* A,
     void*                                                                              workspace,
     size_t                                                                             workspace_size)
 {
+    LINALG_SCOPE("norm/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
@@ -280,6 +286,7 @@ float norm<float, linalg_backend::mkl>::apply(const float* A,
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("norm/mkl<float>");
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
@@ -296,6 +303,7 @@ double norm<double, linalg_backend::mkl>::apply(const double* A,
     void*                                                                 workspace,
     size_t                                                                workspace_size)
 {
+    LINALG_SCOPE("norm/mkl<double>");
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");

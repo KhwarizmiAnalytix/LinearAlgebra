@@ -6,6 +6,8 @@
 
 #include <mkl.h>
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for transpose.h (the native backend lives in
 // transpose.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -25,6 +27,7 @@ template <>
 void transpose<float, linalg_backend::mkl>::apply(
     linalg_long rows, linalg_long columns, float* m, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("transpose/mkl<float>");
     check_transpose_inputs(m, rows, columns);
     mkl_simatcopy('R', 'T', rows, columns, 1.F, m, columns, rows);
 }
@@ -36,6 +39,7 @@ void transpose<double, linalg_backend::mkl>::apply(linalg_long rows,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("transpose/mkl<double>");
     check_transpose_inputs(m, rows, columns);
     mkl_dimatcopy('R', 'T', rows, columns, 1., m, columns, rows);
 }

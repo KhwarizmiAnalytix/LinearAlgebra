@@ -8,6 +8,8 @@
 
 #include <mkl.h>
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for linear_solver.h (the native backend lives in
 // linear_solver.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -31,6 +33,7 @@ void linear_solver<float, linalg_backend::mkl>::apply(float* m,
     void*                                                     workspace,
     size_t                                                    workspace_size)
 {
+    LINALG_SCOPE("linear_solver/mkl<float>");
     check_solver_inputs(m, x, lda);
     switch (type)
     {
@@ -65,6 +68,7 @@ void linear_solver<double, linalg_backend::mkl>::apply(double* m,
     void*                                                       workspace,
     size_t                                                      workspace_size)
 {
+    LINALG_SCOPE("linear_solver/mkl<double>");
     check_solver_inputs(m, x, lda);
     switch (type)
     {

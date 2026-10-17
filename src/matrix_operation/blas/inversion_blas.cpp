@@ -10,6 +10,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS/LAPACKE specializations for inversion.h (the native backend lives in
 // inversion.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -79,6 +81,7 @@ void inversion<float, linalg_backend::blas_lapacke>::apply(float* m,
     void*                                                              workspace,
     size_t                                                             workspace_size)
 {
+    LINALG_SCOPE("inversion/blas_lapacke<float>");
     check_invert_inputs(m, lda);
     LINALG_CHECK(
         workspace_size >= invert_blas_workspace_size_impl<float>(LAPACKE_sgetri_work, lda, type),
@@ -134,6 +137,7 @@ void inversion<double, linalg_backend::blas_lapacke>::apply(double* m,
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("inversion/blas_lapacke<double>");
     check_invert_inputs(m, lda);
     LINALG_CHECK(
         workspace_size >= invert_blas_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type),

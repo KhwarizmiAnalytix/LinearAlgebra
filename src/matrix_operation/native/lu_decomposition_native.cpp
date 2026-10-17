@@ -15,6 +15,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -438,6 +440,7 @@ template <>
 bool lu_decomposition<float, linalg_backend::native>::apply(float* __restrict m, linalg_int lda,
     linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("lu_decomposition/native<float>");
     check_lu_inputs(m, pivot, lda);
     return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<float>::epsilon());
 }
@@ -446,6 +449,7 @@ template <>
 bool lu_decomposition<double, linalg_backend::native>::apply(double* __restrict m, linalg_int lda,
     linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("lu_decomposition/native<double>");
     check_lu_inputs(m, pivot, lda);
     return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
 }

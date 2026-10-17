@@ -2,6 +2,8 @@
 
 #include "include/common/linalg_macros.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg::tridiagonal_operations
 {
 //-----------------------------------------------------------------------------
@@ -11,6 +13,7 @@ void decomposition(std::vector<double>& output,
     const size_t                        inner_dim,
     const bool                          parallelize)
 {
+    LINALG_SCOPE("tridiagonal/decomposition");
     (void)parallelize;
     const auto n      = dim * inner_dim;
     const auto stride = outer_dim * n;
@@ -150,6 +153,7 @@ void solve_decomposed(std::vector<double>& x,
     const size_t                           inner_dim,
     const bool                             parallelize)
 {
+    LINALG_SCOPE("tridiagonal/solve_decomposed");
     (void)parallelize;
     const auto n      = inner_dim * dim;
     const int  end    = static_cast<int>(n) - static_cast<int>(inner_dim) - 1;
@@ -193,6 +197,7 @@ void solve_decomposed_vectorised(std::vector<double>& x,
     const size_t                                      inner_dim,
     const bool                                        parallelize)
 {
+    LINALG_SCOPE("tridiagonal/solve_decomposed_vectorised");
     (void)parallelize;
     const auto n      = inner_dim * dim;
     const int  end    = static_cast<int>(n) - static_cast<int>(inner_dim) - 1;
@@ -365,6 +370,7 @@ void multiply(std::vector<double>& result,
     double                         time_multiplier,
     const bool                     parallelize)
 {
+    LINALG_SCOPE("tridiagonal/multiply");
     (void)parallelize;
     const auto n      = inner_dim * dim;
     const auto stride = outer_dim * n;

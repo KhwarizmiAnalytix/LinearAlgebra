@@ -10,6 +10,8 @@
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 namespace gpu
@@ -70,6 +72,7 @@ size_t cholesky_decomposition_workspace_size(
 void cholesky_decomposition(float* C, linalg_int lda, cholesky_decomposition_enum type, int* info,
     void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("cholesky_decomposition/gpu<float>");
     LINALG_CHECK(C != nullptr && info != nullptr, "cholesky_decomposition: C and info must not be null");
     LINALG_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
@@ -93,6 +96,7 @@ void cholesky_decomposition(float* C, linalg_int lda, cholesky_decomposition_enu
 void cholesky_decomposition(double* C, linalg_int lda, cholesky_decomposition_enum type, int* info,
     void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("cholesky_decomposition/gpu<double>");
     LINALG_CHECK(C != nullptr && info != nullptr, "cholesky_decomposition: C and info must not be null");
     LINALG_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);

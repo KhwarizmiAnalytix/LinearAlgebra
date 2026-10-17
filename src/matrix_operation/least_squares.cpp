@@ -4,6 +4,8 @@
 #include "include/matrix_operation/pseudo_inverse.h"
 #include "include/common/linalg_checks.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -96,6 +98,7 @@ void least_squares<float, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
+    LINALG_SCOPE("least_squares/native<float>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
@@ -117,6 +120,7 @@ void least_squares<double, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("least_squares/native<double>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
@@ -154,6 +158,7 @@ void least_squares<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
     void*                                                                             workspace,
     size_t                                                                            workspace_size)
 {
+    LINALG_SCOPE("least_squares/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
@@ -175,6 +180,7 @@ void least_squares<double, linalg_backend::blas_lapacke>::apply(linalg_long rows
     void*                                                                              workspace,
     size_t                                                                             workspace_size)
 {
+    LINALG_SCOPE("least_squares/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
@@ -214,6 +220,7 @@ void least_squares<float, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
+    LINALG_SCOPE("least_squares/mkl<float>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
@@ -235,6 +242,7 @@ void least_squares<double, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                                     workspace,
     size_t                                                                    workspace_size)
 {
+    LINALG_SCOPE("least_squares/mkl<double>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,

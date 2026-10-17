@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <mkl.h>
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for svd_decomposition.h (the native backend lives in
 // svd_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -184,6 +186,7 @@ void svd_decomposition<float, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                       workspace,
     size_t                                                      workspace_size)
 {
+    LINALG_SCOPE("svd_decomposition/mkl<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd_lapacke_impl<float>(LAPACKE_sgesvd_work,
         "mkl",
@@ -213,6 +216,7 @@ void svd_decomposition<double, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                        workspace,
     size_t                                                       workspace_size)
 {
+    LINALG_SCOPE("svd_decomposition/mkl<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd_lapacke_impl<double>(LAPACKE_dgesvd_work,
         "mkl",

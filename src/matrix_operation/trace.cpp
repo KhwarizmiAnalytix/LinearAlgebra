@@ -2,6 +2,8 @@
 
 #include "include/common/linalg_checks.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -21,6 +23,7 @@ template <>
 float trace<float, linalg_backend::native>::apply(
     const float* A, linalg_int n, linalg_int lda)
 {
+    LINALG_SCOPE("trace/native<float>");
     return matrix_trace_impl(A, n, lda);
 }
 
@@ -28,6 +31,7 @@ template <>
 double trace<double, linalg_backend::native>::apply(
     const double* A, linalg_int n, linalg_int lda)
 {
+    LINALG_SCOPE("trace/native<double>");
     return matrix_trace_impl(A, n, lda);
 }
 
@@ -37,6 +41,7 @@ template <>
 float trace<float, linalg_backend::blas_lapacke>::apply(
     const float* A, linalg_int n, linalg_int lda)
 {
+    LINALG_SCOPE("trace/blas_lapacke<float>");
     return matrix_trace_impl(A, n, lda);
 }
 
@@ -44,6 +49,7 @@ template <>
 double trace<double, linalg_backend::blas_lapacke>::apply(
     const double* A, linalg_int n, linalg_int lda)
 {
+    LINALG_SCOPE("trace/blas_lapacke<double>");
     return matrix_trace_impl(A, n, lda);
 }
 
@@ -55,6 +61,7 @@ template <>
 float trace<float, linalg_backend::mkl>::apply(
     const float* A, linalg_int n, linalg_int lda)
 {
+    LINALG_SCOPE("trace/mkl<float>");
     return matrix_trace_impl(A, n, lda);
 }
 
@@ -62,6 +69,7 @@ template <>
 double trace<double, linalg_backend::mkl>::apply(
     const double* A, linalg_int n, linalg_int lda)
 {
+    LINALG_SCOPE("trace/mkl<double>");
     return matrix_trace_impl(A, n, lda);
 }
 

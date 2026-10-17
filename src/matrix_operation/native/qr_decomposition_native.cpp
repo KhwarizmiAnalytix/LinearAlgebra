@@ -11,6 +11,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -312,6 +314,7 @@ void qr_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
     void*                                                               workspace,
     size_t                                                              workspace_size)
 {
+    LINALG_SCOPE("qr_decomposition/native<float>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_householder(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 }
@@ -328,6 +331,7 @@ void qr_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("qr_decomposition/native<double>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_householder(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
 }

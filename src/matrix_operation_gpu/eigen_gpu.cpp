@@ -11,6 +11,8 @@
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 namespace gpu
@@ -147,6 +149,7 @@ void symmetric_eigenvalue_decomposition(const float* A,
     size_t                                            workspace_size,
     cudaStream_t                                      stream)
 {
+    LINALG_SCOPE("eigen/gpu<float>");
     symmetric_eigen_impl(cusolverDnSsyevd_bufferSize, cusolverDnSsyevd, A, n, lda, eigenvalues,
         eigenvectors, ldv, info, workspace, workspace_size, stream);
 }
@@ -162,6 +165,7 @@ void symmetric_eigenvalue_decomposition(const double* A,
     size_t                                             workspace_size,
     cudaStream_t                                       stream)
 {
+    LINALG_SCOPE("eigen/gpu<double>");
     symmetric_eigen_impl(cusolverDnDsyevd_bufferSize, cusolverDnDsyevd, A, n, lda, eigenvalues,
         eigenvectors, ldv, info, workspace, workspace_size, stream);
 }

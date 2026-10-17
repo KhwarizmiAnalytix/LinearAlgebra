@@ -13,6 +13,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -451,6 +453,7 @@ void inversion<float, linalg_backend::native>::apply(float* __restrict m,
     void*                                                   workspace,
     size_t                                                  workspace_size)
 {
+    LINALG_SCOPE("inversion/native<float>");
     check_invert_inputs(m, lda);
     matrix_invert_scalar_impl(m, pivot, lda, type, workspace, workspace_size);
 }
@@ -463,6 +466,7 @@ void inversion<double, linalg_backend::native>::apply(double* __restrict m,
     void*                                                     workspace,
     size_t                                                    workspace_size)
 {
+    LINALG_SCOPE("inversion/native<double>");
     check_invert_inputs(m, lda);
     matrix_invert_scalar_impl(m, pivot, lda, type, workspace, workspace_size);
 }

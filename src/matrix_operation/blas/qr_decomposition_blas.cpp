@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <lapacke.h>
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS/LAPACKE specializations for qr_decomposition.h (the native backend lives in
 // qr_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -154,6 +156,7 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long ro
     void*                                                               workspace,
     size_t                                                              workspace_size)
 {
+    LINALG_SCOPE("qr_decomposition/blas_lapacke<float>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     const linalg_long k     = std::min(rows, columns);
     const auto        r     = static_cast<lapack_int>(rows);
@@ -206,6 +209,7 @@ void qr_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long r
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("qr_decomposition/blas_lapacke<double>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     const linalg_long k     = std::min(rows, columns);
     const auto        r     = static_cast<lapack_int>(rows);

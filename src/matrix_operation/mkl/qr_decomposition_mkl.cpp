@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <mkl.h>
 
+#include "include/common/linalg_profiler.h"
+
 // MKL specializations for qr_decomposition.h (the native backend lives in
 // qr_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
@@ -155,6 +157,7 @@ void qr_decomposition<float, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                      workspace,
     size_t                                                     workspace_size)
 {
+    LINALG_SCOPE("qr_decomposition/mkl<float>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_lapacke_impl<float>(LAPACKE_sgeqrf_work,
         LAPACKE_sorgqr_work,
@@ -183,6 +186,7 @@ void qr_decomposition<double, linalg_backend::mkl>::apply(linalg_long rows,
     void*                                                       workspace,
     size_t                                                      workspace_size)
 {
+    LINALG_SCOPE("qr_decomposition/mkl<double>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_lapacke_impl<double>(LAPACKE_dgeqrf_work,
         LAPACKE_dorgqr_work,

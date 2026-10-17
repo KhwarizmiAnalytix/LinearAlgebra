@@ -13,6 +13,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS/LAPACKE specializations for lu_decomposition.h (the native backend lives in
 // lu_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -46,6 +48,7 @@ template <>
 bool lu_decomposition<float, linalg_backend::blas_lapacke>::apply(
     float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
 {
+    LINALG_SCOPE("lu_decomposition/blas_lapacke<float>");
     check_lu_inputs(m, pivot, lda);
     LINALG_CHECK(workspace_size >= lu_blas_workspace_size(lda),
         "lu_decomposition: workspace_size too small");
@@ -64,6 +67,7 @@ template <>
 bool lu_decomposition<double, linalg_backend::blas_lapacke>::apply(
     double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
 {
+    LINALG_SCOPE("lu_decomposition/blas_lapacke<double>");
     check_lu_inputs(m, pivot, lda);
     LINALG_CHECK(workspace_size >= lu_blas_workspace_size(lda),
         "lu_decomposition: workspace_size too small");

@@ -8,6 +8,8 @@
 
 #include "include/common/linalg_macros.h"
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -151,6 +153,7 @@ void linear_solver<float, linalg_backend::native>::apply(float* __restrict m,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("linear_solver/native<float>");
     check_solver_inputs(m, x, lda);
     linear_solver_scalar_impl(m, pivot, lda, x, type);
 }
@@ -164,6 +167,7 @@ void linear_solver<double, linalg_backend::native>::apply(double* __restrict m,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {
+    LINALG_SCOPE("linear_solver/native<double>");
     check_solver_inputs(m, x, lda);
     linear_solver_scalar_impl(m, pivot, lda, x, type);
 }

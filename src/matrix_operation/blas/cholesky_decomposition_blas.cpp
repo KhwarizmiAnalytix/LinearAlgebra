@@ -11,6 +11,8 @@
 // when a real lapacke.h was found.
 #include <lapacke.h>
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS/LAPACKE specializations for cholesky_decomposition.h (the native backend lives in
 // cholesky_decomposition.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -43,6 +45,7 @@ template <>
 bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    LINALG_SCOPE("cholesky_decomposition/blas_lapacke<float>");
     detail::check_cholesky_inputs(C, lda);
     detail::check_cholesky_type(type);
     const auto n = detail::checked_narrow<int>(lda);
@@ -53,6 +56,7 @@ template <>
 bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type)
 {
+    LINALG_SCOPE("cholesky_decomposition/blas_lapacke<double>");
     detail::check_cholesky_inputs(C, lda);
     detail::check_cholesky_type(type);
     const auto n = detail::checked_narrow<int>(lda);

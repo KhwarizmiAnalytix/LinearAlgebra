@@ -14,6 +14,8 @@
 #endif
 #include <algorithm>
 
+#include "include/common/linalg_profiler.h"
+
 // BLAS specializations for transpose.h (the native backend lives in
 // transpose.cpp). The build compiles this file only when LINALG_ENABLE_BLAS is
 // on; the #if below is kept as a second guard.
@@ -50,6 +52,7 @@ template <>
 void transpose<float, linalg_backend::blas_lapacke>::apply(
     linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
 {
+    LINALG_SCOPE("transpose/blas_lapacke<float>");
     check_transpose_inputs(m, rows, columns);
     LINALG_CHECK(workspace_size >= transpose_blas_workspace_size_impl<float>(rows, columns),
         "transpose: workspace_size too small");
@@ -80,6 +83,7 @@ template <>
 void transpose<double, linalg_backend::blas_lapacke>::apply(
     linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
 {
+    LINALG_SCOPE("transpose/blas_lapacke<double>");
     check_transpose_inputs(m, rows, columns);
     LINALG_CHECK(workspace_size >= transpose_blas_workspace_size_impl<double>(rows, columns),
         "transpose: workspace_size too small");

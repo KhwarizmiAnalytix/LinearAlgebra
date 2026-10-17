@@ -13,6 +13,8 @@
 #include "src/common/packet.h"
 #endif
 
+#include "include/common/linalg_profiler.h"
+
 namespace linalg
 {
 
@@ -758,6 +760,7 @@ void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                workspace,
     size_t                                                               workspace_size)
 {
+    LINALG_SCOPE("svd_decomposition/native<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
@@ -775,6 +778,7 @@ void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
     void*                                                                 workspace,
     size_t                                                                workspace_size)
 {
+    LINALG_SCOPE("svd_decomposition/native<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
 }
