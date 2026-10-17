@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 #include "include/common/workspace_arena.h"
@@ -39,17 +40,17 @@ singular_values_layout<T> singular_values_plan(detail::workspace_arena& arena,
     return p;
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 size_t singular_values_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
     const auto svd_bytes =
-        linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     singular_values_plan<T>(arena, rows, columns, svd_bytes);
     return arena.total_size();
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 T* singular_values(const T* A,
     linalg_long             rows,
     linalg_long             columns,
@@ -59,22 +60,20 @@ T* singular_values(const T* A,
 {
     const linalg_long k = std::min(rows, columns);
     const auto        svd_bytes =
-        linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
 
-    LINALG_CHECK(workspace_size >= singular_values_workspace_size_impl<T>(rows, columns),
-        "rank: workspace_size too small");
+    const size_t needed = singular_values_workspace_size_impl<T, Backend>(rows, columns);
+    LINALG_CHECK(workspace_size >= needed, "rank: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = singular_values_plan<T>(arena, rows, columns, svd_bytes);
 
     for (linalg_long i = 0; i < rows; ++i)
     {
-        for (linalg_long j = 0; j < columns; ++j)
-        {
-            bufs.A_copy[i * columns + j] = A[i * lda + j];
-        }
+        std::memcpy(bufs.A_copy + i * columns, A + i * lda,
+                    static_cast<size_t>(columns) * sizeof(T));
     }
 
-    linalg::svd_decomposition<T, linalg::linalg_backend::native>::apply(rows,
+    linalg::svd_decomposition<T, Backend>::apply(rows,
         columns,
         bufs.A_copy,
         columns,
@@ -88,7 +87,7 @@ T* singular_values(const T* A,
     return bufs.S;
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 linalg_long matrix_rank_impl(const T* A,
     linalg_long                       rows,
     linalg_long                       columns,
@@ -98,7 +97,7 @@ linalg_long matrix_rank_impl(const T* A,
     size_t                            workspace_size)
 {
     const linalg_long k = std::min(rows, columns);
-    const T*          S = singular_values(A, rows, columns, lda, workspace, workspace_size);
+    const T* S = singular_values<T, Backend>(A, rows, columns, lda, workspace, workspace_size);
 
     T smax = T(0);
     for (linalg_long i = 0; i < k; ++i)
@@ -135,7 +134,8 @@ linalg_long rank<float, linalg_backend::native>::apply(const float* A,
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
-    return matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size);
+    return matrix_rank_impl<float, linalg_backend::native>(
+        A, rows, columns, lda, tol, workspace, workspace_size);
 }
 
 template <>
@@ -150,21 +150,122 @@ linalg_long rank<double, linalg_backend::native>::apply(const double* A,
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "rank::apply: rows/columns/lda must be positive");
-    return matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size);
+    return matrix_rank_impl<double, linalg_backend::native>(
+        A, rows, columns, lda, tol, workspace, workspace_size);
 }
 
 template <>
 size_t rank<float, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<float>(rows, columns);
+    return singular_values_workspace_size_impl<float, linalg_backend::native>(rows, columns);
 }
 
 template <>
 size_t rank<double, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<double>(rows, columns);
+    return singular_values_workspace_size_impl<double, linalg_backend::native>(rows, columns);
 }
+
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+template <>
+linalg_long rank<float, linalg_backend::blas_lapacke>::apply(const float* A,
+    linalg_long                                                                         rows,
+    linalg_long                                                                         columns,
+    linalg_long                                                                         lda,
+    float                                                                               tol,
+    void*                                                                               workspace,
+    size_t                                                                              workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "rank::apply: rows/columns/lda must be positive");
+    return matrix_rank_impl<float, linalg_backend::blas_lapacke>(
+        A, rows, columns, lda, tol, workspace, workspace_size);
+}
+
+template <>
+linalg_long rank<double, linalg_backend::blas_lapacke>::apply(const double* A,
+    linalg_long                                                                          rows,
+    linalg_long                                                                          columns,
+    linalg_long                                                                          lda,
+    double                                                                               tol,
+    void*                                                                                workspace,
+    size_t                                                                               workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "rank::apply: rows/columns/lda must be positive");
+    return matrix_rank_impl<double, linalg_backend::blas_lapacke>(
+        A, rows, columns, lda, tol, workspace, workspace_size);
+}
+
+template <>
+size_t rank<float, linalg_backend::blas_lapacke>::workspace_size(
+    linalg_long rows, linalg_long columns)
+{
+    return singular_values_workspace_size_impl<float, linalg_backend::blas_lapacke>(rows, columns);
+}
+
+template <>
+size_t rank<double, linalg_backend::blas_lapacke>::workspace_size(
+    linalg_long rows, linalg_long columns)
+{
+    return singular_values_workspace_size_impl<double, linalg_backend::blas_lapacke>(rows, columns);
+}
+
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+#if LINALG_HAS_MKL
+
+template <>
+linalg_long rank<float, linalg_backend::mkl>::apply(const float* A,
+    linalg_long                                                              rows,
+    linalg_long                                                              columns,
+    linalg_long                                                              lda,
+    float                                                                    tol,
+    void*                                                                    workspace,
+    size_t                                                                   workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "rank::apply: rows/columns/lda must be positive");
+    return matrix_rank_impl<float, linalg_backend::mkl>(
+        A, rows, columns, lda, tol, workspace, workspace_size);
+}
+
+template <>
+linalg_long rank<double, linalg_backend::mkl>::apply(const double* A,
+    linalg_long                                                               rows,
+    linalg_long                                                               columns,
+    linalg_long                                                               lda,
+    double                                                                    tol,
+    void*                                                                     workspace,
+    size_t                                                                    workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "rank::apply: rows/columns/lda must be positive");
+    return matrix_rank_impl<double, linalg_backend::mkl>(
+        A, rows, columns, lda, tol, workspace, workspace_size);
+}
+
+template <>
+size_t rank<float, linalg_backend::mkl>::workspace_size(
+    linalg_long rows, linalg_long columns)
+{
+    return singular_values_workspace_size_impl<float, linalg_backend::mkl>(rows, columns);
+}
+
+template <>
+size_t rank<double, linalg_backend::mkl>::workspace_size(
+    linalg_long rows, linalg_long columns)
+{
+    return singular_values_workspace_size_impl<double, linalg_backend::mkl>(rows, columns);
+}
+
+#endif  // LINALG_HAS_MKL
 
 }  // namespace linalg

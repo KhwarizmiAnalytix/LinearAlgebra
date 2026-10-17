@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/svd_decomposition.h"
@@ -16,9 +17,10 @@ T norm_frobenius(const T* A, linalg_long rows, linalg_long columns, linalg_long 
     T sum = T(0);
     for (linalg_long i = 0; i < rows; ++i)
     {
+        const T* row = A + i * lda;
         for (linalg_long j = 0; j < columns; ++j)
         {
-            const T v = A[i * lda + j];
+            const T v = row[j];
             sum += v * v;
         }
     }
@@ -46,10 +48,11 @@ T norm_infinity(const T* A, linalg_long rows, linalg_long columns, linalg_long l
     T best = T(0);
     for (linalg_long i = 0; i < rows; ++i)
     {
+        const T* row = A + i * lda;
         T row_sum = T(0);
         for (linalg_long j = 0; j < columns; ++j)
         {
-            row_sum += std::fabs(A[i * lda + j]);
+            row_sum += std::fabs(row[j]);
         }
         best = std::max(best, row_sum);
     }
@@ -81,16 +84,17 @@ norm_two_layout<T> norm_two_plan(detail::workspace_arena& arena,
     return p;
 }
 
-template <typename T> size_t norm_two_workspace_size_impl(linalg_long rows, linalg_long columns)
+template <typename T, linalg_backend Backend>
+size_t norm_two_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
     const auto svd_bytes =
-        linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     norm_two_plan<T>(arena, rows, columns, svd_bytes);
     return arena.total_size();
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 T norm_two(const T* A,
     linalg_long     rows,
     linalg_long     columns,
@@ -100,22 +104,20 @@ T norm_two(const T* A,
 {
     const linalg_long k = std::min(rows, columns);
     const auto        svd_bytes =
-        linalg::svd_decomposition<T, linalg::linalg_backend::native>::workspace_size(rows, columns);
+        linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
 
-    LINALG_CHECK(workspace_size >= norm_two_workspace_size_impl<T>(rows, columns),
-        "norm: workspace_size too small");
+    const size_t needed = norm_two_workspace_size_impl<T, Backend>(rows, columns);
+    LINALG_CHECK(workspace_size >= needed, "norm: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = norm_two_plan<T>(arena, rows, columns, svd_bytes);
 
     for (linalg_long i = 0; i < rows; ++i)
     {
-        for (linalg_long j = 0; j < columns; ++j)
-        {
-            bufs.A_copy[i * columns + j] = A[i * lda + j];
-        }
+        std::memcpy(bufs.A_copy + i * columns, A + i * lda,
+                    static_cast<size_t>(columns) * sizeof(T));
     }
 
-    linalg::svd_decomposition<T, linalg::linalg_backend::native>::apply(rows,
+    linalg::svd_decomposition<T, Backend>::apply(rows,
         columns,
         bufs.A_copy,
         columns,
@@ -135,24 +137,24 @@ T norm_two(const T* A,
     return best;
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 size_t matrix_norm_workspace_size_impl(linalg_long rows, linalg_long columns, norm_type type)
 {
     switch (type)
     {
     case norm_type::TWO:
-        return norm_two_workspace_size_impl<T>(rows, columns);
+        return norm_two_workspace_size_impl<T, Backend>(rows, columns);
     default:
         return 0;
     }
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 T matrix_norm_impl(const T* A,
     linalg_long             rows,
     linalg_long             columns,
     linalg_long             lda,
-    norm_type        type,
+    norm_type               type,
     void*                   workspace,
     size_t                  workspace_size)
 {
@@ -165,7 +167,7 @@ T matrix_norm_impl(const T* A,
     case norm_type::INFINITY_NORM:
         return norm_infinity(A, rows, columns, lda);
     case norm_type::TWO:
-        return norm_two(A, rows, columns, lda, workspace, workspace_size);
+        return norm_two<T, Backend>(A, rows, columns, lda, workspace, workspace_size);
     default:
         LINALG_THROW("unsupported norm_type", static_cast<linalg_int>(type));
     }
@@ -176,14 +178,15 @@ float norm<float, linalg_backend::native>::apply(const float* A,
     linalg_long                                                              rows,
     linalg_long                                                              columns,
     linalg_long                                                              lda,
-    norm_type                                                         type,
+    norm_type                                                                type,
     void*                                                                    workspace,
     size_t                                                                   workspace_size)
 {
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
-    return matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
+    return matrix_norm_impl<float, linalg_backend::native>(
+        A, rows, columns, lda, type, workspace, workspace_size);
 }
 
 template <>
@@ -191,28 +194,129 @@ double norm<double, linalg_backend::native>::apply(const double* A,
     linalg_long                                                                 rows,
     linalg_long                                                                 columns,
     linalg_long                                                                 lda,
-    norm_type                                                            type,
+    norm_type                                                                   type,
     void*                                                                       workspace,
     size_t                                                                      workspace_size)
 {
     LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "norm::apply: rows/columns/lda must be positive");
-    return matrix_norm_impl(A, rows, columns, lda, type, workspace, workspace_size);
+    return matrix_norm_impl<double, linalg_backend::native>(
+        A, rows, columns, lda, type, workspace, workspace_size);
 }
 
 template <>
 size_t norm<float, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns, norm_type type)
 {
-    return matrix_norm_workspace_size_impl<float>(rows, columns, type);
+    return matrix_norm_workspace_size_impl<float, linalg_backend::native>(rows, columns, type);
 }
 
 template <>
 size_t norm<double, linalg_backend::native>::workspace_size(
     linalg_long rows, linalg_long columns, norm_type type)
 {
-    return matrix_norm_workspace_size_impl<double>(rows, columns, type);
+    return matrix_norm_workspace_size_impl<double, linalg_backend::native>(rows, columns, type);
 }
+
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+template <>
+float norm<float, linalg_backend::blas_lapacke>::apply(const float* A,
+    linalg_long                                                                       rows,
+    linalg_long                                                                       columns,
+    linalg_long                                                                       lda,
+    norm_type                                                                         type,
+    void*                                                                             workspace,
+    size_t                                                                            workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "norm::apply: rows/columns/lda must be positive");
+    return matrix_norm_impl<float, linalg_backend::blas_lapacke>(
+        A, rows, columns, lda, type, workspace, workspace_size);
+}
+
+template <>
+double norm<double, linalg_backend::blas_lapacke>::apply(const double* A,
+    linalg_long                                                                        rows,
+    linalg_long                                                                        columns,
+    linalg_long                                                                        lda,
+    norm_type                                                                          type,
+    void*                                                                              workspace,
+    size_t                                                                             workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "norm::apply: rows/columns/lda must be positive");
+    return matrix_norm_impl<double, linalg_backend::blas_lapacke>(
+        A, rows, columns, lda, type, workspace, workspace_size);
+}
+
+template <>
+size_t norm<float, linalg_backend::blas_lapacke>::workspace_size(
+    linalg_long rows, linalg_long columns, norm_type type)
+{
+    return matrix_norm_workspace_size_impl<float, linalg_backend::blas_lapacke>(rows, columns, type);
+}
+
+template <>
+size_t norm<double, linalg_backend::blas_lapacke>::workspace_size(
+    linalg_long rows, linalg_long columns, norm_type type)
+{
+    return matrix_norm_workspace_size_impl<double, linalg_backend::blas_lapacke>(rows, columns, type);
+}
+
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+#if LINALG_HAS_MKL
+
+template <>
+float norm<float, linalg_backend::mkl>::apply(const float* A,
+    linalg_long                                                          rows,
+    linalg_long                                                          columns,
+    linalg_long                                                          lda,
+    norm_type                                                            type,
+    void*                                                                workspace,
+    size_t                                                               workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "norm::apply: rows/columns/lda must be positive");
+    return matrix_norm_impl<float, linalg_backend::mkl>(
+        A, rows, columns, lda, type, workspace, workspace_size);
+}
+
+template <>
+double norm<double, linalg_backend::mkl>::apply(const double* A,
+    linalg_long                                                           rows,
+    linalg_long                                                           columns,
+    linalg_long                                                           lda,
+    norm_type                                                             type,
+    void*                                                                 workspace,
+    size_t                                                                workspace_size)
+{
+    LINALG_CHECK(A != nullptr, "norm::apply: A must not be null");
+    LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
+        "norm::apply: rows/columns/lda must be positive");
+    return matrix_norm_impl<double, linalg_backend::mkl>(
+        A, rows, columns, lda, type, workspace, workspace_size);
+}
+
+template <>
+size_t norm<float, linalg_backend::mkl>::workspace_size(
+    linalg_long rows, linalg_long columns, norm_type type)
+{
+    return matrix_norm_workspace_size_impl<float, linalg_backend::mkl>(rows, columns, type);
+}
+
+template <>
+size_t norm<double, linalg_backend::mkl>::workspace_size(
+    linalg_long rows, linalg_long columns, norm_type type)
+{
+    return matrix_norm_workspace_size_impl<double, linalg_backend::mkl>(rows, columns, type);
+}
+
+#endif  // LINALG_HAS_MKL
 
 }  // namespace linalg

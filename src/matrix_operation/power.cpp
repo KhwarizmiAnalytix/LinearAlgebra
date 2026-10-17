@@ -109,7 +109,8 @@ template <typename T> struct power_layout
     size_t         gemm_bytes;
 };
 
-template <typename T> power_layout<T> power_plan(detail::workspace_arena& arena, linalg_int n)
+template <typename T, linalg_backend Backend>
+power_layout<T> power_plan(detail::workspace_arena& arena, linalg_int n)
 {
     const size_t    nn = static_cast<size_t>(n) * static_cast<size_t>(n);
     power_layout<T> p;
@@ -119,22 +120,23 @@ template <typename T> power_layout<T> power_plan(detail::workspace_arena& arena,
     p.result       = arena.next<T>(nn);
     p.result_tmp   = arena.next<T>(nn);
     p.pivot        = arena.next<linalg_int>(static_cast<size_t>(n));
-    p.invert_bytes = linalg::inversion<T, linalg::linalg_backend::native>::workspace_size(
+    p.invert_bytes = linalg::inversion<T, Backend>::workspace_size(
         n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
     p.invert_ws  = arena.next<unsigned char>(p.invert_bytes);
-    p.gemm_bytes = linalg::multiplication<T, linalg::kMatmulActiveBackend>::workspace_size(n, n, n);
+    p.gemm_bytes = linalg::multiplication<T, Backend>::workspace_size(n, n, n);
     p.gemm_ws    = arena.next<unsigned char>(p.gemm_bytes);
     return p;
 }
 
-template <typename T> size_t matrix_power_workspace_size_impl(linalg_int n)
+template <typename T, linalg_backend Backend>
+size_t matrix_power_workspace_size_impl(linalg_int n)
 {
     detail::workspace_arena arena;
-    power_plan<T>(arena, n);
+    power_plan<T, Backend>(arena, n);
     return arena.total_size();
 }
 
-template <typename T>
+template <typename T, linalg_backend Backend>
 void matrix_power_impl(const T* A_in,
     linalg_int                  n,
     linalg_int                  lda,
@@ -144,10 +146,10 @@ void matrix_power_impl(const T* A_in,
     void*                       workspace,
     size_t                      workspace_size)
 {
-    LINALG_CHECK(workspace_size >= matrix_power_workspace_size_impl<T>(n),
-        "power: workspace_size too small");
+    const size_t needed = matrix_power_workspace_size_impl<T, Backend>(n);
+    LINALG_CHECK(workspace_size >= needed, "power: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto              bufs = power_plan<T>(arena, n);
+    const auto              bufs = power_plan<T, Backend>(arena, n);
 
     if (exponent == 0)
     {
@@ -164,7 +166,7 @@ void matrix_power_impl(const T* A_in,
     }
     if (exponent == -1)
     {
-        linalg::inversion<T, linalg::linalg_backend::native>::apply(bufs.a,
+        linalg::inversion<T, Backend>::apply(bufs.a,
             bufs.pivot,
             n,
             linalg::linear_solver_type::LU_LINEAR_SOLVER,
@@ -177,7 +179,7 @@ void matrix_power_impl(const T* A_in,
     T* a = bufs.a;
     if (exponent < 0)
     {
-        linalg::inversion<T, linalg::linalg_backend::native>::apply(a,
+        linalg::inversion<T, Backend>::apply(a,
             bufs.pivot,
             n,
             linalg::linear_solver_type::LU_LINEAR_SOLVER,
@@ -208,7 +210,7 @@ void matrix_power_impl(const T* A_in,
         else
         {
             T* z_next = (z == bufs.z) ? bufs.z_tmp : bufs.z;
-            linalg::multiplication<T, linalg::kMatmulActiveBackend>::apply(
+            linalg::multiplication<T, Backend>::apply(
                 false, false, n, n, n, z, n, z, n, z_next, n, bufs.gemm_ws, bufs.gemm_bytes);
             z = z_next;
         }
@@ -224,7 +226,7 @@ void matrix_power_impl(const T* A_in,
             else
             {
                 T* r_next = (r == bufs.result) ? bufs.result_tmp : bufs.result;
-                linalg::multiplication<T, linalg::kMatmulActiveBackend>::apply(
+                linalg::multiplication<T, Backend>::apply(
                     false, false, n, n, n, r, n, z, n, r_next, n, bufs.gemm_ws, bufs.gemm_bytes);
                 r = r_next;
             }
@@ -248,7 +250,8 @@ void power<float, linalg_backend::native>::apply(const float* A,
 {
     LINALG_CHECK(A != nullptr && result != nullptr, "power::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "power::apply: n/lda/ldc must be positive");
-    matrix_power_impl(A, n, lda, exponent, result, ldc, workspace, workspace_size);
+    matrix_power_impl<float, linalg_backend::native>(
+        A, n, lda, exponent, result, ldc, workspace, workspace_size);
 }
 
 template <>
@@ -263,17 +266,110 @@ void power<double, linalg_backend::native>::apply(const double* A,
 {
     LINALG_CHECK(A != nullptr && result != nullptr, "power::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "power::apply: n/lda/ldc must be positive");
-    matrix_power_impl(A, n, lda, exponent, result, ldc, workspace, workspace_size);
+    matrix_power_impl<double, linalg_backend::native>(
+        A, n, lda, exponent, result, ldc, workspace, workspace_size);
 }
 
 template <> size_t power<float, linalg_backend::native>::workspace_size(linalg_int n)
 {
-    return matrix_power_workspace_size_impl<float>(n);
+    return matrix_power_workspace_size_impl<float, linalg_backend::native>(n);
 }
 
 template <> size_t power<double, linalg_backend::native>::workspace_size(linalg_int n)
 {
-    return matrix_power_workspace_size_impl<double>(n);
+    return matrix_power_workspace_size_impl<double, linalg_backend::native>(n);
 }
+
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+template <>
+void power<float, linalg_backend::blas_lapacke>::apply(const float* A,
+    linalg_int                                                                n,
+    linalg_int                                                                lda,
+    linalg_int                                                                exponent,
+    float*                                                                    result,
+    linalg_int                                                                ldc,
+    void*                                                                     workspace,
+    size_t                                                                    workspace_size)
+{
+    LINALG_CHECK(A != nullptr && result != nullptr, "power::apply: A and result must not be null");
+    LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "power::apply: n/lda/ldc must be positive");
+    matrix_power_impl<float, linalg_backend::blas_lapacke>(
+        A, n, lda, exponent, result, ldc, workspace, workspace_size);
+}
+
+template <>
+void power<double, linalg_backend::blas_lapacke>::apply(const double* A,
+    linalg_int                                                                 n,
+    linalg_int                                                                 lda,
+    linalg_int                                                                 exponent,
+    double*                                                                    result,
+    linalg_int                                                                 ldc,
+    void*                                                                      workspace,
+    size_t                                                                     workspace_size)
+{
+    LINALG_CHECK(A != nullptr && result != nullptr, "power::apply: A and result must not be null");
+    LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "power::apply: n/lda/ldc must be positive");
+    matrix_power_impl<double, linalg_backend::blas_lapacke>(
+        A, n, lda, exponent, result, ldc, workspace, workspace_size);
+}
+
+template <> size_t power<float, linalg_backend::blas_lapacke>::workspace_size(linalg_int n)
+{
+    return matrix_power_workspace_size_impl<float, linalg_backend::blas_lapacke>(n);
+}
+
+template <> size_t power<double, linalg_backend::blas_lapacke>::workspace_size(linalg_int n)
+{
+    return matrix_power_workspace_size_impl<double, linalg_backend::blas_lapacke>(n);
+}
+
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+#if LINALG_HAS_MKL
+
+template <>
+void power<float, linalg_backend::mkl>::apply(const float* A,
+    linalg_int                                              n,
+    linalg_int                                              lda,
+    linalg_int                                              exponent,
+    float*                                                  result,
+    linalg_int                                              ldc,
+    void*                                                   workspace,
+    size_t                                                  workspace_size)
+{
+    LINALG_CHECK(A != nullptr && result != nullptr, "power::apply: A and result must not be null");
+    LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "power::apply: n/lda/ldc must be positive");
+    matrix_power_impl<float, linalg_backend::mkl>(
+        A, n, lda, exponent, result, ldc, workspace, workspace_size);
+}
+
+template <>
+void power<double, linalg_backend::mkl>::apply(const double* A,
+    linalg_int                                               n,
+    linalg_int                                               lda,
+    linalg_int                                               exponent,
+    double*                                                  result,
+    linalg_int                                               ldc,
+    void*                                                    workspace,
+    size_t                                                   workspace_size)
+{
+    LINALG_CHECK(A != nullptr && result != nullptr, "power::apply: A and result must not be null");
+    LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "power::apply: n/lda/ldc must be positive");
+    matrix_power_impl<double, linalg_backend::mkl>(
+        A, n, lda, exponent, result, ldc, workspace, workspace_size);
+}
+
+template <> size_t power<float, linalg_backend::mkl>::workspace_size(linalg_int n)
+{
+    return matrix_power_workspace_size_impl<float, linalg_backend::mkl>(n);
+}
+
+template <> size_t power<double, linalg_backend::mkl>::workspace_size(linalg_int n)
+{
+    return matrix_power_workspace_size_impl<double, linalg_backend::mkl>(n);
+}
+
+#endif  // LINALG_HAS_MKL
 
 }  // namespace linalg

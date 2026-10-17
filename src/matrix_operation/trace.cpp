@@ -31,4 +31,40 @@ double trace<double, linalg_backend::native>::apply(
     return matrix_trace_impl(A, n, lda);
 }
 
+#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+template <>
+float trace<float, linalg_backend::blas_lapacke>::apply(
+    const float* A, linalg_int n, linalg_int lda)
+{
+    return matrix_trace_impl(A, n, lda);
+}
+
+template <>
+double trace<double, linalg_backend::blas_lapacke>::apply(
+    const double* A, linalg_int n, linalg_int lda)
+{
+    return matrix_trace_impl(A, n, lda);
+}
+
+#endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+
+#if LINALG_HAS_MKL
+
+template <>
+float trace<float, linalg_backend::mkl>::apply(
+    const float* A, linalg_int n, linalg_int lda)
+{
+    return matrix_trace_impl(A, n, lda);
+}
+
+template <>
+double trace<double, linalg_backend::mkl>::apply(
+    const double* A, linalg_int n, linalg_int lda)
+{
+    return matrix_trace_impl(A, n, lda);
+}
+
+#endif  // LINALG_HAS_MKL
+
 }  // namespace linalg
