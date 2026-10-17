@@ -94,57 +94,77 @@ void BM_QRDecomposition(benchmark::State& state)
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
     ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
     ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
     ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
     ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
     ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
     ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
     ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
     ->Threads(1);
 #endif
 
 #if LINALG_HAS_MKL
 BENCHMARK_TEMPLATE(BM_QRDecomposition, float, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif

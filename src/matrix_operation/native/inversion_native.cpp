@@ -1,8 +1,8 @@
 #include "include/matrix_operation/inversion.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 #include <algorithm>
 
@@ -214,11 +214,11 @@ void matrix_invert_scalar_impl(T* m,
 
 template <>
 void inversion<float, linalg_backend::native>::apply(float* m,
-    linalg_int*                                                           pivot,
-    linalg_int                                                            lda,
-    linear_solver_type                                                    type,
-    void*                                                                 workspace,
-    size_t                                                                workspace_size)
+    linalg_int*                                             pivot,
+    linalg_int                                              lda,
+    linear_solver_type                                      type,
+    void*                                                   workspace,
+    size_t                                                  workspace_size)
 {
     check_invert_inputs(m, lda);
     matrix_invert_scalar_impl(m, pivot, lda, type, workspace, workspace_size);
@@ -226,11 +226,11 @@ void inversion<float, linalg_backend::native>::apply(float* m,
 
 template <>
 void inversion<double, linalg_backend::native>::apply(double* m,
-    linalg_int*                                                             pivot,
-    linalg_int                                                              lda,
-    linear_solver_type                                                      type,
-    void*                                                                   workspace,
-    size_t                                                                  workspace_size)
+    linalg_int*                                               pivot,
+    linalg_int                                                lda,
+    linear_solver_type                                        type,
+    void*                                                     workspace,
+    size_t                                                    workspace_size)
 {
     check_invert_inputs(m, lda);
     matrix_invert_scalar_impl(m, pivot, lda, type, workspace, workspace_size);

@@ -79,7 +79,8 @@ void BM_CholeskyDecomposition(benchmark::State& state)
         state.ResumeTiming();
 
         bool ok = linalg::cholesky_decomposition<T, Backend>::apply(work.data(),
-            static_cast<linalg_int>(n), linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
+            static_cast<linalg_int>(n),
+            linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
         benchmark::DoNotOptimize(ok);
     }
 
@@ -87,62 +88,87 @@ void BM_CholeskyDecomposition(benchmark::State& state)
     state.SetComplexityN(static_cast<std::int64_t>(n));
 
     // Cholesky factorization of an n x n SPD matrix costs ~n^3/3 flops.
-    const double flops_per_iter = static_cast<double>(n) * static_cast<double>(n) *
-        static_cast<double>(n) / 3.0;
-    state.counters["FLOPS"] = benchmark::Counter(
-        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
+    const double flops_per_iter =
+        static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n) / 3.0;
+    state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
 }
 
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif
 
 #if LINALG_HAS_MKL
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif

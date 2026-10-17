@@ -57,7 +57,7 @@ void BM_Multiplication(benchmark::State& state)
     const std::vector<T> b = make_random_matrix<T>(n, /*seed=*/43);
     std::vector<T>       c(n * n);
 
-    const auto                 ws_bytes = linalg::multiplication<T, Backend>::workspace_size(
+    const auto ws_bytes = linalg::multiplication<T, Backend>::workspace_size(
         static_cast<linalg_int>(n), static_cast<linalg_int>(n), static_cast<linalg_int>(n));
     std::vector<unsigned char> workspace(ws_bytes);
 
@@ -85,60 +85,85 @@ void BM_Multiplication(benchmark::State& state)
     // n x n * n x n matrix multiplication costs 2*n^3 flops (multiply-add pairs).
     const double flops_per_iter =
         2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n);
-    state.counters["FLOPS"] = benchmark::Counter(
-        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
+    state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
 }
 
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_Multiplication, float, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_Multiplication, double, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 BENCHMARK_TEMPLATE(BM_Multiplication, float, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_Multiplication, double, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif
 
 #if LINALG_HAS_MKL
 BENCHMARK_TEMPLATE(BM_Multiplication, float, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_Multiplication, double, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif

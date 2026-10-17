@@ -2,14 +2,15 @@
 #include <cmath>
 #include <cstdlib>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
 #include "include/matrix_operation/eigen.h"
-#include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/inversion.h"
+#include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/qr_decomposition.h"
+#include "test_backend.h"
 #include "gtest/gtest.h"
 
 namespace
@@ -57,7 +58,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_symmetric_
     }
     dense_matrix<value_t> Q(n, n);
     dense_matrix<value_t> R(n, n);
-    const auto qr_ws_size = linalg::qr_decomposition<value_t, Backend>::workspace_size(
+    const auto            qr_ws_size = linalg::qr_decomposition<value_t, Backend>::workspace_size(
         static_cast<linalg_long>(n), static_cast<linalg_long>(n));
     std::vector<unsigned char> qr_ws(qr_ws_size);
     linalg::qr_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(n),
@@ -94,14 +95,14 @@ template <typename value_t, linalg::linalg_backend Backend> void test_symmetric_
     std::vector<value_t>  evals(n);
     dense_matrix<value_t> evecs(n, n);
     auto       eigen_ws = symmetric_eigen_workspace<value_t, Backend>(static_cast<linalg_int>(n));
-    const bool ok = linalg::symmetric_eigen_backend<value_t, Backend>::apply(A.begin(),
-            static_cast<linalg_int>(n),
-            static_cast<linalg_int>(n),
-            evals.data(),
-            evecs.begin(),
-            static_cast<linalg_int>(n),
-            eigen_ws.data(),
-            eigen_ws.size());
+    const bool ok       = linalg::symmetric_eigen_backend<value_t, Backend>::apply(A.begin(),
+        static_cast<linalg_int>(n),
+        static_cast<linalg_int>(n),
+        evals.data(),
+        evecs.begin(),
+        static_cast<linalg_int>(n),
+        eigen_ws.data(),
+        eigen_ws.size());
     EXPECT_TRUE(ok);
 
     for (std::size_t i = 0; i < n; i++)
@@ -266,7 +267,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_general_ei
     value_t               ei[3];
     dense_matrix<value_t> evecs(3, 3);
     auto                  eigen_ws = general_eigen_workspace<value_t, Backend>(3, true);
-    const bool ok = linalg::general_eigen_backend<value_t, Backend>::apply(
+    const bool            ok       = linalg::general_eigen_backend<value_t, Backend>::apply(
         A.begin(), 3, 3, er, ei, evecs.begin(), 3, eigen_ws.data(), eigen_ws.size());
     EXPECT_TRUE(ok);
 
@@ -286,44 +287,221 @@ template <typename value_t, linalg::linalg_backend Backend> void test_general_ei
         EXPECT_LT(max_error, static_cast<value_t>(EigenTolerance<value_t>::tolerance));
     }
 }
+
+// Results from one backend, kept so later backends can be compared to the
+// first (native) one.
+template <typename value_t> struct eigen_result
+{
+    std::vector<value_t>  evals;
+    std::vector<value_t>  ei;
+    dense_matrix<value_t> evecs;
+    explicit eigen_result(std::size_t n) : evals(n), ei(n, value_t(0)), evecs(n, n) {}
+};
+
+template <typename value_t> dense_matrix<value_t> cross_backend_symmetric_input(std::size_t n)
+{
+    dense_matrix<value_t> A(n, n);
+    for (std::size_t i = 0; i < n; i++)
+    {
+        for (std::size_t j = 0; j <= i; j++)
+        {
+            // Deterministic, well-separated spectrum (no rand(): every backend sees identical
+            // input).
+            const value_t v = static_cast<value_t>(std::sin(1.0 + 3.0 * i + 7.0 * j));
+            A(i, j)         = v;
+            A(j, i)         = v;
+        }
+        A(i, i) += static_cast<value_t>(i);
+    }
+    return A;
+}
+
+template <typename value_t> dense_matrix<value_t> cross_backend_general_input(std::size_t n)
+{
+    dense_matrix<value_t> A(n, n);
+    for (std::size_t i = 0; i < n; i++)
+    {
+        for (std::size_t j = 0; j < n; j++)
+        {
+            A(i, j) = static_cast<value_t>(std::sin(1.0 + 3.0 * i + 7.0 * j));
+        }
+    }
+    return A;
+}
+
+template <typename value_t, linalg::linalg_backend Backend>
+eigen_result<value_t> run_symmetric(const dense_matrix<value_t>& input, std::size_t n)
+{
+    dense_matrix<value_t> A(n, n);
+    std::copy(input.begin(), input.begin() + n * n, A.begin());
+    eigen_result<value_t> r(n);
+    auto       ws = symmetric_eigen_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    const bool ok = linalg::symmetric_eigen_backend<value_t, Backend>::apply(A.begin(),
+        static_cast<linalg_int>(n),
+        static_cast<linalg_int>(n),
+        r.evals.data(),
+        r.evecs.begin(),
+        static_cast<linalg_int>(n),
+        ws.data(),
+        ws.size());
+    EXPECT_TRUE(ok);
+    return r;
+}
+
+template <typename value_t, linalg::linalg_backend Backend>
+eigen_result<value_t> run_general(const dense_matrix<value_t>& input, std::size_t n)
+{
+    dense_matrix<value_t> A(n, n);
+    std::copy(input.begin(), input.begin() + n * n, A.begin());
+    eigen_result<value_t> r(n);
+    auto       ws = general_eigen_workspace<value_t, Backend>(static_cast<linalg_int>(n), false);
+    const bool ok = linalg::general_eigen_backend<value_t, Backend>::apply(A.begin(),
+        static_cast<linalg_int>(n),
+        static_cast<linalg_int>(n),
+        r.evals.data(),
+        r.ei.data(),
+        nullptr,
+        static_cast<linalg_int>(n),
+        ws.data(),
+        ws.size());
+    EXPECT_TRUE(ok) << "general eigen failed, n=" << n << " sizeof(T)=" << sizeof(value_t)
+                    << " backend=" << static_cast<int>(Backend);
+    return r;
+}
+
+// Sort eigenvalues (real, imag) lexicographically with imag rounded so that
+// conjugate pairs order deterministically (positive imaginary part first).
+template <typename value_t>
+std::vector<std::pair<value_t, value_t>> sorted_spectrum(const eigen_result<value_t>& r)
+{
+    std::vector<std::pair<value_t, value_t>> s;
+    for (std::size_t i = 0; i < r.evals.size(); i++)
+    {
+        s.emplace_back(r.evals[i], r.ei[i]);
+    }
+    const value_t tol = static_cast<value_t>(EigenTolerance<value_t>::tolerance);
+    std::sort(s.begin(),
+        s.end(),
+        [tol](const auto& a, const auto& b)
+        {
+            if (std::fabs(a.first - b.first) > tol)
+            {
+                return a.first < b.first;
+            }
+            return a.second > b.second;
+        });
+    return s;
+}
+
+template <typename value_t>
+void compare_spectra(
+    const eigen_result<value_t>& ref, const eigen_result<value_t>& got, const char* name)
+{
+    const auto a = sorted_spectrum(ref);
+    const auto b = sorted_spectrum(got);
+    ASSERT_EQ(a.size(), b.size());
+    for (std::size_t i = 0; i < a.size(); i++)
+    {
+        EXPECT_NEAR(static_cast<double>(a[i].first),
+            static_cast<double>(b[i].first),
+            EigenTolerance<value_t>::tolerance)
+            << name << " eigenvalue real part " << i;
+        EXPECT_NEAR(static_cast<double>(a[i].second),
+            static_cast<double>(b[i].second),
+            EigenTolerance<value_t>::tolerance)
+            << name << " eigenvalue imag part " << i;
+    }
+}
+
+// Eigenvectors are only defined up to sign, so compare |v_ref . v_got| == 1
+// per column (columns are unit norm and the spectrum is simple).
+template <typename value_t>
+void compare_symmetric_vectors(const eigen_result<value_t>& ref,
+    const eigen_result<value_t>&                            got,
+    std::size_t                                             n,
+    const char*                                             name)
+{
+    for (std::size_t c = 0; c < n; c++)
+    {
+        double dot = 0;
+        for (std::size_t r = 0; r < n; r++)
+        {
+            dot += static_cast<double>(ref.evecs(r, c)) * static_cast<double>(got.evecs(r, c));
+        }
+        EXPECT_NEAR(std::fabs(dot), 1.0, EigenTolerance<value_t>::tolerance)
+            << name << " eigenvector column " << c;
+    }
+}
+
+template <typename value_t> void test_cross_backend_agreement(std::size_t n)
+{
+    const auto sym = cross_backend_symmetric_input<value_t>(n);
+    const auto gen = cross_backend_general_input<value_t>(n);
+
+    const auto sym_ref = run_symmetric<value_t, linalg::linalg_backend::native>(sym, n);
+    const auto gen_ref = run_general<value_t, linalg::linalg_backend::native>(gen, n);
+
+    linalg_test::for_each_available_backend(
+        [&](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            if (Backend == linalg::linalg_backend::native)
+            {
+                return;
+            }
+            const char* name = (Backend == linalg::linalg_backend::mkl) ? "mkl" : "blas_lapacke";
+            const auto  s    = run_symmetric<value_t, Backend>(sym, n);
+            compare_spectra(sym_ref, s, name);
+            compare_symmetric_vectors(sym_ref, s, n, name);
+            compare_spectra(gen_ref, run_general<value_t, Backend>(gen, n), name);
+        });
+}
 }  // namespace
 
 TEST(Math, SymmetricEigenvalueDecomposition)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
-        test_symmetric_eigen<float, Backend>(5);
-        test_symmetric_eigen<double, Backend>(5);
-        test_symmetric_eigen<double, Backend>(8);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            test_symmetric_eigen<float, Backend>(5);
+            test_symmetric_eigen<double, Backend>(5);
+            test_symmetric_eigen<double, Backend>(8);
+        });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionRealSpectrum)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
-        test_general_eigen_real_spectrum<float, Backend>(4);
-        test_general_eigen_real_spectrum<double, Backend>(4);
-        test_general_eigen_real_spectrum<double, Backend>(6);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            test_general_eigen_real_spectrum<float, Backend>(4);
+            test_general_eigen_real_spectrum<double, Backend>(4);
+            test_general_eigen_real_spectrum<double, Backend>(6);
+        });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionComplexPair)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
-        test_general_eigen_complex_pair<float, Backend>();
-        test_general_eigen_complex_pair<double, Backend>();
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            test_general_eigen_complex_pair<float, Backend>();
+            test_general_eigen_complex_pair<double, Backend>();
+        });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionEigenvectors)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
-        test_general_eigen_eigenvectors<float, Backend>();
-        test_general_eigen_eigenvectors<double, Backend>();
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            test_general_eigen_eigenvectors<float, Backend>();
+            test_general_eigen_eigenvectors<double, Backend>();
+        });
 }
 
 TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
@@ -334,26 +512,36 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     A(1, 0) = 1;
     A(1, 1) = 0;
 
-    linalg_test::for_each_available_backend([&](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+    linalg_test::for_each_available_backend(
+        [&](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
 
-        double er[2];
-        double ei[2];
-        double evecs[4];
-        auto   eigen_ws = general_eigen_workspace<double, Backend>(2, true);
-        // mkl's and blas_lapacke's LAPACKE *geev call packs complex
-        // eigenvectors natively (see eigen.h); only the portable scalar
-        // fallback, which has no complex arithmetic, throws for this case.
-        if (Backend == linalg::linalg_backend::native)
-        {
-            EXPECT_THROW((linalg::general_eigen_backend<double, Backend>::apply(
-                             A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())),
-                std::exception);
-        }
-        else
-        {
-            EXPECT_NO_THROW((linalg::general_eigen_backend<double, Backend>::apply(
-                A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
-        }
-    });
+            double er[2];
+            double ei[2];
+            double evecs[4];
+            auto   eigen_ws = general_eigen_workspace<double, Backend>(2, true);
+            // mkl's and blas_lapacke's LAPACKE *geev call packs complex
+            // eigenvectors natively (see eigen.h); only the portable scalar
+            // fallback, which has no complex arithmetic, throws for this case.
+            if (Backend == linalg::linalg_backend::native)
+            {
+                EXPECT_THROW(
+                    (linalg::general_eigen_backend<double, Backend>::apply(
+                        A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())),
+                    std::exception);
+            }
+            else
+            {
+                EXPECT_NO_THROW((linalg::general_eigen_backend<double, Backend>::apply(
+                    A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
+            }
+        });
+}
+
+TEST(Math, EigenBackendsAgree)
+{
+    test_cross_backend_agreement<float>(5);
+    test_cross_backend_agreement<double>(5);
+    test_cross_backend_agreement<double>(8);
 }

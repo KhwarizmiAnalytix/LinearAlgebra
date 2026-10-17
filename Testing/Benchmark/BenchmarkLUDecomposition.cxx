@@ -61,12 +61,13 @@ template <typename T> std::vector<T> make_well_conditioned_matrix(std::size_t n,
 template <typename T, linalg::linalg_backend Backend>
 void BM_LUDecomposition(benchmark::State& state)
 {
-    const std::size_t    n = static_cast<std::size_t>(state.range(0));
-    const std::vector<T> m = make_well_conditioned_matrix<T>(n, /*seed=*/42);
-    std::vector<T>       work(n * n);
+    const std::size_t       n = static_cast<std::size_t>(state.range(0));
+    const std::vector<T>    m = make_well_conditioned_matrix<T>(n, /*seed=*/42);
+    std::vector<T>          work(n * n);
     std::vector<linalg_int> pivot(n);
 
-    const size_t ws_size = linalg::lu_decomposition<T, Backend>::workspace_size(static_cast<linalg_int>(n));
+    const size_t ws_size =
+        linalg::lu_decomposition<T, Backend>::workspace_size(static_cast<linalg_int>(n));
     std::vector<std::byte> workspace(ws_size);
 
     for (auto _ : state)
@@ -75,8 +76,8 @@ void BM_LUDecomposition(benchmark::State& state)
         work = m;
         state.ResumeTiming();
 
-        bool ok = linalg::lu_decomposition<T, Backend>::apply(work.data(),
-            static_cast<linalg_int>(n), pivot.data(), workspace.data(), ws_size);
+        bool ok = linalg::lu_decomposition<T, Backend>::apply(
+            work.data(), static_cast<linalg_int>(n), pivot.data(), workspace.data(), ws_size);
         benchmark::DoNotOptimize(ok);
     }
 
@@ -84,62 +85,87 @@ void BM_LUDecomposition(benchmark::State& state)
     state.SetComplexityN(static_cast<std::int64_t>(n));
 
     // LU factorization of an n x n matrix costs ~2n^3/3 flops.
-    const double flops_per_iter = 2.0 * static_cast<double>(n) * static_cast<double>(n) *
-        static_cast<double>(n) / 3.0;
-    state.counters["FLOPS"] = benchmark::Counter(
-        flops_per_iter, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
+    const double flops_per_iter =
+        2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n) / 3.0;
+    state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
 }
 
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_LUDecomposition, float, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_LUDecomposition, double, linalg::linalg_backend::native)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 BENCHMARK_TEMPLATE(BM_LUDecomposition, float, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_LUDecomposition, double, linalg::linalg_backend::blas_lapacke)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif
 
 #if LINALG_HAS_MKL
 BENCHMARK_TEMPLATE(BM_LUDecomposition, float, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 
 BENCHMARK_TEMPLATE(BM_LUDecomposition, double, linalg::linalg_backend::mkl)
+    ->Arg(16)
+    ->Arg(32)
     ->Arg(64)
     ->Arg(128)
-    ->Arg(256)
-    ->Arg(512)
     ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond);
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
 #endif

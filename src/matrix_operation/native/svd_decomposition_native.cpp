@@ -506,16 +506,16 @@ inline void svd(  // NOLINT
 
 template <>
 void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
-    linalg_long                                                    columns,
-    float*                                                         A,
-    linalg_long                                                    lda,
-    float*                                                         S,
-    float*                                                         U,
-    linalg_long                                                    ldu,
-    float*                                                         VT,
-    linalg_long                                                    ldv,
-    void*                                                          workspace,
-    size_t                                                         workspace_size)
+    linalg_long                                                          columns,
+    float*                                                               A,
+    linalg_long                                                          lda,
+    float*                                                               S,
+    float*                                                               U,
+    linalg_long                                                          ldu,
+    float*                                                               VT,
+    linalg_long                                                          ldv,
+    void*                                                                workspace,
+    size_t                                                               workspace_size)
 {
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);
@@ -523,16 +523,16 @@ void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
 
 template <>
 void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
-    linalg_long                                                     columns,
-    double*                                                         A,
-    linalg_long                                                     lda,
-    double*                                                         S,
-    double*                                                         U,
-    linalg_long                                                     ldu,
-    double*                                                         VT,
-    linalg_long                                                     ldv,
-    void*                                                           workspace,
-    size_t                                                          workspace_size)
+    linalg_long                                                           columns,
+    double*                                                               A,
+    linalg_long                                                           lda,
+    double*                                                               S,
+    double*                                                               U,
+    linalg_long                                                           ldu,
+    double*                                                               VT,
+    linalg_long                                                           ldv,
+    void*                                                                 workspace,
+    size_t                                                                workspace_size)
 {
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     svd(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size);

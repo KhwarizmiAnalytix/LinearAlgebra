@@ -46,11 +46,10 @@ namespace
 // built on (see qr_householder's comment below). Mirrors cholesky_decomposition.cpp's
 // cholesky_dot: same linalg::packet<T> (src/common/packet.h) SIMD abstraction, same
 // scalar-remainder tail, just an axpy instead of a dot product.
-template <typename T>
-inline void qr_axpy(T* y, const T* x, T alpha, linalg_long len)
+template <typename T> inline void qr_axpy(T* y, const T* x, T alpha, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                     = packet<T>;
     constexpr linalg_long width = P::size;
 
     typename P::packet_t pa;
@@ -303,15 +302,15 @@ void qr_householder(linalg_long rows,
 
 template <>
 void qr_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
-    linalg_long                                                   columns,
-    const float*                                                  A,
-    linalg_long                                                   lda,
-    float*                                                        Q,
-    linalg_long                                                   ldq,
-    float*                                                        R,
-    linalg_long                                                   ldr,
-    void*                                                         workspace,
-    size_t                                                        workspace_size)
+    linalg_long                                                         columns,
+    const float*                                                        A,
+    linalg_long                                                         lda,
+    float*                                                              Q,
+    linalg_long                                                         ldq,
+    float*                                                              R,
+    linalg_long                                                         ldr,
+    void*                                                               workspace,
+    size_t                                                              workspace_size)
 {
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_householder(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);
@@ -319,15 +318,15 @@ void qr_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
 
 template <>
 void qr_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
-    linalg_long                                                    columns,
-    const double*                                                  A,
-    linalg_long                                                    lda,
-    double*                                                        Q,
-    linalg_long                                                    ldq,
-    double*                                                        R,
-    linalg_long                                                    ldr,
-    void*                                                          workspace,
-    size_t                                                         workspace_size)
+    linalg_long                                                          columns,
+    const double*                                                        A,
+    linalg_long                                                          lda,
+    double*                                                              Q,
+    linalg_long                                                          ldq,
+    double*                                                              R,
+    linalg_long                                                          ldr,
+    void*                                                                workspace,
+    size_t                                                               workspace_size)
 {
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
     qr_householder(rows, columns, A, lda, Q, ldq, R, ldr, workspace, workspace_size);

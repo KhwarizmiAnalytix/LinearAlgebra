@@ -1,5 +1,10 @@
 #include "include/matrix_operation/eigen.h"
 
+#include "include/matrix_operation/linear_solver.h"
+#include "include/matrix_operation/lu_decomposition.h"
+#include "include/matrix_operation/multiplication.h"
+#include "include/matrix_operation/qr_decomposition.h"
+
 #include "include/common/linalg_checks.h"
 
 #include "include/common/workspace_arena.h"
@@ -86,23 +91,43 @@ template <typename T> size_t jacobi_workspace_size(linalg_int n)
     return arena.total_size();
 }
 
+// The shifted-QR iteration runs GEMM/QR on the shrinking leading m x m block,
+// and the native kernels' blocking makes their workspace need non-monotone in
+// m, so size for the maximum over every m <= n rather than for m == n.
+template <typename T> size_t general_scalar_mult_ws_size(linalg_int n)
+{
+    size_t sz = 0;
+    for (linalg_int m = 1; m <= n; ++m)
+    {
+        sz = std::max(sz, multiplication<T, linalg_backend::native>::workspace_size(m, m, m));
+    }
+    return sz;
+}
+
+template <typename T> size_t general_scalar_qr_ws_size(linalg_int n)
+{
+    size_t sz = 0;
+    for (linalg_int m = 1; m <= n; ++m)
+    {
+        sz = std::max(sz, qr_decomposition<T, linalg_backend::native>::workspace_size(m, m));
+    }
+    return sz;
+}
+
 template <typename T> struct general_scalar_layout
 {
-    T* H;
-    T* Hm;
-    T* M;
-    T* Q;
-    T* R;
-    T* tmp;
-    T* Rwork;
-    T* Qwork;
-    T* householder;
-    T* inv_M;
-    T* x;
-    T* y;
-    T* LU;
-    T* b;
-    T* evec;
+    T*             H;
+    T*             Hm;
+    T*             M;
+    T*             Q;
+    T*             R;
+    T*             tmp;
+    unsigned char* qr_ws;
+    unsigned char* mult_ws;
+    T*             inv_M;
+    T*             x;
+    linalg_int*    pivot;
+    T*             evec;
 };
 
 template <typename T>
@@ -112,22 +137,19 @@ general_scalar_layout<T> general_scalar_plan(
     const size_t             nn = static_cast<size_t>(n) * static_cast<size_t>(n);
     const size_t             ns = static_cast<size_t>(n);
     general_scalar_layout<T> p{};
-    p.H           = arena.next<T>(nn);
-    p.Hm          = arena.next<T>(nn);
-    p.M           = arena.next<T>(nn);
-    p.Q           = arena.next<T>(nn);
-    p.R           = arena.next<T>(nn);
-    p.tmp         = arena.next<T>(nn);
-    p.Rwork       = arena.next<T>(nn);
-    p.Qwork       = arena.next<T>(nn);
-    p.householder = arena.next<T>(ns);
+    p.H       = arena.next<T>(nn);
+    p.Hm      = arena.next<T>(nn);
+    p.M       = arena.next<T>(nn);
+    p.Q       = arena.next<T>(nn);
+    p.R       = arena.next<T>(nn);
+    p.tmp     = arena.next<T>(nn);
+    p.qr_ws   = arena.next<unsigned char>(general_scalar_qr_ws_size<T>(n));
+    p.mult_ws = arena.next<unsigned char>(general_scalar_mult_ws_size<T>(n));
     if (compute_eigenvectors)
     {
         p.inv_M = arena.next<T>(nn);
         p.x     = arena.next<T>(ns);
-        p.y     = arena.next<T>(ns);
-        p.LU    = arena.next<T>(nn);
-        p.b     = arena.next<T>(ns);
+        p.pivot = arena.next<linalg_int>(ns);
         p.evec  = arena.next<T>(ns);
     }
     return p;
@@ -281,98 +303,6 @@ bool jacobi_eigen(const T* A,
     return converged;
 }
 
-// Square (full) Householder QR: A (n x n) = Q * R, Q orthogonal, R upper
-// triangular. Self-contained copy of the same algorithm as
-// qr_decomposition.cpp's scalar fallback (kept private to this translation
-// unit, matching this repo's convention of each op's .cpp being
-// self-contained rather than reaching across files into another op's
-// anonymous-namespace helpers) — used internally by the general eigenvalue
-// QR algorithm below.
-template <typename T> void square_qr(linalg_int n, const T* A, T* Q, T* R, T* Rwork, T* Qwork, T* v)
-{
-    std::copy_n(A, static_cast<std::size_t>(n * n), Rwork);
-
-    std::fill_n(Qwork, static_cast<std::size_t>(n) * static_cast<std::size_t>(n), T(0));
-    for (linalg_int i = 0; i < n; ++i)
-    {
-        Qwork[i * n + i] = T(1);
-    }
-
-    for (linalg_int i = 0; i < n; ++i)
-    {
-        T norm = T(0);
-        for (linalg_int r = i; r < n; ++r)
-        {
-            const T x = Rwork[r * n + i];
-            norm += x * x;
-        }
-        norm = std::sqrt(norm);
-        if (norm == T(0))
-        {
-            continue;
-        }
-
-        const T diag  = Rwork[i * n + i];
-        const T alpha = (diag >= T(0)) ? -norm : norm;
-
-        for (linalg_int r = i; r < n; ++r)
-        {
-            v[static_cast<std::size_t>(r)] = Rwork[r * n + i];
-        }
-        v[static_cast<std::size_t>(i)] -= alpha;
-
-        T vnorm = T(0);
-        for (linalg_int r = i; r < n; ++r)
-        {
-            vnorm += v[static_cast<std::size_t>(r)] * v[static_cast<std::size_t>(r)];
-        }
-        vnorm = std::sqrt(vnorm);
-        if (vnorm == T(0))
-        {
-            continue;
-        }
-        for (linalg_int r = i; r < n; ++r)
-        {
-            v[static_cast<std::size_t>(r)] /= vnorm;
-        }
-
-        for (linalg_int j = i; j < n; ++j)
-        {
-            T dot = T(0);
-            for (linalg_int r = i; r < n; ++r)
-            {
-                dot += v[static_cast<std::size_t>(r)] * Rwork[r * n + j];
-            }
-            for (linalg_int r = i; r < n; ++r)
-            {
-                Rwork[r * n + j] -= T(2) * v[static_cast<std::size_t>(r)] * dot;
-            }
-        }
-
-        for (linalg_int r = 0; r < n; ++r)
-        {
-            T dot = T(0);
-            for (linalg_int c = i; c < n; ++c)
-            {
-                dot += Qwork[r * n + c] * v[static_cast<std::size_t>(c)];
-            }
-            for (linalg_int c = i; c < n; ++c)
-            {
-                Qwork[r * n + c] -= T(2) * dot * v[static_cast<std::size_t>(c)];
-            }
-        }
-    }
-
-    std::copy_n(Qwork, static_cast<std::size_t>(n * n), Q);
-    for (linalg_int r = 0; r < n; ++r)
-    {
-        for (linalg_int c = 0; c < n; ++c)
-        {
-            R[r * n + c] = (c >= r) ? Rwork[r * n + c] : T(0);
-        }
-    }
-}
-
 // Real eigenvalues (and, via a real Schur 2x2 diagonal block, a
 // complex-conjugate pair's real/imaginary parts) of a general real square
 // matrix, via the explicit double-shift QR algorithm (Golub & Van Loan,
@@ -397,9 +327,8 @@ bool general_eigenvalues_qr(linalg_int n,
     T*                                 Q,
     T*                                 R,
     T*                                 tmp,
-    T*                                 Rwork,
-    T*                                 Qwork,
-    T*                                 householder)
+    unsigned char*                     qr_ws,
+    unsigned char*                     mult_ws)
 {
     for (linalg_int i = 0; i < n; ++i)
     {
@@ -409,10 +338,12 @@ bool general_eigenvalues_qr(linalg_int n,
         }
     }
 
-    const T    eps            = std::numeric_limits<T>::epsilon();
-    const int  max_total_iter = 30 * n * n + 100;
-    int        iter           = 0;
-    linalg_int m              = n;
+    const T      eps            = std::numeric_limits<T>::epsilon();
+    const int    max_total_iter = 30 * n * n + 100;
+    int          iter           = 0;
+    linalg_int   m              = n;
+    const size_t qr_ws_size     = general_scalar_qr_ws_size<T>(n);
+    const size_t mult_ws_size   = general_scalar_mult_ws_size<T>(n);
 
     while (m > 0)
     {
@@ -426,35 +357,65 @@ bool general_eigenvalues_qr(linalg_int n,
 
         auto solve_2x2 = [&](T a, T b, T c, T d, linalg_int at)
         {
-            const T tr   = a + d;
-            const T det  = a * d - b * c;
-            const T disc = tr * tr - T(4) * det;
+            // Half-difference form: tr^2 - 4*det cancels catastrophically for a
+            // near-degenerate real pair (float roundoff turns it into a spurious
+            // complex pair), while ((a-d)/2)^2 + b*c does not.
+            const T mid  = (a + d) / T(2);
+            const T p    = (a - d) / T(2);
+            const T disc = p * p + b * c;
             if (disc >= T(0))
             {
                 const T s          = std::sqrt(disc);
-                eigen_real[at]     = (tr + s) / T(2);
+                eigen_real[at]     = mid + s;
                 eigen_imag[at]     = T(0);
-                eigen_real[at + 1] = (tr - s) / T(2);
+                eigen_real[at + 1] = mid - s;
                 eigen_imag[at + 1] = T(0);
             }
             else
             {
                 const T s          = std::sqrt(-disc);
-                eigen_real[at]     = tr / T(2);
-                eigen_imag[at]     = s / T(2);
-                eigen_real[at + 1] = tr / T(2);
-                eigen_imag[at + 1] = -s / T(2);
+                eigen_real[at]     = mid;
+                eigen_imag[at]     = s;
+                eigen_real[at + 1] = mid;
+                eigen_imag[at + 1] = -s;
             }
         };
 
-        const T sub   = std::fabs(H[static_cast<std::size_t>((m - 1) * n + (m - 2))]);
-        T       scale = std::fabs(H[static_cast<std::size_t>((m - 2) * n + (m - 2))]) +
-                  std::fabs(H[static_cast<std::size_t>((m - 1) * n + (m - 1))]);
-        if (scale == T(0))
+        // H is dense (no Hessenberg reduction), so deflation needs the whole
+        // off-diagonal part of the trailing row negligible, not just its
+        // subdiagonal entry, and the tolerance must be relative to the active
+        // block's norm: roundoff in Q^T*H*Q leaves ~eps*||H|| residue in the
+        // entries being driven to zero, which a per-entry eps*(|a|+|d|)
+        // threshold can sit below in float, so the iteration never deflates.
+        T hnorm = T(0);
+        for (linalg_int i = 0; i < m; ++i)
         {
-            scale = T(1);
+            for (linalg_int j = 0; j < m; ++j)
+            {
+                const T x = H[static_cast<std::size_t>(i * n + j)];
+                hnorm += x * x;
+            }
         }
-        if (sub <= eps * scale)
+        hnorm = std::sqrt(hnorm);
+        if (hnorm == T(0))
+        {
+            hnorm = T(1);
+        }
+        const T tol = T(4) * eps * hnorm;
+
+        auto row_negligible = [&](linalg_int row, linalg_int cols)
+        {
+            for (linalg_int j = 0; j < cols; ++j)
+            {
+                if (std::fabs(H[static_cast<std::size_t>(row * n + j)]) > tol)
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        if (row_negligible(m - 1, m - 1))
         {
             eigen_real[m - 1] = H[static_cast<std::size_t>((m - 1) * n + (m - 1))];
             eigen_imag[m - 1] = T(0);
@@ -470,14 +431,7 @@ bool general_eigenvalues_qr(linalg_int n,
             break;
         }
 
-        const T sub2   = std::fabs(H[static_cast<std::size_t>((m - 2) * n + (m - 3))]);
-        T       scale2 = std::fabs(H[static_cast<std::size_t>((m - 3) * n + (m - 3))]) +
-                   std::fabs(H[static_cast<std::size_t>((m - 2) * n + (m - 2))]);
-        if (scale2 == T(0))
-        {
-            scale2 = T(1);
-        }
-        if (sub2 <= eps * scale2)
+        if (row_negligible(m - 1, m - 2) && row_negligible(m - 2, m - 2))
         {
             solve_2x2(H[static_cast<std::size_t>((m - 2) * n + (m - 2))],
                 H[static_cast<std::size_t>((m - 2) * n + (m - 1))],
@@ -509,44 +463,36 @@ bool general_eigenvalues_qr(linalg_int n,
             }
         }
 
+        // M <- Hm*Hm - tr*Hm + det*I, the implicit double-shift polynomial, via the
+        // same native GEMM entry point multiplication.cpp exposes rather than a
+        // hand-rolled triple loop.
+        multiplication<T, linalg_backend::native>::apply(
+            false, false, m, m, m, Hm, m, Hm, m, M, m, mult_ws, mult_ws_size);
         for (linalg_int i = 0; i < m; ++i)
         {
             for (linalg_int j = 0; j < m; ++j)
             {
-                T sum = T(0);
-                for (linalg_int k = 0; k < m; ++k)
-                {
-                    sum += Hm[i * m + k] * Hm[k * m + j];
-                }
-                M[i * m + j] = sum - tr * Hm[i * m + j] + ((i == j) ? det : T(0));
+                M[i * m + j] += ((i == j) ? det : T(0)) - tr * Hm[i * m + j];
             }
         }
 
-        square_qr<T>(m, M, Q, R, Rwork, Qwork, householder);
+        // Q, R <- qr(M) via the same native Householder QR qr_decomposition.cpp
+        // exposes, instead of a self-contained copy of that algorithm.
+        qr_decomposition<T, linalg_backend::native>::apply(
+            m, m, M, m, Q, m, R, m, qr_ws, qr_ws_size);
 
-        // Hm <- Q^T * Hm * Q
+        // Hm <- Q^T * Hm * Q, again via the shared native GEMM entry point.
+        multiplication<T, linalg_backend::native>::apply(
+            true, false, m, m, m, Q, m, Hm, m, tmp, m, mult_ws, mult_ws_size);
+        // Product goes to the (now free) stride-m buffer M, then is copied into
+        // H's stride-n leading block.
+        multiplication<T, linalg_backend::native>::apply(
+            false, false, m, m, m, tmp, m, Q, m, M, m, mult_ws, mult_ws_size);
         for (linalg_int i = 0; i < m; ++i)
         {
             for (linalg_int j = 0; j < m; ++j)
             {
-                T sum = T(0);
-                for (linalg_int k = 0; k < m; ++k)
-                {
-                    sum += Q[k * m + i] * Hm[k * m + j];
-                }
-                tmp[i * m + j] = sum;
-            }
-        }
-        for (linalg_int i = 0; i < m; ++i)
-        {
-            for (linalg_int j = 0; j < m; ++j)
-            {
-                T sum = T(0);
-                for (linalg_int k = 0; k < m; ++k)
-                {
-                    sum += tmp[i * m + k] * Q[k * m + j];
-                }
-                H[static_cast<std::size_t>(i * n + j)] = sum;
+                H[static_cast<std::size_t>(i * n + j)] = M[i * m + j];
             }
         }
     }
@@ -566,10 +512,8 @@ bool inverse_iteration(linalg_int n,
     T                             lambda,
     T*                            eigenvector,
     T*                            M,
-    T*                            x,
-    T*                            y,
-    T*                            LU,
-    T*                            b)
+    linalg_int*                   pivot,
+    T*                            x)
 {
     const T eps       = std::numeric_limits<T>::epsilon();
     const T shift_eps = eps * (std::fabs(lambda) + T(1)) * T(10);
@@ -583,78 +527,38 @@ bool inverse_iteration(linalg_int n,
 
     std::fill_n(x, static_cast<std::size_t>(n), T(1) / std::sqrt(static_cast<T>(n)));
 
+    // M is the same matrix across every iteration below, so factor it once via
+    // the shared native LU entry point lu_decomposition.cpp exposes, instead of
+    // a self-contained Gaussian elimination redone from scratch each time.
+    if (!lu_decomposition<T, linalg_backend::native>::apply(M, n, pivot, nullptr, 0))
+    {
+        return false;
+    }
+
     bool ok = true;
     for (int it = 0; it < 25 && ok; ++it)
     {
-        // Solve M * y = x via plain Gaussian elimination with partial
-        // pivoting (self-contained: this op does not depend on
-        // lu_decomposition.cpp's scalar fallback, matching this file's
-        // self-containment convention).
-        std::copy_n(M, static_cast<std::size_t>(n * n), LU);
-        std::copy_n(x, static_cast<std::size_t>(n), b);
+        // Solve M * x = x in place, reusing the LU factors above, via the
+        // shared native linear_solver entry point.
+        linear_solver<T, linalg_backend::native>::apply(
+            M, pivot, n, x, linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, nullptr, 0);
 
-        for (linalg_int k = 0; k < n && ok; ++k)
+        T norm = T(0);
+        for (linalg_int i = 0; i < n; ++i)
         {
-            linalg_int max_row = k;
-            T          max_val = std::fabs(LU[k * n + k]);
-            for (linalg_int r = k + 1; r < n; ++r)
-            {
-                const T v = std::fabs(LU[r * n + k]);
-                if (v > max_val)
-                {
-                    max_val = v;
-                    max_row = r;
-                }
-            }
-            if (max_val <= eps)
-            {
-                ok = false;
-                break;
-            }
-            if (max_row != k)
-            {
-                for (linalg_int c = 0; c < n; ++c)
-                {
-                    std::swap(LU[k * n + c], LU[max_row * n + c]);
-                }
-                std::swap(b[k], b[max_row]);
-            }
-            for (linalg_int r = k + 1; r < n; ++r)
-            {
-                const T f = LU[r * n + k] / LU[k * n + k];
-                for (linalg_int c = k; c < n; ++c)
-                {
-                    LU[r * n + c] -= f * LU[k * n + c];
-                }
-                b[static_cast<std::size_t>(r)] -= f * b[static_cast<std::size_t>(k)];
-            }
+            norm += x[static_cast<std::size_t>(i)] * x[static_cast<std::size_t>(i)];
         }
-
-        if (ok)
+        norm = std::sqrt(norm);
+        if (norm > T(0))
         {
-            for (linalg_int r = n - 1; r >= 0; --r)
-            {
-                T sum = b[static_cast<std::size_t>(r)];
-                for (linalg_int c = r + 1; c < n; ++c)
-                {
-                    sum -= LU[r * n + c] * y[static_cast<std::size_t>(c)];
-                }
-                y[static_cast<std::size_t>(r)] = sum / LU[r * n + r];
-            }
-
-            T norm = T(0);
             for (linalg_int i = 0; i < n; ++i)
             {
-                norm += y[static_cast<std::size_t>(i)] * y[static_cast<std::size_t>(i)];
+                x[static_cast<std::size_t>(i)] /= norm;
             }
-            norm = std::sqrt(norm);
-            if (norm > T(0))
-            {
-                for (linalg_int i = 0; i < n; ++i)
-                {
-                    x[static_cast<std::size_t>(i)] = y[static_cast<std::size_t>(i)] / norm;
-                }
-            }
+        }
+        else
+        {
+            ok = false;
         }
     }
 
@@ -732,9 +636,8 @@ bool general_eigen_scalar_impl(const T* A,
             bufs.Q,
             bufs.R,
             bufs.tmp,
-            bufs.Rwork,
-            bufs.Qwork,
-            bufs.householder))
+            bufs.qr_ws,
+            bufs.mult_ws))
     {
         return false;
     }
@@ -748,21 +651,13 @@ bool general_eigen_scalar_impl(const T* A,
     for (linalg_int i = 0; i < n; ++i)
     {
         LINALG_CHECK(!(std::fabs(eigenvalues_imag[i]) >
-                          eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10)),
+                         eps * (std::fabs(eigenvalues_real[i]) + T(1)) * T(10)),
             "eigen: scalar fallback cannot compute eigenvectors for a complex "
             "eigenvalue (index "
             "{})",
             i);
-        if (!inverse_iteration<T>(n,
-                A,
-                lda,
-                eigenvalues_real[i],
-                bufs.evec,
-                bufs.inv_M,
-                bufs.x,
-                bufs.y,
-                bufs.LU,
-                bufs.b))
+        if (!inverse_iteration<T>(
+                n, A, lda, eigenvalues_real[i], bufs.evec, bufs.inv_M, bufs.pivot, bufs.x))
         {
             return false;
         }

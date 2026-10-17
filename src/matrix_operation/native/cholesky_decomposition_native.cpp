@@ -49,8 +49,7 @@ namespace
 // combined via tree reduction before the horizontal predux, hide FMA latency
 // on the loop-carried dependency a single accumulator would create -- the
 // same fix lu_decomposition_native.cpp's lu_dot applies, for the same reason.
-template <typename T>
-inline T cholesky_dot(const T* x, const T* y, linalg_int len)
+template <typename T> inline T cholesky_dot(const T* x, const T* y, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
     using P                    = packet<T>;
@@ -127,7 +126,7 @@ linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda
 
         for (linalg_int j = 0; j < i; ++j)
         {
-            auto* a_j = &A[j * lda];
+            auto*   a_j = &A[j * lda];
             const T sum = a_i[j] - cholesky_dot(a_i, a_j, j);
             a_i[j]      = sum / a_j[j];
             a_j[i]      = static_cast<T>(0);

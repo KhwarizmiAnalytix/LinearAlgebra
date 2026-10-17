@@ -1,8 +1,8 @@
 #include "include/matrix_operation/linear_solver.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 #include <algorithm>
 
@@ -131,10 +131,10 @@ void linear_solver_scalar_impl(
 
 template <>
 void linear_solver<float, linalg_backend::native>::apply(float* m,
-    linalg_int*                                                  pivot,
-    linalg_int                                                   lda,
-    float*                                                       x,
-    linear_solver_type                                           type,
+    linalg_int*                                                 pivot,
+    linalg_int                                                  lda,
+    float*                                                      x,
+    linear_solver_type                                          type,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {
@@ -144,10 +144,10 @@ void linear_solver<float, linalg_backend::native>::apply(float* m,
 
 template <>
 void linear_solver<double, linalg_backend::native>::apply(double* m,
-    linalg_int*                                                    pivot,
-    linalg_int                                                     lda,
-    double*                                                        x,
-    linear_solver_type                                             type,
+    linalg_int*                                                   pivot,
+    linalg_int                                                    lda,
+    double*                                                       x,
+    linear_solver_type                                            type,
     void* /*workspace*/,
     size_t /*workspace_size*/)
 {

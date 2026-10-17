@@ -64,7 +64,7 @@ namespace
 template <typename T> inline void lu_axpy_sub(T* y, const T* x, T a, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                     = packet<T>;
     constexpr linalg_long width = P::size;
 
     typename P::packet_t va;
@@ -128,7 +128,7 @@ template <typename T> inline void lu_axpy_sub(T* y, const T* x, T a, linalg_long
 template <typename T> inline T lu_dot(const T* x, const T* y, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                     = packet<T>;
     constexpr linalg_long width = P::size;
 
     typename P::packet_t acc0, acc1, acc2, acc3;
@@ -207,10 +207,10 @@ template <typename T> inline T lu_dot(const T* x, const T* y, linalg_long len)
 // pivot found would touch trailing memory this panel has no other reason
 // to touch yet, once per row per panel column.
 template <typename T>
-bool lu_panel_factor(T* m,
-    linalg_long lda,
-    linalg_long start,
-    linalg_long width,
+bool lu_panel_factor(T*       m,
+    linalg_long               lda,
+    linalg_long               start,
+    linalg_long               width,
     LINALG_UNUSED linalg_int* pivot,
     LINALG_UNUSED T           tolerance)
 {
@@ -348,7 +348,7 @@ bool lu_decomposition_blocked_impl(T* m, linalg_long lda, linalg_int* pivot, T t
             T* const row_i = &A(k + ii, k + bs);
             for (size_type p = 0; p < ii; ++p)
             {
-                const T l_ip  = A(k + ii, k + p);
+                const T  l_ip  = A(k + ii, k + p);
                 T* const row_p = &A(k + p, k + bs);
                 lu_axpy_sub(row_i, row_p, l_ip, rest);
             }
@@ -415,12 +415,14 @@ bool lu_decomposition<double, linalg_backend::native>::apply(
     return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
 }
 
-template <> size_t lu_decomposition<float, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
+template <>
+size_t lu_decomposition<float, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }
 
-template <> size_t lu_decomposition<double, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
+template <>
+size_t lu_decomposition<double, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }

@@ -17,8 +17,7 @@ namespace linalg
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
     LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
-    LINALG_CHECK(
-        rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
+    LINALG_CHECK(rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
 }
 
 // Only the native specializations are defined here. The mkl and blas_lapacke
