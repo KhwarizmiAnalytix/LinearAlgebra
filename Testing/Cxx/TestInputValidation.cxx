@@ -10,6 +10,7 @@
 #include "include/matrix_operation/transpose.h"
 #include "include/matrix_operation/svd_decomposition.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 // Every public matrix_operation entry point throws (rather than exhibiting
 // undefined behavior) on a null required pointer or a non-positive
@@ -95,7 +96,7 @@ TEST(Math, InputValidation)
             nullptr,
             0)));
 
-    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::kMatmulActiveBackend>::apply(false,
+    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::linalg_backend::native>::apply(false,
         false,
         3,
         3,
@@ -108,11 +109,11 @@ TEST(Math, InputValidation)
         3,
         nullptr,
         0)));
-    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::kMatmulActiveBackend>::apply(
+    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::linalg_backend::native>::apply(
         false, false, 0, 3, 3, buf.data(), 3, buf.data(), 3, buf.data(), 3, nullptr, 0)));
 
-    EXPECT_ANY_THROW((linalg::transpose<double, linalg::kTransposeActiveBackend>::apply(
+    EXPECT_ANY_THROW((linalg::transpose<double, linalg::linalg_backend::native>::apply(
         3ULL, 3ULL, static_cast<double*>(nullptr), nullptr, 0)));
-    EXPECT_ANY_THROW((linalg::transpose<double, linalg::kTransposeActiveBackend>::apply(
+    EXPECT_ANY_THROW((linalg::transpose<double, linalg::linalg_backend::native>::apply(
         0ULL, 3ULL, buf.data(), nullptr, 0)));
 }

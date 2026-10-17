@@ -211,6 +211,7 @@ bool jacobi_eigen(const T* A,
     bool      converged  = (n <= 1);
     for (int sweep = 0; sweep < max_sweeps && !converged; ++sweep)
     {
+        LINALG_SCOPE("eigen/jacobi/sweep");
         T off = T(0);
         for (linalg_int p = 0; p < n; ++p)
         {
@@ -349,6 +350,7 @@ bool general_eigenvalues_qr(linalg_int n,
 
     while (m > 0)
     {
+        LINALG_SCOPE("general_eigen/qr-iter");
         if (m == 1)
         {
             eigen_real[0] = H[0];
@@ -457,24 +459,27 @@ bool general_eigenvalues_qr(linalg_int n,
         const T tr  = a + d;
         const T det = a * d - b * c;
 
-        for (linalg_int i = 0; i < m; ++i)
         {
-            for (linalg_int j = 0; j < m; ++j)
+            LINALG_SCOPE("general_eigen/shift-poly");
+            for (linalg_int i = 0; i < m; ++i)
             {
-                Hm[i * m + j] = H[static_cast<std::size_t>(i * n + j)];
+                for (linalg_int j = 0; j < m; ++j)
+                {
+                    Hm[i * m + j] = H[static_cast<std::size_t>(i * n + j)];
+                }
             }
-        }
 
-        // M <- Hm*Hm - tr*Hm + det*I, the implicit double-shift polynomial, via the
-        // same native GEMM entry point multiplication.cpp exposes rather than a
-        // hand-rolled triple loop.
-        multiplication<T, linalg_backend::native>::apply(
-            false, false, m, m, m, Hm, m, Hm, m, M, m, mult_ws, mult_ws_size);
-        for (linalg_int i = 0; i < m; ++i)
-        {
-            for (linalg_int j = 0; j < m; ++j)
+            // M <- Hm*Hm - tr*Hm + det*I, the implicit double-shift polynomial, via the
+            // same native GEMM entry point multiplication.cpp exposes rather than a
+            // hand-rolled triple loop.
+            multiplication<T, linalg_backend::native>::apply(
+                false, false, m, m, m, Hm, m, Hm, m, M, m, mult_ws, mult_ws_size);
+            for (linalg_int i = 0; i < m; ++i)
             {
-                M[i * m + j] += ((i == j) ? det : T(0)) - tr * Hm[i * m + j];
+                for (linalg_int j = 0; j < m; ++j)
+                {
+                    M[i * m + j] += ((i == j) ? det : T(0)) - tr * Hm[i * m + j];
+                }
             }
         }
 
@@ -483,18 +488,21 @@ bool general_eigenvalues_qr(linalg_int n,
         qr_decomposition<T, linalg_backend::native>::apply(
             m, m, M, m, Q, m, R, m, qr_ws, qr_ws_size);
 
-        // Hm <- Q^T * Hm * Q, again via the shared native GEMM entry point.
-        multiplication<T, linalg_backend::native>::apply(
-            true, false, m, m, m, Q, m, Hm, m, tmp, m, mult_ws, mult_ws_size);
-        // Product goes to the (now free) stride-m buffer M, then is copied into
-        // H's stride-n leading block.
-        multiplication<T, linalg_backend::native>::apply(
-            false, false, m, m, m, tmp, m, Q, m, M, m, mult_ws, mult_ws_size);
-        for (linalg_int i = 0; i < m; ++i)
         {
-            for (linalg_int j = 0; j < m; ++j)
+            LINALG_SCOPE("general_eigen/similarity");
+            // Hm <- Q^T * Hm * Q, again via the shared native GEMM entry point.
+            multiplication<T, linalg_backend::native>::apply(
+                true, false, m, m, m, Q, m, Hm, m, tmp, m, mult_ws, mult_ws_size);
+            // Product goes to the (now free) stride-m buffer M, then is copied into
+            // H's stride-n leading block.
+            multiplication<T, linalg_backend::native>::apply(
+                false, false, m, m, m, tmp, m, Q, m, M, m, mult_ws, mult_ws_size);
+            for (linalg_int i = 0; i < m; ++i)
             {
-                H[static_cast<std::size_t>(i * n + j)] = M[i * m + j];
+                for (linalg_int j = 0; j < m; ++j)
+                {
+                    H[static_cast<std::size_t>(i * n + j)] = M[i * m + j];
+                }
             }
         }
     }

@@ -126,7 +126,9 @@ void pseudo_inverse_impl(linalg_long rows,
                 P::storeu(out, W_row + c);
             }
             for (; c < columns; ++c)
+            {
                 W_row[c] = inv_s * VT_row[c];
+            }
         }
     }
 #else
@@ -166,7 +168,9 @@ void pseudo_inverse_impl(linalg_long rows,
                 }
                 T sum = P::predux(acc);
                 for (; i < k; ++i)
+                {
                     sum += U_row[i] * W_col[i * columns];
+                }
                 Ainv_col[r] = sum;
             }
         }

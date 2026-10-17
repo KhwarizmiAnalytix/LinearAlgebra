@@ -7,6 +7,7 @@
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/determinant.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

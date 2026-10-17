@@ -9,15 +9,6 @@
 namespace linalg
 {
 
-inline constexpr linalg_backend kTransposeActiveBackend =
-#if LINALG_HAS_MKL
-    linalg_backend::mkl;
-#elif LINALG_HAS_BLAS
-    linalg_backend::blas_lapacke;
-#else
-    linalg_backend::native;
-#endif
-
 /**
  * @brief Transposes a matrix in place.
  */

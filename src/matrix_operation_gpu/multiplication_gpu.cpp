@@ -7,6 +7,7 @@
 #include "include/common/cuda_handle.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 namespace linalg
 {
@@ -33,6 +34,7 @@ void multiplication(bool transpose_a,
     linalg_int                ldc,
     cudaStream_t                stream)
 {
+    LINALG_SCOPE("multiplication/gpu<float>");
     LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr, "multiplication: a, b, and c must not be null");
     LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     const float alpha  = 1.F;
@@ -71,6 +73,7 @@ void multiplication(bool transpose_a,
     linalg_int                ldc,
     cudaStream_t                stream)
 {
+    LINALG_SCOPE("multiplication/gpu<double>");
     LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr, "multiplication: a, b, and c must not be null");
     LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0, "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     const double alpha  = 1.;

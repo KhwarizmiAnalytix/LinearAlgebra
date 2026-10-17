@@ -4,6 +4,7 @@
 #include "dense_matrix_test_helper.h"
 #include "include/matrix_operation/trace.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

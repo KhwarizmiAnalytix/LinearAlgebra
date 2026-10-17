@@ -6,6 +6,7 @@
 #include "dense_matrix_test_helper.h"
 #include "include/matrix_operation/least_squares.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

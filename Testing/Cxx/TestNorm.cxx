@@ -8,6 +8,7 @@
 #include "include/matrix_operation/norm.h"
 #include "include/matrix_operation/svd_decomposition.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

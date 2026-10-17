@@ -10,6 +10,7 @@
 #include "include/matrix_operation_gpu/transpose_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 // File-scope (not namespaced) __global__ templates, matching the usual CUDA
 // idiom already used by multiplication_batched_gpu.cu for a kernel
@@ -511,6 +512,7 @@ size_t matrix_invert_workspace_size(const double* /*type_tag*/, linalg_int lda, 
 void matrix_invert(float* m, linalg_int lda, int* info, linear_solver_type type, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("matrix_invert/gpu<float>");
     if (m == nullptr || info == nullptr)
     {
         LINALG_THROW("matrix_invert: m and info must not be null");
@@ -539,6 +541,7 @@ void matrix_invert(float* m, linalg_int lda, int* info, linear_solver_type type,
 void matrix_invert(double* m, linalg_int lda, int* info, linear_solver_type type, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("matrix_invert/gpu<double>");
     if (m == nullptr || info == nullptr)
     {
         LINALG_THROW("matrix_invert: m and info must not be null");
@@ -597,6 +600,7 @@ size_t matrix_determinant_workspace_size(
 float determinant(float* m, linalg_int lda, linear_solver_type type, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("determinant/gpu<float>");
     if (m == nullptr)
     {
         LINALG_THROW("determinant: m must not be null");
@@ -622,6 +626,7 @@ float determinant(float* m, linalg_int lda, linear_solver_type type, void* works
 double determinant(double* m, linalg_int lda, linear_solver_type type, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("determinant/gpu<double>");
     if (m == nullptr)
     {
         LINALG_THROW("determinant: m must not be null");

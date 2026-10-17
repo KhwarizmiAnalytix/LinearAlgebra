@@ -12,6 +12,7 @@ cc_test(
         allow_empty = True,
     ) + [
         "dense_matrix_test_helper.h",
+        "test_reporting.h",
         "test_backend.h",
     ],
     copts = linear_algebra_copts(),

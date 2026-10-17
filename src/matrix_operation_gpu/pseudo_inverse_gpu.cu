@@ -12,6 +12,7 @@
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns
 // row-major) into Ainv = V * diag(S+) * U^T (columns x rows row-major),
@@ -191,6 +192,7 @@ void pseudo_inverse(linalg_long rows,
     size_t                        workspace_size,
     cudaStream_t                  stream)
 {
+    LINALG_SCOPE("pseudo_inverse/gpu<float>");
     pseudo_inverse_impl(cublasIsamax, rows, columns, A, lda, Ainv, ldai, tol, workspace,
         workspace_size, stream);
 }
@@ -206,6 +208,7 @@ void pseudo_inverse(linalg_long rows,
     size_t                        workspace_size,
     cudaStream_t                  stream)
 {
+    LINALG_SCOPE("pseudo_inverse/gpu<double>");
     pseudo_inverse_impl(cublasIdamax, rows, columns, A, lda, Ainv, ldai, tol, workspace,
         workspace_size, stream);
 }

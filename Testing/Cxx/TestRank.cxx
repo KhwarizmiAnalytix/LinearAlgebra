@@ -7,6 +7,7 @@
 #include "include/matrix_operation/rank.h"
 #include "include/matrix_operation/condition_number.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

@@ -6,6 +6,7 @@
 #include "test_backend.h"
 #include "include/matrix_operation/linear_solver.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

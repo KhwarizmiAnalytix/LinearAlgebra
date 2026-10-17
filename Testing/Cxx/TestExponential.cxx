@@ -6,6 +6,7 @@
 #include "include/matrix_operation/exponential.h"
 #include "include/matrix_operation/multiplication.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {
@@ -35,7 +36,7 @@ template <typename value_t> std::vector<unsigned char> exp_workspace(linalg_int 
 template <typename value_t> std::vector<unsigned char> gemm_workspace(linalg_int n)
 {
     const auto bytes =
-        linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::workspace_size(n, n, n);
+        linalg::multiplication<value_t, linalg::linalg_backend::native>::workspace_size(n, n, n);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -185,7 +186,7 @@ template <typename value_t> void test_against_taylor_series(std::size_t n, doubl
     for (int k = 1; k <= kTaylorTerms; ++k)
     {
         auto gemm_ws = gemm_workspace<double>(static_cast<linalg_int>(n));
-        linalg::multiplication<double, linalg::kMatmulActiveBackend>::apply(false,
+        linalg::multiplication<double, linalg::linalg_backend::native>::apply(false,
             false,
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),
@@ -263,7 +264,7 @@ template <typename value_t> void test_inverse_property(std::size_t n)
 
     dense_matrix<value_t> product(n, n);
     auto                  gemm_ws = gemm_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::apply(false,
+    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
         false,
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),

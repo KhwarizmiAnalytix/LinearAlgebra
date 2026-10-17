@@ -152,12 +152,13 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // qr_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("qr_decomposition");
-        auto                A = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        std::vector<double> tau(static_cast<std::size_t>(cols));
+        auto                A  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        std::vector<double> Q(static_cast<std::size_t>(rows * rows));
+        std::vector<double> R(static_cast<std::size_t>(cols * cols));
         const auto          ws = linalg::qr_decomposition<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
         linalg::qr_decomposition<double, Backend>::apply(
-            rows, cols, A.data(), cols, tau.data(), workspace.data(), ws);
+            rows, cols, A.data(), cols, Q.data(), rows, R.data(), cols, workspace.data(), ws);
     }
 
     // svd_decomposition -----------------------------------------------------
@@ -200,12 +201,13 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // inversion -------------------------------------------------------------
     {
         PROFILER_SCOPE("inversion");
-        auto       A  = make_spd_matrix<double>(n);
+        auto                    A  = make_spd_matrix<double>(n);
+        std::vector<linalg_int> pivot(static_cast<std::size_t>(n));
         const auto ws = linalg::inversion<double, Backend>::workspace_size(
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> workspace(ws);
         linalg::inversion<double, Backend>::apply(
-            A.data(), n, linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
+            A.data(), pivot.data(), n, linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
     }
 
     // linear_solver ---------------------------------------------------------
@@ -218,7 +220,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> workspace(ws);
         linalg::linear_solver<double, Backend>::apply(
-            A.data(), n, b.data(), linalg::linear_solver_type::LU_LINEAR_SOLVER, pivot.data(), workspace.data(), ws);
+            A.data(), pivot.data(), n, b.data(), linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
     }
 
     // least_squares ---------------------------------------------------------
@@ -226,10 +228,11 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         PROFILER_SCOPE("least_squares");
         auto                A = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         std::vector<double> b = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 77);
+        std::vector<double> x_out(static_cast<std::size_t>(cols));
         const auto          ws = linalg::least_squares<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
         linalg::least_squares<double, Backend>::apply(
-            rows, cols, A.data(), cols, b.data(), 1, workspace.data(), ws);
+            rows, cols, static_cast<linalg_long>(1), A.data(), cols, b.data(), static_cast<linalg_long>(1), x_out.data(), cols, workspace.data(), ws);
     }
 
     // pseudo_inverse --------------------------------------------------------
@@ -240,7 +243,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         const auto          ws = linalg::pseudo_inverse<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
         linalg::pseudo_inverse<double, Backend>::apply(
-            rows, cols, A.data(), cols, result.data(), rows, workspace.data(), ws);
+            rows, cols, A.data(), cols, result.data(), rows, double(0), workspace.data(), ws);
     }
 
     // norm ------------------------------------------------------------------
@@ -274,7 +277,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         auto       A  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         const auto ws = linalg::rank<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
-        linalg::rank<double, Backend>::apply(A.data(), rows, cols, cols, T(0), workspace.data(), ws);
+        linalg::rank<double, Backend>::apply(A.data(), rows, cols, cols, double(0), workspace.data(), ws);
     }
 
     // condition_number -------------------------------------------------------
@@ -295,7 +298,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> workspace(ws);
         linalg::determinant<double, Backend>::apply(
-            A.data(), n, pivot.data(), linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
+            A.data(), pivot.data(), n, linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
     }
 
     // power -----------------------------------------------------------------
@@ -325,74 +328,81 @@ void profile_scalar_only_ops(linalg_int n)
 
     const linalg_int tri_n = n;
 
-    // tridiagonal_operations ------------------------------------------------
+    // tridiagonal_operations — packed API: output holds 3*stride doubles,
+    // where stride = outer_dim * dim * inner_dim.
     {
+        const size_t outer_dim = 1;
+        const size_t dim       = static_cast<size_t>(tri_n);
+        const size_t inner_dim = 1;
+        const size_t stride    = outer_dim * dim * inner_dim;
+
         PROFILER_SCOPE("tridiagonal/decomposition");
-        std::vector<double> lower(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> diag(static_cast<std::size_t>(tri_n), 2.0);
-        std::vector<double> upper(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> output;
-        linalg::tridiagonal::decomposition(output, lower, diag, upper);
+        std::vector<double> output(3 * stride, 0.5);
+        linalg::tridiagonal_operations::decomposition(output, outer_dim, dim, inner_dim, false);
     }
 
     {
+        const size_t outer_dim = 1;
+        const size_t dim       = static_cast<size_t>(tri_n);
+        const size_t inner_dim = 1;
+        const size_t stride    = outer_dim * dim * inner_dim;
+
         PROFILER_SCOPE("tridiagonal/solve_decomposed");
-        std::vector<double> lower(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> diag(static_cast<std::size_t>(tri_n), 2.0);
-        std::vector<double> upper(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> decomposed;
-        linalg::tridiagonal::decomposition(decomposed, lower, diag, upper);
-        std::vector<double> rhs(static_cast<std::size_t>(tri_n), 1.0);
-        std::vector<double> x;
-        linalg::tridiagonal::solve_decomposed(x, decomposed, rhs);
+        std::vector<double> decomposed(3 * stride, 0.5);
+        linalg::tridiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false);
+        std::vector<double> x(stride, 1.0);
+        linalg::tridiagonal_operations::solve_decomposed(x, decomposed, outer_dim, dim, inner_dim, false);
     }
 
     {
+        const size_t outer_dim = 1;
+        const size_t dim       = static_cast<size_t>(tri_n);
+        const size_t inner_dim = 1;
+        const size_t stride    = outer_dim * dim * inner_dim;
+
         PROFILER_SCOPE("tridiagonal/multiply");
-        std::vector<double> lower(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> diag(static_cast<std::size_t>(tri_n), 2.0);
-        std::vector<double> upper(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> vec(static_cast<std::size_t>(tri_n), 1.0);
-        std::vector<double> result;
-        linalg::tridiagonal::multiply(result, lower, diag, upper, vec);
+        std::vector<double> mat(3 * stride, 0.1);
+        std::vector<double> in(stride, 1.0);
+        std::vector<double> result(stride, 0.0);
+        linalg::tridiagonal_operations::multiply(result, in, mat, outer_dim, dim, inner_dim, 1.0, false);
     }
 
-    // pentadiagonal_operations ----------------------------------------------
+    // pentadiagonal_operations — same packed convention, 5*stride doubles.
     {
+        const size_t outer_dim = 1;
+        const size_t dim       = static_cast<size_t>(tri_n);
+        const size_t inner_dim = 1;
+        const size_t stride    = outer_dim * dim * inner_dim;
+
         PROFILER_SCOPE("pentadiagonal/decomposition");
-        std::vector<double> ll(static_cast<std::size_t>(tri_n - 2), -0.5);
-        std::vector<double> l(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> d(static_cast<std::size_t>(tri_n), 4.0);
-        std::vector<double> u(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> uu(static_cast<std::size_t>(tri_n - 2), -0.5);
-        std::vector<double> output;
-        linalg::pentadiagonal::decomposition(output, ll, l, d, u, uu);
+        std::vector<double> output(5 * stride, 0.5);
+        linalg::pentadiagonal_operations::decomposition(output, outer_dim, dim, inner_dim, false);
     }
 
     {
+        const size_t outer_dim = 1;
+        const size_t dim       = static_cast<size_t>(tri_n);
+        const size_t inner_dim = 1;
+        const size_t stride    = outer_dim * dim * inner_dim;
+
         PROFILER_SCOPE("pentadiagonal/solve_decomposed");
-        std::vector<double> ll(static_cast<std::size_t>(tri_n - 2), -0.5);
-        std::vector<double> l(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> d(static_cast<std::size_t>(tri_n), 4.0);
-        std::vector<double> u(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> uu(static_cast<std::size_t>(tri_n - 2), -0.5);
-        std::vector<double> decomposed;
-        linalg::pentadiagonal::decomposition(decomposed, ll, l, d, u, uu);
-        std::vector<double> rhs(static_cast<std::size_t>(tri_n), 1.0);
-        std::vector<double> x;
-        linalg::pentadiagonal::solve_decomposed(x, decomposed, rhs);
+        std::vector<double> decomposed(5 * stride, 0.5);
+        linalg::pentadiagonal_operations::decomposition(decomposed, outer_dim, dim, inner_dim, false);
+        std::vector<double> x(stride, 1.0);
+        linalg::pentadiagonal_operations::solve_decomposed(x, decomposed, outer_dim, dim, inner_dim, false);
     }
 
     {
+        const size_t outer_dim = 1;
+        const size_t dim       = static_cast<size_t>(tri_n);
+        const size_t inner_dim = 1;
+        const size_t stride    = outer_dim * dim * inner_dim;
+
         PROFILER_SCOPE("pentadiagonal/multiply");
-        std::vector<double> ll(static_cast<std::size_t>(tri_n - 2), -0.5);
-        std::vector<double> l(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> d(static_cast<std::size_t>(tri_n), 4.0);
-        std::vector<double> u(static_cast<std::size_t>(tri_n - 1), -1.0);
-        std::vector<double> uu(static_cast<std::size_t>(tri_n - 2), -0.5);
-        std::vector<double> vec(static_cast<std::size_t>(tri_n), 1.0);
-        std::vector<double> result;
-        linalg::pentadiagonal::multiply(result, ll, l, d, u, uu, vec);
+        std::vector<double> mat(5 * stride, 0.1);
+        std::vector<double> in(stride, 1.0);
+        std::vector<double> result(stride, 0.0);
+        linalg::pentadiagonal_operations::multiply(result, in, mat, outer_dim, dim, inner_dim, 1.0, false);
     }
 }
 
@@ -507,9 +517,10 @@ void profile_gpu_ops(linalg_int n)
     // qr_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/qr_decomposition");
-        auto    hA   = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA   = cuda_upload(hA);
-        double* d_tau = cuda_alloc<double>(static_cast<std::size_t>(cols));
+        auto    hA    = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double* dA    = cuda_upload(hA);
+        double* d_Q   = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
+        double* d_R   = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
         int*    d_info = cuda_alloc<int>(1);
         const auto ws_bytes =
             linalg::gpu::qr_decomposition_workspace_size(static_cast<const double*>(nullptr), rows, cols);
@@ -518,13 +529,14 @@ void profile_gpu_ops(linalg_int n)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_tau && d_info)
+        if (dA && d_Q && d_R && d_info)
         {
-            linalg::gpu::qr_decomposition(rows, cols, dA, cols, d_tau, d_info, d_ws, ws_bytes);
+            linalg::gpu::qr_decomposition(rows, cols, dA, cols, d_Q, rows, d_R, cols, d_info, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
-        cudaFree(d_tau);
+        cudaFree(d_Q);
+        cudaFree(d_R);
         cudaFree(d_info);
         cudaFree(d_ws);
     }
@@ -592,8 +604,8 @@ void profile_gpu_ops(linalg_int n)
         auto    hA = make_spd_matrix<double>(n);
         double* dA = cuda_upload(hA);
         int*    d_info = cuda_alloc<int>(1);
-        const auto ws_bytes =
-            linalg::gpu::matrix_invert_workspace_size(static_cast<const double*>(nullptr), n);
+        const auto ws_bytes = linalg::gpu::matrix_invert_workspace_size(
+            static_cast<const double*>(nullptr), n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -601,7 +613,7 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA && d_info)
         {
-            linalg::gpu::matrix_invert(dA, n, d_info, d_ws, ws_bytes);
+            linalg::gpu::matrix_invert(dA, n, d_info, linalg::linear_solver_type::LU_LINEAR_SOLVER, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -642,7 +654,7 @@ void profile_gpu_ops(linalg_int n)
         auto    hb = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 55);
         double* dA = cuda_upload(hA);
         double* db = cuda_upload(hb);
-        int*    d_info = cuda_alloc<int>(1);
+        double* d_X = cuda_alloc<double>(static_cast<std::size_t>(cols));
         const auto ws_bytes = linalg::gpu::least_squares_solve_workspace_size(
             static_cast<const double*>(nullptr), rows, cols);
         void* d_ws = nullptr;
@@ -650,14 +662,14 @@ void profile_gpu_ops(linalg_int n)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && db && d_info)
+        if (dA && db && d_X)
         {
-            linalg::gpu::least_squares_solve(rows, cols, dA, cols, db, 1, d_info, d_ws, ws_bytes);
+            linalg::gpu::least_squares_solve(rows, cols, linalg_long(1), dA, cols, db, linalg_long(1), d_X, cols, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(db);
-        cudaFree(d_info);
+        cudaFree(d_X);
         cudaFree(d_ws);
     }
 
@@ -667,7 +679,6 @@ void profile_gpu_ops(linalg_int n)
         auto    hA      = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         double* dA      = cuda_upload(hA);
         double* d_result = cuda_alloc<double>(static_cast<std::size_t>(cols * rows));
-        int*    d_info  = cuda_alloc<int>(1);
         const auto ws_bytes =
             linalg::gpu::pseudo_inverse_workspace_size(static_cast<const double*>(nullptr), rows, cols);
         void* d_ws = nullptr;
@@ -675,14 +686,13 @@ void profile_gpu_ops(linalg_int n)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_result && d_info)
+        if (dA && d_result)
         {
-            linalg::gpu::pseudo_inverse(rows, cols, dA, cols, d_result, rows, d_info, d_ws, ws_bytes);
+            linalg::gpu::pseudo_inverse(rows, cols, dA, cols, d_result, rows, double(0), d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(d_result);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 

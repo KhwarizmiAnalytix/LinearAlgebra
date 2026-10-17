@@ -6,6 +6,7 @@
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/power.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {
@@ -34,7 +35,7 @@ template <typename value_t> std::vector<unsigned char> power_workspace(linalg_in
 template <typename value_t> std::vector<unsigned char> gemm_workspace(linalg_int n)
 {
     const auto bytes =
-        linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::workspace_size(n, n, n);
+        linalg::multiplication<value_t, linalg::linalg_backend::native>::workspace_size(n, n, n);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -98,7 +99,7 @@ dense_matrix<value_t> matmul(
 {
     dense_matrix<value_t> c(n, n);
     auto                  gemm_ws = gemm_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::apply(false,
+    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
         false,
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),

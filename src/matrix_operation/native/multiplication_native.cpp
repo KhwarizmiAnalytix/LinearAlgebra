@@ -22,11 +22,7 @@
 namespace linalg
 {
 
-// Null/positivity checks shared by every multiplication<T, Backend>::apply
-// below, so callers (tests included) get the same validation regardless of
-// which backend is active. There is no non-detail multiplication()
-// wrapper to put this in any more — callers use
-// multiplication<T, kMatmulActiveBackend>::apply directly.
+// Validate inputs for the native multiplication specializations below.
 static void check_matmul_inputs(const void* a,
     const void*                             b,
     const void*                             c,

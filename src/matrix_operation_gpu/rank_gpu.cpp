@@ -11,6 +11,7 @@
 #include "include/common/cuda_workspace.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include "include/common/linalg_checks.h"
+#include "include/common/linalg_profiler.h"
 
 namespace linalg
 {
@@ -142,24 +143,28 @@ size_t matrix_rank_workspace_size(const double* /*type_tag*/, linalg_long rows, 
 linalg_long rank(const float* A, linalg_long rows, linalg_long columns, linalg_long lda,
     float tol, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("rank/gpu<float>");
     return matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size, stream);
 }
 
 linalg_long rank(const double* A, linalg_long rows, linalg_long columns, linalg_long lda,
     double tol, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("rank/gpu<double>");
     return matrix_rank_impl(A, rows, columns, lda, tol, workspace, workspace_size, stream);
 }
 
 float condition_number(const float* A, linalg_long rows, linalg_long columns,
     linalg_long lda, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("condition_number/gpu<float>");
     return matrix_condition_number_impl(A, rows, columns, lda, workspace, workspace_size, stream);
 }
 
 double condition_number(const double* A, linalg_long rows, linalg_long columns,
     linalg_long lda, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("condition_number/gpu<double>");
     return matrix_condition_number_impl(A, rows, columns, lda, workspace, workspace_size, stream);
 }
 

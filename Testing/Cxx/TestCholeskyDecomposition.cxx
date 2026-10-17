@@ -1,6 +1,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
@@ -9,7 +11,9 @@
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/determinant.h"
+#include "include/matrix_operation/multiplication.h"
 #include "gtest/gtest.h"
+#include "include/logging.h"
 
 namespace
 {
@@ -19,6 +23,70 @@ template <typename value_t> struct Tolerance
 {
     static constexpr value_t value = (value_t)200 * std::numeric_limits<value_t>::epsilon();
 };
+
+template <linalg::linalg_backend Backend> const char* backend_name()
+{
+    return Backend == linalg::linalg_backend::native
+               ? "native"
+               : (Backend == linalg::linalg_backend::blas_lapacke ? "blas_lapacke" : "mkl");
+}
+
+template <typename value_t> const char* value_type_name()
+{
+    return std::is_same<value_t, float>::value ? "float" : "double";
+}
+
+const char* triangle_name(linalg::cholesky_decomposition_enum type)
+{
+    return type == linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR ? "lower" : "upper";
+}
+
+template <typename value_t, linalg::linalg_backend Backend>
+std::string test_details(std::size_t dim, linalg::cholesky_decomposition_enum type)
+{
+    return std::string("backend=") + backend_name<Backend>() +
+           ", type=" + value_type_name<value_t>() + ", size=" + std::to_string(dim) + "x" +
+           std::to_string(dim) + ", triangle=" + triangle_name(type);
+}
+
+template <typename value_t>
+void expect_difference(const char* method,
+    const char*                    check,
+    value_t                        actual,
+    value_t                        expected,
+    value_t                        tolerance,
+    const std::string&             details)
+{
+    const double difference = std::fabs(static_cast<double>(actual - expected));
+    const bool   passed     = difference <= static_cast<double>(tolerance);
+
+    if (passed)
+    {
+        LOGGING_LOG_INFO("[PASS]\nmethod tested={}\ncheck={}\ndetails={}\nexpected={}, actual={}, "
+                         "difference={}, tolerance={}",
+            method,
+            check,
+            details,
+            expected,
+            actual,
+            difference,
+            tolerance);
+    }
+    else
+    {
+        LOGGING_LOG_ERROR("[FAIL]\nmethod tested={}\ncheck={}\ndetails={}\nexpected={}, actual={}, "
+                          "difference={}, tolerance={}",
+            method,
+            check,
+            details,
+            expected,
+            actual,
+            difference,
+            tolerance);
+    }
+
+    EXPECT_LE(difference, static_cast<double>(tolerance));
+}
 
 template <typename value_t>
 value_t hmax_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>& b)
@@ -34,22 +102,29 @@ value_t hmax_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t
     return max_error;
 }
 
-template <typename value_t>
-dense_matrix<value_t> matmul(const dense_matrix<value_t>& a, const dense_matrix<value_t>& b)
+template <typename value_t, linalg::linalg_backend Backend>
+dense_matrix<value_t> multiply(const dense_matrix<value_t>& a, const dense_matrix<value_t>& b)
 {
     dense_matrix<value_t> c(a.rows(), b.cols());
-    for (std::size_t i = 0; i < a.rows(); ++i)
-    {
-        for (std::size_t j = 0; j < b.cols(); ++j)
-        {
-            value_t sum = 0;
-            for (std::size_t k = 0; k < a.cols(); ++k)
-            {
-                sum += a(i, k) * b(k, j);
-            }
-            c(i, j) = sum;
-        }
-    }
+    const auto            rows  = static_cast<linalg_int>(a.rows());
+    const auto            cols  = static_cast<linalg_int>(b.cols());
+    const auto            depth = static_cast<linalg_int>(a.cols());
+    const auto            ws_size =
+        linalg::multiplication<value_t, Backend>::workspace_size(rows, cols, depth);
+    std::vector<unsigned char> workspace(ws_size);
+    linalg::multiplication<value_t, Backend>::apply(false,
+        false,
+        rows,
+        cols,
+        depth,
+        a.data(),
+        depth,
+        b.data(),
+        cols,
+        c.data(),
+        cols,
+        workspace.data(),
+        ws_size);
     return c;
 }
 
@@ -112,11 +187,11 @@ void build_cholesky_matrix(
     auto                  t_C = transpose(C);
     if (type == linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)
     {
-        A = matmul(C, t_C);
+        A = multiply<value_t, Backend>(C, t_C);
     }
     else
     {
-        A = matmul(t_C, C);
+        A = multiply<value_t, Backend>(t_C, C);
     }
 
     dense_matrix<value_t> R = A;
@@ -136,8 +211,14 @@ void build_cholesky_matrix(
             }
         }
     }
-    auto diff = hmax_abs_diff(R, C);
-    EXPECT_LE(diff, Tolerance<value_t>::value);
+    auto       diff    = hmax_abs_diff(R, C);
+    const auto details = test_details<value_t, Backend>(dim, type);
+    expect_difference("linalg::cholesky_decomposition",
+        "factor max absolute element error",
+        diff,
+        static_cast<value_t>(0),
+        Tolerance<value_t>::value,
+        details);
 
     // Zero out the opposite triangle so R is purely the Cholesky factor
     // before using it in matrix_invert / linear_solver below.
@@ -194,9 +275,14 @@ void build_cholesky_matrix(
             }
         }
 
-        auto RET = matmul(IA, A);
+        auto RET = multiply<value_t, Backend>(IA, A);
         diff     = hmax_abs_diff(Id, RET);
-        EXPECT_LE(diff, Tolerance<value_t>::value);
+        expect_difference("linalg::inversion",
+            "identity reconstruction max absolute element error",
+            diff,
+            static_cast<value_t>(0),
+            Tolerance<value_t>::value,
+            details);
 
         IA = R;
         linalg::determinant<value_t, linalg::linalg_backend::native>::apply(
@@ -232,7 +318,12 @@ void build_cholesky_matrix(
             }
             solve_diff = std::fmax(solve_diff, std::fabs(static_cast<double>(b[i] - sum)));
         }
-        EXPECT_LE(solve_diff, Tolerance<value_t>::value);
+        expect_difference("linalg::linear_solver",
+            "solution max absolute residual",
+            solve_diff,
+            static_cast<value_t>(0),
+            Tolerance<value_t>::value,
+            details);
     }
 }
 
@@ -259,8 +350,37 @@ template <typename value_t, linalg::linalg_backend Backend> void test_cholesky(s
     // enum the way native and blas_lapacke do.
     if (Backend != linalg::linalg_backend::mkl)
     {
-        EXPECT_ANY_THROW((linalg::cholesky_decomposition<value_t, Backend>::apply(
-            &values[0], 1, (linalg::cholesky_decomposition_enum)'5')));
+        bool threw = false;
+        try
+        {
+            linalg::cholesky_decomposition<value_t, Backend>::apply(
+                &values[0], 1, (linalg::cholesky_decomposition_enum)'5');
+        }
+        catch (...)
+        {
+            threw = true;
+        }
+
+        const auto details = "backend=" + std::string(backend_name<Backend>()) +
+                             ", type=" + value_type_name<value_t>() +
+                             ", size=1x1, triangle=invalid";
+        if (threw)
+        {
+            LOGGING_LOG_INFO("[PASS]\nmethod tested=linalg::cholesky_decomposition\n"
+                             "check=reject invalid triangle\n"
+                             "details={}\nexpected=exception, actual=exception, "
+                             "difference=n/a, tolerance=n/a",
+                details);
+        }
+        else
+        {
+            LOGGING_LOG_ERROR("[FAIL]\nmethod tested=linalg::cholesky_decomposition\n"
+                              "check=reject invalid triangle\n"
+                              "details={}\nexpected=exception, actual=no exception, "
+                              "difference=n/a, tolerance=n/a",
+                details);
+        }
+        EXPECT_TRUE(threw);
     }
 }
 }  // namespace

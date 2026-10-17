@@ -10,6 +10,7 @@
 #include "include/matrix_operation_gpu/transpose_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 namespace linalg
 {
@@ -71,6 +72,7 @@ size_t lu_decomposition_workspace_size(const double* /*type_tag*/, linalg_int ld
 void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("lu_decomposition/gpu<float>");
     LINALG_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
     LINALG_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
@@ -104,6 +106,7 @@ void lu_decomposition(float* m, linalg_int lda, int* pivot, int* info, void* wor
 void lu_decomposition(double* m, linalg_int lda, int* pivot, int* info, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("lu_decomposition/gpu<double>");
     LINALG_CHECK(m != nullptr && pivot != nullptr && info != nullptr, "lu_decomposition: m, pivot, and info must not be null");
     LINALG_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);

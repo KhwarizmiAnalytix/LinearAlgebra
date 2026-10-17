@@ -7,6 +7,7 @@
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 // Single-thread reduction: n is one matrix dimension, not a large array, so
 // a parallel reduction buys nothing here — same rationale and shape as
@@ -96,12 +97,14 @@ size_t matrix_trace_workspace_size(const double* /*type_tag*/)
 float trace(const float* A, linalg_int n, linalg_int lda, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("trace/gpu<float>");
     return matrix_trace_impl(A, n, lda, workspace, workspace_size, stream);
 }
 
 double trace(const double* A, linalg_int n, linalg_int lda, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("trace/gpu<double>");
     return matrix_trace_impl(A, n, lda, workspace, workspace_size, stream);
 }
 

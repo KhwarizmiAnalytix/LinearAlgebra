@@ -11,6 +11,7 @@
 #include "include/matrix_operation_gpu/transpose_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 namespace linalg
 {
@@ -292,6 +293,7 @@ void svd_decomposition(linalg_long rows,
     size_t                           workspace_size,
     cudaStream_t                     stream)
 {
+    LINALG_SCOPE("svd_decomposition/gpu<float>");
     svd_impl(cusolverDnSgesvd_bufferSize,
         cusolverDnSgesvd,
         rows,
@@ -323,6 +325,7 @@ void svd_decomposition(linalg_long rows,
     size_t                           workspace_size,
     cudaStream_t                     stream)
 {
+    LINALG_SCOPE("svd_decomposition/gpu<double>");
     svd_impl(cusolverDnDgesvd_bufferSize,
         cusolverDnDgesvd,
         rows,

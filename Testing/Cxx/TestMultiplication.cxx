@@ -6,6 +6,7 @@
 #include "dense_matrix_test_helper.h"
 #include "include/matrix_operation/multiplication.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 // #define DEBUG_MATRIXMULTIPLICATION
 
@@ -17,7 +18,7 @@ template <typename value_t>
 std::vector<unsigned char> gemm_workspace(linalg_int rows, linalg_int columns, linalg_int depth)
 {
     const auto bytes =
-        linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::workspace_size(
+        linalg::multiplication<value_t, linalg::linalg_backend::native>::workspace_size(
             rows, columns, depth);
     return std::vector<unsigned char>(bytes);
 }
@@ -71,7 +72,7 @@ template <typename value_t> void vector_matrix_multiplication(int rows, int colu
     }
 
     auto gemm_ws = gemm_workspace<value_t>(1, columns, rows);
-    linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::apply(false,
+    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
         false,
         1,
         columns,
@@ -140,7 +141,7 @@ template <typename value_t> void matrix_vector_multiplication(int rows, int colu
     }
 
     auto gemm_ws = gemm_workspace<value_t>(rows, 1, columns);
-    linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::apply(false,
+    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
         false,
         rows,
         1,
@@ -250,7 +251,7 @@ void matrix_multiplication_test(
     }
 
     auto gemm_ws = gemm_workspace<value_t>(rows, columns, depth);
-    linalg::multiplication<value_t, linalg::kMatmulActiveBackend>::apply(transpose_a,
+    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(transpose_a,
         transpose_b,
         rows,
         columns,

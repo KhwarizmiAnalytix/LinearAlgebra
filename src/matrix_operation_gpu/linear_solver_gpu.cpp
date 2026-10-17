@@ -10,6 +10,7 @@
 #include "include/matrix_operation_gpu/transpose_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 namespace linalg
 {
@@ -183,6 +184,7 @@ size_t linear_solver_workspace_size(const double* /*type_tag*/, linalg_int lda, 
 void linear_solver(float* m, linalg_int lda, float* x, linear_solver_type type, int* info,
     void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("linear_solver/gpu<float>");
     LINALG_CHECK(m != nullptr && x != nullptr && info != nullptr, "linear_solver: m, x, and info must not be null");
     LINALG_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
     switch (type)
@@ -203,6 +205,7 @@ void linear_solver(float* m, linalg_int lda, float* x, linear_solver_type type, 
 void linear_solver(double* m, linalg_int lda, double* x, linear_solver_type type, int* info,
     void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("linear_solver/gpu<double>");
     LINALG_CHECK(m != nullptr && x != nullptr && info != nullptr, "linear_solver: m, x, and info must not be null");
     LINALG_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
     switch (type)

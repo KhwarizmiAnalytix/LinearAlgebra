@@ -169,13 +169,12 @@ general, not something this repo calls.
 #include "include/matrix_operation/linear_solver.h"
 
 // In-place lower-triangular Cholesky factor of an n x n row-major matrix.
-// kActiveBackend (include/common/backend.h) is the compile-time choice
-// between the scalar / BLAS+LAPACKE / MKL implementation.
-linalg::detail::cholesky_decomposition<double, linalg::kActiveBackend>::apply(
+// Choose native, blas_lapacke, or mkl explicitly for each operation.
+linalg::cholesky_decomposition<double, linalg::linalg_backend::native>::apply(
     A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
 
 // Solve A x = b in place, reusing the Cholesky factor above.
-linalg::detail::linear_solver<double, linalg::kActiveBackend>::apply(
+linalg::linear_solver<double, linalg::linalg_backend::native>::apply(
     A.data(), pivot.data(), n, x.data(),
     linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER, nullptr, 0);
 ```

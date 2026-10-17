@@ -31,6 +31,7 @@
 #include "include/matrix_operation_gpu/qr_decomposition_gpu.h"
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 
 namespace
 {

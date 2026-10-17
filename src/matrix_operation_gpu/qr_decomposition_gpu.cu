@@ -11,6 +11,7 @@
 #include "include/matrix_operation_gpu/transpose_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 // R's strictly-below-diagonal entries are Householder-vector scratch left
 // over from geqrf, not zero — this clears them, matching the CPU
@@ -249,6 +250,7 @@ void qr_decomposition(linalg_long rows,
     size_t                          workspace_size,
     cudaStream_t                    stream)
 {
+    LINALG_SCOPE("qr_decomposition/gpu<float>");
     qr_impl(cusolverDnSgeqrf_bufferSize,
         cusolverDnSgeqrf,
         cusolverDnSorgqr_bufferSize,
@@ -280,6 +282,7 @@ void qr_decomposition(linalg_long rows,
     size_t                          workspace_size,
     cudaStream_t                    stream)
 {
+    LINALG_SCOPE("qr_decomposition/gpu<double>");
     qr_impl(cusolverDnDgeqrf_bufferSize,
         cusolverDnDgeqrf,
         cusolverDnDorgqr_bufferSize,

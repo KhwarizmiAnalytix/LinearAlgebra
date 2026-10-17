@@ -11,6 +11,7 @@
 #include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 // One thread per column/row, looping serially over the other dimension —
 // simple and obviously correct rather than a tree reduction, matching this
@@ -255,6 +256,7 @@ size_t matrix_norm_workspace_size(const double* /*type_tag*/, linalg_long rows, 
 float norm(const float* A, linalg_long rows, linalg_long columns, linalg_long lda,
     norm_type type, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("norm/gpu<float>");
     return matrix_norm_impl(
         cublasSnrm2, cublasIsamax, A, rows, columns, lda, type, workspace, workspace_size, stream);
 }
@@ -262,6 +264,7 @@ float norm(const float* A, linalg_long rows, linalg_long columns, linalg_long ld
 double norm(const double* A, linalg_long rows, linalg_long columns, linalg_long lda,
     norm_type type, void* workspace, size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("norm/gpu<double>");
     return matrix_norm_impl(
         cublasDnrm2, cublasIdamax, A, rows, columns, lda, type, workspace, workspace_size, stream);
 }

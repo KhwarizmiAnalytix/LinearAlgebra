@@ -9,6 +9,7 @@
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/common/linalg_profiler.h"
 
 namespace linalg
 {
@@ -42,6 +43,7 @@ size_t matrix_transpose_workspace_size(const double* /*type_tag*/, linalg_long r
 void transpose(linalg_long rows, linalg_long columns, float* m, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("transpose/gpu<float>");
     LINALG_CHECK(m != nullptr, "transpose: m must not be null");
     LINALG_CHECK(rows != 0 && columns != 0, "transpose: rows and columns must be positive");
     LINALG_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const float*>(nullptr), rows, columns),
@@ -55,6 +57,7 @@ void transpose(linalg_long rows, linalg_long columns, float* m, void* workspace,
 void transpose(linalg_long rows, linalg_long columns, double* m, void* workspace,
     size_t workspace_size, cudaStream_t stream)
 {
+    LINALG_SCOPE("transpose/gpu<double>");
     LINALG_CHECK(m != nullptr, "transpose: m must not be null");
     LINALG_CHECK(rows != 0 && columns != 0, "transpose: rows and columns must be positive");
     LINALG_CHECK(workspace_size >= matrix_transpose_workspace_size(static_cast<const double*>(nullptr), rows, columns),

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "test_reporting.h"
 #include "include/matrix_operation/pentadiagonal_operations.h"
 #include "include/matrix_operation/tridiagonal_operations.h"
 

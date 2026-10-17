@@ -11,11 +11,7 @@
 namespace linalg
 {
 
-// Null/positivity checks shared by every transpose<T, Backend>::
-// apply below, so callers (tests included) get the same validation
-// regardless of which backend is active. There is no non-detail
-// transpose() wrapper to put this in any more — callers use
-// transpose<T, kTransposeActiveBackend>::apply directly.
+// Validate inputs for the native transpose specializations below.
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
     LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
