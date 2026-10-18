@@ -2,6 +2,7 @@
 #include <cstdlib>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/trace.h"
 #include "gtest/gtest.h"
 #include "test_reporting.h"
@@ -24,7 +25,8 @@ template <> struct TraceTolerance<double>
     static constexpr double tolerance = 1e-12;
 };
 
-template <typename value_t> void test_trace(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_trace(std::size_t n)
 {
     dense_matrix<value_t> M(n, n);
     for (std::size_t i = 0; i < n; i++)
@@ -42,7 +44,7 @@ template <typename value_t> void test_trace(std::size_t n)
     }
 
     const value_t actual =
-        linalg::trace<value_t, linalg::linalg_backend::native>::apply(
+        linalg::trace<value_t, Backend>::apply(
             M.begin(), static_cast<linalg_int>(n), static_cast<linalg_int>(n));
 
     EXPECT_NEAR(static_cast<double>(actual), static_cast<double>(expected),
@@ -52,8 +54,11 @@ template <typename value_t> void test_trace(std::size_t n)
 
 TEST(Math, MatrixTrace)
 {
-    test_trace<float>(1);
-    test_trace<float>(5);
-    test_trace<double>(1);
-    test_trace<double>(7);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_trace<float, Backend>(1);
+        test_trace<float, Backend>(5);
+        test_trace<double, Backend>(1);
+        test_trace<double, Backend>(7);
+    });
 }

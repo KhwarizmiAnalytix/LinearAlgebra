@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/multiplication.h"
 #include "gtest/gtest.h"
 #include "test_reporting.h"
@@ -14,12 +15,11 @@ namespace
 {
 using linalg_test::dense_matrix;
 
-template <typename value_t>
+template <typename value_t, linalg::linalg_backend Backend>
 std::vector<unsigned char> gemm_workspace(linalg_int rows, linalg_int columns, linalg_int depth)
 {
     const auto bytes =
-        linalg::multiplication<value_t, linalg::linalg_backend::native>::workspace_size(
-            rows, columns, depth);
+        linalg::multiplication<value_t, Backend>::workspace_size(rows, columns, depth);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -47,7 +47,8 @@ std::default_random_engine test_generator()
 // v (1 x rows) * A (rows x columns) -> r (1 x columns), via the raw
 // multiplication(transpose_a=false, transpose_b=false, ...) entry
 // point, treating v as a 1-row matrix.
-template <typename value_t> void vector_matrix_multiplication(int rows, int columns)
+template <typename value_t, linalg::linalg_backend Backend>
+void vector_matrix_multiplication(int rows, int columns)
 {
     constexpr auto tol = matrixTolerance<value_t>::tolerance;
 
@@ -71,8 +72,8 @@ template <typename value_t> void vector_matrix_multiplication(int rows, int colu
         v[static_cast<std::size_t>(j)] = (value_t)distribution(generator);
     }
 
-    auto gemm_ws = gemm_workspace<value_t>(1, columns, rows);
-    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
+    auto gemm_ws = gemm_workspace<value_t, Backend>(1, columns, rows);
+    linalg::multiplication<value_t, Backend>::apply(false,
         false,
         1,
         columns,
@@ -116,7 +117,8 @@ template <typename value_t> void vector_matrix_multiplication(int rows, int colu
 // A (rows x columns) * v (columns x 1) -> r (rows x 1), plus a transpose
 // sanity check (B = transpose(A) computed by hand, since transpose
 // is not exercised by this test file — matches the original test scope).
-template <typename value_t> void matrix_vector_multiplication(int rows, int columns)
+template <typename value_t, linalg::linalg_backend Backend>
+void matrix_vector_multiplication(int rows, int columns)
 {
     constexpr auto tol = matrixTolerance<value_t>::tolerance;
 
@@ -140,8 +142,8 @@ template <typename value_t> void matrix_vector_multiplication(int rows, int colu
         v[static_cast<std::size_t>(j)] = (value_t)distribution(generator);
     }
 
-    auto gemm_ws = gemm_workspace<value_t>(rows, 1, columns);
-    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
+    auto gemm_ws = gemm_workspace<value_t, Backend>(rows, 1, columns);
+    linalg::multiplication<value_t, Backend>::apply(false,
         false,
         rows,
         1,
@@ -206,7 +208,7 @@ template <typename value_t> void matrix_vector_multiplication(int rows, int colu
 // B's storage shape is (depth x columns) when !transpose_b, else
 // (columns x depth) — matching linalg::multiplication's row-major
 // convention (see src/matrix_operation/multiplication.cpp).
-template <typename value_t>
+template <typename value_t, linalg::linalg_backend Backend>
 void matrix_multiplication_test(
     int rows, int columns, int depth, bool transpose_a, bool transpose_b)
 {
@@ -250,8 +252,8 @@ void matrix_multiplication_test(
         }
     }
 
-    auto gemm_ws = gemm_workspace<value_t>(rows, columns, depth);
-    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(transpose_a,
+    auto gemm_ws = gemm_workspace<value_t, Backend>(rows, columns, depth);
+    linalg::multiplication<value_t, Backend>::apply(transpose_a,
         transpose_b,
         rows,
         columns,
@@ -300,21 +302,24 @@ TEST(Math, MatrixMultiplication)
     const int lda     = 64 + 3;
     const int columns = 64 + 32 + 8 + 4 + 1 + 9;
 
-    matrix_vector_multiplication<double>(rows, columns);
-    matrix_vector_multiplication<float>(rows, columns);
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        matrix_vector_multiplication<double, Backend>(rows, columns);
+        matrix_vector_multiplication<float, Backend>(rows, columns);
 
-    vector_matrix_multiplication<float>(rows, columns);
-    vector_matrix_multiplication<double>(rows, columns);
+        vector_matrix_multiplication<float, Backend>(rows, columns);
+        vector_matrix_multiplication<double, Backend>(rows, columns);
 
-    matrix_multiplication_test<float>(rows, lda, columns, false, false);
-    matrix_multiplication_test<float>(rows, lda, columns, true, false);
-    matrix_multiplication_test<float>(rows, lda, columns, false, true);
-    matrix_multiplication_test<float>(rows, lda, columns, true, true);
+        matrix_multiplication_test<float, Backend>(rows, lda, columns, false, false);
+        matrix_multiplication_test<float, Backend>(rows, lda, columns, true, false);
+        matrix_multiplication_test<float, Backend>(rows, lda, columns, false, true);
+        matrix_multiplication_test<float, Backend>(rows, lda, columns, true, true);
 
-    matrix_multiplication_test<double>(rows, lda, columns, false, false);
-    matrix_multiplication_test<double>(rows, lda, columns, true, false);
-    matrix_multiplication_test<double>(rows, lda, columns, false, true);
-    matrix_multiplication_test<double>(rows, lda, columns, true, true);
+        matrix_multiplication_test<double, Backend>(rows, lda, columns, false, false);
+        matrix_multiplication_test<double, Backend>(rows, lda, columns, true, false);
+        matrix_multiplication_test<double, Backend>(rows, lda, columns, false, true);
+        matrix_multiplication_test<double, Backend>(rows, lda, columns, true, true);
+    });
 }
 
 // The scalar backend's LINALG_HAS_VECTORIZATION path (multiplication.cpp)
@@ -330,19 +335,22 @@ TEST(Math, MatrixMultiplicationVectorizedBoundary)
 {
     constexpr int rows = 5;
 
-    for (int columns = 1; columns <= 16; ++columns)
-    {
-        for (int depth = 1; depth <= 16; ++depth)
+    linalg_test::for_each_available_backend([&](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        for (int columns = 1; columns <= 16; ++columns)
         {
-            matrix_multiplication_test<float>(rows, depth, columns, false, false);
-            matrix_multiplication_test<float>(rows, depth, columns, true, false);
-            matrix_multiplication_test<float>(rows, depth, columns, false, true);
-            matrix_multiplication_test<float>(rows, depth, columns, true, true);
+            for (int depth = 1; depth <= 16; ++depth)
+            {
+                matrix_multiplication_test<float, Backend>(rows, depth, columns, false, false);
+                matrix_multiplication_test<float, Backend>(rows, depth, columns, true, false);
+                matrix_multiplication_test<float, Backend>(rows, depth, columns, false, true);
+                matrix_multiplication_test<float, Backend>(rows, depth, columns, true, true);
 
-            matrix_multiplication_test<double>(rows, depth, columns, false, false);
-            matrix_multiplication_test<double>(rows, depth, columns, true, false);
-            matrix_multiplication_test<double>(rows, depth, columns, false, true);
-            matrix_multiplication_test<double>(rows, depth, columns, true, true);
+                matrix_multiplication_test<double, Backend>(rows, depth, columns, false, false);
+                matrix_multiplication_test<double, Backend>(rows, depth, columns, true, false);
+                matrix_multiplication_test<double, Backend>(rows, depth, columns, false, true);
+                matrix_multiplication_test<double, Backend>(rows, depth, columns, true, true);
+            }
         }
-    }
+    });
 }

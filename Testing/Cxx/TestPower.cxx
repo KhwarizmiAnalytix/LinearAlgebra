@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/power.h"
 #include "gtest/gtest.h"
 #include "test_reporting.h"
@@ -25,9 +26,10 @@ template <> struct PowerTolerance<double>
     static constexpr double tolerance = 1e-12;
 };
 
-template <typename value_t> std::vector<unsigned char> power_workspace(linalg_int n)
+template <typename value_t, linalg::linalg_backend Backend>
+std::vector<unsigned char> power_workspace(linalg_int n)
 {
-    const auto bytes = linalg::power<value_t, linalg::linalg_backend::native>::workspace_size(n);
+    const auto bytes = linalg::power<value_t, Backend>::workspace_size(n);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -75,12 +77,12 @@ template <typename value_t> dense_matrix<value_t> identity(std::size_t n)
     return I;
 }
 
-template <typename value_t>
+template <typename value_t, linalg::linalg_backend Backend>
 dense_matrix<value_t> apply_power(const dense_matrix<value_t>& A, std::size_t n, linalg_int e)
 {
     dense_matrix<value_t> R(n, n);
-    auto                  ws = power_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::power<value_t, linalg::linalg_backend::native>::apply(A.begin(),
+    auto                  ws = power_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    linalg::power<value_t, Backend>::apply(A.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         e,
@@ -108,60 +110,66 @@ template <typename value_t> dense_matrix<value_t> random_matrix(std::size_t n)
 }
 
 // A^0 == I, regardless of A.
-template <typename value_t> void test_zero_power(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_zero_power(std::size_t n)
 {
     const auto A = random_matrix<value_t>(n);
-    const auto R = apply_power(A, n, 0);
+    const auto R = apply_power<value_t, Backend>(A, n, 0);
     EXPECT_LT(max_abs_diff(R, identity<value_t>(n), n), PowerTolerance<value_t>::tolerance);
 }
 
 // A^1 == A.
-template <typename value_t> void test_identity_power(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_identity_power(std::size_t n)
 {
     const auto A = random_matrix<value_t>(n);
-    const auto R = apply_power(A, n, 1);
+    const auto R = apply_power<value_t, Backend>(A, n, 1);
     EXPECT_LT(max_abs_diff(R, A, n), PowerTolerance<value_t>::tolerance);
 }
 
 // A^2 and A^3 against direct multiplication.
-template <typename value_t> void test_small_positive_powers(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_small_positive_powers(std::size_t n)
 {
     const auto A  = random_matrix<value_t>(n);
     const auto A2 = linalg_test::matmul(A, A);
     const auto A3 = linalg_test::matmul(A2, A);
 
-    EXPECT_LT(normalized_max_diff(apply_power(A, n, 2), A2, n), PowerTolerance<value_t>::tolerance);
-    EXPECT_LT(normalized_max_diff(apply_power(A, n, 3), A3, n), PowerTolerance<value_t>::tolerance);
+    EXPECT_LT(normalized_max_diff(apply_power<value_t, Backend>(A, n, 2), A2, n), PowerTolerance<value_t>::tolerance);
+    EXPECT_LT(normalized_max_diff(apply_power<value_t, Backend>(A, n, 3), A3, n), PowerTolerance<value_t>::tolerance);
 }
 
 // A^k for a larger k, built by repeated multiplication, exercises the binary
 // (square-and-multiply) exponentiation path with more than one set bit.
-template <typename value_t> void test_large_positive_power(std::size_t n, linalg_int k)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_large_positive_power(std::size_t n, linalg_int k)
 {
     const auto            A         = random_matrix<value_t>(n);
     dense_matrix<value_t> reference = identity<value_t>(n);
     for (linalg_int i = 0; i < k; ++i)
         reference = linalg_test::matmul(reference, A);
 
-    EXPECT_LT(normalized_max_diff(apply_power(A, n, k), reference, n),
+    EXPECT_LT(normalized_max_diff(apply_power<value_t, Backend>(A, n, k), reference, n),
         PowerTolerance<value_t>::tolerance);
 }
 
 // A^-1 matches an explicit inverse computed via A^-1 * A == I.
-template <typename value_t> void test_negative_one_power(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_negative_one_power(std::size_t n)
 {
     const auto A    = random_matrix<value_t>(n);
-    const auto Ainv = apply_power(A, n, -1);
+    const auto Ainv = apply_power<value_t, Backend>(A, n, -1);
     const auto prod = linalg_test::matmul(Ainv, A);
     EXPECT_LT(max_abs_diff(prod, identity<value_t>(n), n), PowerTolerance<value_t>::tolerance);
 }
 
 // A^(-k) * A^k == I: round-trips back to identity regardless of entry scale.
-template <typename value_t> void test_negative_power(std::size_t n, linalg_int k)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_negative_power(std::size_t n, linalg_int k)
 {
     const auto A      = random_matrix<value_t>(n);
-    const auto Anegk  = apply_power(A, n, -k);
-    const auto Aposk  = apply_power(A, n,  k);
+    const auto Anegk  = apply_power<value_t, Backend>(A, n, -k);
+    const auto Aposk  = apply_power<value_t, Backend>(A, n,  k);
     const auto result = linalg_test::matmul(Anegk, Aposk);
     EXPECT_LT(max_abs_diff(result, identity<value_t>(n), n), PowerTolerance<value_t>::tolerance);
 }
@@ -170,21 +178,24 @@ template <typename value_t> void test_negative_power(std::size_t n, linalg_int k
 
 TEST(Math, MatrixPower)
 {
-    test_zero_power<float>(4);
-    test_zero_power<double>(5);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_zero_power<float, Backend>(4);
+        test_zero_power<double, Backend>(5);
 
-    test_identity_power<float>(4);
-    test_identity_power<double>(5);
+        test_identity_power<float, Backend>(4);
+        test_identity_power<double, Backend>(5);
 
-    test_small_positive_powers<float>(4);
-    test_small_positive_powers<double>(5);
+        test_small_positive_powers<float, Backend>(4);
+        test_small_positive_powers<double, Backend>(5);
 
-    test_large_positive_power<float>(4, 7);
-    test_large_positive_power<double>(5, 11);
+        test_large_positive_power<float, Backend>(4, 7);
+        test_large_positive_power<double, Backend>(5, 11);
 
-    test_negative_one_power<float>(4);
-    test_negative_one_power<double>(5);
+        test_negative_one_power<float, Backend>(4);
+        test_negative_one_power<double, Backend>(5);
 
-    test_negative_power<float>(4, 5);
-    test_negative_power<double>(5, 6);
+        test_negative_power<float, Backend>(4, 5);
+        test_negative_power<double, Backend>(5, 6);
+    });
 }

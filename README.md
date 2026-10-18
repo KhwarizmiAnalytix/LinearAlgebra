@@ -206,13 +206,21 @@ wires `ThirdParty/googletest` in via `local_repository`.
 ## CI & Coverage
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
-PR to `main`: CMake scalar-fallback build+test on Linux and macOS, a CMake
-build+test with `-DLINALG_ENABLE_MKL=ON` (Linux, Intel oneMKL via apt),
-`bazel test //...` on Linux and macOS, and a `Coverage` job (Linux/macOS/Windows,
-`-DLINALG_ENABLE_COVERAGE=ON` via `coverage-tool`, Codecov upload on Linux).
-`LINALG_ENABLE_BLAS` and `LINALG_ENABLE_CUBLAS` are **not** covered by CI (no
-BLAS/LAPACKE job; no GPU runner) — both are exercised only by local, manual
-builds; see [`docs/gpu_backend_design.md`](docs/gpu_backend_design.md) §7 for
-how the GPU backend is verified today. See [CONTRIBUTING.md](CONTRIBUTING.md)
+PR to `main`: native CMake builds with GCC and Clang, OpenBLAS/LAPACKE and
+MKL builds, LU pivoting, sanitizers, and `bazel test //Testing/...`.
+The SIMD matrix covers vectorization disabled and each explicit ISA; an ISA
+is compiled but not executed when the runner lacks the required instructions.
+Shared and static install-consumer jobs build a separate application against
+the installed packages. Coverage runs on Linux/macOS/Windows for the native
+backend and on Linux for OpenBLAS/LAPACKE and MKL, with separate report artifacts
+and Codecov flags per backend.
+
+CUDA is always compiled in a GPU-less container. GPU runtime tests run on pushes
+to `main` when the repository variable `LINALG_GPU_CI_ENABLED` is `true` and a
+self-hosted runner with labels `linux`, `x64`, and `gpu` is registered. That runner
+needs Docker, a compatible NVIDIA driver, and the NVIDIA Container Toolkit;
+the job installs its build tools inside the CUDA container. Until that runner
+is available, GPU numerical correctness requires manual hardware testing.
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 for running the same checks locally, plus sanitizers and lintrunner (not yet
 wired into CI).

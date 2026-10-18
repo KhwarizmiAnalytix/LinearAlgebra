@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/exponential.h"
 #include "include/matrix_operation/multiplication.h"
 #include "gtest/gtest.h"
@@ -26,17 +27,17 @@ template <> struct ExpTolerance<double>
     static constexpr double tolerance = 1.e-9;
 };
 
-template <typename value_t> std::vector<unsigned char> exp_workspace(linalg_int n)
+template <typename value_t, linalg::linalg_backend Backend>
+std::vector<unsigned char> exp_workspace(linalg_int n)
 {
-    const auto bytes =
-        linalg::exponential<value_t, linalg::linalg_backend::native>::workspace_size(n);
+    const auto bytes = linalg::exponential<value_t, Backend>::workspace_size(n);
     return std::vector<unsigned char>(bytes);
 }
 
-template <typename value_t> std::vector<unsigned char> gemm_workspace(linalg_int n)
+template <typename value_t, linalg::linalg_backend Backend>
+std::vector<unsigned char> gemm_workspace(linalg_int n)
 {
-    const auto bytes =
-        linalg::multiplication<value_t, linalg::linalg_backend::native>::workspace_size(n, n, n);
+    const auto bytes = linalg::multiplication<value_t, Backend>::workspace_size(n, n, n);
     return std::vector<unsigned char>(bytes);
 }
 
@@ -56,13 +57,14 @@ double max_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>&
 }
 
 // exp(0) == I.
-template <typename value_t> void test_zero()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_zero()
 {
     const std::size_t     n = 4;
     dense_matrix<value_t> A(n, n);
     dense_matrix<value_t> R(n, n);
-    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(A.begin(),
+    auto                  ws = exp_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    linalg::exponential<value_t, Backend>::apply(A.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         R.begin(),
@@ -79,7 +81,8 @@ template <typename value_t> void test_zero()
 }
 
 // A diagonal: exp(A) is diagonal with exp of each entry.
-template <typename value_t> void test_diagonal()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_diagonal()
 {
     const std::size_t     n = 3;
     dense_matrix<value_t> A(n, n);
@@ -88,8 +91,8 @@ template <typename value_t> void test_diagonal()
     A(2, 2) = value_t(2.0);
 
     dense_matrix<value_t> R(n, n);
-    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(A.begin(),
+    auto                  ws = exp_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    linalg::exponential<value_t, Backend>::apply(A.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         R.begin(),
@@ -108,14 +111,15 @@ template <typename value_t> void test_diagonal()
 }
 
 // Nilpotent N = [[0,1],[0,0]] (N^2 = 0): exp(N) = I + N = [[1,1],[0,1]].
-template <typename value_t> void test_nilpotent()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_nilpotent()
 {
     dense_matrix<value_t> A(2, 2);
     A(0, 1) = value_t(1);
 
     dense_matrix<value_t> R(2, 2);
-    auto                  ws = exp_workspace<value_t>(2);
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(
+    auto                  ws = exp_workspace<value_t, Backend>(2);
+    linalg::exponential<value_t, Backend>::apply(
         A.begin(), 2, 2, R.begin(), 2, ws.data(), ws.size());
 
     EXPECT_NEAR(static_cast<double>(R(0, 0)), 1., ExpTolerance<value_t>::tolerance);
@@ -128,15 +132,16 @@ template <typename value_t> void test_nilpotent()
 // rotation matrix [[cos t, -sin t], [sin t, cos t]]. A large theta gives
 // ||A||_1 well above the degree-13 threshold, exercising the scaling and
 // repeated-squaring loop rather than just a direct Pade evaluation.
-template <typename value_t> void test_rotation_generator(double theta)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_rotation_generator(double theta)
 {
     dense_matrix<value_t> A(2, 2);
     A(0, 1) = static_cast<value_t>(-theta);
     A(1, 0) = static_cast<value_t>(theta);
 
     dense_matrix<value_t> R(2, 2);
-    auto                  ws = exp_workspace<value_t>(2);
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(
+    auto                  ws = exp_workspace<value_t, Backend>(2);
+    linalg::exponential<value_t, Backend>::apply(
         A.begin(), 2, 2, R.begin(), 2, ws.data(), ws.size());
 
     EXPECT_NEAR(static_cast<double>(R(0, 0)), std::cos(theta), ExpTolerance<value_t>::tolerance);
@@ -148,7 +153,8 @@ template <typename value_t> void test_rotation_generator(double theta)
 // exp(A) computed against a directly-summed, high-order Taylor series
 // (independent of the scaling-and-squaring/Pade implementation under test)
 // for a general, moderate-norm random matrix.
-template <typename value_t> void test_against_taylor_series(std::size_t n, double scale = 1.0)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_against_taylor_series(std::size_t n, double scale = 1.0)
 {
     dense_matrix<value_t> A(n, n);
     for (std::size_t i = 0; i < n; ++i)
@@ -185,7 +191,8 @@ template <typename value_t> void test_against_taylor_series(std::size_t n, doubl
     constexpr int kTaylorTerms = 40;
     for (int k = 1; k <= kTaylorTerms; ++k)
     {
-        auto gemm_ws = gemm_workspace<double>(static_cast<linalg_int>(n));
+        // Reference Taylor series always uses native to build the expected value.
+        auto gemm_ws = gemm_workspace<double, linalg::linalg_backend::native>(static_cast<linalg_int>(n));
         linalg::multiplication<double, linalg::linalg_backend::native>::apply(false,
             false,
             static_cast<linalg_int>(n),
@@ -212,8 +219,8 @@ template <typename value_t> void test_against_taylor_series(std::size_t n, doubl
     }
 
     dense_matrix<value_t> R(n, n);
-    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(A.begin(),
+    auto                  ws = exp_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    linalg::exponential<value_t, Backend>::apply(A.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         R.begin(),
@@ -231,7 +238,8 @@ template <typename value_t> void test_against_taylor_series(std::size_t n, doubl
 }
 
 // exp(A) * exp(-A) == I, a property independent of any closed-form value.
-template <typename value_t> void test_inverse_property(std::size_t n)
+template <typename value_t, linalg::linalg_backend Backend>
+void test_inverse_property(std::size_t n)
 {
     dense_matrix<value_t> A(n, n);
     dense_matrix<value_t> negA(n, n);
@@ -246,15 +254,15 @@ template <typename value_t> void test_inverse_property(std::size_t n)
 
     dense_matrix<value_t> expA(n, n);
     dense_matrix<value_t> expNegA(n, n);
-    auto                  ws = exp_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(A.begin(),
+    auto                  ws = exp_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    linalg::exponential<value_t, Backend>::apply(A.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         expA.begin(),
         static_cast<linalg_int>(n),
         ws.data(),
         ws.size());
-    linalg::exponential<value_t, linalg::linalg_backend::native>::apply(negA.begin(),
+    linalg::exponential<value_t, Backend>::apply(negA.begin(),
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
         expNegA.begin(),
@@ -263,8 +271,8 @@ template <typename value_t> void test_inverse_property(std::size_t n)
         ws.size());
 
     dense_matrix<value_t> product(n, n);
-    auto                  gemm_ws = gemm_workspace<value_t>(static_cast<linalg_int>(n));
-    linalg::multiplication<value_t, linalg::linalg_backend::native>::apply(false,
+    auto                  gemm_ws = gemm_workspace<value_t, Backend>(static_cast<linalg_int>(n));
+    linalg::multiplication<value_t, Backend>::apply(false,
         false,
         static_cast<linalg_int>(n),
         static_cast<linalg_int>(n),
@@ -289,38 +297,41 @@ template <typename value_t> void test_inverse_property(std::size_t n)
 
 TEST(Math, MatrixExponential)
 {
-    test_zero<float>();
-    test_zero<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_zero<float, Backend>();
+        test_zero<double, Backend>();
 
-    test_diagonal<float>();
-    test_diagonal<double>();
+        test_diagonal<float, Backend>();
+        test_diagonal<double, Backend>();
 
-    test_nilpotent<float>();
-    test_nilpotent<double>();
+        test_nilpotent<float, Backend>();
+        test_nilpotent<double, Backend>();
 
-    test_rotation_generator<float>(0.7);
-    test_rotation_generator<double>(0.7);
-    test_rotation_generator<float>(20.0);
-    test_rotation_generator<double>(20.0);
+        test_rotation_generator<float, Backend>(0.7);
+        test_rotation_generator<double, Backend>(0.7);
+        test_rotation_generator<float, Backend>(20.0);
+        test_rotation_generator<double, Backend>(20.0);
 
-    test_against_taylor_series<float>(5);
-    test_against_taylor_series<double>(6);
+        test_against_taylor_series<float, Backend>(5);
+        test_against_taylor_series<double, Backend>(6);
 
-    // Double theta thresholds (degree: upper bound on ||A||_1) are
-    // T1: 2.22e-16, T2: 2.58e-8, T4: 3.40e-4, T8: 4.99e-2, T12: 3.00e-1,
-    // T18 (scale-and-square beyond): 1.09e0. These magnitudes keep ||A||_1
-    // comfortably inside each bracket in turn, so every degree path
-    // (T2/T4/T8/T12 in particular, not otherwise exercised above) is
-    // checked against the independent Taylor-series reference.
-    test_against_taylor_series<double>(3, 1e-8);    // T2 bracket
-    test_against_taylor_series<double>(3, 1e-4);    // T4 bracket
-    test_against_taylor_series<double>(3, 1e-2);    // T8 bracket
-    test_against_taylor_series<double>(3, 1.5e-1);  // T12 bracket
-    test_against_taylor_series<float>(3, 1e-8);     // T1 bracket (float)
-    test_against_taylor_series<float>(3, 3e-4);     // T2 bracket (float)
-    test_against_taylor_series<float>(3, 1e-2);     // T4 bracket (float)
-    test_against_taylor_series<float>(3, 3e-1);     // T8 bracket (float)
+        // Double theta thresholds (degree: upper bound on ||A||_1) are
+        // T1: 2.22e-16, T2: 2.58e-8, T4: 3.40e-4, T8: 4.99e-2, T12: 3.00e-1,
+        // T18 (scale-and-square beyond): 1.09e0. These magnitudes keep ||A||_1
+        // comfortably inside each bracket in turn, so every degree path
+        // (T2/T4/T8/T12 in particular, not otherwise exercised above) is
+        // checked against the independent Taylor-series reference.
+        test_against_taylor_series<double, Backend>(3, 1e-8);    // T2 bracket
+        test_against_taylor_series<double, Backend>(3, 1e-4);    // T4 bracket
+        test_against_taylor_series<double, Backend>(3, 1e-2);    // T8 bracket
+        test_against_taylor_series<double, Backend>(3, 1.5e-1);  // T12 bracket
+        test_against_taylor_series<float, Backend>(3, 1e-8);     // T1 bracket (float)
+        test_against_taylor_series<float, Backend>(3, 3e-4);     // T2 bracket (float)
+        test_against_taylor_series<float, Backend>(3, 1e-2);     // T4 bracket (float)
+        test_against_taylor_series<float, Backend>(3, 3e-1);     // T8 bracket (float)
 
-    test_inverse_property<float>(5);
-    test_inverse_property<double>(6);
+        test_inverse_property<float, Backend>(5);
+        test_inverse_property<double, Backend>(6);
+    });
 }

@@ -12,12 +12,21 @@ concurrency:
 
 jobs:
   cmake:
-    name: CMake (${{ matrix.os }}, scalar fallback)
+    name: CMake (${{ matrix.os }}, ${{ matrix.compiler }}, native)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+          - os: ubuntu-latest
+            compiler: clang
+          - os: macos-latest
+            compiler: clang
+    env:
+      CC: ${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }}
+      CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,7 +47,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --no-tests=error
 
   cmake-mkl:
     name: CMake (Linux, Intel MKL backend)
@@ -203,6 +212,158 @@ jobs:
       - name: Build
         run: cmake --build build-cuda -j
 
+  simd:
+    name: SIMD (${{ matrix.isa }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            isa: disabled
+          - os: ubuntu-latest
+            isa: scalar
+          - os: ubuntu-latest
+            isa: sse2
+          - os: ubuntu-latest
+            isa: avx
+          - os: ubuntu-latest
+            isa: avx2
+          - os: ubuntu-latest
+            isa: avx512
+          - os: macos-latest
+            isa: neon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure
+        env:
+          SIMD_ISA: ${{ matrix.isa }}
+        shell: bash
+        run: |
+          if [[ "$SIMD_ISA" == disabled ]]; then
+            cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINALG_ENABLE_VECTORIZATION=OFF
+          else
+            cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DLINALG_ENABLE_VECTORIZATION=ON -DLINALG_VECTORIZATION_ISA="$SIMD_ISA"
+          fi
+
+      - name: Build
+        run: cmake --build build-simd --parallel 4
+
+      - name: Test when the runner supports the ISA
+        env:
+          SIMD_ISA: ${{ matrix.isa }}
+        shell: bash
+        run: |
+          case "$SIMD_ISA" in
+            avx) required_flags="avx" ;;
+            avx2) required_flags="avx2 fma" ;;
+            avx512) required_flags="avx512f avx2 fma" ;;
+            neon)
+              test "$(uname -m)" = arm64
+              required_flags="" ;;
+            *) required_flags="" ;;
+          esac
+          for flag in $required_flags; do
+            if ! grep -qw "$flag" /proc/cpuinfo; then
+              echo "Compile-only: runner lacks $flag" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
+          ctest --test-dir build-simd --output-on-failure --no-tests=error
+
+  cuda-runtime:
+    name: CUDA (GPU runtime)
+    # Enable only after registering a GPU runner with these labels, Docker,
+    # an NVIDIA driver, and the NVIDIA Container Toolkit installed.
+    # Run trusted main-branch code only on the persistent self-hosted runner.
+    if: github.event_name == 'push' && vars.LINALG_GPU_CI_ENABLED == 'true'
+    runs-on: [self-hosted, linux, x64, gpu]
+    timeout-minutes: 30
+    container:
+      image: nvidia/cuda:12.6.2-devel-ubuntu22.04
+      options: --gpus all
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update && apt-get install -y ninja-build git python3-pip
+          python3 -m pip install "cmake>=3.24,<4"
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify GPU access
+        run: nvidia-smi
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-gpu -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DLINALG_ENABLE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=native
+
+      - name: Build
+        run: cmake --build build-gpu --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build-gpu --output-on-failure --no-tests=error
+
+  install-consumer:
+    name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shared: ['ON', 'OFF']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Build and install packages, then run external consumer
+        env:
+          BUILD_SHARED: ${{ matrix.shared }}
+        shell: bash
+        run: |
+          package_prefix="$RUNNER_TEMP/linalg-package"
+          cmake -S ThirdParty/Logging -B build-logging-install -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS="$BUILD_SHARED" \
+            -DLOGGING_ENABLE_TESTING=OFF -DLOGGING_ENABLE_BENCHMARK=OFF \
+            -DLOGGING_ENABLE_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$package_prefix" \
+            -DCMAKE_INSTALL_RPATH="$package_prefix/lib"
+          cmake --build build-logging-install --parallel 4
+          cmake --install build-logging-install
+          cmake -S . -B build-install -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS="$BUILD_SHARED" -DLINALG_ENABLE_TESTING=OFF \
+            -DCMAKE_INSTALL_PREFIX="$package_prefix" -DCMAKE_INSTALL_RPATH="$package_prefix/lib"
+          cmake --build build-install --parallel 4
+          cmake --install build-install
+          # Copy the consumer outside the checkout; it must use installed headers/libraries.
+          cp -R Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
+          cmake -S "$RUNNER_TEMP/linalg-consumer" -B "$RUNNER_TEMP/linalg-consumer-build" \
+            -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$package_prefix"
+          cmake --build "$RUNNER_TEMP/linalg-consumer-build" --parallel 4
+          ctest --test-dir "$RUNNER_TEMP/linalg-consumer-build" --output-on-failure --no-tests=error
+
   bazel:
     name: Bazel (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -240,13 +401,23 @@ jobs:
   # the binaries. Codecov upload stays Linux/lcov-only.
   # ---------------------------------------------------------------------------
   coverage:
-    name: Coverage / ${{ matrix.os }}
+    name: Coverage / ${{ matrix.os }} / ${{ matrix.backend }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            backend: native
+          - os: ubuntu-latest
+            backend: openblas
+          - os: ubuntu-latest
+            backend: mkl
+          - os: macos-latest
+            backend: native
+          - os: windows-latest
+            backend: native
     env:
       CC: ${{ matrix.os == 'ubuntu-latest' && 'gcc' || '' }}
       CXX: ${{ matrix.os == 'ubuntu-latest' && 'g++' || '' }}
@@ -258,6 +429,20 @@ jobs:
       - name: Install tools (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y ninja-build lcov
+
+      - name: Install OpenBLAS/LAPACKE
+        if: matrix.backend == 'openblas'
+        run: sudo apt-get install -y libopenblas-dev liblapacke-dev
+
+      - name: Install Intel oneMKL
+        if: matrix.backend == 'mkl'
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y intel-oneapi-mkl-devel
 
       - name: Install tools (macOS)
         if: matrix.os == 'macos-latest'
@@ -284,8 +469,12 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           -DLINALG_ENABLE_TESTING=ON
           -DLINALG_ENABLE_COVERAGE=ON
+          -DLINALG_ENABLE_BLAS=${{ matrix.backend == 'openblas' && 'ON' || 'OFF' }}
+          -DLINALG_ENABLE_MKL=${{ matrix.backend == 'mkl' && 'ON' || 'OFF' }}
+          -DCMAKE_PREFIX_PATH=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
 
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
@@ -293,6 +482,27 @@ jobs:
           cmake -S . -B build
           -DLINALG_ENABLE_TESTING=ON
           -DLINALG_ENABLE_COVERAGE=ON
+
+      - name: Verify coverage backend
+        if: matrix.os != 'windows-latest'
+        env:
+          COVERAGE_BACKEND: ${{ matrix.backend }}
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          import os
+          from pathlib import Path
+          commands = json.loads(Path("build/compile_commands.json").read_text())
+          command = next(entry["command"] for entry in commands if entry["file"].endswith("/src/matrix_operation/trace.cpp"))
+          backend = os.environ["COVERAGE_BACKEND"]
+          expected = {
+              "LINALG_HAS_MKL": int(backend == "mkl"),
+              "LINALG_HAS_BLAS": int(backend == "openblas"),
+              "LINALG_HAS_LAPACKE": int(backend == "openblas"),
+          }
+          for macro, value in expected.items():
+              assert f"-D{macro}={value}" in command, f"Expected {macro}={value} for {backend}"
+          PYCODE
 
       - name: Build (Linux/macOS)
         if: matrix.os != 'windows-latest'
@@ -304,7 +514,7 @@ jobs:
 
       - name: Test (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --no-tests=error
 
       - name: Test (Windows)
         if: matrix.os == 'windows-latest'
@@ -318,7 +528,7 @@ jobs:
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html-${{ matrix.os }}
+          name: coverage-html-${{ matrix.os }}-${{ matrix.backend }}
           path: build/coverage_report/html
 
       - name: Upload to Codecov
@@ -326,5 +536,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: build/coverage_filtered.info
+          flags: ${{ matrix.backend }}
+          name: coverage-${{ matrix.os }}-${{ matrix.backend }}
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}

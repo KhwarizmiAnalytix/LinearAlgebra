@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/pseudo_inverse.h"
 #include "gtest/gtest.h"
 #include "test_reporting.h"
@@ -44,15 +45,15 @@ double frobenius(const dense_matrix<T>& M)
     return std::sqrt(s);
 }
 
-template <typename T>
+template <typename T, linalg::linalg_backend Backend>
 dense_matrix<T> compute_pinv(const dense_matrix<T>& A, T tol = T(-1))
 {
     dense_matrix<T> Ainv(A.cols(), A.rows());
     const auto      ws_size =
-        linalg::pseudo_inverse<T, linalg::linalg_backend::native>::workspace_size(
+        linalg::pseudo_inverse<T, Backend>::workspace_size(
             static_cast<linalg_long>(A.rows()), static_cast<linalg_long>(A.cols()));
     std::vector<unsigned char> ws(ws_size);
-    linalg::pseudo_inverse<T, linalg::linalg_backend::native>::apply(
+    linalg::pseudo_inverse<T, Backend>::apply(
         static_cast<linalg_long>(A.rows()),
         static_cast<linalg_long>(A.cols()),
         A.begin(),
@@ -100,7 +101,7 @@ void check_mp_identities(const dense_matrix<T>& A, const dense_matrix<T>& Ainv)
 }
 
 // Full column-rank tall matrix: pinv is a left inverse, Ainv*A ≈ I_cols.
-template <typename T>
+template <typename T, linalg::linalg_backend Backend>
 void test_pseudo_inverse_tall(std::size_t rows, std::size_t cols)
 {
     dense_matrix<T> A(rows, cols);
@@ -108,7 +109,7 @@ void test_pseudo_inverse_tall(std::size_t rows, std::size_t cols)
         for (std::size_t j = 0; j < cols; j++)
             A(i, j) = static_cast<T>(20. * rand() / RAND_MAX - 10.);
 
-    const auto Ainv = compute_pinv(A);
+    const auto Ainv = compute_pinv<T, Backend>(A);
     check_mp_identities(A, Ainv);
 
     const double tol = PseudoInverseTolerance<T>::value;
@@ -122,7 +123,7 @@ void test_pseudo_inverse_tall(std::size_t rows, std::size_t cols)
 }
 
 // Full row-rank wide matrix: pinv is a right inverse, A*Ainv ≈ I_rows.
-template <typename T>
+template <typename T, linalg::linalg_backend Backend>
 void test_pseudo_inverse_wide(std::size_t rows, std::size_t cols)
 {
     dense_matrix<T> A(rows, cols);
@@ -130,7 +131,7 @@ void test_pseudo_inverse_wide(std::size_t rows, std::size_t cols)
         for (std::size_t j = 0; j < cols; j++)
             A(i, j) = static_cast<T>(20. * rand() / RAND_MAX - 10.);
 
-    const auto Ainv = compute_pinv(A);
+    const auto Ainv = compute_pinv<T, Backend>(A);
     check_mp_identities(A, Ainv);
 
     const double tol = PseudoInverseTolerance<T>::value;
@@ -145,7 +146,7 @@ void test_pseudo_inverse_wide(std::size_t rows, std::size_t cols)
 
 // Rank-deficient: 4x4 block diag [[I_2, 0],[0, 0]], rank=2.
 // pinv equals A itself; tests that zero singular values are correctly discarded.
-template <typename T>
+template <typename T, linalg::linalg_backend Backend>
 void test_pseudo_inverse_rank_deficient()
 {
     dense_matrix<T> A(4, 4);
@@ -153,7 +154,7 @@ void test_pseudo_inverse_rank_deficient()
     A(0, 0) = T(1);
     A(1, 1) = T(1);
 
-    const auto   Ainv = compute_pinv(A);
+    const auto   Ainv = compute_pinv<T, Backend>(A);
     check_mp_identities(A, Ainv);
 
     const double tol = PseudoInverseTolerance<T>::value;
@@ -167,7 +168,7 @@ void test_pseudo_inverse_rank_deficient()
 
 // Known analytic case: A = [[1,0],[0,1],[0,0]] (3x2, rank 2).
 // pinv(A) = [[1,0,0],[0,1,0]] (2x3).
-template <typename T>
+template <typename T, linalg::linalg_backend Backend>
 void test_pseudo_inverse_known()
 {
     dense_matrix<T> A(3, 2);
@@ -175,7 +176,7 @@ void test_pseudo_inverse_known()
     A(0, 0) = T(1);
     A(1, 1) = T(1);
 
-    const auto Ainv = compute_pinv(A);
+    const auto Ainv = compute_pinv<T, Backend>(A);
     check_mp_identities(A, Ainv);
 
     const double tol                  = PseudoInverseTolerance<T>::value;
@@ -189,28 +190,40 @@ void test_pseudo_inverse_known()
 
 TEST(Math, PseudoInverse)
 {
-    test_pseudo_inverse_tall<float>(6, 4);
-    test_pseudo_inverse_tall<double>(6, 4);
-    test_pseudo_inverse_tall<float>(9, 3);
-    test_pseudo_inverse_tall<double>(9, 3);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_pseudo_inverse_tall<float, Backend>(6, 4);
+        test_pseudo_inverse_tall<double, Backend>(6, 4);
+        test_pseudo_inverse_tall<float, Backend>(9, 3);
+        test_pseudo_inverse_tall<double, Backend>(9, 3);
+    });
 }
 
 TEST(Math, PseudoInverseWide)
 {
-    test_pseudo_inverse_wide<float>(4, 6);
-    test_pseudo_inverse_wide<double>(4, 6);
-    test_pseudo_inverse_wide<float>(3, 9);
-    test_pseudo_inverse_wide<double>(3, 9);
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_pseudo_inverse_wide<float, Backend>(4, 6);
+        test_pseudo_inverse_wide<double, Backend>(4, 6);
+        test_pseudo_inverse_wide<float, Backend>(3, 9);
+        test_pseudo_inverse_wide<double, Backend>(3, 9);
+    });
 }
 
 TEST(Math, PseudoInverseRankDeficient)
 {
-    test_pseudo_inverse_rank_deficient<float>();
-    test_pseudo_inverse_rank_deficient<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_pseudo_inverse_rank_deficient<float, Backend>();
+        test_pseudo_inverse_rank_deficient<double, Backend>();
+    });
 }
 
 TEST(Math, PseudoInverseKnown)
 {
-    test_pseudo_inverse_known<float>();
-    test_pseudo_inverse_known<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_pseudo_inverse_known<float, Backend>();
+        test_pseudo_inverse_known<double, Backend>();
+    });
 }

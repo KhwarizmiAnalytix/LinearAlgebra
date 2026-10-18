@@ -160,7 +160,9 @@ option(LINALG_ENABLE_BENCHMARK "Enable Google Benchmark for LinearAlgebra micro-
 
 # Profiler-instrumented profiling program for all matrix operations (CPU and GPU).
 # Requires Profiler::Profiler (auto-detected above via find_package(Profiler CONFIG QUIET)).
-option(LINALG_ENABLE_PROFILING "Build the Profiler-instrumented matrix operation profiling program" OFF)
+option(LINALG_ENABLE_PROFILING "Build the Profiler-instrumented matrix operation profiling program"
+       OFF
+)
 
 # Icecream distributed compilation launcher (rarely needed; hidden by default).
 option(LINALG_ENABLE_ICECC "Use Icecream (icecc) distributed compiler for LinearAlgebra" OFF)
@@ -508,22 +510,11 @@ add_subdirectory(
     "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
     "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
 )
-# $<BUILD_INTERFACE:> here mirrors Profiler's install(EXPORT) fix
-# (Profiler/CMakeLists.txt's PROFILER_DEPENDENCY_LIBS handling, ~line 310):
-# "Logging" is a plain in-tree target pulled in via add_subdirectory(...
-# EXCLUDE_FROM_ALL) above, not an IMPORTED target from find_package(), and
-# EXCLUDE_FROM_ALL means Logging's own install()/install(EXPORT) calls never
-# run as part of this build. Without this wrapper,
-# install(EXPORT LinearAlgebraTargets ...) fails with "requires target
-# Logging that is not in any export set" because a non-imported target must
-# either be part of an export set or excluded from the installed
-# usage-requirements. $<BUILD_INTERFACE:> keeps Logging::Logging linked for
-# in-tree builds (this library itself and its tests) while leaving it out of
-# LinearAlgebraTargets.cmake's INSTALL_INTERFACE; for a SHARED build (the
-# default), libLogging's symbols are already resolved into/alongside
-# libLinearAlgebra, and an installed consumer separately resolves the actual
-# Logging package via find_dependency(Logging) in LinearAlgebraConfig.cmake.in.
-list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>)
+# Keep the in-tree target out of this export set, and link the separately
+# installed Logging package for consumers (including static library users).
+list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>
+     $<INSTALL_INTERFACE:Logging::Logging>
+)
 
 # --- Configure-time headers ---
 configure_file(
@@ -628,10 +619,11 @@ endif()
 # (which use mkl_lapacke.h with its own struct-based complex types) are not
 # affected.
 if(LINALG_ENABLE_BLAS AND MSVC)
-    file(GLOB _linalg_blas_srcs
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp")
-    set_source_files_properties(${_linalg_blas_srcs} PROPERTIES
-        COMPILE_DEFINITIONS
+    file(GLOB _linalg_blas_srcs "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp")
+    set_source_files_properties(
+        ${_linalg_blas_srcs}
+        PROPERTIES
+            COMPILE_DEFINITIONS
             "lapack_complex_float=std::complex<float>;lapack_complex_double=std::complex<double>"
     )
     unset(_linalg_blas_srcs)
@@ -669,7 +661,8 @@ if(LINALG_ENABLE_VECTORIZATION)
         elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx2")
             target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
         elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx512")
-            target_compile_options(LinearAlgebra PUBLIC -mavx512f)
+            # Half-packet operations also use the 128/256-bit FMA intrinsics.
+            target_compile_options(LinearAlgebra PUBLIC -mavx512f -mfma)
         endif()
     endif()
 endif()
@@ -745,11 +738,9 @@ if(LINALG_ENABLE_PROFILING)
     if(LINALG_HAS_PROFILER)
         add_subdirectory(Testing/Profile)
     else()
-        message(
-            WARNING
-                "LINALG_ENABLE_PROFILING is ON but Profiler::Profiler was not found. "
-                "Build and install KhwarizmiAnalytix/Profiler and set CMAKE_PREFIX_PATH "
-                "to its install prefix, then re-configure."
+        message(WARNING "LINALG_ENABLE_PROFILING is ON but Profiler::Profiler was not found. "
+                        "Build and install KhwarizmiAnalytix/Profiler and set CMAKE_PREFIX_PATH "
+                        "to its install prefix, then re-configure."
         )
     endif()
 endif()

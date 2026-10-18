@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
+#include "test_backend.h"
 #include "include/matrix_operation/least_squares.h"
 #include "gtest/gtest.h"
 #include "test_reporting.h"
@@ -26,7 +27,8 @@ template <> struct LeastSquaresTolerance<double>
 
 // Overdetermined, consistent system (B = A * X_true exactly): the
 // least-squares solution should recover X_true (residual is zero).
-template <typename value_t> void test_least_squares_overdetermined()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_least_squares_overdetermined()
 {
     const std::size_t rows = 6, columns = 3, nrhs = 2;
 
@@ -52,10 +54,10 @@ template <typename value_t> void test_least_squares_overdetermined()
 
     dense_matrix<value_t> X(columns, nrhs);
     const auto            ws_size =
-        linalg::least_squares<value_t, linalg::linalg_backend::native>::workspace_size(
+        linalg::least_squares<value_t, Backend>::workspace_size(
             static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::least_squares<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares<value_t, Backend>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(nrhs),
@@ -84,7 +86,8 @@ template <typename value_t> void test_least_squares_overdetermined()
 // least-squares (zero-residual) answer; least_squares_solve should at
 // least satisfy the system, since it is exactly solvable when rows < columns
 // and A has full row rank.
-template <typename value_t> void test_least_squares_underdetermined()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_least_squares_underdetermined()
 {
     const std::size_t rows = 3, columns = 6, nrhs = 1;
 
@@ -105,10 +108,10 @@ template <typename value_t> void test_least_squares_underdetermined()
 
     dense_matrix<value_t> X(columns, nrhs);
     const auto            ws_size =
-        linalg::least_squares<value_t, linalg::linalg_backend::native>::workspace_size(
+        linalg::least_squares<value_t, Backend>::workspace_size(
             static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::least_squares<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares<value_t, Backend>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(nrhs),
@@ -136,7 +139,8 @@ template <typename value_t> void test_least_squares_underdetermined()
 
 // Square, full-rank consistent system: rows == columns, exact solution exists.
 // Mirrors torch.linalg.lstsq behavior on square inputs (PyTorch test_lstsq).
-template <typename value_t> void test_least_squares_square()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_least_squares_square()
 {
     const std::size_t n = 4, nrhs = 2;
 
@@ -162,10 +166,10 @@ template <typename value_t> void test_least_squares_square()
 
     dense_matrix<value_t> X(n, nrhs);
     const auto            ws_size =
-        linalg::least_squares<value_t, linalg::linalg_backend::native>::workspace_size(
+        linalg::least_squares<value_t, Backend>::workspace_size(
             static_cast<linalg_long>(n), static_cast<linalg_long>(n));
     std::vector<unsigned char> ws(ws_size);
-    linalg::least_squares<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares<value_t, Backend>::apply(
         static_cast<linalg_long>(n),
         static_cast<linalg_long>(n),
         static_cast<linalg_long>(nrhs),
@@ -193,7 +197,8 @@ template <typename value_t> void test_least_squares_square()
 // Rank-deficient overdetermined system: A is a rank-1 outer product (u*v^T) so
 // the column space is a line. The solution must still minimise ||A*X - B||_F.
 // Mirrors torch.linalg.lstsq on rank-deficient inputs (PyTorch test_lstsq_rank_deficient).
-template <typename value_t> void test_least_squares_rank_deficient()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_least_squares_rank_deficient()
 {
     const std::size_t rows = 6, columns = 3, nrhs = 1;
 
@@ -226,10 +231,10 @@ template <typename value_t> void test_least_squares_rank_deficient()
 
     dense_matrix<value_t> X(columns, nrhs);
     const auto            ws_size =
-        linalg::least_squares<value_t, linalg::linalg_backend::native>::workspace_size(
+        linalg::least_squares<value_t, Backend>::workspace_size(
             static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> ws(ws_size);
-    linalg::least_squares<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares<value_t, Backend>::apply(
         static_cast<linalg_long>(rows),
         static_cast<linalg_long>(columns),
         static_cast<linalg_long>(nrhs),
@@ -257,7 +262,8 @@ template <typename value_t> void test_least_squares_rank_deficient()
 }
 
 // Trivial 1x1 system: scalar division. Mirrors PyTorch edge-case coverage.
-template <typename value_t> void test_least_squares_1x1()
+template <typename value_t, linalg::linalg_backend Backend>
+void test_least_squares_1x1()
 {
     const value_t             a_val = static_cast<value_t>(3);
     const value_t             b_val = static_cast<value_t>(12);
@@ -267,9 +273,9 @@ template <typename value_t> void test_least_squares_1x1()
     A(0, 0)        = a_val;
     B(0, 0)        = b_val;
     const auto ws_size =
-        linalg::least_squares<value_t, linalg::linalg_backend::native>::workspace_size(1, 1);
+        linalg::least_squares<value_t, Backend>::workspace_size(1, 1);
     std::vector<unsigned char> ws(ws_size);
-    linalg::least_squares<value_t, linalg::linalg_backend::native>::apply(
+    linalg::least_squares<value_t, Backend>::apply(
         1, 1, 1, A.begin(), 1, B.begin(), 1, X.begin(), 1, ws.data(), ws_size);
     EXPECT_NEAR(static_cast<double>(X(0, 0)), static_cast<double>(b_val / a_val), LeastSquaresTolerance<value_t>::value);
 }
@@ -277,26 +283,38 @@ template <typename value_t> void test_least_squares_1x1()
 
 TEST(Math, LeastSquares)
 {
-    test_least_squares_overdetermined<float>();
-    test_least_squares_overdetermined<double>();
-    test_least_squares_underdetermined<float>();
-    test_least_squares_underdetermined<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_least_squares_overdetermined<float, Backend>();
+        test_least_squares_overdetermined<double, Backend>();
+        test_least_squares_underdetermined<float, Backend>();
+        test_least_squares_underdetermined<double, Backend>();
+    });
 }
 
 TEST(Math, LeastSquaresSquare)
 {
-    test_least_squares_square<float>();
-    test_least_squares_square<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_least_squares_square<float, Backend>();
+        test_least_squares_square<double, Backend>();
+    });
 }
 
 TEST(Math, LeastSquaresRankDeficient)
 {
-    test_least_squares_rank_deficient<float>();
-    test_least_squares_rank_deficient<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_least_squares_rank_deficient<float, Backend>();
+        test_least_squares_rank_deficient<double, Backend>();
+    });
 }
 
 TEST(Math, LeastSquares1x1)
 {
-    test_least_squares_1x1<float>();
-    test_least_squares_1x1<double>();
+    linalg_test::for_each_available_backend([](auto backend) {
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+        test_least_squares_1x1<float, Backend>();
+        test_least_squares_1x1<double, Backend>();
+    });
 }

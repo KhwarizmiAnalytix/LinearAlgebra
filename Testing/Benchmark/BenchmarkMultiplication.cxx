@@ -85,8 +85,8 @@ void BM_Multiplication(benchmark::State& state)
     }
 
     state.SetLabel(backend_name(Backend));
-    state.SetComplexityN(static_cast<std::int64_t>(m) * static_cast<std::int64_t>(n) *
-                         static_cast<std::int64_t>(k));
+    state.SetComplexityN(
+        static_cast<std::int64_t>(m) * static_cast<std::int64_t>(n) * static_cast<std::int64_t>(k));
 
     const double flops =
         2.0 * static_cast<double>(m) * static_cast<double>(n) * static_cast<double>(k);
