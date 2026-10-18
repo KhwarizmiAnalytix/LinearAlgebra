@@ -175,12 +175,12 @@ jobs:
     runs-on: ubuntu-latest
     container: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
+      - name: Install build tools
+        run: apt-get update && apt-get install -y ninja-build cmake git
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install build tools
-        run: apt-get update && apt-get install -y ninja-build cmake git
 
       - name: Configure
         # CMAKE_CUDA_ARCHITECTURES defaults to "native", which queries an

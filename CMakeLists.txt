@@ -423,6 +423,13 @@ if(LINALG_ENABLE_BLAS)
     # otherwise each op's dispatcher .cpp falls through to the scalar backend
     # at compile time via #if LINALG_HAS_LAPACKE.
     if(LINALG_LAPACKE_INCLUDE_DIR)
+        # Debian/Ubuntu package the C interface separately from LAPACK.
+        # Other vendors (including Homebrew OpenBLAS) bundle it in LAPACK.
+        find_library(LINALG_LAPACKE_LIBRARY NAMES lapacke)
+        mark_as_advanced(LINALG_LAPACKE_LIBRARY)
+        if(LINALG_LAPACKE_LIBRARY)
+            list(APPEND LINALG_DEPENDENCY_LIBS "${LINALG_LAPACKE_LIBRARY}")
+        endif()
         list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
         set(LINALG_BLAS_HAS_LAPACKE ON)
     else()

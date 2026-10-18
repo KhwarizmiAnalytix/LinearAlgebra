@@ -28,3 +28,26 @@ local_path_override(
     module_name = "magic_enum",
     path = "ThirdParty/Logging/ThirdParty/magic_enum",
 )
+
+# Resolve vendor paths relative to this workspace. Logging's extension records
+# absolute paths in the shared lockfile, which cannot be reused on CI runners.
+new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
+
+new_local_repository(
+    name = "fmt",
+    path = "ThirdParty/Logging/ThirdParty/fmt",
+    build_file = "@xsigma_logging//ThirdParty:fmt.BUILD",
+)
+new_local_repository(
+    name = "loguru",
+    path = "ThirdParty/Logging/ThirdParty/loguru",
+    build_file = "@xsigma_logging//ThirdParty:loguru.BUILD",
+)
+new_local_repository(
+    name = "spdlog",
+    path = "ThirdParty/Logging/ThirdParty/spdlog",
+    build_file = "@xsigma_logging//ThirdParty:spdlog.BUILD",
+)
+
+logging_vendor_deps = use_extension("@xsigma_logging//bazel:vendor_deps.bzl", "vendor_deps")
+override_repo(logging_vendor_deps, "fmt", "loguru", "spdlog")

@@ -586,49 +586,6 @@
           ]
         ]
       }
-    },
-    "@@xsigma_logging+//bazel:vendor_deps.bzl%vendor_deps": {
-      "general": {
-        "bzlTransitiveDigest": "V4qKQQEDzGtSnUtI//YHiDPalqBMPi0kMPQzLTBPLwY=",
-        "usagesDigest": "+mqox897tGytSSgOpNcqM/FRa1TXWhgI4ubpADFHrPE=",
-        "recordedFileInputs": {
-          "@@xsigma_logging+//ThirdParty/fmt.BUILD": "3ae60d377e43d6aa1f75ab1e51abd688eb58a7bce535962427f1e412b0b14971",
-          "@@xsigma_logging+//ThirdParty/loguru.BUILD": "cd1e9ceeee89557a8251cf9c58bb22e8c2034f0a35af1b9a2e79611da7f5bfa1",
-          "@@xsigma_logging+//ThirdParty/spdlog.BUILD": "9c25646c49c59c19ce0397d3753fec7db741826450eb7a6a3cc34d01e31b3542"
-        },
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "fmt": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:local.bzl%new_local_repository",
-            "attributes": {
-              "path": "/private/var/tmp/_bazel_toufikbellaj/11236bf71ce85e00c681dd7533fac0e4/external/xsigma_logging+/ThirdParty/fmt",
-              "build_file_content": "# =============================================================================\n# fmt Library BUILD Configuration\n# =============================================================================\n# Modern formatting library (header-only mode)\n# Equivalent to ThirdParty/fmt\n# =============================================================================\n\npackage(default_visibility = [\"//visibility:public\"])\n\ncc_library(\n    name = \"fmt\",\n    hdrs = glob([\n        \"include/fmt/*\",\n    ]),\n    defines = [\"FMT_HEADER_ONLY=1\"],\n    includes = [\"include\"],\n    textual_hdrs = glob([\n        \"include/fmt/*\",\n    ]),\n)\n"
-            }
-          },
-          "loguru": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:local.bzl%new_local_repository",
-            "attributes": {
-              "path": "/private/var/tmp/_bazel_toufikbellaj/11236bf71ce85e00c681dd7533fac0e4/external/xsigma_logging+/ThirdParty/loguru",
-              "build_file_content": "# BUILD file for Loguru logging library\n# This file is part of the XSigma project and provides build rules for the\n# third-party Loguru library without modifying the submodule itself.\n# See .augment/rules/ThirdParty.md for third-party integration guidelines.\n\nload(\"@rules_cc//cc:defs.bzl\", \"cc_library\")\n\ncc_library(\n    name = \"loguru\",\n    srcs = [\"loguru.cpp\"],\n    hdrs = [\"loguru.hpp\"],\n    copts = select({\n        \"@platforms//os:windows\": [\n            \"/W0\",  # Disable warnings\n            \"/std:c++17\",\n        ],\n        \"@platforms//os:macos\": [\n            \"-w\",  # Disable warnings\n            \"-std=c++17\",\n            \"-fPIC\",\n        ],\n        \"//conditions:default\": [\n            \"-w\",  # Disable warnings\n            \"-std=c++17\",\n            \"-fPIC\",\n        ],\n    }),\n    defines = [\n        \"LOGURU_WITH_STREAMS=1\",\n    ],\n    includes = [\".\"],\n    linkopts = select({\n        \"@platforms//os:windows\": [],\n        \"@platforms//os:macos\": [\"-lpthread\"],\n        \"//conditions:default\": [\"-lpthread\", \"-ldl\"],\n    }),\n    linkstatic = True,\n    visibility = [\"//visibility:public\"],\n)\n\n"
-            }
-          },
-          "spdlog": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:local.bzl%new_local_repository",
-            "attributes": {
-              "path": "/private/var/tmp/_bazel_toufikbellaj/11236bf71ce85e00c681dd7533fac0e4/external/xsigma_logging+/ThirdParty/spdlog",
-              "build_file_content": "# BUILD file for spdlog (header-only, external fmt) â vendored ThirdParty/spdlog submodule.\n# Mirrors Library/Logging CMake: SPDLOG_FMT_EXTERNAL_HO + header-only use of @fmt.\nload(\"@rules_cc//cc:defs.bzl\", \"cc_library\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\ncc_library(\n    name = \"spdlog\",\n    hdrs = glob([\"include/spdlog/**/*.h\"]),\n    defines = [\n        \"SPDLOG_FMT_EXTERNAL_HO\",\n    ],\n    includes = [\"include\"],\n    deps = [\"@fmt//:fmt\"],\n)\n"
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "xsigma_logging+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
     }
   }
 }
