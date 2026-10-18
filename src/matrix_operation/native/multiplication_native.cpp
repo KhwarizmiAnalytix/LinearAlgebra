@@ -8,6 +8,7 @@
 #endif  // _MSC_VER
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 #include "include/common/linalg_macros.h"
@@ -517,25 +518,56 @@ void pack_rhs(  // NOLINT
                 const auto* const dm2 = &element<value_t, ColMajor>(data, 0, j2 + 2, ldb);
                 const auto* const dm3 = &element<value_t, ColMajor>(data, 0, j2 + 3, ldb);
                 linalg_int        k   = 0;
-                if constexpr ((PacketSize % 4) == 0)
+                if constexpr ((PacketSize % nr) == 0)
                 {
+                    // ptranspose<nr> on a PacketSize-wide register produces
+                    // n_groups = PacketSize/nr independent nr-lane transposed
+                    // blocks; group g occupies lanes [g*nr .. (g+1)*nr-1].
+                    // For PacketSize == nr (SSE/NEON float, all double) there
+                    // is only one group and the full-width storeu lands exactly
+                    // on the nr-element output slot — same as the original
+                    // code, zero overhead.
+                    // For PacketSize > nr (AVX2 float: n_groups=2, AVX-512:
+                    // n_groups=4) spill to a stack buffer and copy each group
+                    // with memcpy so the compiler emits one SIMD move per
+                    // nr-element block rather than nr scalar stores.
+                    constexpr linalg_int n_groups = PacketSize / nr;
+
                     for (; k < peeled_k; k += PacketSize)
                     {
-                        packet_t tmp[PacketSize];  // NOLINT
-
+                        packet_t tmp[4];  // NOLINT
                         packet<value_t>::loadu(dm0 + k, tmp[0]);
                         packet<value_t>::loadu(dm1 + k, tmp[1]);
                         packet<value_t>::loadu(dm2 + k, tmp[2]);
                         packet<value_t>::loadu(dm3 + k, tmp[3]);
 
-                        constexpr linalg_int Np = (PacketSize % 4) == 0 ? 4 : PacketSize;  // NOLINT
+                        packet<value_t>::template ptranspose<nr>(tmp);
 
-                        packet<value_t>::template ptranspose<Np>(tmp);
-                        packet<value_t>::storeu(tmp[0], blockB + count);
-                        packet<value_t>::storeu(tmp[1], blockB + count + PacketSize);
-                        packet<value_t>::storeu(tmp[2], blockB + count + 2 * PacketSize);
-                        packet<value_t>::storeu(tmp[3], blockB + count + 3 * PacketSize);
-                        count += 4 * PacketSize;
+                        if constexpr (n_groups == 1)
+                        {
+                            packet<value_t>::storeu(tmp[0], blockB + count);
+                            packet<value_t>::storeu(tmp[1], blockB + count + nr);
+                            packet<value_t>::storeu(tmp[2], blockB + count + 2 * nr);
+                            packet<value_t>::storeu(tmp[3], blockB + count + 3 * nr);
+                            count += 4 * nr;
+                        }
+                        else
+                        {
+                            value_t buf[4][PacketSize];  // NOLINT
+                            packet<value_t>::storeu(tmp[0], buf[0]);
+                            packet<value_t>::storeu(tmp[1], buf[1]);
+                            packet<value_t>::storeu(tmp[2], buf[2]);
+                            packet<value_t>::storeu(tmp[3], buf[3]);
+
+                            for (linalg_int g = 0; g < n_groups; ++g, count += 4 * nr)
+                            {
+                                const linalg_int base = g * nr;
+                                std::memcpy(blockB + count,          buf[0] + base, nr * sizeof(value_t));
+                                std::memcpy(blockB + count + nr,     buf[1] + base, nr * sizeof(value_t));
+                                std::memcpy(blockB + count + 2 * nr, buf[2] + base, nr * sizeof(value_t));
+                                std::memcpy(blockB + count + 3 * nr, buf[3] + base, nr * sizeof(value_t));
+                            }
+                        }
                     }
                 }
                 for (; k < depth; k++)  // NOLINT
