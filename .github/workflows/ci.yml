@@ -176,7 +176,12 @@ jobs:
     container: nvidia/cuda:12.6.2-devel-ubuntu22.04
     steps:
       - name: Install build tools
-        run: apt-get update && apt-get install -y ninja-build cmake git
+        # Ubuntu 22.04 ships CMake 3.22; the dependency helper's
+        # find_package(... GLOBAL) requires CMake 3.24 or newer.
+        run: |
+          apt-get update && apt-get install -y ninja-build git python3-pip
+          python3 -m pip install "cmake>=3.24,<4"
+          cmake --version
 
       - uses: actions/checkout@v4
         with:

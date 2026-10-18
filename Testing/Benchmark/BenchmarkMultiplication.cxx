@@ -3,12 +3,13 @@
 //
 // The library never defaults to a backend — every linalg::*<T, Backend> call
 // requires Backend to be named explicitly. This benchmark mirrors that:
-// BM_Multiplication is templated on Backend too, and registered once per
-// backend gated on LINALG_HAS_MKL / LINALG_HAS_BLAS / LINALG_HAS_LAPACKE
-// (native is unconditional, the scalar fallback always builds) — see
-// Testing/Cxx/test_backend.h for the same per-backend coverage on the unit
-// test side. A single run now reports all backends present in this build,
-// each row labeled with the backend that produced it.
+// BM_Multiplication is templated on Backend and transpose flags, and registered
+// once per backend gated on LINALG_HAS_MKL / LINALG_HAS_BLAS (native is
+// unconditional, the scalar fallback always builds).
+//
+// Parameters: {M, N, K} — C(M×N) = A(M×K) * B(K×N).
+// Square runs use M=N=K; rectangular runs exercise fat (M<<N) and tall (M>>N)
+// shapes that stress cache tiling differently.
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -36,26 +37,76 @@ const char* backend_name(linalg::linalg_backend backend)
     }
 }
 
-template <typename T> std::vector<T> make_random_matrix(std::size_t n, unsigned seed)
+template <typename T> std::vector<T> make_random(std::size_t n, unsigned seed)
 {
     std::mt19937                      rng(seed);
     std::uniform_real_distribution<T> dist(static_cast<T>(-1), static_cast<T>(1));
-
-    std::vector<T> m(n * n);
-    for (auto& v : m)
+    std::vector<T>                    v(n);
+    for (auto& x : v)
     {
-        v = dist(rng);
+        x = dist(rng);
     }
-    return m;
+    return v;
 }
 
+// BM_Multiplication — square and rectangular, no transpose.
+// state.range(0)=M, state.range(1)=N, state.range(2)=K.
 template <typename T, linalg::linalg_backend Backend>
 void BM_Multiplication(benchmark::State& state)
 {
-    const std::size_t    n = static_cast<std::size_t>(state.range(0));
-    const std::vector<T> a = make_random_matrix<T>(n, /*seed=*/42);
-    const std::vector<T> b = make_random_matrix<T>(n, /*seed=*/43);
-    std::vector<T>       c(n * n);
+    const auto m = static_cast<std::size_t>(state.range(0));
+    const auto n = static_cast<std::size_t>(state.range(1));
+    const auto k = static_cast<std::size_t>(state.range(2));
+
+    const auto a = make_random<T>(m * k, /*seed=*/42);
+    const auto b = make_random<T>(k * n, /*seed=*/43);
+    auto       c = std::vector<T>(m * n);
+
+    const auto ws_bytes = linalg::multiplication<T, Backend>::workspace_size(
+        static_cast<linalg_int>(m), static_cast<linalg_int>(n), static_cast<linalg_int>(k));
+    std::vector<unsigned char> workspace(ws_bytes);
+
+    for (auto _ : state)
+    {
+        linalg::multiplication<T, Backend>::apply(false,
+            false,
+            static_cast<linalg_int>(m),
+            static_cast<linalg_int>(n),
+            static_cast<linalg_int>(k),
+            a.data(),
+            static_cast<linalg_int>(k),
+            b.data(),
+            static_cast<linalg_int>(n),
+            c.data(),
+            static_cast<linalg_int>(n),
+            workspace.data(),
+            ws_bytes);
+        benchmark::DoNotOptimize(c.data());
+    }
+
+    state.SetLabel(backend_name(Backend));
+    state.SetComplexityN(static_cast<std::int64_t>(m) * static_cast<std::int64_t>(n) *
+                         static_cast<std::int64_t>(k));
+
+    const double flops =
+        2.0 * static_cast<double>(m) * static_cast<double>(n) * static_cast<double>(k);
+    state.counters["FLOPS"] = benchmark::Counter(
+        flops, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
+}
+
+// BM_MultiplicationTranspose — square matrices with all four transpose combos.
+// state.range(0)=N (square dimension).
+// TransposeA / TransposeB are compile-time booleans so each variant gets its
+// own benchmark row.
+template <typename T, linalg::linalg_backend Backend, bool TransposeA, bool TransposeB>
+void BM_MultiplicationTranspose(benchmark::State& state)
+{
+    const auto n = static_cast<std::size_t>(state.range(0));
+
+    // A is (rows × depth): if TransposeA, the stored matrix is depth×rows = n×n (square).
+    const auto a = make_random<T>(n * n, /*seed=*/42);
+    const auto b = make_random<T>(n * n, /*seed=*/43);
+    auto       c = std::vector<T>(n * n);
 
     const auto ws_bytes = linalg::multiplication<T, Backend>::workspace_size(
         static_cast<linalg_int>(n), static_cast<linalg_int>(n), static_cast<linalg_int>(n));
@@ -63,8 +114,8 @@ void BM_Multiplication(benchmark::State& state)
 
     for (auto _ : state)
     {
-        linalg::multiplication<T, Backend>::apply(false,
-            false,
+        linalg::multiplication<T, Backend>::apply(TransposeA,
+            TransposeB,
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),
@@ -79,91 +130,65 @@ void BM_Multiplication(benchmark::State& state)
         benchmark::DoNotOptimize(c.data());
     }
 
-    state.SetLabel(backend_name(Backend));
-    state.SetComplexityN(static_cast<std::int64_t>(n));
+    char label[64];
+    std::snprintf(label,
+        sizeof(label),
+        "%s tA=%d tB=%d",
+        backend_name(Backend),
+        static_cast<int>(TransposeA),
+        static_cast<int>(TransposeB));
+    state.SetLabel(label);
 
-    // n x n * n x n matrix multiplication costs 2*n^3 flops (multiply-add pairs).
-    const double flops_per_iter =
+    const double flops =
         2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n);
-    state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
-        benchmark::Counter::kIsIterationInvariantRate,
-        benchmark::Counter::OneK::kIs1000);
+    state.counters["FLOPS"] = benchmark::Counter(
+        flops, benchmark::Counter::kIsIterationInvariantRate, benchmark::Counter::OneK::kIs1000);
 }
+
+// clang-format off
+// ---- Helper macro so each backend block stays DRY -------------------------
+// Square: 32, 64, 128, 256, 512, 1024.
+// Rectangular: fat M<<N (64×1024×256), tall M>>N (1024×64×256).
+#define LINALG_BENCH_MATMUL(T, Backend)                                                             \
+    BENCHMARK_TEMPLATE(BM_Multiplication, T, linalg::linalg_backend::Backend)                      \
+        ->Args({32,   32,   32})                                                                    \
+        ->Args({64,   64,   64})                                                                    \
+        ->Args({128,  128,  128})                                                                   \
+        ->Args({256,  256,  256})                                                                   \
+        ->Args({512,  512,  512})                                                                   \
+        ->Args({1024, 1024, 1024})                                                                  \
+        ->Args({64,   1024, 256})                                                                   \
+        ->Args({1024, 64,   256})                                                                   \
+        ->Unit(benchmark::kMicrosecond)                                                             \
+        ->MinTime(0.1)                                                                              \
+        ->Repetitions(3)                                                                            \
+        ->ReportAggregatesOnly(true)                                                                \
+        ->Threads(1);                                                                               \
+    BENCHMARK_TEMPLATE(BM_MultiplicationTranspose, T, linalg::linalg_backend::Backend, false, true) \
+        ->Arg(64)->Arg(256)->Arg(512)->Arg(1024)                                                    \
+        ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)                              \
+        ->ReportAggregatesOnly(true)->Threads(1);                                                   \
+    BENCHMARK_TEMPLATE(BM_MultiplicationTranspose, T, linalg::linalg_backend::Backend, true, false) \
+        ->Arg(64)->Arg(256)->Arg(512)->Arg(1024)                                                    \
+        ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)                              \
+        ->ReportAggregatesOnly(true)->Threads(1);                                                   \
+    BENCHMARK_TEMPLATE(BM_MultiplicationTranspose, T, linalg::linalg_backend::Backend, true, true) \
+        ->Arg(64)->Arg(256)->Arg(512)->Arg(1024)                                                    \
+        ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)                              \
+        ->ReportAggregatesOnly(true)->Threads(1)
+// clang-format on
 
 }  // namespace
 
-BENCHMARK_TEMPLATE(BM_Multiplication, float, linalg::linalg_backend::native)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
+LINALG_BENCH_MATMUL(float, native);
+LINALG_BENCH_MATMUL(double, native);
 
-BENCHMARK_TEMPLATE(BM_Multiplication, double, linalg::linalg_backend::native)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
-
-#if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-BENCHMARK_TEMPLATE(BM_Multiplication, float, linalg::linalg_backend::blas_lapacke)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
-
-BENCHMARK_TEMPLATE(BM_Multiplication, double, linalg::linalg_backend::blas_lapacke)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
+#if LINALG_HAS_BLAS
+LINALG_BENCH_MATMUL(float, blas_lapacke);
+LINALG_BENCH_MATMUL(double, blas_lapacke);
 #endif
 
 #if LINALG_HAS_MKL
-BENCHMARK_TEMPLATE(BM_Multiplication, float, linalg::linalg_backend::mkl)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
-
-BENCHMARK_TEMPLATE(BM_Multiplication, double, linalg::linalg_backend::mkl)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(128)
-    ->Arg(1024)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
+LINALG_BENCH_MATMUL(float, mkl);
+LINALG_BENCH_MATMUL(double, mkl);
 #endif

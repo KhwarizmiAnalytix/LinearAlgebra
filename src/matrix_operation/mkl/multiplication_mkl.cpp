@@ -3,6 +3,7 @@
 #include "include/matrix_operation/multiplication.h"
 
 #include "include/common/linalg_checks.h"
+#include "include/common/narrow.h"
 
 #include <mkl.h>
 
@@ -52,17 +53,17 @@ void multiplication<float, linalg_backend::mkl>::apply(bool transpose_a,
     cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
-        rows,
-        columns,
-        depth,
+        detail::checked_narrow<MKL_INT>(rows),
+        detail::checked_narrow<MKL_INT>(columns),
+        detail::checked_narrow<MKL_INT>(depth),
         1.F,
         a,
-        lda,
+        detail::checked_narrow<MKL_INT>(lda),
         b,
-        ldb,
+        detail::checked_narrow<MKL_INT>(ldb),
         0.F,
         c,
-        ldc);
+        detail::checked_narrow<MKL_INT>(ldc));
 }
 
 template <>
@@ -85,17 +86,17 @@ void multiplication<double, linalg_backend::mkl>::apply(bool transpose_a,
     cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
-        rows,
-        columns,
-        depth,
+        detail::checked_narrow<MKL_INT>(rows),
+        detail::checked_narrow<MKL_INT>(columns),
+        detail::checked_narrow<MKL_INT>(depth),
         1.,
         a,
-        lda,
+        detail::checked_narrow<MKL_INT>(lda),
         b,
-        ldb,
+        detail::checked_narrow<MKL_INT>(ldb),
         0.,
         c,
-        ldc);
+        detail::checked_narrow<MKL_INT>(ldc));
 }
 
 template <>
