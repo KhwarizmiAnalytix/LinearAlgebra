@@ -613,6 +613,22 @@ target_include_directories(
 if(LINALG_BLAS_INCLUDE_DIRS)
     target_include_directories(LinearAlgebra PRIVATE ${LINALG_BLAS_INCLUDE_DIRS})
 endif()
+# OpenBLAS lapack.h uses float _Complex / double _Complex (C99), which MSVC
+# does not support in C++ mode.  The fix is to include <complex> before
+# <lapacke.h> in each BLAS source file so std::complex<> is available when
+# lapack_complex_float / lapack_complex_double are expanded.  Per-file
+# compile properties scope the macros to the BLAS TUs only so MKL sources
+# (which use mkl_lapacke.h with its own struct-based complex types) are not
+# affected.
+if(LINALG_ENABLE_BLAS AND MSVC)
+    file(GLOB _linalg_blas_srcs
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp")
+    set_source_files_properties(${_linalg_blas_srcs} PROPERTIES
+        COMPILE_DEFINITIONS
+            "lapack_complex_float=std::complex<float>;lapack_complex_double=std::complex<double>"
+    )
+    unset(_linalg_blas_srcs)
+endif()
 target_compile_definitions(
     LinearAlgebra
     PUBLIC "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"

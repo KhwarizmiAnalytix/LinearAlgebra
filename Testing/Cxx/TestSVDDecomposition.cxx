@@ -256,7 +256,7 @@ void test_svd_rank_deficient()
 TEST(Math, SVDDecomposition)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
 
         std::size_t rows    = 6;
         std::size_t columns = 5;
@@ -278,7 +278,7 @@ TEST(Math, SVDDecomposition)
 TEST(Math, SVDSingularValuesNonneg)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_svd_singular_values_nonneg<float, Backend>(6, 5);
         test_svd_singular_values_nonneg<float, Backend>(5, 6);
         test_svd_singular_values_nonneg<double, Backend>(6, 5);
@@ -289,7 +289,7 @@ TEST(Math, SVDSingularValuesNonneg)
 TEST(Math, SVDOrthogonality)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_svd_orthogonality<float, Backend>(8, 5);
         test_svd_orthogonality<float, Backend>(5, 8);
         test_svd_orthogonality<double, Backend>(8, 5);
@@ -300,7 +300,7 @@ TEST(Math, SVDOrthogonality)
 TEST(Math, SVDRankDeficient)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_svd_rank_deficient<float, Backend>();
         test_svd_rank_deficient<double, Backend>();
     });

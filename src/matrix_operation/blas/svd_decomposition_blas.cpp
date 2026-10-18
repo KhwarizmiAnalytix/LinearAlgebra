@@ -7,7 +7,15 @@
 #include "include/common/workspace_arena.h"
 
 #include <algorithm>
+#include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
+#endif
 #include <lapacke.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include "include/common/linalg_profiler.h"
 

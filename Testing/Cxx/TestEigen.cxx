@@ -445,7 +445,7 @@ template <typename value_t> void test_cross_backend_agreement(std::size_t n)
     linalg_test::for_each_available_backend(
         [&](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
             if (Backend == linalg::linalg_backend::native)
             {
                 return;
@@ -464,7 +464,7 @@ TEST(Math, SymmetricEigenvalueDecomposition)
     linalg_test::for_each_available_backend(
         [](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
             test_symmetric_eigen<float, Backend>(5);
             test_symmetric_eigen<double, Backend>(5);
             test_symmetric_eigen<double, Backend>(8);
@@ -476,7 +476,7 @@ TEST(Math, GeneralEigenvalueDecompositionRealSpectrum)
     linalg_test::for_each_available_backend(
         [](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
             test_general_eigen_real_spectrum<float, Backend>(4);
             test_general_eigen_real_spectrum<double, Backend>(4);
             test_general_eigen_real_spectrum<double, Backend>(6);
@@ -488,7 +488,7 @@ TEST(Math, GeneralEigenvalueDecompositionComplexPair)
     linalg_test::for_each_available_backend(
         [](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
             test_general_eigen_complex_pair<float, Backend>();
             test_general_eigen_complex_pair<double, Backend>();
         });
@@ -499,7 +499,7 @@ TEST(Math, GeneralEigenvalueDecompositionEigenvectors)
     linalg_test::for_each_available_backend(
         [](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
             test_general_eigen_eigenvectors<float, Backend>();
             test_general_eigen_eigenvectors<double, Backend>();
         });
@@ -516,7 +516,8 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
     linalg_test::for_each_available_backend(
         [&](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            using B = decltype(backend);
 
             double er[2];
             double ei[2];
@@ -528,13 +529,13 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
             if (Backend == linalg::linalg_backend::native)
             {
                 EXPECT_THROW(
-                    (linalg::general_eigen_backend<double, Backend>::apply(
+                    (linalg::general_eigen_backend<double, B::value>::apply(
                         A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())),
                     std::exception);
             }
             else
             {
-                EXPECT_NO_THROW((linalg::general_eigen_backend<double, Backend>::apply(
+                EXPECT_NO_THROW((linalg::general_eigen_backend<double, B::value>::apply(
                     A.begin(), 2, 2, er, ei, evecs, 2, eigen_ws.data(), eigen_ws.size())));
             }
         });

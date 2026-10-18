@@ -9,7 +9,15 @@
 // LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate framework ships
 // CBLAS but not the LAPACKE row-major C wrapper, so this block only compiles
 // when a real lapacke.h was found.
+#include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
+#endif
 #include <lapacke.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include "include/common/linalg_profiler.h"
 

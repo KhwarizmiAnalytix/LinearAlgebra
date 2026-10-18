@@ -107,7 +107,7 @@ void test_qr(std::size_t rows, std::size_t columns)
 TEST(Math, QRDecomposition)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_qr<float, Backend>(6, 5);
         test_qr<float, Backend>(5, 6);
         test_qr<float, Backend>(4, 4);

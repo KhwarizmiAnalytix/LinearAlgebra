@@ -206,7 +206,7 @@ TEST(Math, LUDecomposition)
     linalg_test::for_each_available_backend(
         [](auto backend)
         {
-            constexpr auto Backend = decltype(backend)::value;
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
             test_lu<float, Backend>(2.e-5);
             test_lu<double, Backend>(4.e-14);
         });

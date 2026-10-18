@@ -291,7 +291,7 @@ void test_norm_inequality(std::size_t rows, std::size_t columns)
 TEST(Math, MatrixNorm)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_norms<float, Backend>(6, 5);
         test_norms<float, Backend>(5, 6);
         test_norms<double, Backend>(6, 5);
@@ -318,7 +318,7 @@ TEST(Math, MatrixNormIdentity)
 TEST(Math, MatrixNormInequality)
 {
     linalg_test::for_each_available_backend([](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_norm_inequality<float, Backend>(6, 4);
         test_norm_inequality<float, Backend>(4, 6);
         test_norm_inequality<double, Backend>(6, 4);

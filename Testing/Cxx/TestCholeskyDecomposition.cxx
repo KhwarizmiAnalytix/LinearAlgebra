@@ -376,7 +376,7 @@ TEST(Math, CholeskyDecomposition)
 {
     const std::size_t dim = 128 + 24 + 16 + 12 + 8 + 4 + 3 + 2 + 1;
     linalg_test::for_each_available_backend([&](auto backend) {
-        constexpr auto Backend = decltype(backend)::value;
+        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
         test_cholesky<float, Backend>(dim);
         test_cholesky<double, Backend>(dim);
 
