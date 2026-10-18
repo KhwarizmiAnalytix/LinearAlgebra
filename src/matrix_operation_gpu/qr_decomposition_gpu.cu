@@ -145,7 +145,7 @@ void qr_impl(GeqrfBufFn geqrf_buffer_size,
     const auto kc = static_cast<size_t>(k) * static_cast<size_t>(c);
 
     int lwork_geqrf = 0;
-    LINALG_CHECK(geqrf_buffer_size(handle, r, c, static_cast<const T*>(nullptr), r, &lwork_geqrf) ==
+    LINALG_CHECK(geqrf_buffer_size(handle, r, c, static_cast<T*>(nullptr), r, &lwork_geqrf) ==
             CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*geqrf_bufferSize failed");
     int lwork_orgqr = 0;
