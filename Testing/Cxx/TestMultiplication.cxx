@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -212,6 +213,10 @@ template <typename value_t, linalg::linalg_backend Backend>
 void matrix_multiplication_test(
     int rows, int columns, int depth, bool transpose_a, bool transpose_b)
 {
+    SCOPED_TRACE(::testing::Message()
+                 << "backend=" << static_cast<int>(Backend) << ", scalar bytes=" << sizeof(value_t)
+                 << ", rows=" << rows << ", columns=" << columns << ", depth=" << depth
+                 << ", transpose_a=" << transpose_a << ", transpose_b=" << transpose_b);
     constexpr auto tol       = matrixTolerance<value_t>::tolerance;
     auto           a_rows    = rows;
     auto           a_columns = depth;
@@ -267,12 +272,20 @@ void matrix_multiplication_test(
         gemm_ws.data(),
         gemm_ws.size());
 
-    value_t max_error = 0;
+    // A dot product's rounding error depends on its depth and the magnitudes
+    // of its products, including when cancellation leaves a small result.
+    // Use a wider reference and the standard gamma_(2*depth) forward-error
+    // bound instead of treating a sequential value_t sum as exact. The
+    // existing absolute tolerance remains a floor for the small cases.
+    const long double roundoff = std::numeric_limits<value_t>::epsilon() / 2.0L;
+    const long double gamma    = (2.0L * depth * roundoff) / (1.0L - 2.0L * depth * roundoff);
+    long double       max_error_ratio = 0;
     for (int i = 0; i < rows; ++i)
     {
         for (int j = 0; j < columns; ++j)
         {
-            value_t sum = 0;
+            long double sum          = 0;
+            long double absolute_sum = 0;
             for (int k = 0; k < depth; ++k)
             {
                 const value_t a_val =
@@ -281,17 +294,24 @@ void matrix_multiplication_test(
                 const value_t b_val =
                     transpose_b ? B(static_cast<std::size_t>(j), static_cast<std::size_t>(k))
                                 : B(static_cast<std::size_t>(k), static_cast<std::size_t>(j));
-                sum += a_val * b_val;
+                const long double product =
+                    static_cast<long double>(a_val) * static_cast<long double>(b_val);
+                sum += product;
+                absolute_sum += std::fabs(product);
             }
-            auto c    = C(static_cast<std::size_t>(i), static_cast<std::size_t>(j));
-            max_error = std::fmax(max_error, std::fabs(static_cast<double>(sum - c)));
+            const auto c = C(static_cast<std::size_t>(i), static_cast<std::size_t>(j));
+            ASSERT_TRUE(std::isfinite(c)) << "row=" << i << ", column=" << j;
+            const long double allowed_error =
+                std::max(static_cast<long double>(tol), gamma * absolute_sum);
+            max_error_ratio = std::max(
+                max_error_ratio, std::fabs(sum - static_cast<long double>(c)) / allowed_error);
         }
     }
 
 #ifdef DEBUG_MATRIXMULTIPLICATION
-    (void)max_error;
+    (void)max_error_ratio;
 #else
-    EXPECT_LE(max_error, tol);
+    EXPECT_LE(max_error_ratio, 1.0L);
 #endif
 }
 }  // namespace
