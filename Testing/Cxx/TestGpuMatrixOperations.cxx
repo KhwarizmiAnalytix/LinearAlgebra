@@ -750,7 +750,6 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
 
     device_buffer<value_t> dA(n * n);
     device_buffer<value_t> devals(n);
-    device_buffer<value_t> devecs(n * n);
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
 
     const auto eig_ws_size =
@@ -764,7 +763,6 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
                                 (linalg_int)n,
                                 (linalg_int)n,
                                 devals.get(),
-                                devecs.get(),
                                 (linalg_int)n,
                                 eig_dws.get(),
                                 eig_ws_size,
@@ -776,7 +774,7 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
     std::vector<value_t>  evals(n);
     dense_matrix<value_t> evecs(n, n);
     ASSERT_EQ(devals.download(evals.data()), cudaSuccess);
-    ASSERT_EQ(devecs.download(evecs.begin()), cudaSuccess);
+    ASSERT_EQ(dA.download(evecs.begin()), cudaSuccess);
 
     for (std::size_t i = 0; i < n; ++i)
     {
@@ -1250,13 +1248,13 @@ TEST(MathGpu, InputValidation)
         [&](int* info)
         {
             linalg::symmetric_eigen_backend<double, CB>::apply(
-                static_cast<const double*>(nullptr), n, n, dS.get(), dA.get(), n, nullptr, 0, info);
+                static_cast<double*>(nullptr), n, n, dS.get(), n, nullptr, 0, info);
         })));
     EXPECT_ANY_THROW((read_gpu_scalar<int>(
         [&](int* info)
         {
             linalg::symmetric_eigen_backend<double, CB>::apply(
-                dA.get(), 0, 0, dS.get(), dA.get(), 0, nullptr, 0, info);
+                dA.get(), 0, 0, dS.get(), 0, nullptr, 0, info);
         })));
 
     // pseudo_inverse.

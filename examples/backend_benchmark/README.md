@@ -37,6 +37,11 @@ Use a Release build for timings. The recorded configuration used Clang/Ninja
 on Windows; other toolchains and platforms were not measured. This CUDA example
 uses CMake; the repository's Bazel configuration currently supports CPU sources.
 
+Current QR timings call `apply_r` followed by `apply_q` in place, without extracting
+R. QR and eigen inputs are restored outside the timed region on every iteration,
+including steady GPU runs, because these APIs consume their input matrices.
+The dated result files describe the earlier recorded revision and are unchanged.
+
 The four CTest entries are:
 
 | Test | Measurement |

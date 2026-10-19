@@ -244,7 +244,7 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
     {
         if constexpr (gpu)
         {
-            if (steady_gpu_mode && Op != operation::chol && Op != operation::lu && input_ready)
+            if (steady_gpu_mode && (Op == operation::gemm || Op == operation::svd) && input_ready)
             {
                 return;
             }
@@ -292,8 +292,8 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
         }
         if constexpr (Op == operation::qr)
         {
-            linalg::qr_decomposition<T, B>::apply(
-                n, n, ap, n, cp, n, outp, n, wsp, bytes, stream.get());
+            linalg::qr_decomposition<T, B>::apply_r(n, n, ap, n, sp, wsp, bytes, stream.get());
+            linalg::qr_decomposition<T, B>::apply_q(n, n, ap, n, sp, wsp, bytes, stream.get());
         }
         if constexpr (Op == operation::svd)
         {
@@ -305,17 +305,17 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
             if constexpr (gpu)
             {
                 linalg::symmetric_eigen_backend<T, B>::apply(
-                    ap, n, n, sp, cp, n, wsp, bytes, dinfo.get(), stream.get());
+                    ap, n, n, sp, n, wsp, bytes, dinfo.get(), stream.get());
             }
             else
             {
-                ok = linalg::symmetric_eigen_backend<T, B>::apply(ap, n, n, sp, cp, n, wsp, bytes);
+                ok = linalg::symmetric_eigen_backend<T, B>::apply(ap, n, n, sp, n, wsp, bytes);
             }
         }
         if constexpr (Op == operation::general_eigen)
         {
             ok = linalg::general_eigen_backend<T, B>::apply(
-                ap, n, n, sp, imaginary.data(), nullptr, n, wsp, bytes);
+                ap, n, n, sp, imaginary.data(), false, n, wsp, bytes);
         }
         if (!ok)
         {

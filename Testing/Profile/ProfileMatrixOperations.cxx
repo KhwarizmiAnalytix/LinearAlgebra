@@ -584,7 +584,7 @@ void profile_gpu_ops(linalg_int n)
         if (dA && d_ev)
         {
             linalg::symmetric_eigen_backend<double, CB>::apply(
-                dA, n, n, d_ev, n, d_ws, ws_bytes);
+                dA, n, n, d_ev, n, d_ws, ws_bytes, outputs.info);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
