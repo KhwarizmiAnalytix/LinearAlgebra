@@ -89,45 +89,6 @@ option(LINALG_ENABLE_VECTORIZATION
        "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
 )
 
-# Which linalg::packet<T> specialization backs LINALG_ENABLE_VECTORIZATION.
-# There is no "auto" choice: the ISA is always explicit, and CMake computes a
-# platform-appropriate default (below) when the cache variable is not
-# overridden on the command line:
-#   scalar - force linalg::packet<T>'s scalar (width-1) primary template.
-#            Default for platforms other than x86_64/aarch64.
-#   sse2/avx/avx2/avx512/neon - force that specialization and (x86 targets
-#            only) add the matching -m<isa> compiler flag so it is actually
-#            enabled; a target that cannot assemble the requested ISA fails
-#            to build rather than silently falling back to a narrower one.
-#            avx2 is the default on x86_64/AMD64/i386/i686; neon is the
-#            default on aarch64/arm64.
-string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _linalg_system_processor_lower)
-if(_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
-    set(_linalg_vectorization_isa_default "neon")
-elseif(_linalg_system_processor_lower MATCHES "^(x86_64|amd64|i386|i686)$")
-    set(_linalg_vectorization_isa_default "avx2")
-else()
-    set(_linalg_vectorization_isa_default "scalar")
-endif()
-unset(_linalg_system_processor_lower)
-set(LINALG_VECTORIZATION_ISA
-    "${_linalg_vectorization_isa_default}"
-    CACHE
-        STRING
-        "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse2, avx, avx2, avx512, neon"
-)
-unset(_linalg_vectorization_isa_default)
-set_property(
-    CACHE LINALG_VECTORIZATION_ISA
-    PROPERTY STRINGS
-             scalar
-             sse2
-             avx
-             avx2
-             avx512
-             neon
-)
-
 # On MSVC, native/multiplication_native.cpp normally suppresses C4244
 # narrowing-conversion warnings around its non-MKL fallback; this re-enables
 # them.
@@ -237,9 +198,15 @@ endif()
 # c) Coverage gate — appends -fprofile-instr-generate / --coverage; LTO already cleared above.
 if(LINALG_ENABLE_COVERAGE)
     include(coverage)
-elseif(MSVC)
+elseif(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+                     AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"))
     string(APPEND CMAKE_EXE_LINKER_FLAGS " /DEBUG:FULL")
     string(APPEND CMAKE_SHARED_LINKER_FLAGS " /DEBUG:FULL")
+elseif(MSVC)
+    # clang++ GNU driver targeting the MSVC ABI. lld-link accepts /DEBUG:FULL,
+    # but a bare /DEBUG:FULL argument is a file path to that driver.
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,/DEBUG:FULL")
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,/DEBUG:FULL")
 endif()
 
 # --- Optional Intel MKL backend ---
@@ -461,6 +428,20 @@ if(LINALG_ENABLE_CUBLAS)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES native)
     endif()
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+       AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+        # Mixed CXX/CUDA targets link with clang++. CMake's CUDA runtime
+        # options are bare cudadevrt/cudart names, which the MSVC linker
+        # frontend turns into *.lib. The GNU driver treats those as input
+        # files instead of searching the CUDA library directory.
+        set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_SHARED
+            "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib" "${CUDAToolkit_LIBRARY_DIR}/cudart.lib"
+        )
+        set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_STATIC
+            "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib"
+            "${CUDAToolkit_LIBRARY_DIR}/cudart_static.lib"
+        )
+    endif()
     list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
 endif()
 
@@ -507,10 +488,20 @@ endif()
 set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
 set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(
+include(LinearAlgebraDependencies)
+linalg_add_dependency_subdirectory(
     "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
     "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
 )
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+   AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+    # Logging names this Windows SDK library without a path. Use the GNU
+    # driver's library search syntax rather than a bare dbghelp.lib input.
+    get_target_property(_linalg_logging_libraries Logging LINK_LIBRARIES)
+    list(TRANSFORM _linalg_logging_libraries REPLACE "^dbghelp$" "-ldbghelp")
+    set_property(TARGET Logging PROPERTY LINK_LIBRARIES "${_linalg_logging_libraries}")
+    unset(_linalg_logging_libraries)
+endif()
 # Keep the in-tree target out of this export set, and link the separately
 # installed Logging package for consumers (including static library users).
 list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>
@@ -596,15 +587,7 @@ set_target_properties(
     LinearAlgebra PROPERTIES CXX_STANDARD ${LINALG_CXX_STANDARD} CXX_STANDARD_REQUIRED ON
                              CXX_EXTENSIONS OFF
 )
-if(MSVC)
-    # Excludes CUDA: nvcc's frontend does not recognize the bare MSVC-style
-    # /WX flag and misparses it as a second input file ("nvcc fatal: A single
-    # input file is required for a non-link phase when an outputfile is
-    # specified") when LINALG_ENABLE_CUBLAS compiles the .cu source below.
-    target_compile_options(LinearAlgebra PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/WX>)
-else()
-    target_compile_options(LinearAlgebra PRIVATE -include cstdlib)
-endif()
+linalg_apply_platform_compile_flags(LinearAlgebra)
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
 #                             "include/util/cpu_info.h", ...
@@ -647,31 +630,7 @@ target_compile_definitions(
            "LINALG_HAS_VECTORIZATION=$<BOOL:${LINALG_ENABLE_VECTORIZATION}>"
            "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
 )
-if(LINALG_ENABLE_VECTORIZATION)
-    string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
-    target_compile_definitions(LinearAlgebra PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
-    unset(_linalg_simd_isa_upper)
-
-    # x86 ISAs need the matching -m<isa> flag to actually be assembled;
-    # NEON is the aarch64 baseline (and has no single standard x86-style
-    # flag on the compilers this repository targets), so "neon" adds none.
-    # MSVC has no per-ISA -mXXX flags of its own — /arch:AVX[2|512] is the
-    # closest equivalent but covers the whole TU like GCC/Clang's -m flags
-    # do, and this repository's MSVC support does not target AVX-512 at
-    # all, so it is left for whoever first needs it to wire up.
-    if(NOT MSVC)
-        if(LINALG_VECTORIZATION_ISA STREQUAL "sse2")
-            target_compile_options(LinearAlgebra PUBLIC -msse2)
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx")
-            target_compile_options(LinearAlgebra PUBLIC -mavx)
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx2")
-            target_compile_options(LinearAlgebra PUBLIC -mavx2 -mfma)
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx512")
-            # Half-packet operations also use the 128/256-bit FMA intrinsics.
-            target_compile_options(LinearAlgebra PUBLIC -mavx512f -mfma)
-        endif()
-    endif()
-endif()
+linalg_apply_vectorization_flags(LinearAlgebra)
 if(LINALG_ENABLE_CLANGTIDY)
     include(clang_tidy)
     xsigma_target_clang_tidy(LinearAlgebra ${LINALG_ENABLE_FIX})

@@ -155,7 +155,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "PGI")
   string(APPEND CMAKE_CXX_FLAGS " --diag_suppress=381")
 endif()
 
-if(MSVC)
+if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+                 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"))
   message(STATUS "MSVC compiler detected: applying MSVC-specific flags")
   # Use the highest warning level for visual c++ compiler. set(CMAKE_CXX_WARNING_LEVEL 4)
   # if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]") string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS
@@ -171,10 +172,6 @@ if(MSVC)
   )
   string(APPEND CMAKE_CXX_FLAGS " /wd4244 /wd4267 /wd4715 /wd4018")
   string(APPEND CMAKE_C_FLAGS " /wd4244 /wd4267 /wd4715 /wd4018")
-
-  # Disable deprecation warnings for standard C and STL functions in VS2015+ and later
-  add_definitions(-D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS)
-  add_definitions(-D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS)
 
   # Enable /MP flag for Visual Studio
   set(CMAKE_CXX_MP_FLAG ON CACHE BOOL "Build with /MP flag enabled")
@@ -211,6 +208,14 @@ if(MSVC)
   message(STATUS "  MSVC: enabling structured exception handling (/EHsc)")
   string(APPEND CMAKE_CXX_FLAGS " /EHsc")
   string(APPEND CMAKE_C_FLAGS " /EHsc")
+endif()
+
+# Suppress MSVC CRT deprecation warnings for all compilers that target the
+# Windows CRT (cl.exe, clang-cl, clang++ with MSVC CRT).  MinGW ships its own
+# CRT that does not use these macros, so it is excluded.
+if(WIN32 AND NOT MINGW)
+  add_definitions(-D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS)
+  add_definitions(-D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS)
 endif()
 
 if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -314,3 +319,97 @@ if(UNIX AND NOT APPLE)
     _xsigma_add_compile_flag("-fdiagnostics-color=always")
   endif()
 endif()
+
+# --- LINALG vectorization ISA option ---
+# Which linalg::packet<T> specialization backs LINALG_ENABLE_VECTORIZATION.
+# There is no "auto" choice: the ISA is always explicit, and CMake computes a
+# platform-appropriate default when the cache variable is not overridden on the
+# command line:
+#   scalar - force linalg::packet<T>'s scalar (width-1) primary template.
+#            Default for platforms other than x86_64/aarch64.
+#   sse2/avx/avx2/avx512/neon - force that specialization and (x86 targets
+#            only) add the matching -m<isa> compiler flag so it is actually
+#            enabled; a target that cannot assemble the requested ISA fails
+#            to build rather than silently falling back to a narrower one.
+#            avx2 is the default on x86_64/AMD64/i386/i686; neon is the
+#            default on aarch64/arm64.
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _linalg_system_processor_lower)
+if(_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
+    set(_linalg_vectorization_isa_default "neon")
+elseif(_linalg_system_processor_lower MATCHES "^(x86_64|amd64|i386|i686)$")
+    set(_linalg_vectorization_isa_default "avx2")
+else()
+    set(_linalg_vectorization_isa_default "scalar")
+endif()
+unset(_linalg_system_processor_lower)
+set(LINALG_VECTORIZATION_ISA
+    "${_linalg_vectorization_isa_default}"
+    CACHE
+        STRING
+        "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse2, avx, avx2, avx512, neon"
+)
+unset(_linalg_vectorization_isa_default)
+set_property(
+    CACHE LINALG_VECTORIZATION_ISA
+    PROPERTY STRINGS
+             scalar
+             sse2
+             avx
+             avx2
+             avx512
+             neon
+)
+
+# Apply per-target compilation flags: /WX on MSVC (excluding CUDA TUs and the
+# GNU-frontend clang-cl variant that rejects /WX as a path), -include cstdlib
+# everywhere else.
+function(linalg_apply_platform_compile_flags target)
+    if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+                     AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"))
+        # Excludes CUDA: nvcc's frontend does not recognize the bare MSVC-style
+        # /WX flag and misparses it as a second input file when
+        # LINALG_ENABLE_CUBLAS compiles .cu sources.
+        target_compile_options(${target} PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/WX>)
+    else()
+        target_compile_options(${target} PRIVATE -include cstdlib)
+    endif()
+endfunction()
+
+# Apply SIMD vectorization compile options to a target.  Emits the
+# LINALG_SIMD_<ISA> compile definition and, on non-MSVC toolchains, the
+# matching -m<isa> / -mfma flags wrapped in a $<NOT:CUDA> generator expression
+# so nvcc's cl.exe host compiler is never passed GCC-style flags.
+# Does nothing when LINALG_ENABLE_VECTORIZATION is OFF.
+function(linalg_apply_vectorization_flags target)
+    if(NOT LINALG_ENABLE_VECTORIZATION)
+        return()
+    endif()
+
+    string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
+    target_compile_definitions(${target} PUBLIC "LINALG_SIMD_${_linalg_simd_isa_upper}")
+    unset(_linalg_simd_isa_upper)
+
+    # x86 ISAs need the matching -m<isa> flag to actually be assembled;
+    # NEON is the aarch64 baseline (no single standard x86-style flag), so
+    # "neon" adds none.  cl.exe (MSVC, non-Clang) has no -mXXX flags;
+    # clang-cl sets MSVC=1 but accepts GCC-style -m flags via its Clang
+    # backend, so it is explicitly included in this path.
+    if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        if(LINALG_VECTORIZATION_ISA STREQUAL "sse2")
+            target_compile_options(${target}
+                PUBLIC $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-msse2>)
+        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx")
+            target_compile_options(${target}
+                PUBLIC $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-mavx>)
+        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx2")
+            target_compile_options(${target}
+                PUBLIC $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-mavx2>
+                       $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-mfma>)
+        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx512")
+            # Half-packet operations also use the 128/256-bit FMA intrinsics.
+            target_compile_options(${target}
+                PUBLIC $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-mavx512f>
+                       $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-mfma>)
+        endif()
+    endif()
+endfunction()

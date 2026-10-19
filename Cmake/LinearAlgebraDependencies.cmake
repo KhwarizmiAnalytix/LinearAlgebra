@@ -11,6 +11,18 @@ include_guard(GLOBAL)
 
 include(third_party_helpers)
 
+# MSVC also identifies clang++ targeting the MSVC ABI. These bundled projects
+# use it to select cl.exe arguments, which the GNU Clang driver cannot parse.
+# Limit the override to dependency configuration; keep the project's ABI and
+# CUDA host compiler settings intact in the caller.
+function(linalg_add_dependency_subdirectory source_dir binary_dir)
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+       AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+        set(MSVC FALSE)
+    endif()
+    add_subdirectory("${source_dir}" "${binary_dir}" ${ARGN})
+endfunction()
+
 # CMAKE_CURRENT_LIST_DIR = this file's directory (<repo>/Cmake) regardless of
 # the including directory's scope.
 get_filename_component(_linalg_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
@@ -31,8 +43,9 @@ function(linalg_setup_gtest)
         set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
         set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-        add_subdirectory("${LINALG_THIRD_PARTY_DIR}/googletest"
-                         "${CMAKE_BINARY_DIR}/ThirdParty/googletest_build" EXCLUDE_FROM_ALL)
+        linalg_add_dependency_subdirectory(
+            "${LINALG_THIRD_PARTY_DIR}/googletest"
+            "${CMAKE_BINARY_DIR}/ThirdParty/googletest_build" EXCLUDE_FROM_ALL)
     else()
         include(FetchContent)
         FetchContent_Declare(

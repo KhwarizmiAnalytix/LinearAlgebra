@@ -169,7 +169,7 @@ function(xsigma_create_iwyu_wrapper target_name lang)
     WRITE "${WRAPPER_SCRIPT}"
     "
 # IWYU Wrapper Script for ${target_name} (${lang})
-# Invoked by CMake as: cmake -P <this_script> <source_file> [compile_flags...]
+# Invoked by CMake as: cmake -P <this_script> -- [compile_flags...]
 # IWYU writes its include suggestions to stderr, which we capture to iwyu.log.
 
 set(IWYU_EXECUTABLE \"${IWYU_EXECUTABLE}\")
@@ -180,6 +180,9 @@ ${IWYU_ARGS_INIT_CODE}
 # Collect source file and compile flags passed by CMake (start at argv3)
 set(COMPILE_ARGS)
 set(_i 3)
+if(CMAKE_ARGV3 STREQUAL \"--\")
+  set(_i 4)
+endif()
 while(_i LESS CMAKE_ARGC)
   list(APPEND COMPILE_ARGS \"\${CMAKE_ARGV\${_i}}\")
   math(EXPR _i \"\${_i} + 1\")
@@ -193,12 +196,24 @@ execute_process(
   RESULT_VARIABLE IWYU_RESULT
 )
 
-# Append suggestions to iwyu.log
-if(IWYU_SUGGESTIONS)
-  file(APPEND \"\${IWYU_LOG_FILE}\" \"\${IWYU_SUGGESTIONS}\")
-endif()
-if(IWYU_OUTPUT)
-  file(APPEND \"\${IWYU_LOG_FILE}\" \"\${IWYU_OUTPUT}\")
+# Keep a complete report for each invocation, including failures with no stderr.
+# The command identifies the source even when IWYU crashes before printing it.
+string(SHA256 IWYU_LOG_KEY \"\${COMPILE_ARGS}\")
+set(IWYU_REPORT \"${IWYU_LOG_DIR}/${target_name}_${lang}_\${IWYU_LOG_KEY}.log\")
+set(IWYU_LOG_ENTRY
+    \"IWYU command: \${IWYU_EXECUTABLE} \${IWYU_EXTRA_ARGS} \${COMPILE_ARGS}\nIWYU result: \${IWYU_RESULT}\n\${IWYU_OUTPUT}\${IWYU_SUGGESTIONS}\n\")
+file(WRITE \"\${IWYU_REPORT}\" \"\${IWYU_LOG_ENTRY}\")
+
+# Parallel compiler jobs must not interleave or lose each other's reports.
+file(LOCK \"\${IWYU_LOG_FILE}.lock\" GUARD PROCESS TIMEOUT 30)
+file(APPEND \"\${IWYU_LOG_FILE}\" \"\${IWYU_LOG_ENTRY}\")
+
+# --error=0 keeps include suggestions advisory. A nonzero result therefore
+# means an analysis failure, including Windows access violations. Propagate
+# it to CMake's co-compile driver instead of silently reporting success.
+if(NOT \"\${IWYU_RESULT}\" STREQUAL \"0\")
+  message(FATAL_ERROR
+      \"IWYU failed: \${IWYU_RESULT}\nReport: \${IWYU_REPORT}\n\${IWYU_OUTPUT}\${IWYU_SUGGESTIONS}\")
 endif()
 "
   )
@@ -237,12 +252,13 @@ function(xsigma_apply_iwyu target_name)
   xsigma_create_iwyu_wrapper(${target_name} C "-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH")
 
   # Apply IWYU via the logging wrapper (cmake -P; IWYU suggestions go to iwyu.log via stderr)
+  # Stop CMake option parsing before forwarding compiler -D/-U arguments.
   set_target_properties(
     ${target_name}
     PROPERTIES CXX_INCLUDE_WHAT_YOU_USE
-               "${CMAKE_COMMAND};-P;${PROJECT_BINARY_DIR}/iwyu_wrapper_${target_name}_CXX.cmake"
+               "${CMAKE_COMMAND};-P;${PROJECT_BINARY_DIR}/iwyu_wrapper_${target_name}_CXX.cmake;--"
                C_INCLUDE_WHAT_YOU_USE
-               "${CMAKE_COMMAND};-P;${PROJECT_BINARY_DIR}/iwyu_wrapper_${target_name}_C.cmake"
+               "${CMAKE_COMMAND};-P;${PROJECT_BINARY_DIR}/iwyu_wrapper_${target_name}_C.cmake;--"
   )
 
   message(STATUS "Applied IWYU to target: ${target_name} (logging to ${IWYU_LOG_FILE})")

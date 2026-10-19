@@ -168,11 +168,28 @@ endif()
 
 include(CheckCXXSourceCompiles)
 
-# C++17 features validation (cached)
-if(MSVC)
-  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /Zc:__cplusplus /std:c++17")
-endif()
+# C++17 features validation (cached).
+# CMAKE_CXX_STANDARD is applied to targets later, and check_cxx_source_compiles
+# does not inherit it. Clang's default language mode accepts structured
+# bindings and if constexpr as extensions, but the MSVC STL hides std::optional
+# until the TU is actually compiled as C++17. Probe with the project standard.
 if(NOT DEFINED TEMP_CXX17_FEATURES_VALIDATED)
+  set(_linalg_checks_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+  if(DEFINED LINALG_CXX_STANDARD)
+    set(_linalg_checks_cxx_standard "${LINALG_CXX_STANDARD}")
+  elseif(DEFINED CMAKE_CXX_STANDARD AND NOT CMAKE_CXX_STANDARD STREQUAL "")
+    set(_linalg_checks_cxx_standard "${CMAKE_CXX_STANDARD}")
+  else()
+    set(_linalg_checks_cxx_standard 17)
+  endif()
+  if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+                   AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"))
+    string(APPEND CMAKE_REQUIRED_FLAGS
+           " /Zc:__cplusplus /std:c++${_linalg_checks_cxx_standard}")
+  else()
+    string(APPEND CMAKE_REQUIRED_FLAGS " -std=c++${_linalg_checks_cxx_standard}")
+  endif()
+
   # Test structured bindings
   check_cxx_source_compiles(
     "
@@ -214,6 +231,10 @@ if(NOT DEFINED TEMP_CXX17_FEATURES_VALIDATED)
     "
     TEMP_HAS_STD_OPTIONAL
   )
+
+  set(CMAKE_REQUIRED_FLAGS "${_linalg_checks_saved_required_flags}")
+  unset(_linalg_checks_saved_required_flags)
+  unset(_linalg_checks_cxx_standard)
 
   if(NOT TEMP_HAS_STRUCTURED_BINDINGS OR NOT TEMP_HAS_IF_CONSTEXPR OR NOT TEMP_HAS_STD_OPTIONAL)
     message(WARNING "XSigma: Compiler does not support required C++17 features")

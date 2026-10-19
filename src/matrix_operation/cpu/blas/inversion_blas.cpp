@@ -7,12 +7,17 @@
 #include "include/common/linalg_checks.h"
 
 #include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
-#ifdef _MSC_VER
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#elif defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
 #endif
 #include <lapacke.h>
-#ifdef _MSC_VER
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(_MSC_VER)
 #pragma warning(pop)
 #endif
 

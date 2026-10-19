@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(python setup.py config.build.test)",
+      "PowerShell(lintrunner init)",
+      "PowerShell(python3 -m pip install lintrunner --upgrade)",
+      "PowerShell(python3 -m pip install git+https://github.com/KhwarizmiAnalytix/lint-tool.git)",
+      "PowerShell(lintrunner -a)",
+      "Bash(lintrunner -a)",
+      "PowerShell(clang-format --version)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
+    ]
+  }
+}

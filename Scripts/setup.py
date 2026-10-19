@@ -805,8 +805,14 @@ class LinearAlgebraConfiguration:
         elif self.__is_clang_compiler(arg):
             self.__set_clang_compiler(arg)
         elif arg == "clang-cl":
-            self.__value["cmake_cxx_compiler"] = "-DCMAKE_GENERATOR_TOOLSET=ClangCL"
-            self.__value["cmake_c_compiler"] = ""
+            # CMAKE_GENERATOR_TOOLSET=ClangCL only works with VS generators.
+            # With Ninja (the default), pass the compiler directly.
+            if self.__value.get("cmake_generator", "Ninja") == "Ninja":
+                self.__value["cmake_cxx_compiler"] = "-DCMAKE_CXX_COMPILER=clang-cl"
+                self.__value["cmake_c_compiler"] = "-DCMAKE_C_COMPILER=clang-cl"
+            else:
+                self.__value["cmake_cxx_compiler"] = "-DCMAKE_GENERATOR_TOOLSET=ClangCL"
+                self.__value["cmake_c_compiler"] = ""
             self.__compiler_user_specified = True
         elif self.__is_gcc_compiler(arg):
             self.__set_gcc_compiler(arg)
@@ -1152,7 +1158,7 @@ def main():
             compilation_calc.cppcheck(source_path, build_path)
             cppcheck_end = time.perf_counter()
 
-            compilation_calc.test(source_path, build_path)
+            test_exit = compilation_calc.test(source_path, build_path)
             test_end = time.perf_counter()
 
             compilation_calc.coverage(source_path, build_path)
@@ -1166,6 +1172,10 @@ def main():
             print_status(f"Test time: {test_end - cppcheck_end:.4f} seconds", "INFO")
             print_status(f"Coverage time: {end - test_end:.4f} seconds", "INFO")
             print_status(f"Total time: {end - start:.4f} seconds", "INFO")
+            if test_exit:
+                print_status("Tests failed", "ERROR")
+                compilation_calc.summary_reporter.display_summary()
+                sys.exit(test_exit)
             print_status("Build process completed successfully!", "SUCCESS")
 
             compilation_calc.summary_reporter.display_summary()

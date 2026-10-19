@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <limits>
+#include <math_constants.h>
 
 #include "include/matrix_operation/condition_number.h"
 #include "include/matrix_operation/rank.h"
@@ -31,6 +32,23 @@ void svd_on_device(linalg_long rows, linalg_long columns, const double* A, linal
 
 namespace
 {
+
+// The Windows INFINITY macro is ((float)(1e+300)). nvcc warns that this
+// literal does not fit in float or double. CUDART_INF_* are device infinities.
+template <typename T>
+__device__ T device_infinity();
+
+template <>
+__device__ float device_infinity<float>()
+{
+    return CUDART_INF_F;
+}
+
+template <>
+__device__ double device_infinity<double>()
+{
+    return CUDART_INF;
+}
 
 template <typename T>
 struct singular_values_layout
@@ -99,7 +117,7 @@ static __global__ void singular_values_reduce(const T* S,
         *rank_result = count;
     }
     if (condition_result)
-        *condition_result = S[k - 1] == T(0) ? T(INFINITY) : S[0] / S[k - 1];
+        *condition_result = S[k - 1] == T(0) ? device_infinity<T>() : S[0] / S[k - 1];
 }
 
 template <typename T>

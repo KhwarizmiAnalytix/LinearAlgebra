@@ -64,16 +64,23 @@ private:
 template <typename T>
 dense_matrix<T> transpose(const dense_matrix<T>& a)
 {
-    dense_matrix<T> t(a);
+    // Apply in-place transpose to a copy of a's flat data, then move the
+    // result into a new dense_matrix with swapped dimensions so that the
+    // row-major accessor (i*cols_+j) uses the correct stride.
+    dense_matrix<T> scratch(a);  // copy — same rows/cols as a
     const auto      ws_size = linalg::transpose<T, linalg::linalg_backend::native>::workspace_size(
         static_cast<linalg_long>(a.rows()), static_cast<linalg_long>(a.cols()));
     std::vector<unsigned char> ws(ws_size);
     linalg::transpose<T, linalg::linalg_backend::native>::apply(
         static_cast<linalg_long>(a.rows()),
         static_cast<linalg_long>(a.cols()),
-        t.data(),
+        scratch.data(),
         ws.data(),
         ws.size());
+    // scratch.data() now holds the transposed layout (cols x rows); wrap it
+    // in a dense_matrix with the correct (swapped) dimension metadata.
+    dense_matrix<T> t(a.cols(), a.rows());
+    std::copy(scratch.data(), scratch.data() + a.rows() * a.cols(), t.data());
     return t;
 }
 

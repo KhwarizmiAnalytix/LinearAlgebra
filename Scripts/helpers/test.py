@@ -5,8 +5,26 @@ Handles ctest / valgrind invocation for Scripts/setup.py.
 """
 
 import os
+import shutil
 import subprocess
 from typing import Optional
+
+
+def _resolve_ctest() -> str:
+    """Return a real CMake ctest, not a same-named script earlier on PATH.
+
+    The pip ``cmake`` package can install a ``ctest.exe`` shim ahead of
+    CMake's own executable. That shim fails before any test runs. The
+    ``cmake`` used to configure the build is the matching ctest.
+    """
+    cmake = shutil.which("cmake")
+    if cmake:
+        sibling = os.path.join(
+            os.path.dirname(cmake), "ctest.exe" if os.name == "nt" else "ctest"
+        )
+        if os.path.isfile(sibling):
+            return sibling
+    return shutil.which("ctest") or "ctest"
 
 
 def run_ctest(
@@ -34,7 +52,7 @@ def run_ctest(
         Exit code (0 for success, non-zero for failure)
     """
     try:
-        ctest_cmd = ["ctest"]
+        ctest_cmd = [_resolve_ctest()]
 
         if system == "Windows" and builder != "ninja":
             ctest_cmd.extend(["-C", build_enum])
