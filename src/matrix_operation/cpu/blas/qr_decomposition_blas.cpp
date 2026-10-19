@@ -22,6 +22,8 @@
 #pragma warning(pop)
 #endif
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS/LAPACKE specializations for qr_decomposition.h (the native backend lives in
@@ -176,9 +178,16 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long ro
     const auto        r     = static_cast<lapack_int>(rows);
     const auto        c     = static_cast<lapack_int>(columns);
     const auto        kk    = static_cast<lapack_int>(k);
-    const auto        lwork = qr_lwork<float>(LAPACKE_sgeqrf_work, LAPACKE_sorgqr_work, r, c, kk);
-    LINALG_CHECK(workspace_size >= qr_workspace_size_impl<float>(
-                                        LAPACKE_sgeqrf_work, LAPACKE_sorgqr_work, rows, columns),
+    const auto        lwork = qr_lwork<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgeqrf_work),
+        LINALG_BLAS_FUNCTION(LAPACKE_sorgqr_work),
+        r,
+        c,
+        kk);
+    LINALG_CHECK(
+        workspace_size >= qr_workspace_size_impl<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgeqrf_work),
+                              LINALG_BLAS_FUNCTION(LAPACKE_sorgqr_work),
+                              rows,
+                              columns),
         "qr_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = qr_plan<float>(arena, rows, columns, k, lwork);
@@ -186,8 +195,8 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long ro
     {
         std::copy_n(A + i * lda, columns, bufs.buf + i * columns);
     }
-    auto info =
-        LAPACKE_sgeqrf_work(LAPACK_ROW_MAJOR, r, c, bufs.buf, c, bufs.tau, bufs.work, lwork);
+    auto info = LINALG_BLAS_FUNCTION(LAPACKE_sgeqrf_work)(
+        LAPACK_ROW_MAJOR, r, c, bufs.buf, c, bufs.tau, bufs.work, lwork);
     if (info != 0)
     {
         LINALG_THROW("blas_lapack QR (geqrf) was unsuccessful");
@@ -199,8 +208,8 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long ro
             R[i * ldr + j] = (j >= i) ? bufs.buf[i * columns + j] : 0.F;
         }
     }
-    info =
-        LAPACKE_sorgqr_work(LAPACK_ROW_MAJOR, r, kk, kk, bufs.buf, c, bufs.tau, bufs.work, lwork);
+    info = LINALG_BLAS_FUNCTION(LAPACKE_sorgqr_work)(
+        LAPACK_ROW_MAJOR, r, kk, kk, bufs.buf, c, bufs.tau, bufs.work, lwork);
     if (info != 0)
     {
         LINALG_THROW("blas_lapack QR (orgqr) was unsuccessful");
@@ -230,9 +239,16 @@ void qr_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long r
     const auto        r     = static_cast<lapack_int>(rows);
     const auto        c     = static_cast<lapack_int>(columns);
     const auto        kk    = static_cast<lapack_int>(k);
-    const auto        lwork = qr_lwork<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, r, c, kk);
-    LINALG_CHECK(workspace_size >= qr_workspace_size_impl<double>(
-                                        LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, rows, columns),
+    const auto        lwork = qr_lwork<double>(LINALG_BLAS_FUNCTION(LAPACKE_dgeqrf_work),
+        LINALG_BLAS_FUNCTION(LAPACKE_dorgqr_work),
+        r,
+        c,
+        kk);
+    LINALG_CHECK(
+        workspace_size >= qr_workspace_size_impl<double>(LINALG_BLAS_FUNCTION(LAPACKE_dgeqrf_work),
+                              LINALG_BLAS_FUNCTION(LAPACKE_dorgqr_work),
+                              rows,
+                              columns),
         "qr_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = qr_plan<double>(arena, rows, columns, k, lwork);
@@ -240,8 +256,8 @@ void qr_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long r
     {
         std::copy_n(A + i * lda, columns, bufs.buf + i * columns);
     }
-    auto info =
-        LAPACKE_dgeqrf_work(LAPACK_ROW_MAJOR, r, c, bufs.buf, c, bufs.tau, bufs.work, lwork);
+    auto info = LINALG_BLAS_FUNCTION(LAPACKE_dgeqrf_work)(
+        LAPACK_ROW_MAJOR, r, c, bufs.buf, c, bufs.tau, bufs.work, lwork);
     if (info != 0)
     {
         LINALG_THROW("blas_lapack QR (geqrf) was unsuccessful");
@@ -253,8 +269,8 @@ void qr_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long r
             R[i * ldr + j] = (j >= i) ? bufs.buf[i * columns + j] : 0.;
         }
     }
-    info =
-        LAPACKE_dorgqr_work(LAPACK_ROW_MAJOR, r, kk, kk, bufs.buf, c, bufs.tau, bufs.work, lwork);
+    info = LINALG_BLAS_FUNCTION(LAPACKE_dorgqr_work)(
+        LAPACK_ROW_MAJOR, r, kk, kk, bufs.buf, c, bufs.tau, bufs.work, lwork);
     if (info != 0)
     {
         LINALG_THROW("blas_lapack QR (orgqr) was unsuccessful");
@@ -269,14 +285,20 @@ template <>
 size_t qr_decomposition<float, linalg_backend::blas_lapacke>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return qr_workspace_size_impl<float>(LAPACKE_sgeqrf_work, LAPACKE_sorgqr_work, rows, columns);
+    return qr_workspace_size_impl<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgeqrf_work),
+        LINALG_BLAS_FUNCTION(LAPACKE_sorgqr_work),
+        rows,
+        columns);
 }
 
 template <>
 size_t qr_decomposition<double, linalg_backend::blas_lapacke>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return qr_workspace_size_impl<double>(LAPACKE_dgeqrf_work, LAPACKE_dorgqr_work, rows, columns);
+    return qr_workspace_size_impl<double>(LINALG_BLAS_FUNCTION(LAPACKE_dgeqrf_work),
+        LINALG_BLAS_FUNCTION(LAPACKE_dorgqr_work),
+        rows,
+        columns);
 }
 }  // namespace linalg
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE

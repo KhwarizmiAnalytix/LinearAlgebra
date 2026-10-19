@@ -125,7 +125,9 @@ backend's design and known restrictions.
 | CMake variable | Default | Summary |
 |-----------------|---------|---------|
 | `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigen); least_squares/pseudo_inverse/rank/norm/trace compose on top of svd_decomposition and pick up the same backend transitively |
-| `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); MKL takes precedence when both are ON |
+| `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); uses an independent shared provider when MKL is also ON |
+| `LINALG_BLAS_RUNTIME_LIBRARY` | auto-detected OpenBLAS | Shared CBLAS provider (`.dll`, `.so`, `.dylib`) for combined MKL/BLAS builds |
+| `LINALG_LAPACKE_RUNTIME_LIBRARY` | empty | Optional separate shared LAPACKE provider; empty means LAPACKE is bundled in the CBLAS provider |
 | `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::cuda_blas` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
@@ -136,12 +138,36 @@ backend's design and known restrictions.
 
 When `LINALG_ENABLE_MKL` is `ON`, `find_package(MKL)` must resolve (via
 `MKLROOT` / `CMAKE_PREFIX_PATH`) or configuration fails with `FATAL_ERROR`.
-When `LINALG_ENABLE_BLAS` is `ON`, `find_package(BLAS)`/`find_package(LAPACK)`
+When only `LINALG_ENABLE_BLAS` is `ON`, `find_package(BLAS)`/`find_package(LAPACK)`
 must resolve, or configuration fails with `FATAL_ERROR`; `cblas.h` is
 required, but `lapacke.h` is optional — without it, the backend covers only
 `multiplication`/`transpose` and every other op falls back to
 scalar (a `STATUS` message reports which case applies). When
 `LINALG_ENABLE_CUBLAS` is `ON`, `find_package(CUDAToolkit)` must resolve.
+
+With both CPU vendor backends enabled, `blas_lapacke` calls its own shared
+provider and `mkl` calls MKL's ILP64 interface. The BLAS provider is loaded
+through a private handle rather than linked alongside MKL, since the libraries
+export overlapping CBLAS/LAPACKE symbols. Its headers must match its integer ABI.
+For example, on Windows:
+
+```powershell
+cmake -G Ninja -S . -B build_compare -DCMAKE_BUILD_TYPE=Release -DLINALG_ENABLE_MKL=ON -DLINALG_ENABLE_BLAS=ON -DLINALG_ENABLE_BENCHMARK=ON -DLINALG_CBLAS_INCLUDE_DIR=C:/tools/OpenBLAS/include -DLINALG_LAPACKE_INCLUDE_DIR=C:/tools/OpenBLAS/include -DLINALG_BLAS_RUNTIME_LIBRARY=C:/tools/OpenBLAS/bin/libopenblas.dll
+cmake --build build_compare --config Release
+./build_compare/bin/benchmark_linalg_multiplication.exe --benchmark_filter='double.*(blas_lapacke|mkl)>/64/64/64'
+```
+
+Each benchmark executable reports both backends separately. Match vendor thread
+counts (for example `OPENBLAS_NUM_THREADS=1` and `MKL_NUM_THREADS=1`) when comparing
+them. Function addresses are cached on first use; combined builds add an indirect
+call to BLAS operations. Standalone BLAS builds retain direct calls.
+
+The configured shared-library paths and their dependencies must remain available
+at runtime, including when consuming an installed LinearAlgebra package. Set
+`LINALG_LAPACKE_RUNTIME_LIBRARY` explicitly if LAPACKE is packaged separately
+(for example `liblapacke.so`). On ELF systems, combined builds require
+`RTLD_DEEPBIND` to isolate the provider's internal calls; sanitizer checks must
+enable one CPU vendor backend at a time.
 
 ## Backend landscape
 

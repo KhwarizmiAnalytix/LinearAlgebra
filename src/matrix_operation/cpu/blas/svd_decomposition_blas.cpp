@@ -22,6 +22,8 @@
 #pragma warning(pop)
 #endif
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS/LAPACKE specializations for svd_decomposition.h (the native backend lives in
@@ -203,16 +205,17 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     const auto r     = static_cast<lapack_int>(rows);
     const auto c     = static_cast<lapack_int>(columns);
-    const auto lwork = svd_lwork<float>(LAPACKE_sgesvd_work, r, c, rows > columns);
-    LINALG_CHECK(
-        workspace_size >= svd_workspace_size_impl<float>(LAPACKE_sgesvd_work, rows, columns),
+    const auto lwork =
+        svd_lwork<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work), r, c, rows > columns);
+    LINALG_CHECK(workspace_size >= svd_workspace_size_impl<float>(
+                                       LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work), rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = svd_plan<float>(arena, lwork);
     if (rows > columns)
     {
         std::copy_n(A, rows * columns, U);
-        auto info = LAPACKE_sgesvd_work(LAPACK_ROW_MAJOR,
+        auto info = LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work)(LAPACK_ROW_MAJOR,
             'O',
             'S',
             r,
@@ -231,7 +234,7 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
     else
     {
         std::copy_n(A, rows * columns, VT);
-        auto info = LAPACKE_sgesvd_work(LAPACK_ROW_MAJOR,
+        auto info = LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work)(LAPACK_ROW_MAJOR,
             'S',
             'O',
             r,
@@ -267,16 +270,17 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
     const auto r     = static_cast<lapack_int>(rows);
     const auto c     = static_cast<lapack_int>(columns);
-    const auto lwork = svd_lwork<double>(LAPACKE_dgesvd_work, r, c, rows > columns);
-    LINALG_CHECK(
-        workspace_size >= svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns),
+    const auto lwork =
+        svd_lwork<double>(LINALG_BLAS_FUNCTION(LAPACKE_dgesvd_work), r, c, rows > columns);
+    LINALG_CHECK(workspace_size >= svd_workspace_size_impl<double>(
+                                       LINALG_BLAS_FUNCTION(LAPACKE_dgesvd_work), rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = svd_plan<double>(arena, lwork);
     if (rows > columns)
     {
         std::copy_n(A, rows * columns, U);
-        auto info = LAPACKE_dgesvd_work(LAPACK_ROW_MAJOR,
+        auto info = LINALG_BLAS_FUNCTION(LAPACKE_dgesvd_work)(LAPACK_ROW_MAJOR,
             'O',
             'S',
             r,
@@ -295,7 +299,7 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
     else
     {
         std::copy_n(A, rows * columns, VT);
-        auto info = LAPACKE_dgesvd_work(LAPACK_ROW_MAJOR,
+        auto info = LINALG_BLAS_FUNCTION(LAPACKE_dgesvd_work)(LAPACK_ROW_MAJOR,
             'S',
             'O',
             r,
@@ -317,14 +321,15 @@ template <>
 size_t svd_decomposition<float, linalg_backend::blas_lapacke>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return svd_workspace_size_impl<float>(LAPACKE_sgesvd_work, rows, columns);
+    return svd_workspace_size_impl<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work), rows, columns);
 }
 
 template <>
 size_t svd_decomposition<double, linalg_backend::blas_lapacke>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return svd_workspace_size_impl<double>(LAPACKE_dgesvd_work, rows, columns);
+    return svd_workspace_size_impl<double>(
+        LINALG_BLAS_FUNCTION(LAPACKE_dgesvd_work), rows, columns);
 }
 
 }  // namespace linalg

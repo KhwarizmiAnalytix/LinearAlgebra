@@ -43,6 +43,8 @@ double hmax_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>
 
 template <typename value_t, linalg::linalg_backend Backend> void test_inversion(std::size_t dim)
 {
+    SCOPED_TRACE(::testing::Message() << "backend=" << static_cast<int>(Backend)
+                                   << ", scalar_bytes=" << sizeof(value_t) << ", dimension=" << dim);
     dense_matrix<value_t> R(dim, dim);
     dense_matrix<value_t> Id(dim, dim);
 

@@ -11,6 +11,8 @@
 #include <cblas.h>
 #endif
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS specializations for multiplication.h (the native backend lives in
@@ -63,7 +65,7 @@ void multiplication<float, linalg_backend::blas_lapacke>::apply(bool transpose_a
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-    cblas_sgemm(CblasRowMajor,
+    LINALG_BLAS_FUNCTION(cblas_sgemm)(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
         detail::checked_narrow<int>(rows),
@@ -105,7 +107,7 @@ void multiplication<double, linalg_backend::blas_lapacke>::apply(bool transpose_
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-    cblas_dgemm(CblasRowMajor,
+    LINALG_BLAS_FUNCTION(cblas_dgemm)(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
         detail::checked_narrow<int>(rows),

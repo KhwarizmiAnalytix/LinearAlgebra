@@ -1,0 +1,5 @@
+#pragma once
+
+// Kept private to the compiled library; consumers do not need vendor headers.
+#define LINALG_BLAS_RUNTIME_PATH R"(@LINALG_BLAS_RUNTIME_LIBRARY@)"
+#define LINALG_LAPACKE_RUNTIME_PATH R"(@LINALG_LAPACKE_RUNTIME_LIBRARY@)"

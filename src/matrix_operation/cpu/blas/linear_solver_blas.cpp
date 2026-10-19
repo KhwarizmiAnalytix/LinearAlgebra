@@ -25,6 +25,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS/LAPACKE specializations for linear_solver.h (the native backend lives in
@@ -105,7 +107,7 @@ void linear_solver<float, linalg_backend::blas_lapacke>::apply(float* m,
                 m, lda, pivot, lu_ws, lu_decomposition<float, linalg_backend::blas_lapacke>::workspace_size(lda)))
         {
             to_lapack_pivots(pivot, lda, ipiv);
-            LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
+            LINALG_BLAS_FUNCTION(LAPACKE_sgetrs)(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
         }
         break;
     }
@@ -113,18 +115,18 @@ void linear_solver<float, linalg_backend::blas_lapacke>::apply(float* m,
         if (cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
-            LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
+            LINALG_BLAS_FUNCTION(LAPACKE_spotrs)(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
         }
         break;
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
     {
         auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
         to_lapack_pivots(pivot, lda, ipiv);
-        LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
+        LINALG_BLAS_FUNCTION(LAPACKE_sgetrs)(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
         break;
     }
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
+        LINALG_BLAS_FUNCTION(LAPACKE_spotrs)(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
         break;
     }
 }
@@ -156,7 +158,7 @@ void linear_solver<double, linalg_backend::blas_lapacke>::apply(double* m,
                 m, lda, pivot, lu_ws, lu_decomposition<double, linalg_backend::blas_lapacke>::workspace_size(lda)))
         {
             to_lapack_pivots(pivot, lda, ipiv);
-            LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
+            LINALG_BLAS_FUNCTION(LAPACKE_dgetrs)(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
         }
         break;
     }
@@ -164,18 +166,18 @@ void linear_solver<double, linalg_backend::blas_lapacke>::apply(double* m,
         if (cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
-            LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
+            LINALG_BLAS_FUNCTION(LAPACKE_dpotrs)(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
         }
         break;
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
     {
         auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
         to_lapack_pivots(pivot, lda, ipiv);
-        LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
+        LINALG_BLAS_FUNCTION(LAPACKE_dgetrs)(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
         break;
     }
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
+        LINALG_BLAS_FUNCTION(LAPACKE_dpotrs)(LAPACK_ROW_MAJOR, 'L', n, 1, m, n, x, 1);
         break;
     }
 }

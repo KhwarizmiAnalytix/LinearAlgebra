@@ -63,9 +63,8 @@ include(third_party_helpers)
 option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearAlgebra" OFF)
 
 # Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...).
-# When both this and LINALG_ENABLE_MKL are ON, MKL takes precedence at
-# compile time (see the #if/#elif chain in
-# native/multiplication_native.cpp).
+# When MKL is also enabled, load this provider through a private runtime handle
+# so identical CBLAS/LAPACKE names cannot bind to MKL's ILP64 interface.
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
 # cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as
@@ -198,8 +197,9 @@ endif()
 # c) Coverage gate — appends -fprofile-instr-generate / --coverage; LTO already cleared above.
 if(LINALG_ENABLE_COVERAGE)
     include(coverage)
-elseif(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-                     AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"))
+elseif(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
+                                                                STREQUAL "GNU")
+)
     string(APPEND CMAKE_EXE_LINKER_FLAGS " /DEBUG:FULL")
     string(APPEND CMAKE_SHARED_LINKER_FLAGS " /DEBUG:FULL")
 elseif(MSVC)
@@ -241,11 +241,11 @@ if(LINALG_ENABLE_MKL)
         # called. Intel's own linking guidance is to force --no-as-needed
         # around the MKL libraries on ELF/GNU-ld platforms; MSVC has no such
         # flag and Apple's ld doesn't prune unresolved lazy symbols this way.
-        if(NOT MSVC AND NOT APPLE)
+        if(UNIX AND NOT APPLE)
             list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--no-as-needed)
         endif()
         list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
-        if(NOT MSVC AND NOT APPLE)
+        if(UNIX AND NOT APPLE)
             list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--as-needed)
         endif()
     endif()
@@ -321,19 +321,21 @@ if(LINALG_ENABLE_BLAS)
         unset(LINALG_BLAS_PREFIX_CANDIDATE)
     endif()
 
-    find_package(BLAS REQUIRED)
-    find_package(LAPACK REQUIRED)
-    # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
-    # back to the raw *_LIBRARIES lists on older CMake (project minimum: 3.16).
-    if(TARGET BLAS::BLAS)
-        list(APPEND LINALG_DEPENDENCY_LIBS BLAS::BLAS)
-    else()
-        list(APPEND LINALG_DEPENDENCY_LIBS ${BLAS_LIBRARIES})
-    endif()
-    if(TARGET LAPACK::LAPACK)
-        list(APPEND LINALG_DEPENDENCY_LIBS LAPACK::LAPACK)
-    else()
-        list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
+    if(NOT LINALG_ENABLE_MKL)
+        find_package(BLAS REQUIRED)
+        find_package(LAPACK REQUIRED)
+        # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
+        # back to the raw *_LIBRARIES lists on older CMake (project minimum: 3.16).
+        if(TARGET BLAS::BLAS)
+            list(APPEND LINALG_DEPENDENCY_LIBS BLAS::BLAS)
+        else()
+            list(APPEND LINALG_DEPENDENCY_LIBS ${BLAS_LIBRARIES})
+        endif()
+        if(TARGET LAPACK::LAPACK)
+            list(APPEND LINALG_DEPENDENCY_LIBS LAPACK::LAPACK)
+        else()
+            list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
+        endif()
     endif()
 
     # BLAS::BLAS/LAPACK::LAPACK link the libraries but do not guarantee a
@@ -394,10 +396,12 @@ if(LINALG_ENABLE_BLAS)
     if(LINALG_LAPACKE_INCLUDE_DIR)
         # Debian/Ubuntu package the C interface separately from LAPACK.
         # Other vendors (including Homebrew OpenBLAS) bundle it in LAPACK.
-        find_library(LINALG_LAPACKE_LIBRARY NAMES lapacke)
-        mark_as_advanced(LINALG_LAPACKE_LIBRARY)
-        if(LINALG_LAPACKE_LIBRARY)
-            list(APPEND LINALG_DEPENDENCY_LIBS "${LINALG_LAPACKE_LIBRARY}")
+        if(NOT LINALG_ENABLE_MKL)
+            find_library(LINALG_LAPACKE_LIBRARY NAMES lapacke)
+            mark_as_advanced(LINALG_LAPACKE_LIBRARY)
+            if(LINALG_LAPACKE_LIBRARY)
+                list(APPEND LINALG_DEPENDENCY_LIBS "${LINALG_LAPACKE_LIBRARY}")
+            endif()
         endif()
         list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
         set(LINALG_BLAS_HAS_LAPACKE ON)
@@ -408,6 +412,11 @@ if(LINALG_ENABLE_BLAS)
         )
     endif()
     list(REMOVE_DUPLICATES LINALG_BLAS_INCLUDE_DIRS)
+    if(LINALG_ENABLE_MKL)
+        include(isolated_blas)
+        linalg_configure_isolated_blas()
+        list(APPEND LINALG_DEPENDENCY_LIBS ${CMAKE_DL_LIBS})
+    endif()
 endif()
 
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
@@ -428,8 +437,9 @@ if(LINALG_ENABLE_CUBLAS)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES native)
     endif()
-    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-       AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
+                                                            STREQUAL "GNU"
+    )
         # Mixed CXX/CUDA targets link with clang++. CMake's CUDA runtime
         # options are bare cudadevrt/cudart names, which the MSVC linker
         # frontend turns into *.lib. The GNU driver treats those as input
@@ -493,8 +503,9 @@ linalg_add_dependency_subdirectory(
     "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
     "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
 )
-if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-   AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
+                                                        STREQUAL "GNU"
+)
     # Logging names this Windows SDK library without a path. Use the GNU
     # driver's library search syntax rather than a bare dbghelp.lib input.
     get_target_property(_linalg_logging_libraries Logging LINK_LIBRARIES)

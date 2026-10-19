@@ -22,6 +22,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS/LAPACKE specializations for eigen.h (the native backend lives in
@@ -108,7 +110,8 @@ bool symmetric_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const f
     {
         std::copy_n(A + i * lda, static_cast<std::size_t>(n), buf + i * n);
     }
-    auto info = LAPACKE_ssyevd(LAPACK_ROW_MAJOR, 'V', 'L', nn, buf, nn, eigenvalues);
+    auto info =
+        LINALG_BLAS_FUNCTION(LAPACKE_ssyevd)(LAPACK_ROW_MAJOR, 'V', 'L', nn, buf, nn, eigenvalues);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(buf + i * n, static_cast<std::size_t>(n), eigenvectors + i * ldv);
@@ -138,7 +141,8 @@ bool symmetric_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const 
     {
         std::copy_n(A + i * lda, static_cast<std::size_t>(n), buf + i * n);
     }
-    auto info = LAPACKE_dsyevd(LAPACK_ROW_MAJOR, 'V', 'L', nn, buf, nn, eigenvalues);
+    auto info =
+        LINALG_BLAS_FUNCTION(LAPACKE_dsyevd)(LAPACK_ROW_MAJOR, 'V', 'L', nn, buf, nn, eigenvalues);
     for (linalg_int i = 0; i < n; ++i)
     {
         std::copy_n(buf + i * n, static_cast<std::size_t>(n), eigenvectors + i * ldv);
@@ -177,7 +181,7 @@ bool general_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const flo
     if (compute_eigenvectors)
     {
         auto* vr = arena.next<float>(bytes);
-        info     = LAPACKE_sgeev(LAPACK_ROW_MAJOR,
+        info     = LINALG_BLAS_FUNCTION(LAPACKE_sgeev)(LAPACK_ROW_MAJOR,
             'N',
             'V',
             nn,
@@ -196,7 +200,7 @@ bool general_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const flo
     }
     else
     {
-        info = LAPACKE_sgeev(LAPACK_ROW_MAJOR,
+        info = LINALG_BLAS_FUNCTION(LAPACKE_sgeev)(LAPACK_ROW_MAJOR,
             'N',
             'N',
             nn,
@@ -243,7 +247,7 @@ bool general_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const do
     if (compute_eigenvectors)
     {
         auto* vr = arena.next<double>(bytes);
-        info     = LAPACKE_dgeev(LAPACK_ROW_MAJOR,
+        info     = LINALG_BLAS_FUNCTION(LAPACKE_dgeev)(LAPACK_ROW_MAJOR,
             'N',
             'V',
             nn,
@@ -262,7 +266,7 @@ bool general_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const do
     }
     else
     {
-        info = LAPACKE_dgeev(LAPACK_ROW_MAJOR,
+        info = LINALG_BLAS_FUNCTION(LAPACKE_dgeev)(LAPACK_ROW_MAJOR,
             'N',
             'N',
             nn,

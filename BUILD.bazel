@@ -21,7 +21,11 @@ package(default_visibility = ["//visibility:public"])
 # resolves mkl.h/cblas.h/lapacke.h or links an MKL/BLAS/LAPACK library the
 # way CMakeLists.txt's find_package(MKL)/find_package(BLAS)/find_path() do,
 # so a Bazel build with either set still depends on those headers/libs
-# already being on the toolchain's default search paths. LINALG_HAS_CUBLAS
+# already being on the toolchain's default search paths.
+# Combined MKL/BLAS builds also need LINALG_BLAS_RUNTIME_PATH defined as a
+# string naming an independent shared provider (and optionally
+# LINALG_LAPACKE_RUNTIME_PATH for a separate LAPACKE provider), plus libdl on ELF.
+# CMake configures these paths automatically. LINALG_HAS_CUBLAS
 # (and its helper macros) has no Bazel toggle at all — CMake is this repo's
 # primary, exercised build system for the mkl / blas_lapack backends and the
 # cuBLAS/cuSOLVER GPU backend (src/matrix_operation/gpu/cublas/ +
@@ -35,6 +39,7 @@ filegroup(
             "include/memory/*.h",
             "include/util/*.h",
             "include/matrix_operation/*.h",
+            "src/matrix_operation/cpu/blas/*.h",
         ],
         allow_empty = True,
     ),

@@ -24,6 +24,8 @@
 #pragma warning(pop)
 #endif
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS/LAPACKE specializations for cholesky_decomposition.h (the native backend lives in
@@ -62,7 +64,8 @@ bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
     detail::check_cholesky_inputs(C, lda);
     detail::check_cholesky_type(type);
     const auto n = detail::checked_narrow<int>(lda);
-    return LAPACKE_spotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
+    return LINALG_BLAS_FUNCTION(LAPACKE_spotrf)(
+               LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
 template <>
@@ -73,7 +76,8 @@ bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
     detail::check_cholesky_inputs(C, lda);
     detail::check_cholesky_type(type);
     const auto n = detail::checked_narrow<int>(lda);
-    return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
+    return LINALG_BLAS_FUNCTION(LAPACKE_dpotrf)(
+               LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n) == 0;
 }
 
 // apply_aad has no vendor-library equivalent: forward to the native

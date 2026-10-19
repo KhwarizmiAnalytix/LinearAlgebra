@@ -16,8 +16,9 @@ include(third_party_helpers)
 # Limit the override to dependency configuration; keep the project's ABI and
 # CUDA host compiler settings intact in the caller.
 function(linalg_add_dependency_subdirectory source_dir binary_dir)
-    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-       AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
+                                                            STREQUAL "GNU"
+    )
         set(MSVC FALSE)
     endif()
     add_subdirectory("${source_dir}" "${binary_dir}" ${ARGN})
@@ -45,13 +46,12 @@ function(linalg_setup_gtest)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         linalg_add_dependency_subdirectory(
             "${LINALG_THIRD_PARTY_DIR}/googletest"
-            "${CMAKE_BINARY_DIR}/ThirdParty/googletest_build" EXCLUDE_FROM_ALL)
+            "${CMAKE_BINARY_DIR}/ThirdParty/googletest_build" EXCLUDE_FROM_ALL
+        )
     else()
         include(FetchContent)
         FetchContent_Declare(
-            googletest
-            GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG v1.18.0
+            googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.18.0
         )
         set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
         set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
@@ -66,8 +66,7 @@ function(linalg_setup_gtest)
     endif()
     # XSigma-style namespaced aliases used by this repo's test targets.
     _create_third_party_interface_targets(
-        "Gtest::gtest=GTest::gtest|gtest"
-        "Gtest::gtest_main=GTest::gtest_main|gtest_main"
+        "Gtest::gtest=GTest::gtest|gtest" "Gtest::gtest_main=GTest::gtest_main|gtest_main"
     )
 endfunction()
 
@@ -84,6 +83,8 @@ function(linalg_setup_benchmark)
     set(_bench_src "")
     if(EXISTS "${LINALG_THIRD_PARTY_DIR}/benchmark/CMakeLists.txt")
         set(_bench_src "${LINALG_THIRD_PARTY_DIR}/benchmark")
+    elseif(EXISTS "${_linalg_repo_root}/ThirdParty/Logging/ThirdParty/benchmark/CMakeLists.txt")
+        set(_bench_src "${_linalg_repo_root}/ThirdParty/Logging/ThirdParty/benchmark")
     elseif(XSIGMA_ENABLE_EXTERNAL)
         find_package(benchmark QUIET)
         if(benchmark_FOUND)
@@ -110,14 +111,22 @@ function(linalg_setup_benchmark)
     set(BENCHMARK_USE_BUNDLED_GTEST OFF CACHE BOOL "Don't use bundled gtest for benchmark" FORCE)
     set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "Don't download dependencies" FORCE)
     if(_bench_src)
-        add_subdirectory("${_bench_src}" "${CMAKE_BINARY_DIR}/ThirdParty/benchmark_build"
-                         EXCLUDE_FROM_ALL)
+        linalg_add_dependency_subdirectory(
+            "${_bench_src}" "${CMAKE_BINARY_DIR}/ThirdParty/benchmark_build" EXCLUDE_FROM_ALL
+        )
+        if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
+                                                                STREQUAL "GNU"
+        )
+            # The GNU driver treats a bare shlwapi.lib as an input file, rather
+            # than searching the Windows SDK as the MSVC driver does.
+            get_target_property(_bench_links benchmark LINK_LIBRARIES)
+            list(TRANSFORM _bench_links REPLACE "^shlwapi$" "-lshlwapi")
+            set_property(TARGET benchmark PROPERTY LINK_LIBRARIES "${_bench_links}")
+        endif()
     else()
         include(FetchContent)
         FetchContent_Declare(
-            benchmark
-            GIT_REPOSITORY https://github.com/google/benchmark.git
-            GIT_TAG v1.9.5
+            benchmark GIT_REPOSITORY https://github.com/google/benchmark.git GIT_TAG v1.9.5
         )
         FetchContent_MakeAvailable(benchmark)
     endif()

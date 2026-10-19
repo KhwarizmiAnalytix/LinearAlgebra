@@ -14,6 +14,8 @@
 #endif
 #include <algorithm>
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS specializations for transpose.h (the native backend lives in
@@ -67,7 +69,7 @@ void transpose<float, linalg_backend::blas_lapacke>::apply(
 #endif
     for (linalg_long i = 0; i < rows; ++i)
     {
-        cblas_scopy(detail::checked_narrow<int>(columns),
+        LINALG_BLAS_FUNCTION(cblas_scopy)(detail::checked_narrow<int>(columns),
             m + i * columns,
             1,
             scratch + i,
@@ -95,7 +97,7 @@ void transpose<double, linalg_backend::blas_lapacke>::apply(
 #endif
     for (linalg_long i = 0; i < rows; ++i)
     {
-        cblas_dcopy(detail::checked_narrow<int>(columns),
+        LINALG_BLAS_FUNCTION(cblas_dcopy)(detail::checked_narrow<int>(columns),
             m + i * columns,
             1,
             scratch + i,

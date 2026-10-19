@@ -26,6 +26,8 @@
 
 #include "include/common/workspace_arena.h"
 
+#include "blas_runtime.h"
+
 #include "include/common/linalg_profiler.h"
 
 // BLAS/LAPACKE specializations for lu_decomposition.h (the native backend lives in
@@ -68,7 +70,7 @@ bool lu_decomposition<float, linalg_backend::blas_lapacke>::apply(
     const auto              n = static_cast<lapack_int>(lda);
     detail::workspace_arena arena(workspace, workspace_size);
     lapack_int*             ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto              info = LAPACKE_sgetrf(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
+    const auto info = LINALG_BLAS_FUNCTION(LAPACKE_sgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
     for (lapack_int i = 0; i < n; ++i)
     {
         pivot[i] = static_cast<linalg_int>(ipiv[i]);
@@ -87,7 +89,7 @@ bool lu_decomposition<double, linalg_backend::blas_lapacke>::apply(
     const auto              n = static_cast<lapack_int>(lda);
     detail::workspace_arena arena(workspace, workspace_size);
     lapack_int*             ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto              info = LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
+    const auto info = LINALG_BLAS_FUNCTION(LAPACKE_dgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
     for (lapack_int i = 0; i < n; ++i)
     {
         pivot[i] = static_cast<linalg_int>(ipiv[i]);

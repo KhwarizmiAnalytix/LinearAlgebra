@@ -21,6 +21,7 @@ find_dependency(Logging)
 # was itself configured with LINALG_ENABLE_MKL=ON.
 set(LinearAlgebra_HAS_MKL @LINALG_ENABLE_MKL@)
 if(LinearAlgebra_HAS_MKL)
+  set(MKL_INTERFACE "ilp64")
   find_package(MKL CONFIG QUIET)
   if(NOT MKL_FOUND)
     # Mirror the classic (non-CONFIG) FindMKL-style fallback used by
@@ -39,7 +40,9 @@ endif()
 
 # --- Optional vendor-neutral BLAS/LAPACK backend (LINALG_ENABLE_BLAS) ---
 set(LinearAlgebra_HAS_BLAS @LINALG_ENABLE_BLAS@)
-if(LinearAlgebra_HAS_BLAS)
+# Combined builds load the independent BLAS provider privately at runtime.
+# Rediscovering BLAS here could add MKL's LP64 interface to a consumer's link.
+if(LinearAlgebra_HAS_BLAS AND NOT LinearAlgebra_HAS_MKL)
   find_dependency(BLAS)
   find_dependency(LAPACK)
 endif()
