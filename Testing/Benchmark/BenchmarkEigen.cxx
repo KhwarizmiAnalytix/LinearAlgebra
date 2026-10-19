@@ -15,6 +15,7 @@
 // Eigenvalue iteration counts depend on the spectrum, so report time rather
 // than FLOPS. The general registrations below distinguish eigenvalues only
 // from eigenvalues with real eigenvectors.
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -93,15 +94,17 @@ void BM_SymmetricEigen(benchmark::State& state)
     std::vector<unsigned char> workspace(ws_size);
 
     std::vector<T> eigenvalues(n);
-    std::vector<T> eigenvectors(n * n);
+    auto input = a;
 
     for (auto _ : state)
     {
-        bool ok = linalg::symmetric_eigen_backend<T, Backend>::apply(a.data(),
+        state.PauseTiming();
+        std::copy(a.begin(), a.end(), input.begin());
+        state.ResumeTiming();
+        bool ok = linalg::symmetric_eigen_backend<T, Backend>::apply(input.data(),
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),
             eigenvalues.data(),
-            eigenvectors.data(),
             static_cast<linalg_int>(n),
             workspace.data(),
             ws_size);
@@ -144,16 +147,19 @@ void BM_GeneralEigen(benchmark::State& state)
 
     std::vector<T> eigenvalues_real(n);
     std::vector<T> eigenvalues_imag(n);
-    std::vector<T> eigenvectors(ComputeEigenvectors ? n * n : 0);
+    auto input = a;
 
     for (auto _ : state)
     {
-        bool ok = linalg::general_eigen_backend<T, Backend>::apply(a.data(),
+        state.PauseTiming();
+        std::copy(a.begin(), a.end(), input.begin());
+        state.ResumeTiming();
+        bool ok = linalg::general_eigen_backend<T, Backend>::apply(input.data(),
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),
             eigenvalues_real.data(),
             eigenvalues_imag.data(),
-            ComputeEigenvectors ? eigenvectors.data() : nullptr,
+            ComputeEigenvectors,
             static_cast<linalg_int>(n),
             workspace.data(),
             ws_size);
