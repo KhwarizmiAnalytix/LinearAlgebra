@@ -74,6 +74,8 @@ option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for Lin
 # builds remain free of any CUDA toolchain requirement.
 option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
 
+option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
+
 # Enables partial pivoting in the scalar (non-MKL) LU decomposition / solve /
 # invert fallback paths. Off by default, preserving the existing fallback
 # behavior exactly (matrix_operation's non-pivoting path is what currently
@@ -704,6 +706,10 @@ install(
 )
 
 # --- Testing ---
+if(LINALG_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
 if(LINALG_ENABLE_TESTING)
     add_subdirectory(Testing/Cxx)
 endif()

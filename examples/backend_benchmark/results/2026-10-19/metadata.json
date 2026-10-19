@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-19",
+  "library_commit": "15534ab",
+  "previous_commit": "c52ba9f",
+  "cpu": "Intel Core i9-14900K, 24 cores / 32 logical processors; affinity mask 0x1",
+  "os": "Windows 11 Pro 10.0.26200 (build 26200)",
+  "compiler": "Clang 22.1.2, Release -O3, AVX2/FMA",
+  "openblas": "OpenBLAS 0.3.34 DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=64; LP64",
+  "mkl": "Intel oneMKL 2026.0.0, ILP64",
+  "gpu": "NVIDIA GeForce RTX 4060 Ti, 8188 MiB, WDDM",
+  "gpu_driver": "591.86",
+  "cuda_toolkit": "13.2.78",
+  "cpu_environment": {
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "quality": {
+    "cases": 488,
+    "transfer_and_end_to_end_cases": 96,
+    "median_cv_percent": 1.4951556620000002,
+    "max_cv_percent": 9.755886002,
+    "cases_above_10_percent_cv": 0
+  }
+}

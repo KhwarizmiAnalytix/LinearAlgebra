@@ -129,6 +129,7 @@ backend's design and known restrictions.
 | `LINALG_BLAS_RUNTIME_LIBRARY` | auto-detected OpenBLAS | Shared CBLAS provider (`.dll`, `.so`, `.dylib`) for combined MKL/BLAS builds |
 | `LINALG_LAPACKE_RUNTIME_LIBRARY` | empty | Optional separate shared LAPACKE provider; empty means LAPACKE is bundled in the CBLAS provider |
 | `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::cuda_blas` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
+| `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | ON | Build the test suite |
@@ -161,6 +162,10 @@ Each benchmark executable reports both backends separately. Match vendor thread
 counts (for example `OPENBLAS_NUM_THREADS=1` and `MKL_NUM_THREADS=1`) when comparing
 them. Function addresses are cached on first use; combined builds add an indirect
 call to BLAS operations. Standalone BLAS builds retain direct calls.
+
+The [CPU/GPU benchmark example](examples/backend_benchmark/README.md) compares
+all four backends in one executable. Its [Markdown analysis](examples/backend_benchmark/analysis.md)
+includes recorded timings, transfer costs, workspace sizes and scaling charts.
 
 The configured shared-library paths and their dependencies must remain available
 at runtime, including when consuming an installed LinearAlgebra package. Set
