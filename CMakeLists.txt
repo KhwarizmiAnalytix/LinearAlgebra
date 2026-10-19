@@ -11,7 +11,7 @@
 # Public compile definitions: LINALG_HAS_MKL — MKL-backed LAPACKE code
 # paths; LINALG_HAS_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
 # LINALG_HAS_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
-# src/matrix_operation/cublas/. These (and LINALG_HAS_LAPACKE,
+# src/matrix_operation/gpu/cublas/. These (and LINALG_HAS_LAPACKE,
 # LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION, LINALG_HAS_LU_PIVOTING,
 # LINALG_HAS_WIN32_WARNINGS below) are always-defined 0/1 macros, checked in
 # C++ with plain #if (never #ifdef/#if defined), not conditionally-defined
@@ -70,7 +70,7 @@ option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for Lin
 
 # cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as
 # linalg_backend::cuda_blas specializations of the same struct-template API
-# used by the CPU backends (src/matrix_operation/cublas/). Requires the CUDA
+# used by the CPU backends (src/matrix_operation/gpu/cublas/). Requires the CUDA
 # toolkit; enables the CUDA language only when this option is ON so plain CPU
 # builds remain free of any CUDA toolchain requirement.
 option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
@@ -445,8 +445,8 @@ endif()
 
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
 # cuBLAS/cuSOLVER themselves are host-callable C APIs, linked into ordinary
-# .cpp translation units with no CUDA toolchain needed. One op
-# Several operations under src/matrix_operation/cublas/ are genuine
+# .cpp translation units with no CUDA toolchain needed.
+# Several operations under src/matrix_operation/gpu/cublas/ are genuine
 # CUDA-kernel .cu files (batched matmul, norm, QR, SVD, pseudo-inverse,
 # inversion/determinant, trace), so `enable_language(CUDA)` and an nvcc
 # toolchain are only required — and only enabled — when this option is ON;
@@ -530,33 +530,33 @@ set(linalg_sources "")
 file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
 file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-# Native CPU implementation files under matrix_operation/native/ are included
+# Native CPU implementation files under matrix_operation/cpu/native/ are included
 # by the recursive glob above.
-# The mkl/ and blas/ backend sources under src/matrix_operation/ include
+# The mkl/ and blas/ backend sources under src/matrix_operation/cpu/ include
 # mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /
 # LINALG_ENABLE_BLAS turned on the matching backend above.
-list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(mkl|blas|cublas)/")
+list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/cublas)/")
 if(LINALG_ENABLE_MKL)
     file(GLOB linalg_mkl_sources LIST_DIRECTORIES false
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/mkl/*.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/mkl/*.cpp"
     )
     list(APPEND linalg_sources ${linalg_mkl_sources})
 endif()
 if(LINALG_ENABLE_BLAS)
     file(GLOB linalg_blas_sources LIST_DIRECTORIES false
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/blas/*.cpp"
     )
     list(APPEND linalg_sources ${linalg_blas_sources})
 endif()
 
 # cuBLAS/cuSOLVER bridge sources and .cu kernel sources (all under
-# src/matrix_operation/cublas/) need an nvcc toolchain, so they are only
+# src/matrix_operation/gpu/cublas/) need an nvcc toolchain, so they are only
 # globbed in — and only compilable — when LINALG_ENABLE_CUBLAS turned on
 # CUDA above.
 if(LINALG_ENABLE_CUBLAS)
     file(GLOB linalg_cublas_sources LIST_DIRECTORIES false
-         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cublas/*.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/cublas/*.cpp"
     )
     list(APPEND linalg_sources ${linalg_cublas_sources})
     file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false
@@ -625,7 +625,7 @@ endif()
 # (which use mkl_lapacke.h with its own struct-based complex types) are not
 # affected.
 if(LINALG_ENABLE_BLAS AND MSVC)
-    file(GLOB _linalg_blas_srcs "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/blas/*.cpp")
+    file(GLOB _linalg_blas_srcs "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/blas/*.cpp")
     set_source_files_properties(
         ${_linalg_blas_srcs}
         PROPERTIES

@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "include/common/linalg_checks.h"
+#include "include/common/types.h"
 
 namespace linalg
 {
@@ -91,8 +92,29 @@ inline void set_stream(cusolverDnHandle_t handle, cudaStream_t stream)
     }
 }
 
+// Scoped device-result mode; restore the previous mode for later BLAS calls.
+class device_pointer_mode
+{
+public:
+    explicit device_pointer_mode(cublasHandle_t handle) : handle_(handle)
+    {
+        LINALG_CHECK(cublasGetPointerMode(handle_, &previous_) == CUBLAS_STATUS_SUCCESS,
+            "cublasGetPointerMode failed");
+        LINALG_CHECK(
+            cublasSetPointerMode(handle_, CUBLAS_POINTER_MODE_DEVICE) == CUBLAS_STATUS_SUCCESS,
+            "cublasSetPointerMode failed");
+    }
+    ~device_pointer_mode() { cublasSetPointerMode(handle_, previous_); }
+    device_pointer_mode(const device_pointer_mode&)            = delete;
+    device_pointer_mode& operator=(const device_pointer_mode&) = delete;
+
+private:
+    cublasHandle_t      handle_;
+    cublasPointerMode_t previous_{};
+};
+
 // Forward declarations for the device-side in-place transpose helper defined in
-// src/matrix_operation/cublas/transpose_cublas.cpp. Every GPU translation unit
+// src/matrix_operation/gpu/cublas/transpose_cublas.cpp. Every GPU translation unit
 // that needs detail::transpose_device includes this header (already a dependency
 // for the cuBLAS/cuSOLVER handle accessors above), so this is the natural single
 // declaration point — no extra header is required.

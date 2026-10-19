@@ -1,7 +1,7 @@
 # Standalone LinearAlgebra library. Include root is the repository root; public headers live
 # under include/ (e.g. #include "include/matrix_operation/lu_decomposition.h"), implementation
 # files under the mirrored src/ tree (e.g.
-# src/matrix_operation/native/lu_decomposition_native.cpp).
+# src/matrix_operation/cpu/native/lu_decomposition_native.cpp).
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
@@ -15,7 +15,7 @@ package(default_visibility = ["//visibility:public"])
 # linalg_enable_mkl / linalg_enable_blas / linalg_lu_pivoting), always
 # defined 0/1 (never conditionally-defined/#ifdef-style). The same
 # linalg_enable_mkl / linalg_enable_blas settings also select() whether
-# src/matrix_operation/mkl/*.cpp / src/matrix_operation/blas/*.cpp are part
+# src/matrix_operation/cpu/mkl/*.cpp / src/matrix_operation/cpu/blas/*.cpp are part
 # of linear_algebra_srcs; the #if LINALG_HAS_MKL / #if LINALG_HAS_BLAS guards
 # inside those files remain as a second line of defense. Neither setting
 # resolves mkl.h/cblas.h/lapacke.h or links an MKL/BLAS/LAPACK library the
@@ -24,7 +24,7 @@ package(default_visibility = ["//visibility:public"])
 # already being on the toolchain's default search paths. LINALG_HAS_CUBLAS
 # (and its helper macros) has no Bazel toggle at all — CMake is this repo's
 # primary, exercised build system for the mkl / blas_lapack backends and the
-# cuBLAS/cuSOLVER GPU backend (src/matrix_operation/cublas/ +
+# cuBLAS/cuSOLVER GPU backend (src/matrix_operation/gpu/cublas/ +
 # include/matrix_operation/multiplication_batched.h, not part of this glob).
 
 filegroup(
@@ -45,15 +45,15 @@ filegroup(
     srcs = glob(
         [
             "src/common/*.cpp",
-            "src/matrix_operation/*.cpp",
-            "src/matrix_operation/native/*.cpp",
+            "src/matrix_operation/cpu/*.cpp",
+            "src/matrix_operation/cpu/native/*.cpp",
         ],
         allow_empty = True,
     ) + select({
-        "//bazel:linalg_enable_mkl": glob(["src/matrix_operation/mkl/*.cpp"], allow_empty = True),
+        "//bazel:linalg_enable_mkl": glob(["src/matrix_operation/cpu/mkl/*.cpp"], allow_empty = True),
         "//conditions:default": [],
     }) + select({
-        "//bazel:linalg_enable_blas": glob(["src/matrix_operation/blas/*.cpp"], allow_empty = True),
+        "//bazel:linalg_enable_blas": glob(["src/matrix_operation/cpu/blas/*.cpp"], allow_empty = True),
         "//conditions:default": [],
     }),
 )

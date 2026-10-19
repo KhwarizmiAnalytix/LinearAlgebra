@@ -429,7 +429,22 @@ void profile_gpu_ops(linalg_int n)
 {
     PROFILER_SCOPE("gpu_cublas");
 
-    constexpr linalg_backend CB = linalg_backend::cuda_blas;
+    constexpr linalg::linalg_backend CB = linalg::linalg_backend::cuda_blas;
+    struct output_buffers
+    {
+        double*      scalar = cuda_alloc<double>(1);
+        linalg_long* rank   = cuda_alloc<linalg_long>(1);
+        int*         info   = cuda_alloc<int>(1);
+        int*         pivot;
+        explicit output_buffers(linalg_int n) : pivot(cuda_alloc<int>(static_cast<size_t>(n))) {}
+        ~output_buffers()
+        {
+            cudaFree(scalar);
+            cudaFree(rank);
+            cudaFree(info);
+            cudaFree(pivot);
+        }
+    } outputs(n);
 
     const linalg_long rows = static_cast<linalg_long>(n + n / 2);
     const linalg_long cols = static_cast<linalg_long>(n);
@@ -453,16 +468,25 @@ void profile_gpu_ops(linalg_int n)
         cudaFree(dc);
     }
 
-    // cholesky_decomposition — no workspace param; allocates internally -----
+    // cholesky_decomposition — caller-owned device workspace ----------------
     {
         PROFILER_SCOPE("gpu/cholesky_decomposition");
         auto    hA = make_spd_matrix<double>(n);
         double* dA = cuda_upload(hA);
         if (dA)
         {
-            linalg::cholesky_decomposition<double, CB>::apply(
-                dA, n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
+            const auto bytes = linalg::cholesky_decomposition<double, CB>::workspace_size(
+                n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
+            void* workspace = nullptr;
+            cudaMalloc(&workspace, bytes);
+            linalg::cholesky_decomposition<double, CB>::apply(dA,
+                n,
+                linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR,
+                workspace,
+                bytes,
+                outputs.info);
             cudaDeviceSynchronize();
+            cudaFree(workspace);
         }
         cudaFree(dA);
     }
@@ -481,7 +505,8 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA)
         {
-            linalg::lu_decomposition<double, CB>::apply(dA, n, nullptr, d_ws, ws_bytes);
+            linalg::lu_decomposition<double, CB>::apply(
+                dA, n, outputs.pivot, d_ws, ws_bytes, outputs.info);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -559,7 +584,7 @@ void profile_gpu_ops(linalg_int n)
         if (dA && d_ev && d_vecs)
         {
             linalg::symmetric_eigen_backend<double, CB>::apply(
-                dA, n, n, d_ev, d_vecs, n, d_ws, ws_bytes);
+                dA, n, n, d_ev, d_vecs, n, d_ws, ws_bytes, outputs.info);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -632,8 +657,17 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA && db && d_X)
         {
-            linalg::least_squares<double, CB>::apply(
-                rows, cols, linalg_long(1), dA, cols, db, linalg_long(1), d_X, cols, d_ws, ws_bytes);
+            linalg::least_squares<double, CB>::apply(rows,
+                cols,
+                static_cast<linalg_long>(1),
+                dA,
+                cols,
+                db,
+                static_cast<linalg_long>(1),
+                d_X,
+                cols,
+                d_ws,
+                ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -681,7 +715,7 @@ void profile_gpu_ops(linalg_int n)
         if (dA)
         {
             linalg::norm<double, CB>::apply(
-                dA, n, n, n, linalg::norm_type::FROBENIUS, d_ws, ws_bytes);
+                dA, n, n, n, linalg::norm_type::FROBENIUS, d_ws, ws_bytes, outputs.scalar);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -695,7 +729,7 @@ void profile_gpu_ops(linalg_int n)
         double* dA = cuda_upload(hA);
         if (dA)
         {
-            linalg::trace<double, CB>::apply(dA, n, n, nullptr);
+            linalg::trace<double, CB>::apply(dA, n, n, outputs.scalar);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -735,7 +769,8 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA)
         {
-            linalg::rank<double, CB>::apply(dA, rows, cols, cols, double(0), d_ws, ws_bytes);
+            linalg::rank<double, CB>::apply(
+                dA, rows, cols, cols, double(0), d_ws, ws_bytes, outputs.rank);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);

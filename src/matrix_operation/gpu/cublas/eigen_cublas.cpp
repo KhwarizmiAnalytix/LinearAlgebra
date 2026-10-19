@@ -12,7 +12,6 @@
 
 // Only symmetric_eigen_backend has a GPU implementation; there is no
 // cuSOLVER geev-equivalent for general (non-symmetric) matrices.
-// Returning bool requires synchronizing the stream to read back info.
 namespace linalg
 {
 namespace
@@ -58,18 +57,20 @@ size_t sym_eigen_workspace_size_impl(BufSizeFn buffer_size, linalg_int n)
 // See svd_decomposition_cublas.cpp's RESTRICTION note: every caller-visible
 // buffer here is required to be tightly packed row-major.
 template <typename T, typename BufSizeFn, typename SyevdFn>
-bool sym_eigen_impl(BufSizeFn buffer_size,
-    SyevdFn    syevd,
-    const T*   A,
-    linalg_int n,
-    linalg_int lda,
-    T*         eigenvalues,
-    T*         eigenvectors,
-    linalg_int ldv,
-    void*      workspace,
-    size_t     workspace_size,
-    void*      stream)
+void sym_eigen_impl(BufSizeFn buffer_size,
+    SyevdFn                   syevd,
+    const T*                  A,
+    linalg_int                n,
+    linalg_int                lda,
+    T*                        eigenvalues,
+    T*                        eigenvectors,
+    linalg_int                ldv,
+    void*                     workspace,
+    size_t                    workspace_size,
+    int*                      info,
+    void*                     stream)
 {
+    LINALG_CHECK(info != nullptr, "device info must not be null");
     const auto stream_t = static_cast<cudaStream_t>(stream);
     LINALG_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr,
         "symmetric_eigenvalue_decomposition: A, eigenvalues, and eigenvectors must not be null");
@@ -98,16 +99,21 @@ bool sym_eigen_impl(BufSizeFn buffer_size,
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = symmetric_eigen_plan<T>(arena, nn, lwork);
 
-    // One extra int slot for dev_info, carved after the three main buffers.
-    int* dev_info = arena.next<int>(1, alignof(int));
-
     const auto n2 = static_cast<size_t>(nn) * static_cast<size_t>(nn);
     LINALG_CHECK(cudaMemcpyAsync(bufs.work_a, A, sizeof(T) * n2, cudaMemcpyDeviceToDevice, stream_t) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
 
-    LINALG_CHECK(!(syevd(handle, CUSOLVER_EIG_MODE_VECTOR, fill, nn, bufs.work_a, nn,
-                       eigenvalues, bufs.workspace, lwork, dev_info) != CUSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(!(syevd(handle,
+                       CUSOLVER_EIG_MODE_VECTOR,
+                       fill,
+                       nn,
+                       bufs.work_a,
+                       nn,
+                       eigenvalues,
+                       bufs.workspace,
+                       lwork,
+                       info) != CUSOLVER_STATUS_SUCCESS),
         "cusolverDn*syevd failed");
 
     // work_a now holds the eigenvectors column-major (n x n); the CPU
@@ -117,14 +123,6 @@ bool sym_eigen_impl(BufSizeFn buffer_size,
     LINALG_CHECK(!(cudaMemcpyAsync(eigenvectors, bufs.work_a, sizeof(T) * n2,
                        cudaMemcpyDeviceToDevice, stream_t) != cudaSuccess),
         "cudaMemcpyAsync failed");
-
-    LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess,
-        "symmetric_eigen_backend<cuda_blas>: cudaStreamSynchronize failed");
-    int host_info = 0;
-    LINALG_CHECK(
-        cudaMemcpy(&host_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost) == cudaSuccess,
-        "symmetric_eigen_backend<cuda_blas>: cudaMemcpy failed");
-    return host_info == 0;
 }
 
 template <typename T>
@@ -134,49 +132,70 @@ template <>
 size_t sym_eigen_ws_size<float>(linalg_int n)
 {
     const auto base = sym_eigen_workspace_size_impl<float>(cusolverDnSsyevd_bufferSize, n);
-    // +sizeof(int) for the dev_info slot carved by sym_eigen_impl.
-    return base + sizeof(int);
+    return base;
 }
 
 template <>
 size_t sym_eigen_ws_size<double>(linalg_int n)
 {
     const auto base = sym_eigen_workspace_size_impl<double>(cusolverDnDsyevd_bufferSize, n);
-    return base + sizeof(int);
+    return base;
 }
 
 }  // namespace
 
 template <>
-bool symmetric_eigen_backend<float, linalg_backend::cuda_blas>::apply(const float* A,
-    linalg_int n,
-    linalg_int lda,
-    float*     eigenvalues,
-    float*     eigenvectors,
-    linalg_int ldv,
-    void*      workspace,
-    size_t     workspace_size,
-    void*      stream)
+void symmetric_eigen_backend<float, linalg_backend::cuda_blas>::apply(const float* A,
+    linalg_int                                                                     n,
+    linalg_int                                                                     lda,
+    float*                                                                         eigenvalues,
+    float*                                                                         eigenvectors,
+    linalg_int                                                                     ldv,
+    void*                                                                          workspace,
+    size_t                                                                         workspace_size,
+    int*                                                                           info,
+    void*                                                                          stream)
 {
     LINALG_SCOPE("symmetric_eigen/cuda_blas<float>");
-    return sym_eigen_impl(cusolverDnSsyevd_bufferSize, cusolverDnSsyevd,
-        A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size, stream);
+    sym_eigen_impl(cusolverDnSsyevd_bufferSize,
+        cusolverDnSsyevd,
+        A,
+        n,
+        lda,
+        eigenvalues,
+        eigenvectors,
+        ldv,
+        workspace,
+        workspace_size,
+        info,
+        stream);
 }
 
 template <>
-bool symmetric_eigen_backend<double, linalg_backend::cuda_blas>::apply(const double* A,
-    linalg_int n,
-    linalg_int lda,
-    double*    eigenvalues,
-    double*    eigenvectors,
-    linalg_int ldv,
-    void*      workspace,
-    size_t     workspace_size,
-    void*      stream)
+void symmetric_eigen_backend<double, linalg_backend::cuda_blas>::apply(const double* A,
+    linalg_int                                                                       n,
+    linalg_int                                                                       lda,
+    double*                                                                          eigenvalues,
+    double*                                                                          eigenvectors,
+    linalg_int                                                                       ldv,
+    void*                                                                            workspace,
+    size_t                                                                           workspace_size,
+    int*                                                                             info,
+    void*                                                                            stream)
 {
     LINALG_SCOPE("symmetric_eigen/cuda_blas<double>");
-    return sym_eigen_impl(cusolverDnDsyevd_bufferSize, cusolverDnDsyevd,
-        A, n, lda, eigenvalues, eigenvectors, ldv, workspace, workspace_size, stream);
+    sym_eigen_impl(cusolverDnDsyevd_bufferSize,
+        cusolverDnDsyevd,
+        A,
+        n,
+        lda,
+        eigenvalues,
+        eigenvectors,
+        ldv,
+        workspace,
+        workspace_size,
+        info,
+        stream);
 }
 
 template <>

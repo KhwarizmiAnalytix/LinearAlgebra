@@ -38,11 +38,11 @@ one consumer, not a required host.
   straight through Logging's `LOGGING_THROW`/`logging::exception` now.
 - `include/matrix_operation/` — the public modules (CPU and GPU); the GPU
   `linalg_backend::cuda_blas` specializations are in
-  `src/matrix_operation/cublas/`, built when `LINALG_ENABLE_CUBLAS=ON`.
+  `src/matrix_operation/gpu/cublas/`, built when `LINALG_ENABLE_CUBLAS=ON`.
 - `src/` — implementation (`.cpp`/`.cu`) files, mirroring `include/`'s
   layout (e.g. `include/matrix_operation/lu_decomposition.h` pairs with
-  `src/matrix_operation/native/lu_decomposition_native.cpp` on the scalar
-  path and `src/matrix_operation/cublas/lu_decomposition_cublas.cpp` on the
+  `src/matrix_operation/cpu/native/lu_decomposition_native.cpp` on the scalar
+  path and `src/matrix_operation/gpu/cublas/lu_decomposition_cublas.cpp` on the
   GPU path).
 - `Testing/Cxx/` — GoogleTest unit tests.
 - `ThirdParty/` — vendored `googletest` submodule, plus `Logging`
@@ -91,18 +91,27 @@ use `linalg_backend::cuda_blas` as the template argument:
 #include "include/matrix_operation/svd_decomposition.h"
 
 // Query workspace, allocate on device, then call:
-linalg::svd_decomposition<double, linalg_backend::cuda_blas>::apply(
+linalg::svd_decomposition<double, linalg::linalg_backend::cuda_blas>::apply(
     rows, cols, dA, lda, dS, dU, ldu, dVT, ldv, d_workspace, ws_size);
 ```
 
-All entry points take device pointers only (never touch host memory
-internally); most accept an optional trailing `void* stream` (cast to
-`cudaStream_t` internally; default: `nullptr` for the legacy default stream).
-Operations that return a scalar (`trace`, `determinant`, `norm`, `rank`,
-`condition_number`) synchronize internally and return the host value directly.
-`cholesky_decomposition<T, cuda_blas>::apply` and
-`trace<T, cuda_blas>::apply` allocate their own workspace internally (the
-struct `apply` has no workspace parameter for those two operations).
+All GPU matrix, output and workspace pointers refer to device memory. Calls
+accept an optional trailing `void* stream` (default `nullptr`) and perform no
+host/device transfers or explicit stream synchronization. Scalar operations
+(`trace`, `determinant`, `norm`, `rank`, `condition_number`) write to a required
+device result pointer before the stream argument. LU, Cholesky and symmetric
+eigen write numerical status to a required device `int* info`; LU also writes
+a caller-owned device `int* pivot`. Cholesky takes caller-owned workspace,
+queried with `workspace_size(n, triangle)`. CPU signatures are unchanged.
+
+```cpp
+linalg::norm<double, linalg::linalg_backend::cuda_blas>::apply(
+    dA, rows, cols, cols, linalg::norm_type::FROBENIUS,
+    nullptr, 0, d_result, stream);
+```
+
+The caller owns buffer lifetimes and any deliberate upload/download at the
+application boundary. GPU scalar APIs no longer return host values.
 
 For batched square-matrix multiplication, include
 `include/matrix_operation/multiplication_batched.h` and call
@@ -117,7 +126,7 @@ backend's design and known restrictions.
 |-----------------|---------|---------|
 | `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigen); least_squares/pseudo_inverse/rank/norm/trace compose on top of svd_decomposition and pick up the same backend transitively |
 | `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); MKL takes precedence when both are ON |
-| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::cuda_blas` specializations, `src/matrix_operation/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
+| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::cuda_blas` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | ON | Build the test suite |

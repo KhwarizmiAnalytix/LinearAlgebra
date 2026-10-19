@@ -1,6 +1,7 @@
 #if LINALG_HAS_CUBLAS
 
 #include <algorithm>
+#include <cmath>
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
 #include <limits>
@@ -19,17 +20,28 @@ template <typename scalar_t>
 static __global__ void pinv_combine_kernel(const scalar_t* U,
     const scalar_t*                                        S,
     const scalar_t*                                        VT,
-    scalar_t                                                tol,
-    int                                                      rows,
-    int                                                      columns,
-    int                                                      k,
-    scalar_t*                                                Ainv)
+    scalar_t                                               tol,
+    scalar_t                                               default_scale,
+    const int*                                             info,
+    int                                                    rows,
+    int                                                    columns,
+    int                                                    k,
+    scalar_t*                                              Ainv)
 {
     const int c = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
     const int r = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
     if (c >= columns || r >= rows)
     {
         return;
+    }
+    if (*info != 0)
+    {
+        Ainv[c * rows + r] = scalar_t(NAN);
+        return;
+    }
+    if (tol < scalar_t(0))
+    {
+        tol = default_scale * S[0];
     }
     scalar_t sum = scalar_t(0);
     for (int i = 0; i < k; ++i)
@@ -102,18 +114,17 @@ size_t pseudo_inverse_workspace_size_impl(linalg_long rows, linalg_long columns)
     return arena.total_size();
 }
 
-template <typename T, typename AmaxFn>
-void pseudo_inverse_impl(AmaxFn      amax,
-    linalg_long                       rows,
-    linalg_long                       columns,
-    const T*                          A,
-    linalg_long                       lda,
-    T*                                Ainv,
-    linalg_long                       ldai,
-    T                                 tol,
-    void*                             workspace,
-    size_t                            workspace_size,
-    cudaStream_t                      stream)
+template <typename T>
+void pseudo_inverse_impl(linalg_long rows,
+    linalg_long                      columns,
+    const T*                         A,
+    linalg_long                      lda,
+    T*                               Ainv,
+    linalg_long                      ldai,
+    T                                tol,
+    void*                            workspace,
+    size_t                           workspace_size,
+    cudaStream_t                     stream)
 {
     if (A == nullptr || Ainv == nullptr)
     {
@@ -144,36 +155,17 @@ void pseudo_inverse_impl(AmaxFn      amax,
     detail::svd_on_device(rows, columns, A, columns, bufs.S, bufs.U, static_cast<linalg_long>(k),
         bufs.VT, columns, bufs.svd_info, bufs.svd_workspace, svd_bytes, stream);
 
-    int svd_status = -1;
-    LINALG_CHECK(
-        cudaMemcpyAsync(&svd_status, bufs.svd_info, sizeof(int), cudaMemcpyDeviceToHost, stream) ==
-                cudaSuccess &&
-            cudaStreamSynchronize(stream) == cudaSuccess,
-        "cudaMemcpyAsync/cudaStreamSynchronize failed");
-    LINALG_CHECK(svd_status == 0, "svd_on_device failed inside pseudo_inverse", svd_status);
-
-    auto cublas_handle = detail::cublas_handle_for_current_device();
-    detail::set_stream(cublas_handle, stream);
-    int idx_1based = 1;
-    LINALG_CHECK(
-        amax(cublas_handle, k, bufs.S, 1, &idx_1based) == CUBLAS_STATUS_SUCCESS,
-        "cublasI*amax failed");
-
-    T smax = T(0);
-    LINALG_CHECK(
-        cudaMemcpyAsync(&smax, bufs.S + (idx_1based - 1), sizeof(T), cudaMemcpyDeviceToHost,
-            stream) == cudaSuccess &&
-            cudaStreamSynchronize(stream) == cudaSuccess,
-        "cudaMemcpyAsync/cudaStreamSynchronize failed");
-    smax = std::fabs(smax);
-
-    const T eff_tol = (tol >= T(0)) ? tol
-                                      : std::numeric_limits<T>::epsilon() *
-                                           static_cast<T>(std::max(r, c)) * smax;
-
     const dim3 block(16, 16);
-    pinv_combine_kernel<T>
-        <<<grid_2d(c, r, block), block, 0, stream>>>(bufs.U, bufs.S, bufs.VT, eff_tol, r, c, k, Ainv);
+    pinv_combine_kernel<T><<<grid_2d(c, r, block), block, 0, stream>>>(bufs.U,
+        bufs.S,
+        bufs.VT,
+        tol,
+        std::numeric_limits<T>::epsilon() * static_cast<T>(std::max(r, c)),
+        bufs.svd_info,
+        r,
+        c,
+        k,
+        Ainv);
     LINALG_CHECK(cudaGetLastError() == cudaSuccess, "pinv_combine_kernel launch failed");
 }
 
@@ -192,8 +184,16 @@ void pseudo_inverse<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
     void*         stream)
 {
     LINALG_SCOPE("pseudo_inverse/cuda_blas<float>");
-    pseudo_inverse_impl(cublasIsamax, rows, columns, A, lda, Ainv, ldai, tol, workspace,
-        workspace_size, static_cast<cudaStream_t>(stream));
+    pseudo_inverse_impl(rows,
+        columns,
+        A,
+        lda,
+        Ainv,
+        ldai,
+        tol,
+        workspace,
+        workspace_size,
+        static_cast<cudaStream_t>(stream));
 }
 
 template <>
@@ -209,8 +209,16 @@ void pseudo_inverse<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
     void*          stream)
 {
     LINALG_SCOPE("pseudo_inverse/cuda_blas<double>");
-    pseudo_inverse_impl(cublasIdamax, rows, columns, A, lda, Ainv, ldai, tol, workspace,
-        workspace_size, static_cast<cudaStream_t>(stream));
+    pseudo_inverse_impl(rows,
+        columns,
+        A,
+        lda,
+        Ainv,
+        ldai,
+        tol,
+        workspace,
+        workspace_size,
+        static_cast<cudaStream_t>(stream));
 }
 
 template <>

@@ -7,8 +7,8 @@
  * a `*_workspace_size()` sibling the caller queries up front, then passes a
  * single caller-owned `(workspace, workspace_size)` buffer into the
  * operation itself, which slices it into typed sub-buffers with
- * `workspace_arena`. Used identically on the CPU side (src/matrix_operation/)
- * and the GPU side (src/matrix_operation/cublas/, where `workspace` is a
+ * `workspace_arena`. Used identically on the CPU side (src/matrix_operation/cpu/)
+ * and the GPU side (src/matrix_operation/gpu/cublas/, where `workspace` is a
  * cudaMalloc'd device buffer instead of a host one) — the arena itself has
  * no device dependency, it only ever does pointer arithmetic over
  * `void*`/`size_t`.

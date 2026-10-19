@@ -46,4 +46,22 @@ template <typename T, linalg_backend Backend> struct lu_decomposition
     LINALG_API static size_t workspace_size(linalg_int lda);
 };
 
+/**
+ * GPU specialization: all matrix, result, pivot, info and workspace pointers
+ * refer to device memory. Enqueues work on stream without host transfers or
+ * stream synchronization. The caller keeps buffers alive until work completes.
+ * CUDA/cuBLAS/cuSOLVER API errors throw; numerical status stays on device.
+ */
+template <typename T> struct lu_decomposition<T, linalg_backend::cuda_blas>
+{
+    LINALG_API static void   apply(T* m,
+        linalg_int                  lda,
+        int*                        pivot,
+        void*                       workspace,
+        size_t                      workspace_size,
+        int*                        info,
+        void*                       stream = nullptr);
+    LINALG_API static size_t workspace_size(linalg_int lda);
+};
+
 }  // namespace linalg

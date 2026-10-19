@@ -493,7 +493,7 @@ jobs:
           import os
           from pathlib import Path
           commands = json.loads(Path("build/compile_commands.json").read_text())
-          command = next(entry["command"] for entry in commands if entry["file"].endswith("/src/matrix_operation/trace.cpp"))
+          command = next(entry["command"] for entry in commands if entry["file"].endswith("/src/matrix_operation/cpu/trace.cpp"))
           backend = os.environ["COVERAGE_BACKEND"]
           expected = {
               "LINALG_HAS_MKL": int(backend == "mkl"),

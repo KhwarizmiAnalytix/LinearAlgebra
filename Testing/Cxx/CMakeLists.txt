@@ -38,3 +38,8 @@ set_tests_properties(LinearAlgebraCxxTests PROPERTIES TIMEOUT 120 LABELS "Linear
 if(COMMAND linalg_set_target_output_directories)
   linalg_set_target_output_directories(LinearAlgebraCxxTests)
 endif()
+
+add_test(NAME GpuResidencySourceCheck
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckGpuResidency.cmake)
+set_tests_properties(GpuResidencySourceCheck PROPERTIES LABELS "LinearAlgebra;Unit")
