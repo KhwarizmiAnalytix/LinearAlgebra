@@ -629,30 +629,28 @@ template <typename value_t> void qr_decomposition_gpu_test(std::size_t rows, std
     auto                       A = random_matrix<value_t>(rows, columns, generator);
 
     device_buffer<value_t> dA(rows * columns);
-    device_buffer<value_t> dQ(rows * k);
-    device_buffer<value_t> dR(k * columns);
+    device_buffer<value_t> dtau(k);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-    const auto ws_size =
-        linalg::qr_decomposition<value_t, CB>::workspace_size((linalg_long)rows, (linalg_long)columns);
+    const auto ws_size = linalg::qr_decomposition<value_t, CB>::workspace_size(
+        (linalg_long)rows, (linalg_long)columns);
     device_buffer<unsigned char> dws(ws_size);
 
-    linalg::qr_decomposition<value_t, CB>::apply((linalg_long)rows,
-        (linalg_long)columns,
-        dA.get(),
-        (linalg_long)columns,
-        dQ.get(),
-        (linalg_long)k,
-        dR.get(),
-        (linalg_long)columns,
-        dws.get(),
-        ws_size);
+    linalg::qr_decomposition<value_t, CB>::apply_r(
+        rows, columns, dA.get(), columns, dtau.get(), dws.get(), ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
-
-    dense_matrix<value_t> Q(rows, k);
+    // Saving R is this client's decision; the factorization itself leaves it packed.
+    dense_matrix<value_t> packed(rows, columns);
+    ASSERT_EQ(dA.download(packed.begin()), cudaSuccess);
     dense_matrix<value_t> R(k, columns);
-    ASSERT_EQ(dQ.download(Q.begin()), cudaSuccess);
-    ASSERT_EQ(dR.download(R.begin()), cudaSuccess);
+    for (std::size_t i = 0; i < k; ++i)
+        for (std::size_t j = i; j < columns; ++j)
+            R(i, j) = packed(i, j);
+    linalg::qr_decomposition<value_t, CB>::apply_q(
+        rows, columns, dA.get(), columns, dtau.get(), dws.get(), ws_size);
+    ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
+    dense_matrix<value_t> Q(rows, columns);
+    ASSERT_EQ(dA.download(Q.begin()), cudaSuccess);
 
     value_t max_error = 0;
     for (std::size_t i = 0; i < rows; ++i)
@@ -706,19 +704,29 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
     auto                       R0 = random_matrix<value_t>(n, n, generator);
 
     device_buffer<value_t> dR0(n * n);
-    device_buffer<value_t> dQ(n * n);
-    device_buffer<value_t> dR(n * n);
+    device_buffer<value_t> dtau(n);
     ASSERT_EQ(dR0.upload(R0.begin()), cudaSuccess);
     const auto qr_ws_size =
         linalg::qr_decomposition<value_t, CB>::workspace_size((linalg_long)n, (linalg_long)n);
     device_buffer<unsigned char> qr_dws(qr_ws_size);
-    linalg::qr_decomposition<value_t, CB>::apply((linalg_long)n, (linalg_long)n, dR0.get(),
-        (linalg_long)n, dQ.get(), (linalg_long)n, dR.get(), (linalg_long)n, qr_dws.get(),
+    linalg::qr_decomposition<value_t, CB>::apply_r((linalg_long)n,
+        (linalg_long)n,
+        dR0.get(),
+        (linalg_long)n,
+        dtau.get(),
+        qr_dws.get(),
+        qr_ws_size);
+    linalg::qr_decomposition<value_t, CB>::apply_q((linalg_long)n,
+        (linalg_long)n,
+        dR0.get(),
+        (linalg_long)n,
+        dtau.get(),
+        qr_dws.get(),
         qr_ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     dense_matrix<value_t> Q(n, n);
-    ASSERT_EQ(dQ.download(Q.begin()), cudaSuccess);
+    ASSERT_EQ(dR0.download(Q.begin()), cudaSuccess);
 
     std::vector<value_t> known(n);
     for (std::size_t i = 0; i < n; ++i)
@@ -1232,26 +1240,10 @@ TEST(MathGpu, InputValidation)
         0)));
 
     // qr_decomposition.
-    EXPECT_ANY_THROW((linalg::qr_decomposition<double, CB>::apply((linalg_long)n,
-        (linalg_long)n,
-        static_cast<const double*>(nullptr),
-        (linalg_long)n,
-        dA.get(),
-        (linalg_long)n,
-        dA.get(),
-        (linalg_long)n,
-        nullptr,
-        0)));
-    EXPECT_ANY_THROW((linalg::qr_decomposition<double, CB>::apply(0LL,
-        (linalg_long)n,
-        dA.get(),
-        (linalg_long)n,
-        dA.get(),
-        (linalg_long)n,
-        dA.get(),
-        (linalg_long)n,
-        nullptr,
-        0)));
+    EXPECT_ANY_THROW((linalg::qr_decomposition<double, CB>::apply_r(
+        n, n, static_cast<double*>(nullptr), n, dA.get(), nullptr, 0)));
+    EXPECT_ANY_THROW(
+        (linalg::qr_decomposition<double, CB>::apply_r(0, n, dA.get(), n, dA.get(), nullptr, 0)));
 
     // symmetric_eigen_backend.
     EXPECT_ANY_THROW((read_gpu_scalar<int>(

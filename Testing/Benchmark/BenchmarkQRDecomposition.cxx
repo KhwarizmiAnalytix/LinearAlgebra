@@ -1,4 +1,4 @@
-// Benchmarks linalg::qr_decomposition<T, Backend>::apply for every backend
+// Benchmarks linalg::qr_decomposition<T, Backend>::apply_r/apply_q for every backend
 // this build actually compiled in.
 //
 // The library never defaults to a backend — every linalg::*<T, Backend> call
@@ -10,6 +10,7 @@
 // test side, and BenchmarkCholeskyDecomposition.cxx for the sibling
 // benchmark this one is modeled on. A single run now reports all backends
 // present in this build, each row labeled with the backend that produced it.
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -61,23 +62,19 @@ void BM_QRDecomposition(benchmark::State& state)
         static_cast<linalg_long>(n), static_cast<linalg_long>(n));
     std::vector<std::byte> workspace(ws_size);
 
-    std::vector<T> q(n * n);
-    std::vector<T> r(n * n);
-
+    auto           input = a;
+    std::vector<T> tau(n);
     for (auto _ : state)
     {
-        linalg::qr_decomposition<T, Backend>::apply(static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            a.data(),
-            static_cast<linalg_long>(n),
-            q.data(),
-            static_cast<linalg_long>(n),
-            r.data(),
-            static_cast<linalg_long>(n),
-            workspace.data(),
-            ws_size);
-        benchmark::DoNotOptimize(q.data());
-        benchmark::DoNotOptimize(r.data());
+        state.PauseTiming();
+        std::copy(a.begin(), a.end(), input.begin());
+        state.ResumeTiming();
+        linalg::qr_decomposition<T, Backend>::apply_r(
+            n, n, input.data(), n, tau.data(), workspace.data(), ws_size);
+        linalg::qr_decomposition<T, Backend>::apply_q(
+            n, n, input.data(), n, tau.data(), workspace.data(), ws_size);
+        benchmark::DoNotOptimize(input.data());
+        benchmark::DoNotOptimize(tau.data());
     }
 
     state.SetLabel(backend_name(Backend));

@@ -26,15 +26,14 @@ namespace detail
 // non-detail symmetric_eigenvalue_decomposition() wrapper to put this in
 // any more — callers use
 // symmetric_eigen_backend<T, Backend>::apply directly, naming Backend explicitly.
-static void check_symmetric_eigen_inputs(const void* A,
+static void check_symmetric_eigen_inputs(const void* eigenvectors,
     const void*                                      eigenvalues,
-    const void*                                      eigenvectors,
     linalg_int                                       n,
     linalg_int                                       lda,
     linalg_int                                       ldv)
 {
-    LINALG_CHECK(A != nullptr && eigenvalues != nullptr && eigenvectors != nullptr,
-        "symmetric_eigen_backend::apply: A, eigenvalues, and eigenvectors must not be null");
+    LINALG_CHECK(eigenvalues != nullptr && eigenvectors != nullptr,
+        "symmetric_eigen_backend::apply: eigenvalues and eigenvectors must not be null");
     LINALG_CHECK(
         n > 0 && lda > 0 && ldv > 0, "symmetric_eigen_backend::apply: n/lda/ldv must be positive");
 }
@@ -43,17 +42,19 @@ static void check_symmetric_eigen_inputs(const void* A,
 // no non-detail eigen() wrapper to put this in any more
 // — callers use general_eigen_backend<T, Backend>::apply directly, naming
 // Backend explicitly.
-static void check_general_eigen_inputs(const void* A,
+static void check_general_eigen_inputs(const void* eigenvectors,
     const void*                                    eigenvalues_real,
     const void*                                    eigenvalues_imag,
-    const void*                                    eigenvectors,
-    linalg_int                                     n,
-    linalg_int                                     lda,
-    linalg_int                                     ldv)
+    bool                                            compute_eigenvectors,
+    linalg_int                                      n,
+    linalg_int                                      lda,
+    linalg_int                                      ldv)
 {
-    LINALG_CHECK(A != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
-        "general_eigen_backend::apply: A, eigenvalues_real, and eigenvalues_imag must not be null");
-    LINALG_CHECK(n > 0 && lda > 0 && !(eigenvectors != nullptr && ldv <= 0),
+    LINALG_CHECK(
+        eigenvectors != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
+        "general_eigen_backend::apply: eigenvectors, eigenvalues_real, and eigenvalues_imag "
+        "must not be null");
+    LINALG_CHECK(n > 0 && lda > 0 && !(compute_eigenvectors && ldv <= 0),
         "general_eigen_backend::apply: n/lda/ldv must be positive");
 }
 
@@ -122,7 +123,7 @@ template <typename T> struct general_scalar_layout
     T*             Hm;
     T*             M;
     T*             Q;
-    T*             R;
+    T*             tau;
     T*             tmp;
     unsigned char* qr_ws;
     unsigned char* mult_ws;
@@ -130,6 +131,7 @@ template <typename T> struct general_scalar_layout
     T*             x;
     linalg_int*    pivot;
     T*             evec;
+    T*             V;
 };
 
 template <typename T>
@@ -143,7 +145,7 @@ general_scalar_layout<T> general_scalar_plan(
     p.Hm      = arena.next<T>(nn);
     p.M       = arena.next<T>(nn);
     p.Q       = arena.next<T>(nn);
-    p.R       = arena.next<T>(nn);
+    p.tau     = arena.next<T>(ns);
     p.tmp     = arena.next<T>(nn);
     p.qr_ws   = arena.next<unsigned char>(general_scalar_qr_ws_size<T>(n));
     p.mult_ws = arena.next<unsigned char>(general_scalar_mult_ws_size<T>(n));
@@ -153,6 +155,11 @@ general_scalar_layout<T> general_scalar_plan(
         p.x     = arena.next<T>(ns);
         p.pivot = arena.next<linalg_int>(ns);
         p.evec  = arena.next<T>(ns);
+        // Eigenvectors are written here, not directly into the caller's in-out
+        // eigenvectors/A buffer, because inverse_iteration still needs to read
+        // the original matrix for every column; writing results in place would
+        // corrupt A before later columns are computed.
+        p.V = arena.next<T>(nn);
     }
     return p;
 }
@@ -358,7 +365,7 @@ bool general_eigenvalues_qr(linalg_int n,
     T*                                 Hm,
     T*                                 M,
     T*                                 Q,
-    T*                                 R,
+    T*                                 tau,
     T*                                 tmp,
     unsigned char*                     qr_ws,
     unsigned char*                     mult_ws)
@@ -526,25 +533,23 @@ bool general_eigenvalues_qr(linalg_int n,
             }
         }
 
-        // Q, R <- qr(M) via the same native Householder QR qr_decomposition.cpp
-        // exposes, instead of a self-contained copy of that algorithm.
-        qr_decomposition<T, linalg_backend::native>::apply(
-            m, m, M, m, Q, m, R, m, qr_ws, qr_ws_size);
+        // Form Q directly in M; the similarity update does not need R.
+        qr_decomposition<T, linalg_backend::native>::apply_r(m, m, M, m, tau, qr_ws, qr_ws_size);
+        qr_decomposition<T, linalg_backend::native>::apply_q(m, m, M, m, tau, qr_ws, qr_ws_size);
 
         {
             LINALG_SCOPE("general_eigen/similarity");
             // Hm <- Q^T * Hm * Q, again via the shared native GEMM entry point.
             multiplication<T, linalg_backend::native>::apply(
-                true, false, m, m, m, Q, m, Hm, m, tmp, m, mult_ws, mult_ws_size);
-            // Product goes to the (now free) stride-m buffer M, then is copied into
-            // H's stride-n leading block.
+                true, false, m, m, m, M, m, Hm, m, tmp, m, mult_ws, mult_ws_size);
+            // Product goes to the free stride-m buffer Q, then to H's leading block.
             multiplication<T, linalg_backend::native>::apply(
-                false, false, m, m, m, tmp, m, Q, m, M, m, mult_ws, mult_ws_size);
+                false, false, m, m, m, tmp, m, M, m, Q, m, mult_ws, mult_ws_size);
             for (linalg_int i = 0; i < m; ++i)
             {
                 for (linalg_int j = 0; j < m; ++j)
                 {
-                    H[static_cast<std::size_t>(i * n + j)] = M[i * m + j];
+                    H[static_cast<std::size_t>(i * n + j)] = Q[i * m + j];
                 }
             }
         }
@@ -625,65 +630,62 @@ bool inverse_iteration(linalg_int n,
 }  // namespace
 
 template <>
-bool symmetric_eigen_backend<float, linalg_backend::native>::apply(const float* A,
-    linalg_int                                                                  n,
-    linalg_int                                                                  lda,
-    float*                                                                      eigenvalues,
-    float*                                                                      eigenvectors,
-    linalg_int                                                                  ldv,
-    void*                                                                       workspace,
-    size_t                                                                      workspace_size,
+bool symmetric_eigen_backend<float, linalg_backend::native>::apply(float* eigenvectors,
+    linalg_int                                                                n,
+    linalg_int                                                                lda,
+    float*                                                                    eigenvalues,
+    linalg_int                                                                ldv,
+    void*                                                                     workspace,
+    size_t                                                                    workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("eigen/native<float>");
-    detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
+    detail::check_symmetric_eigen_inputs(eigenvectors, eigenvalues, n, lda, ldv);
     LINALG_CHECK(workspace_size >= jacobi_workspace_size<float>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = jacobi_plan<float>(arena, n);
     return jacobi_eigen(
-        A, n, lda, eigenvalues, eigenvectors, ldv, bufs.a, bufs.v, bufs.evals, bufs.idx);
+        eigenvectors, n, lda, eigenvalues, eigenvectors, ldv, bufs.a, bufs.v, bufs.evals, bufs.idx);
 }
 
 template <>
-bool symmetric_eigen_backend<double, linalg_backend::native>::apply(const double* A,
-    linalg_int                                                                    n,
-    linalg_int                                                                    lda,
-    double*                                                                       eigenvalues,
-    double*                                                                       eigenvectors,
-    linalg_int                                                                    ldv,
-    void*                                                                         workspace,
-    size_t                                                                        workspace_size,
+bool symmetric_eigen_backend<double, linalg_backend::native>::apply(double* eigenvectors,
+    linalg_int                                                                  n,
+    linalg_int                                                                  lda,
+    double*                                                                     eigenvalues,
+    linalg_int                                                                  ldv,
+    void*                                                                       workspace,
+    size_t                                                                      workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("eigen/native<double>");
-    detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
+    detail::check_symmetric_eigen_inputs(eigenvectors, eigenvalues, n, lda, ldv);
     LINALG_CHECK(workspace_size >= jacobi_workspace_size<double>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = jacobi_plan<double>(arena, n);
     return jacobi_eigen(
-        A, n, lda, eigenvalues, eigenvectors, ldv, bufs.a, bufs.v, bufs.evals, bufs.idx);
+        eigenvectors, n, lda, eigenvalues, eigenvectors, ldv, bufs.a, bufs.v, bufs.evals, bufs.idx);
 }
 
 template <typename T>
-bool general_eigen_scalar_impl(const T* A,
-    linalg_int                          n,
-    linalg_int                          lda,
-    T*                                  eigenvalues_real,
-    T*                                  eigenvalues_imag,
-    T*                                  eigenvectors,
-    linalg_int                          ldv,
-    void*                               workspace,
-    size_t                              workspace_size)
+bool general_eigen_scalar_impl(T* eigenvectors,
+    linalg_int                     n,
+    linalg_int                     lda,
+    T*                             eigenvalues_real,
+    T*                             eigenvalues_imag,
+    bool                           compute_eigenvectors,
+    linalg_int                    ldv,
+    void*                          workspace,
+    size_t                         workspace_size)
 {
-    const bool compute_eigenvectors = eigenvectors != nullptr;
     LINALG_CHECK(workspace_size >= general_scalar_workspace_size<T>(n, compute_eigenvectors),
         "eigen: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = general_scalar_plan<T>(arena, n, compute_eigenvectors);
     if (!general_eigenvalues_qr<T>(n,
-            A,
+            eigenvectors,
             lda,
             eigenvalues_real,
             eigenvalues_imag,
@@ -691,7 +693,7 @@ bool general_eigen_scalar_impl(const T* A,
             bufs.Hm,
             bufs.M,
             bufs.Q,
-            bufs.R,
+            bufs.tau,
             bufs.tmp,
             bufs.qr_ws,
             bufs.mult_ws))
@@ -714,65 +716,72 @@ bool general_eigen_scalar_impl(const T* A,
             "{})",
             i);
         if (!inverse_iteration<T>(
-                n, A, lda, eigenvalues_real[i], bufs.evec, bufs.inv_M, bufs.pivot, bufs.x))
+                n, eigenvectors, lda, eigenvalues_real[i], bufs.evec, bufs.inv_M, bufs.pivot, bufs.x))
         {
             return false;
         }
         for (linalg_int r = 0; r < n; ++r)
         {
-            eigenvectors[r * ldv + i] = bufs.evec[static_cast<std::size_t>(r)];
+            bufs.V[r * n + i] = bufs.evec[static_cast<std::size_t>(r)];
+        }
+    }
+    for (linalg_int r = 0; r < n; ++r)
+    {
+        for (linalg_int c = 0; c < n; ++c)
+        {
+            eigenvectors[r * ldv + c] = bufs.V[r * n + c];
         }
     }
     return true;
 }
 
 template <>
-bool general_eigen_backend<float, linalg_backend::native>::apply(const float* A,
-    linalg_int                                                                n,
-    linalg_int                                                                lda,
-    float*                                                                    eigenvalues_real,
-    float*                                                                    eigenvalues_imag,
-    float*                                                                    eigenvectors,
-    linalg_int                                                                ldv,
-    void*                                                                     workspace,
-    size_t                                                                    workspace_size,
+bool general_eigen_backend<float, linalg_backend::native>::apply(float* eigenvectors,
+    linalg_int                                                              n,
+    linalg_int                                                              lda,
+    float*                                                                  eigenvalues_real,
+    float*                                                                  eigenvalues_imag,
+    bool                                                                    compute_eigenvectors,
+    linalg_int                                                              ldv,
+    void*                                                                   workspace,
+    size_t                                                                  workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/native<float>");
     detail::check_general_eigen_inputs(
-        A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
-    return general_eigen_scalar_impl(A,
+        eigenvectors, eigenvalues_real, eigenvalues_imag, compute_eigenvectors, n, lda, ldv);
+    return general_eigen_scalar_impl(eigenvectors,
         n,
         lda,
         eigenvalues_real,
         eigenvalues_imag,
-        eigenvectors,
+        compute_eigenvectors,
         ldv,
         workspace,
         workspace_size);
 }
 
 template <>
-bool general_eigen_backend<double, linalg_backend::native>::apply(const double* A,
-    linalg_int                                                                  n,
-    linalg_int                                                                  lda,
-    double*                                                                     eigenvalues_real,
-    double*                                                                     eigenvalues_imag,
-    double*                                                                     eigenvectors,
-    linalg_int                                                                  ldv,
-    void*                                                                       workspace,
-    size_t                                                                      workspace_size,
+bool general_eigen_backend<double, linalg_backend::native>::apply(double* eigenvectors,
+    linalg_int                                                                n,
+    linalg_int                                                                lda,
+    double*                                                                   eigenvalues_real,
+    double*                                                                   eigenvalues_imag,
+    bool                                                                      compute_eigenvectors,
+    linalg_int                                                                ldv,
+    void*                                                                     workspace,
+    size_t                                                                    workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/native<double>");
     detail::check_general_eigen_inputs(
-        A, eigenvalues_real, eigenvalues_imag, eigenvectors, n, lda, ldv);
-    return general_eigen_scalar_impl(A,
+        eigenvectors, eigenvalues_real, eigenvalues_imag, compute_eigenvectors, n, lda, ldv);
+    return general_eigen_scalar_impl(eigenvectors,
         n,
         lda,
         eigenvalues_real,
         eigenvalues_imag,
-        eigenvectors,
+        compute_eigenvectors,
         ldv,
         workspace,
         workspace_size);

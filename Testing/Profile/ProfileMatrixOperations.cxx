@@ -138,13 +138,15 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // qr_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("qr_decomposition");
-        auto                A  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        std::vector<double> Q(static_cast<std::size_t>(rows * rows));
-        std::vector<double> R(static_cast<std::size_t>(cols * cols));
-        const auto          ws = linalg::qr_decomposition<double, Backend>::workspace_size(rows, cols);
+        auto A = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        std::vector<double> tau(static_cast<std::size_t>(std::min(rows, cols)));
+        const auto ws = linalg::qr_decomposition<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
-        linalg::qr_decomposition<double, Backend>::apply(
-            rows, cols, A.data(), cols, Q.data(), rows, R.data(), cols, workspace.data(), ws);
+        linalg::qr_decomposition<double, Backend>::apply_r(
+            rows, cols, A.data(), cols, tau.data(), workspace.data(), ws);
+        linalg::qr_decomposition<double, Backend>::apply_q(
+            rows, cols, A.data(), cols, tau.data(), workspace.data(), ws);
     }
 
     // svd_decomposition -----------------------------------------------------
@@ -165,11 +167,10 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         PROFILER_SCOPE("eigen_symmetric");
         auto                A = make_spd_matrix<double>(n);
         std::vector<double> eigenvalues(static_cast<std::size_t>(n));
-        std::vector<double> eigenvectors(static_cast<std::size_t>(n * n));
         const auto          ws = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
         linalg::symmetric_eigen_backend<double, Backend>::apply(
-            A.data(), n, n, eigenvalues.data(), eigenvectors.data(), n, workspace.data(), ws);
+            A.data(), n, n, eigenvalues.data(), n, workspace.data(), ws);
     }
 
     // general_eigen_backend -------------------------------------------------
@@ -181,7 +182,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         const auto          ws = linalg::general_eigen_backend<double, Backend>::workspace_size(n, false);
         std::vector<unsigned char> workspace(ws);
         linalg::general_eigen_backend<double, Backend>::apply(
-            A.data(), n, n, ev_real.data(), ev_imag.data(), nullptr, n, workspace.data(), ws);
+            A.data(), n, n, ev_real.data(), ev_imag.data(), false, n, workspace.data(), ws);
     }
 
     // inversion -------------------------------------------------------------
@@ -516,26 +517,26 @@ void profile_gpu_ops(linalg_int n)
     // qr_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/qr_decomposition");
-        auto    hA  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA  = cuda_upload(hA);
-        double* d_Q = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
-        double* d_R = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
-        const auto ws_bytes =
-            linalg::qr_decomposition<double, CB>::workspace_size(rows, cols);
-        void* d_ws = nullptr;
+        auto hA = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double*    dA       = cuda_upload(hA);
+        double*    d_tau    = cuda_alloc<double>(static_cast<std::size_t>(std::min(rows, cols)));
+        const auto ws_bytes = linalg::qr_decomposition<double, CB>::workspace_size(rows, cols);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_Q && d_R)
+        if (dA && d_tau)
         {
-            linalg::qr_decomposition<double, CB>::apply(
-                rows, cols, dA, cols, d_Q, rows, d_R, cols, d_ws, ws_bytes);
+            linalg::qr_decomposition<double, CB>::apply_r(
+                rows, cols, dA, cols, d_tau, d_ws, ws_bytes);
+            linalg::qr_decomposition<double, CB>::apply_q(
+                rows, cols, dA, cols, d_tau, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
-        cudaFree(d_Q);
-        cudaFree(d_R);
+        cudaFree(d_tau);
         cudaFree(d_ws);
     }
 
@@ -573,7 +574,6 @@ void profile_gpu_ops(linalg_int n)
         auto    hA     = make_spd_matrix<double>(n);
         double* dA     = cuda_upload(hA);
         double* d_ev   = cuda_alloc<double>(static_cast<std::size_t>(n));
-        double* d_vecs = cuda_alloc<double>(static_cast<std::size_t>(n * n));
         const auto ws_bytes =
             linalg::symmetric_eigen_backend<double, CB>::workspace_size(n);
         void* d_ws = nullptr;
@@ -581,15 +581,14 @@ void profile_gpu_ops(linalg_int n)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_ev && d_vecs)
+        if (dA && d_ev)
         {
             linalg::symmetric_eigen_backend<double, CB>::apply(
-                dA, n, n, d_ev, d_vecs, n, d_ws, ws_bytes, outputs.info);
+                dA, n, n, d_ev, n, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(d_ev);
-        cudaFree(d_vecs);
         cudaFree(d_ws);
     }
 
