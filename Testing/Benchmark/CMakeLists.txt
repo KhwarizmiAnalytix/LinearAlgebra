@@ -41,5 +41,7 @@ foreach(_bench_source IN ITEMS ${bench_sources})
   )
   set_tests_properties(
     ${target_name} PROPERTIES TIMEOUT 600 LABELS "Benchmark;Performance;LinearAlgebra"
+                             PROCESSOR_AFFINITY TRUE PROCESSORS 1
+                             ENVIRONMENT "MKL_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1"
   )
 endforeach()
