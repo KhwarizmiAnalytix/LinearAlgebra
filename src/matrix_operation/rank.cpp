@@ -131,7 +131,8 @@ linalg_long rank<float, linalg_backend::native>::apply(const float* A,
     linalg_long                                                                    lda,
     float                                                                          tol,
     void*                                                                          workspace,
-    size_t                                                                         workspace_size)
+    size_t                                                                         workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("rank/native<float>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
@@ -148,7 +149,8 @@ linalg_long rank<double, linalg_backend::native>::apply(const double* A,
     linalg_long                                                                      lda,
     double                                                                           tol,
     void*                                                                            workspace,
-    size_t                                                                           workspace_size)
+    size_t                                                                           workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("rank/native<double>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
@@ -181,7 +183,8 @@ linalg_long rank<float, linalg_backend::blas_lapacke>::apply(const float* A,
     linalg_long                                                                         lda,
     float                                                                               tol,
     void*                                                                               workspace,
-    size_t                                                                              workspace_size)
+    size_t                                                                              workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("rank/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
@@ -198,7 +201,8 @@ linalg_long rank<double, linalg_backend::blas_lapacke>::apply(const double* A,
     linalg_long                                                                          lda,
     double                                                                               tol,
     void*                                                                                workspace,
-    size_t                                                                               workspace_size)
+    size_t                                                                               workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("rank/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
@@ -233,7 +237,8 @@ linalg_long rank<float, linalg_backend::mkl>::apply(const float* A,
     linalg_long                                                              lda,
     float                                                                    tol,
     void*                                                                    workspace,
-    size_t                                                                   workspace_size)
+    size_t                                                                   workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("rank/mkl<float>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");
@@ -250,7 +255,8 @@ linalg_long rank<double, linalg_backend::mkl>::apply(const double* A,
     linalg_long                                                               lda,
     double                                                                    tol,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("rank/mkl<double>");
     LINALG_CHECK(A != nullptr, "rank::apply: A must not be null");

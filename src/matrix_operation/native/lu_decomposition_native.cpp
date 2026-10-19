@@ -438,7 +438,7 @@ bool lu_decomposition_blocked_impl(
 
 template <>
 bool lu_decomposition<float, linalg_backend::native>::apply(float* __restrict m, linalg_int lda,
-    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/)
+    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<float>");
     check_lu_inputs(m, pivot, lda);
@@ -447,7 +447,7 @@ bool lu_decomposition<float, linalg_backend::native>::apply(float* __restrict m,
 
 template <>
 bool lu_decomposition<double, linalg_backend::native>::apply(double* __restrict m, linalg_int lda,
-    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/)
+    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<double>");
     check_lu_inputs(m, pivot, lda);

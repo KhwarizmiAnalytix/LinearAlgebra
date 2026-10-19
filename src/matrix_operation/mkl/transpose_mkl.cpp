@@ -25,7 +25,7 @@ static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long 
 
 template <>
 void transpose<float, linalg_backend::mkl>::apply(
-    linalg_long rows, linalg_long columns, float* m, void* /*workspace*/, size_t /*workspace_size*/)
+    linalg_long rows, linalg_long columns, float* m, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("transpose/mkl<float>");
     check_transpose_inputs(m, rows, columns);
@@ -37,7 +37,8 @@ void transpose<double, linalg_backend::mkl>::apply(linalg_long rows,
     linalg_long                                                        columns,
     double*                                                            m,
     void* /*workspace*/,
-    size_t /*workspace_size*/)
+    size_t /*workspace_size*/,
+    void* /*stream*/)
 {
     LINALG_SCOPE("transpose/mkl<double>");
     check_transpose_inputs(m, rows, columns);

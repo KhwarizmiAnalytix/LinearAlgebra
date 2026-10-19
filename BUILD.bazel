@@ -24,8 +24,8 @@ package(default_visibility = ["//visibility:public"])
 # already being on the toolchain's default search paths. LINALG_HAS_CUBLAS
 # (and its helper macros) has no Bazel toggle at all — CMake is this repo's
 # primary, exercised build system for the mkl / blas_lapack backends and the
-# cuBLAS/cuSOLVER GPU backend (src/matrix_operation_gpu/ +
-# include/matrix_operation_gpu/, not part of this glob).
+# cuBLAS/cuSOLVER GPU backend (src/matrix_operation/cublas/ +
+# include/matrix_operation/multiplication_batched.h, not part of this glob).
 
 filegroup(
     name = "linear_algebra_hdrs",

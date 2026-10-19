@@ -36,7 +36,8 @@ template <typename T, linalg_backend Backend> struct inversion
         linalg_int                  lda,
         linalg::linear_solver_type  type,
         void*                       workspace,
-        size_t                      workspace_size);
+        size_t                      workspace_size,
+        void*                       stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

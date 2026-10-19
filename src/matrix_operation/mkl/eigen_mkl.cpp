@@ -81,7 +81,8 @@ bool symmetric_eigen_backend<float, linalg_backend::mkl>::apply(const float* A,
     float*                                                                   eigenvectors,
     linalg_int                                                               ldv,
     void*                                                                    workspace,
-    size_t                                                                   workspace_size)
+    size_t                                                                   workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("eigen/mkl<float>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
@@ -109,7 +110,8 @@ bool symmetric_eigen_backend<double, linalg_backend::mkl>::apply(const double* A
     double*                                                                    eigenvectors,
     linalg_int                                                                 ldv,
     void*                                                                      workspace,
-    size_t                                                                     workspace_size)
+    size_t                                                                     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("eigen/mkl<double>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
@@ -138,7 +140,8 @@ bool general_eigen_backend<float, linalg_backend::mkl>::apply(const float* A,
     float*                                                                 eigenvectors,
     linalg_int                                                             ldv,
     void*                                                                  workspace,
-    size_t                                                                 workspace_size)
+    size_t                                                                 workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/mkl<float>");
     detail::check_general_eigen_inputs(
@@ -204,7 +207,8 @@ bool general_eigen_backend<double, linalg_backend::mkl>::apply(const double* A,
     double*                                                                  eigenvectors,
     linalg_int                                                               ldv,
     void*                                                                    workspace,
-    size_t                                                                   workspace_size)
+    size_t                                                                   workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/mkl<double>");
     detail::check_general_eigen_inputs(

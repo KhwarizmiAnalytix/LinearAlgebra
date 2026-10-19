@@ -124,7 +124,8 @@ float condition_number<float, linalg_backend::native>::apply(const float* A,
     linalg_long                                                                          columns,
     linalg_long                                                                          lda,
     void*                                                                                workspace,
-    size_t workspace_size)
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/native<float>");
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
@@ -140,7 +141,8 @@ double condition_number<double, linalg_backend::native>::apply(const double* A,
     linalg_long                                                                             columns,
     linalg_long                                                                             lda,
     void*  workspace,
-    size_t workspace_size)
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/native<double>");
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
@@ -172,7 +174,8 @@ float condition_number<float, linalg_backend::blas_lapacke>::apply(const float* 
     linalg_long                                                                              columns,
     linalg_long                                                                              lda,
     void*                                                                                    workspace,
-    size_t workspace_size)
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
@@ -188,7 +191,8 @@ double condition_number<double, linalg_backend::blas_lapacke>::apply(const doubl
     linalg_long                                                                               columns,
     linalg_long                                                                               lda,
     void*  workspace,
-    size_t workspace_size)
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
@@ -222,7 +226,8 @@ float condition_number<float, linalg_backend::mkl>::apply(const float* A,
     linalg_long                                                                   columns,
     linalg_long                                                                   lda,
     void*                                                                         workspace,
-    size_t                                                                        workspace_size)
+    size_t                                                                        workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/mkl<float>");
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
@@ -238,7 +243,8 @@ double condition_number<double, linalg_backend::mkl>::apply(const double* A,
     linalg_long                                                                    columns,
     linalg_long                                                                    lda,
     void*  workspace,
-    size_t workspace_size)
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/mkl<double>");
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");

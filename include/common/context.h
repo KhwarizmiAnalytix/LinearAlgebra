@@ -7,8 +7,8 @@
  * runtime dispatch to steer, unlike PyTorch's at::Context, which this used
  * to mirror more closely. What remains here is read-only introspection of
  * what a given build actually has available, for callers that want to know
- * before calling into an op (e.g. to decide whether the linalg::gpu::* entry
- * points, include/matrix_operation_gpu/, are usable at all).
+ * before calling into an op (e.g. to decide whether the
+ * linalg_backend::cuda_blas struct specializations are usable at all).
  */
 #pragma once
 

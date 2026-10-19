@@ -11,10 +11,10 @@ eigenvalue/eigenvector decomposition, and rank/condition-number/norm/trace
 estimation, with a portable scalar fallback, an optional **Intel MKL**
 (LAPACKE/BLAS) backend, an optional vendor-neutral **CBLAS/LAPACKE** backend
 (OpenBLAS, Accelerate, netlib, ...), and an optional **cuBLAS/cuSOLVER** GPU backend
-(`linalg::gpu::*`, device pointers only, no implicit host transfers)
-covering every CPU op except general (non-symmetric) eigenvalue
-decomposition, for which cuSOLVER's dense API has no `geev`-equivalent
-routine to call into. Error reporting always goes through
+(same struct-template API, `linalg_backend::cuda_blas` specializations,
+device pointers only, no implicit host transfers) covering every CPU op
+except general (non-symmetric) eigenvalue decomposition, for which
+cuSOLVER's dense API has no `geev`-equivalent routine to call into. Error reporting always goes through
 [KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)
 (vendored at `ThirdParty/Logging`, a required dependency, not an optional
 backend). See [`docs/gpu_backend_design.md`](docs/gpu_backend_design.md)
@@ -36,14 +36,14 @@ one consumer, not a required host.
 - `include/util/` — conservative CPU cache-size defaults (`cpu_info.h`); the
   exception helper that used to live here is gone — error reporting goes
   straight through Logging's `LOGGING_THROW`/`logging::exception` now.
-- `include/matrix_operation/` — the public CPU modules (below).
-- `include/matrix_operation_gpu/` — the `linalg::gpu::*` counterparts
-  (below), built when `LINALG_ENABLE_CUBLAS=ON`.
+- `include/matrix_operation/` — the public modules (CPU and GPU); the GPU
+  `linalg_backend::cuda_blas` specializations are in
+  `src/matrix_operation/cublas/`, built when `LINALG_ENABLE_CUBLAS=ON`.
 - `src/` — implementation (`.cpp`/`.cu`) files, mirroring `include/`'s
   layout (e.g. `include/matrix_operation/lu_decomposition.h` pairs with
-  `src/matrix_operation/native/lu_decomposition_native.cpp`, and
-  `include/matrix_operation_gpu/qr_decomposition_gpu.h` pairs with
-  `src/matrix_operation_gpu/qr_decomposition_gpu.cu`).
+  `src/matrix_operation/native/lu_decomposition_native.cpp` on the scalar
+  path and `src/matrix_operation/cublas/lu_decomposition_cublas.cpp` on the
+  GPU path).
 - `Testing/Cxx/` — GoogleTest unit tests.
 - `ThirdParty/` — vendored `googletest` submodule, plus `Logging`
   ([KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)),
@@ -81,36 +81,35 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 All entry points are plain row-major raw-pointer C++ (`T* data, lda`) — no
 matrix class is part of the public API; callers own their own storage.
 
-### GPU modules (`linalg::gpu::*`, `LINALG_ENABLE_CUBLAS=ON`)
+### GPU backend (`linalg_backend::cuda_blas`, `LINALG_ENABLE_CUBLAS=ON`)
 
-| Header | Provides |
-|--------|----------|
-| `matrix_operation_gpu/cholesky_decomposition_gpu.h` | In-place Cholesky factorization on device memory |
-| `matrix_operation_gpu/lu_decomposition_gpu.h` | In-place LU factorization, row-major "P·A = L·U" packed layout matching the CPU convention |
-| `matrix_operation_gpu/linear_solver_gpu.h` | Cholesky/LU solve (no caller-visible pivot — cuSOLVER manages it internally) |
-| `matrix_operation_gpu/inversion_gpu.h` | `matrix_invert`, `determinant` |
-| `matrix_operation_gpu/multiplication_gpu.h` | cuBLAS GEMM with optional operand transpose |
-| `matrix_operation_gpu/multiplication_batched_gpu.h` | Batched same-size square matrix multiply |
-| `matrix_operation_gpu/transpose_gpu.h` | In-place transpose |
-| `matrix_operation_gpu/svd_decomposition_gpu.h` | Economy SVD (tightly packed `lda`/`ldu`/`ldv` only — see the header) |
-| `matrix_operation_gpu/qr_decomposition_gpu.h` | Economy Householder QR (tightly packed only) |
-| `matrix_operation_gpu/eigen_gpu.h` | Symmetric eigenvalue/eigenvector decomposition only — cuSOLVER's dense API has no general (non-symmetric) `geev`-equivalent, so there is no GPU counterpart for that case; use the CPU `eigen` |
-| `matrix_operation_gpu/pseudo_inverse_gpu.h` | Moore-Penrose pseudo-inverse, via GPU SVD |
-| `matrix_operation_gpu/rank_gpu.h` | `rank`, `condition_number`, via GPU SVD (downloads only the small singular-value vector, never the full matrix) |
-| `matrix_operation_gpu/norm_gpu.h` | Frobenius / 1 / infinity / 2 matrix norms (`cublasXnrm2`/`cublasIXamax` plus a small reduction kernel for 1/infinity) |
-| `matrix_operation_gpu/trace_gpu.h` | `trace` |
-| `matrix_operation_gpu/least_squares_gpu.h` | `least_squares_solve` — over/under-determined, via GPU pseudo-inverse |
+The GPU backend reuses the same struct-template API as every other backend.
+Include the same `include/matrix_operation/*.h` headers as the CPU path and
+use `linalg_backend::cuda_blas` as the template argument:
 
-Every GPU entry point takes device pointers only (never touches host
-memory internally) and an optional trailing `cudaStream_t` (default: the
-legacy default stream); `determinant`/`pseudo_inverse`/`rank`/
-`condition_number`/`norm`/`trace` are the exceptions
-that must synchronize once and copy back a single scalar (or, for
-`pseudo_inverse`, the small singular-value vector) to compute their result
-— every other buffer involved stays device-resident. See
-[`docs/gpu_backend_design.md`](docs/gpu_backend_design.md) for the backend's
-design, known restrictions, and what's still pending (multi-RHS solve,
-batched factorizations).
+```cpp
+#include "include/matrix_operation/svd_decomposition.h"
+
+// Query workspace, allocate on device, then call:
+linalg::svd_decomposition<double, linalg_backend::cuda_blas>::apply(
+    rows, cols, dA, lda, dS, dU, ldu, dVT, ldv, d_workspace, ws_size);
+```
+
+All entry points take device pointers only (never touch host memory
+internally); most accept an optional trailing `void* stream` (cast to
+`cudaStream_t` internally; default: `nullptr` for the legacy default stream).
+Operations that return a scalar (`trace`, `determinant`, `norm`, `rank`,
+`condition_number`) synchronize internally and return the host value directly.
+`cholesky_decomposition<T, cuda_blas>::apply` and
+`trace<T, cuda_blas>::apply` allocate their own workspace internally (the
+struct `apply` has no workspace parameter for those two operations).
+
+For batched square-matrix multiplication, include
+`include/matrix_operation/multiplication_batched.h` and call
+`linalg::batched_matrix_multiplication(dim, count, a, b, c, stream)`.
+
+See [`docs/gpu_backend_design.md`](docs/gpu_backend_design.md) for the
+backend's design and known restrictions.
 
 ## CMake options
 
@@ -118,7 +117,7 @@ batched factorizations).
 |-----------------|---------|---------|
 | `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigen); least_squares/pseudo_inverse/rank/norm/trace compose on top of svd_decomposition and pick up the same backend transitively |
 | `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); MKL takes precedence when both are ON |
-| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg::gpu::*`, `include/matrix_operation_gpu/`); requires the CUDA toolkit, enables the CUDA language only when ON |
+| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::cuda_blas` specializations, `src/matrix_operation/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | ON | Build the test suite |
@@ -147,7 +146,7 @@ see the Implemented column.
 | **OpenBLAS** | CPU | ✅ | ✅* | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
 | **Apple Accelerate** | CPU / Apple Silicon | ✅ | ✅ | ✅ | ✅ | ✅ via `LINALG_ENABLE_BLAS` |
 | **Netlib BLAS/LAPACK** | CPU | ✅ | ✅ | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
-| **cuBLAS / cuSOLVER** | NVIDIA GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_CUBLAS` (`linalg::gpu::*`) |
+| **cuBLAS / cuSOLVER** | NVIDIA GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_CUBLAS` (`linalg_backend::cuda_blas`) |
 | **BLIS** | CPU | ✅ | ❌ | ❌ | ❌ | ❌ not wired up |
 | **cuBLASLt** | NVIDIA GPU | ✅ | — | — | — | ❌ not wired up |
 | **cuSPARSE** | NVIDIA GPU | — | — | ✅ | — | ❌ out of scope (dense only) |

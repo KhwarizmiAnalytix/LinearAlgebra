@@ -196,7 +196,8 @@ void pseudo_inverse<float, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                               ldai,
     float                                                                     tol,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("pseudo_inverse/native<float>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
@@ -216,7 +217,8 @@ void pseudo_inverse<double, linalg_backend::native>::apply(linalg_long rows,
     linalg_long                                                                ldai,
     double                                                                     tol,
     void*                                                                      workspace,
-    size_t                                                                     workspace_size)
+    size_t                                                                     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("pseudo_inverse/native<double>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
@@ -252,7 +254,8 @@ void pseudo_inverse<float, linalg_backend::blas_lapacke>::apply(linalg_long rows
     linalg_long                                                                        ldai,
     float                                                                              tol,
     void*                                                                              workspace,
-    size_t                                                                             workspace_size)
+    size_t                                                                             workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("pseudo_inverse/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
@@ -272,7 +275,8 @@ void pseudo_inverse<double, linalg_backend::blas_lapacke>::apply(linalg_long row
     linalg_long                                                                         ldai,
     double                                                                              tol,
     void*                                                                               workspace,
-    size_t                                                                              workspace_size)
+    size_t                                                                              workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("pseudo_inverse/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
@@ -310,7 +314,8 @@ void pseudo_inverse<float, linalg_backend::mkl>::apply(linalg_long rows,
     linalg_long                                                               ldai,
     float                                                                     tol,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("pseudo_inverse/mkl<float>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,
@@ -330,7 +335,8 @@ void pseudo_inverse<double, linalg_backend::mkl>::apply(linalg_long rows,
     linalg_long                                                                ldai,
     double                                                                     tol,
     void*                                                                      workspace,
-    size_t                                                                     workspace_size)
+    size_t                                                                     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("pseudo_inverse/mkl<double>");
     LINALG_CHECK(A != nullptr && Ainv != nullptr,

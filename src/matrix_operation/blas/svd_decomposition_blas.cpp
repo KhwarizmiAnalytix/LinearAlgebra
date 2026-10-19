@@ -191,7 +191,8 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
     float*                                                               VT,
     linalg_long                                                          ldv,
     void*                                                                workspace,
-    size_t                                                               workspace_size)
+    size_t                                                               workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/blas_lapacke<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
@@ -254,7 +255,8 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
     double*                                                               VT,
     linalg_long                                                           ldv,
     void*                                                                 workspace,
-    size_t                                                                workspace_size)
+    size_t                                                                workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/blas_lapacke<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);

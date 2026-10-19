@@ -27,8 +27,12 @@ template <typename T, linalg_backend Backend> struct transpose
      * @param[in] workspace_size Size of workspace in bytes; must meet the size returned by
      *     workspace_size().
      */
-    LINALG_API static void apply(
-        linalg_long rows, linalg_long columns, T* m, void* workspace, size_t workspace_size);
+    LINALG_API static void apply(linalg_long rows,
+        linalg_long                             columns,
+        T*                                      m,
+        void*                                   workspace,
+        size_t                                  workspace_size,
+        void*                                   stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

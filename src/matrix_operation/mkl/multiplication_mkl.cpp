@@ -46,7 +46,8 @@ void multiplication<float, linalg_backend::mkl>::apply(bool transpose_a,
     float*                                                  c,
     linalg_int                                              ldc,
     void* /*workspace*/,
-    size_t /*workspace_size*/)
+    size_t /*workspace_size*/,
+    void* /*stream*/)
 {
     LINALG_SCOPE("multiplication/mkl<float>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
@@ -79,7 +80,8 @@ void multiplication<double, linalg_backend::mkl>::apply(bool transpose_a,
     double*                                                  c,
     linalg_int                                               ldc,
     void* /*workspace*/,
-    size_t /*workspace_size*/)
+    size_t /*workspace_size*/,
+    void* /*stream*/)
 {
     LINALG_SCOPE("multiplication/mkl<double>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);

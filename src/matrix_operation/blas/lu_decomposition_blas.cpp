@@ -54,7 +54,7 @@ size_t lu_blas_workspace_size(linalg_int lda)
 
 template <>
 bool lu_decomposition<float, linalg_backend::blas_lapacke>::apply(
-    float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
+    float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<float>");
     check_lu_inputs(m, pivot, lda);
@@ -73,7 +73,7 @@ bool lu_decomposition<float, linalg_backend::blas_lapacke>::apply(
 
 template <>
 bool lu_decomposition<double, linalg_backend::blas_lapacke>::apply(
-    double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size)
+    double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<double>");
     check_lu_inputs(m, pivot, lda);

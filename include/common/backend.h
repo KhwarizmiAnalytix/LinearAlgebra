@@ -15,7 +15,8 @@ enum class linalg_backend : std::uint8_t
 {
     native,
     blas_lapacke,
-    mkl
+    mkl,
+    cuda_blas
 };
 
 }  // namespace linalg

@@ -184,7 +184,8 @@ void svd_decomposition<float, linalg_backend::mkl>::apply(linalg_long rows,
     float*                                                      VT,
     linalg_long                                                 ldv,
     void*                                                       workspace,
-    size_t                                                      workspace_size)
+    size_t                                                      workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/mkl<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
@@ -214,7 +215,8 @@ void svd_decomposition<double, linalg_backend::mkl>::apply(linalg_long rows,
     double*                                                      VT,
     linalg_long                                                  ldv,
     void*                                                        workspace,
-    size_t                                                       workspace_size)
+    size_t                                                       workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/mkl<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);

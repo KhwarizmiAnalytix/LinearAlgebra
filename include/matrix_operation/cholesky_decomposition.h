@@ -31,7 +31,8 @@ template <typename T, linalg_backend Backend> struct cholesky_decomposition
      *     with C = U^T * U.
      * @return True on success; false if factorization fails.
      */
-    LINALG_API static bool apply(T* C, linalg_int lda, cholesky_decomposition_enum type);
+    LINALG_API static bool apply(
+        T* C, linalg_int lda, cholesky_decomposition_enum type, void* stream = nullptr);
 
     /**
      * @brief Propagates derivatives through a Cholesky factorization.

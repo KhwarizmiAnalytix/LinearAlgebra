@@ -96,7 +96,8 @@ void least_squares<float, linalg_backend::native>::apply(linalg_long rows,
     float*                                                                   X,
     linalg_long                                                              ldx,
     void*                                                                    workspace,
-    size_t                                                                   workspace_size)
+    size_t                                                                   workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/native<float>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
@@ -118,7 +119,8 @@ void least_squares<double, linalg_backend::native>::apply(linalg_long rows,
     double*                                                                   X,
     linalg_long                                                               ldx,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/native<double>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
@@ -156,7 +158,8 @@ void least_squares<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
     float*                                                                            X,
     linalg_long                                                                       ldx,
     void*                                                                             workspace,
-    size_t                                                                            workspace_size)
+    size_t                                                                            workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/blas_lapacke<float>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
@@ -178,7 +181,8 @@ void least_squares<double, linalg_backend::blas_lapacke>::apply(linalg_long rows
     double*                                                                            X,
     linalg_long                                                                        ldx,
     void*                                                                              workspace,
-    size_t                                                                             workspace_size)
+    size_t                                                                             workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/blas_lapacke<double>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
@@ -218,7 +222,8 @@ void least_squares<float, linalg_backend::mkl>::apply(linalg_long rows,
     float*                                                                   X,
     linalg_long                                                              ldx,
     void*                                                                    workspace,
-    size_t                                                                   workspace_size)
+    size_t                                                                   workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/mkl<float>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,
@@ -240,7 +245,8 @@ void least_squares<double, linalg_backend::mkl>::apply(linalg_long rows,
     double*                                                                   X,
     linalg_long                                                               ldx,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/mkl<double>");
     LINALG_CHECK(A != nullptr && B != nullptr && X != nullptr,

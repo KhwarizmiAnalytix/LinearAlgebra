@@ -29,8 +29,12 @@ template <typename T, linalg_backend Backend> struct lu_decomposition
      *     workspace_size().
      * @return True on success; false if factorization fails.
      */
-    LINALG_API static bool apply(
-        T* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size);
+    LINALG_API static bool apply(T* m,
+        linalg_int                   lda,
+        linalg_int*                  pivot,
+        void*                        workspace,
+        size_t                       workspace_size,
+        void*                        stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

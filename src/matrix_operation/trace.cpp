@@ -21,7 +21,7 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 
 template <>
 float trace<float, linalg_backend::native>::apply(
-    const float* A, linalg_int n, linalg_int lda)
+    const float* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/native<float>");
     return matrix_trace_impl(A, n, lda);
@@ -29,7 +29,7 @@ float trace<float, linalg_backend::native>::apply(
 
 template <>
 double trace<double, linalg_backend::native>::apply(
-    const double* A, linalg_int n, linalg_int lda)
+    const double* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/native<double>");
     return matrix_trace_impl(A, n, lda);
@@ -39,7 +39,7 @@ double trace<double, linalg_backend::native>::apply(
 
 template <>
 float trace<float, linalg_backend::blas_lapacke>::apply(
-    const float* A, linalg_int n, linalg_int lda)
+    const float* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/blas_lapacke<float>");
     return matrix_trace_impl(A, n, lda);
@@ -47,7 +47,7 @@ float trace<float, linalg_backend::blas_lapacke>::apply(
 
 template <>
 double trace<double, linalg_backend::blas_lapacke>::apply(
-    const double* A, linalg_int n, linalg_int lda)
+    const double* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/blas_lapacke<double>");
     return matrix_trace_impl(A, n, lda);
@@ -59,7 +59,7 @@ double trace<double, linalg_backend::blas_lapacke>::apply(
 
 template <>
 float trace<float, linalg_backend::mkl>::apply(
-    const float* A, linalg_int n, linalg_int lda)
+    const float* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/mkl<float>");
     return matrix_trace_impl(A, n, lda);
@@ -67,7 +67,7 @@ float trace<float, linalg_backend::mkl>::apply(
 
 template <>
 double trace<double, linalg_backend::mkl>::apply(
-    const double* A, linalg_int n, linalg_int lda)
+    const double* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/mkl<double>");
     return matrix_trace_impl(A, n, lda);

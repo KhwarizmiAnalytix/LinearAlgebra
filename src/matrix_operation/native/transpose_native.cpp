@@ -76,7 +76,7 @@ void transpose_scalar_impl(
 
 template <>
 void transpose<float, linalg_backend::native>::apply(
-    linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size)
+    linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("transpose/native<float>");
     check_transpose_inputs(m, rows, columns);
@@ -85,7 +85,7 @@ void transpose<float, linalg_backend::native>::apply(
 
 template <>
 void transpose<double, linalg_backend::native>::apply(
-    linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size)
+    linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("transpose/native<double>");
     check_transpose_inputs(m, rows, columns);

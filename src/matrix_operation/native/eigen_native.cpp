@@ -632,7 +632,8 @@ bool symmetric_eigen_backend<float, linalg_backend::native>::apply(const float* 
     float*                                                                      eigenvectors,
     linalg_int                                                                  ldv,
     void*                                                                       workspace,
-    size_t                                                                      workspace_size)
+    size_t                                                                      workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("eigen/native<float>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
@@ -652,7 +653,8 @@ bool symmetric_eigen_backend<double, linalg_backend::native>::apply(const double
     double*                                                                       eigenvectors,
     linalg_int                                                                    ldv,
     void*                                                                         workspace,
-    size_t                                                                        workspace_size)
+    size_t                                                                        workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("eigen/native<double>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
@@ -733,7 +735,8 @@ bool general_eigen_backend<float, linalg_backend::native>::apply(const float* A,
     float*                                                                    eigenvectors,
     linalg_int                                                                ldv,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/native<float>");
     detail::check_general_eigen_inputs(
@@ -758,7 +761,8 @@ bool general_eigen_backend<double, linalg_backend::native>::apply(const double* 
     double*                                                                     eigenvectors,
     linalg_int                                                                  ldv,
     void*                                                                       workspace,
-    size_t                                                                      workspace_size)
+    size_t                                                                      workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/native<double>");
     detail::check_general_eigen_inputs(

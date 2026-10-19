@@ -89,7 +89,8 @@ bool symmetric_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const f
     float*                                                                            eigenvectors,
     linalg_int                                                                        ldv,
     void*                                                                             workspace,
-    size_t workspace_size)
+    size_t                                                                            workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("eigen/blas_lapacke<float>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
@@ -118,7 +119,8 @@ bool symmetric_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const 
     double*    eigenvectors,
     linalg_int ldv,
     void*      workspace,
-    size_t     workspace_size)
+    size_t     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("eigen/blas_lapacke<double>");
     detail::check_symmetric_eigen_inputs(A, eigenvalues, eigenvectors, n, lda, ldv);
@@ -148,7 +150,8 @@ bool general_eigen_backend<float, linalg_backend::blas_lapacke>::apply(const flo
     float*     eigenvectors,
     linalg_int ldv,
     void*      workspace,
-    size_t     workspace_size)
+    size_t     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/blas_lapacke<float>");
     detail::check_general_eigen_inputs(
@@ -213,7 +216,8 @@ bool general_eigen_backend<double, linalg_backend::blas_lapacke>::apply(const do
     double*    eigenvectors,
     linalg_int ldv,
     void*      workspace,
-    size_t     workspace_size)
+    size_t     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/blas_lapacke<double>");
     detail::check_general_eigen_inputs(

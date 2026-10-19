@@ -11,7 +11,7 @@
 # Public compile definitions: LINALG_HAS_MKL — MKL-backed LAPACKE code
 # paths; LINALG_HAS_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
 # LINALG_HAS_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
-# include/matrix_operation_gpu/. These (and LINALG_HAS_LAPACKE,
+# src/matrix_operation/cublas/. These (and LINALG_HAS_LAPACKE,
 # LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION, LINALG_HAS_LU_PIVOTING,
 # LINALG_HAS_WIN32_WARNINGS below) are always-defined 0/1 macros, checked in
 # C++ with plain #if (never #ifdef/#if defined), not conditionally-defined
@@ -68,11 +68,11 @@ option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearA
 # native/multiplication_native.cpp).
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
-# cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as separate
-# linalg::gpu::* entry points (include/matrix_operation_gpu/) rather than a
-# device parameter on the CPU ops. Requires the CUDA toolkit; enables the
-# CUDA language only when this option is ON so plain CPU builds need no CUDA
-# toolchain.
+# cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as
+# linalg_backend::cuda_blas specializations of the same struct-template API
+# used by the CPU backends (src/matrix_operation/cublas/). Requires the CUDA
+# toolkit; enables the CUDA language only when this option is ON so plain CPU
+# builds remain free of any CUDA toolchain requirement.
 option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
 
 # Enables partial pivoting in the scalar (non-MKL) LU decomposition / solve /
@@ -446,8 +446,9 @@ endif()
 # --- Optional cuBLAS / cuSOLVER GPU backend ---
 # cuBLAS/cuSOLVER themselves are host-callable C APIs, linked into ordinary
 # .cpp translation units with no CUDA toolchain needed. One op
-# (multiplication_batched_gpu.cu, batched square-matrix multiply) is a
-# genuine hand-written CUDA kernel, so `enable_language(CUDA)` and an nvcc
+# Several operations under src/matrix_operation/cublas/ are genuine
+# CUDA-kernel .cu files (batched matmul, norm, QR, SVD, pseudo-inverse,
+# inversion/determinant, trace), so `enable_language(CUDA)` and an nvcc
 # toolchain are only required — and only enabled — when this option is ON;
 # plain CPU builds remain free of any CUDA toolchain requirement.
 if(LINALG_ENABLE_CUBLAS)
@@ -497,7 +498,7 @@ endif()
 # KhwarizmiAnalytix/Logging (ThirdParty/Logging, a nested submodule with its
 # own fmt/loguru/glog/spdlog/magic_enum submodules) provides logging::
 # exception, the type every LOGGING_THROW call site in this library throws
-# (include/matrix_operation/, include/matrix_operation_gpu/) — there is no
+# (include/matrix_operation/) — there is no
 # std::runtime_error fallback, so this is unconditional, not gated behind an
 # option. Logging is a full standalone CMake package (same
 # add_subdirectory-embeddable shape as this repo itself); disable its own
@@ -535,7 +536,7 @@ file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_
 # mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /
 # LINALG_ENABLE_BLAS turned on the matching backend above.
-list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(mkl|blas)/")
+list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(mkl|blas|cublas)/")
 if(LINALG_ENABLE_MKL)
     file(GLOB linalg_mkl_sources LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/mkl/*.cpp"
@@ -549,10 +550,15 @@ if(LINALG_ENABLE_BLAS)
     list(APPEND linalg_sources ${linalg_blas_sources})
 endif()
 
-# .cu sources (under src/matrix_operation_gpu/, mirroring every other
-# implementation file) need an nvcc toolchain, so they are only globbed in —
-# and only compilable — when LINALG_ENABLE_CUBLAS turned on CUDA above.
+# cuBLAS/cuSOLVER bridge sources and .cu kernel sources (all under
+# src/matrix_operation/cublas/) need an nvcc toolchain, so they are only
+# globbed in — and only compilable — when LINALG_ENABLE_CUBLAS turned on
+# CUDA above.
 if(LINALG_ENABLE_CUBLAS)
+    file(GLOB linalg_cublas_sources LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cublas/*.cpp"
+    )
+    list(APPEND linalg_sources ${linalg_cublas_sources})
     file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
     )

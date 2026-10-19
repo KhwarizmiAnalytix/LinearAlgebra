@@ -49,7 +49,8 @@ template <typename T, linalg_backend Backend> struct linear_solver
         T*                          x,
         linear_solver_type          type,
         void*                       workspace,
-        size_t                      workspace_size);
+        size_t                      workspace_size,
+        void*                       stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

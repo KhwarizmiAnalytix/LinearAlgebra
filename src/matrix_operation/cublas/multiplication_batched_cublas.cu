@@ -1,16 +1,14 @@
-#include "include/matrix_operation_gpu/multiplication_batched_gpu.h"
-
 #if LINALG_HAS_CUBLAS
 
 #include <cuda_runtime.h>
 
+#include "include/matrix_operation/multiplication_batched.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
 // One thread per output element, one z-block of the launch grid per matrix.
 // C[row][col] = sum_k A[row][k] * B[k][col], all row-major. File-scope
-// (not namespaced) __global__ template, matching the usual CUDA idiom for a
-// kernel that is only ever launched from this translation unit.
+// (not namespaced) __global__ template — only ever launched from this TU.
 template <typename scalar_t>
 static __global__ void batched_matmul_kernel(
     int dim, int count, const scalar_t* A_i, const scalar_t* B_i, scalar_t* C_i)
@@ -43,13 +41,11 @@ static __global__ void batched_matmul_kernel(
 
 namespace linalg
 {
-namespace gpu
-{
 namespace
 {
 
 template <typename scalar_t>
-void launch(linalg_int dim,
+void launch_batched(linalg_int dim,
     linalg_int         count,
     const scalar_t*      a,
     const scalar_t*      b,
@@ -82,25 +78,24 @@ void launch(linalg_int dim,
 
 void batched_matrix_multiplication(linalg_int dim,
     linalg_int                                count,
-    const float*                                a,
-    const float*                                b,
-    float*                                      c,
-    cudaStream_t                                stream)
+    const float*                              a,
+    const float*                              b,
+    float*                                    c,
+    void*                                     stream)
 {
-    launch(dim, count, a, b, c, stream);
+    launch_batched(dim, count, a, b, c, static_cast<cudaStream_t>(stream));
 }
 
 void batched_matrix_multiplication(linalg_int dim,
     linalg_int                                count,
-    const double*                               a,
-    const double*                               b,
-    double*                                     c,
-    cudaStream_t                                stream)
+    const double*                             a,
+    const double*                             b,
+    double*                                   c,
+    void*                                     stream)
 {
-    launch(dim, count, a, b, c, stream);
+    launch_batched(dim, count, a, b, c, static_cast<cudaStream_t>(stream));
 }
 
-}  // namespace gpu
 }  // namespace linalg
 
 #endif  // LINALG_HAS_CUBLAS

@@ -155,7 +155,8 @@ void qr_decomposition<float, linalg_backend::mkl>::apply(linalg_long rows,
     float*                                                     R,
     linalg_long                                                ldr,
     void*                                                      workspace,
-    size_t                                                     workspace_size)
+    size_t                                                     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("qr_decomposition/mkl<float>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
@@ -184,7 +185,8 @@ void qr_decomposition<double, linalg_backend::mkl>::apply(linalg_long rows,
     double*                                                     R,
     linalg_long                                                 ldr,
     void*                                                       workspace,
-    size_t                                                      workspace_size)
+    size_t                                                      workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("qr_decomposition/mkl<double>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);

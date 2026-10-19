@@ -114,7 +114,8 @@ float determinant<float, linalg_backend::native>::apply(float* __restrict m,
     linalg_int                                                                lda,
     linear_solver_type                                                        type,
     void*                                                                     workspace,
-    size_t                                                                    workspace_size)
+    size_t                                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("determinant/native<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
@@ -128,7 +129,8 @@ double determinant<double, linalg_backend::native>::apply(double* __restrict m,
     linalg_int                                                                   lda,
     linear_solver_type                                                           type,
     void*                                                                        workspace,
-    size_t                                                                       workspace_size)
+    size_t                                                                       workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("determinant/native<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
@@ -158,7 +160,8 @@ float determinant<float, linalg_backend::blas_lapacke>::apply(float* __restrict 
     linalg_int                                                                       lda,
     linear_solver_type                                                               type,
     void*                                                                            workspace,
-    size_t                                                                           workspace_size)
+    size_t                                                                           workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("determinant/blas_lapacke<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
@@ -172,7 +175,8 @@ double determinant<double, linalg_backend::blas_lapacke>::apply(double* __restri
     linalg_int                                                                          lda,
     linear_solver_type                                                                  type,
     void*                                                                               workspace,
-    size_t                                                                              workspace_size)
+    size_t                                                                              workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("determinant/blas_lapacke<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
@@ -204,7 +208,8 @@ float determinant<float, linalg_backend::mkl>::apply(float* __restrict m,
     linalg_int                                                              lda,
     linear_solver_type                                                      type,
     void*                                                                   workspace,
-    size_t                                                                  workspace_size)
+    size_t                                                                  workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("determinant/mkl<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
@@ -218,7 +223,8 @@ double determinant<double, linalg_backend::mkl>::apply(double* __restrict m,
     linalg_int                                                                 lda,
     linear_solver_type                                                         type,
     void*                                                                      workspace,
-    size_t                                                                     workspace_size)
+    size_t                                                                     workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("determinant/mkl<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");

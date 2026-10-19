@@ -73,8 +73,8 @@ inline cusolverDnHandle_t cusolver_handle_for_current_device()
 }
 
 // Binds `stream` (nullptr = the legacy default stream) to `handle` before
-// the caller issues work on it. Every linalg::gpu::* entry point takes an
-// explicit trailing cudaStream_t parameter and routes it through here.
+// the caller issues work on it. Every cuda_blas struct apply() overload takes
+// an explicit trailing stream parameter and routes it through here.
 inline void set_stream(cublasHandle_t handle, cudaStream_t stream)
 {
     if (cublasSetStream(handle, stream) != CUBLAS_STATUS_SUCCESS)
@@ -90,6 +90,16 @@ inline void set_stream(cusolverDnHandle_t handle, cudaStream_t stream)
         LINALG_THROW("cusolverDnSetStream failed");
     }
 }
+
+// Forward declarations for the device-side in-place transpose helper defined in
+// src/matrix_operation/cublas/transpose_cublas.cpp. Every GPU translation unit
+// that needs detail::transpose_device includes this header (already a dependency
+// for the cuBLAS/cuSOLVER handle accessors above), so this is the natural single
+// declaration point — no extra header is required.
+void transpose_device(linalg_long rows, linalg_long columns,
+    float* m, float* scratch, cudaStream_t stream);
+void transpose_device(linalg_long rows, linalg_long columns,
+    double* m, double* scratch, cudaStream_t stream);
 
 }  // namespace detail
 }  // namespace linalg

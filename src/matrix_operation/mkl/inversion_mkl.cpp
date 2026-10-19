@@ -70,7 +70,8 @@ void inversion<float, linalg_backend::mkl>::apply(float* m,
     linalg_int                                                lda,
     linear_solver_type                                        type,
     void*                                                     workspace,
-    size_t                                                    workspace_size)
+    size_t                                                    workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("inversion/mkl<float>");
     check_invert_inputs(m, lda);
@@ -122,7 +123,8 @@ void inversion<double, linalg_backend::mkl>::apply(double* m,
     linalg_int                                                  lda,
     linear_solver_type                                          type,
     void*                                                       workspace,
-    size_t                                                      workspace_size)
+    size_t                                                      workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("inversion/mkl<double>");
     check_invert_inputs(m, lda);

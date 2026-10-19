@@ -43,7 +43,8 @@ template <typename T, linalg_backend Backend> struct least_squares
         T*                                   X,
         linalg_long                          ldx,
         void*                                workspace,
-        size_t                               workspace_size);
+        size_t                               workspace_size,
+        void*                                stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

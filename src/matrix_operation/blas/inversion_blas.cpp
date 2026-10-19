@@ -87,7 +87,8 @@ void inversion<float, linalg_backend::blas_lapacke>::apply(float* m,
     linalg_int                                                         lda,
     linear_solver_type                                                 type,
     void*                                                              workspace,
-    size_t                                                             workspace_size)
+    size_t                                                             workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("inversion/blas_lapacke<float>");
     check_invert_inputs(m, lda);
@@ -143,7 +144,8 @@ void inversion<double, linalg_backend::blas_lapacke>::apply(double* m,
     linalg_int                                                           lda,
     linear_solver_type                                                   type,
     void*                                                                workspace,
-    size_t                                                               workspace_size)
+    size_t                                                               workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("inversion/blas_lapacke<double>");
     check_invert_inputs(m, lda);

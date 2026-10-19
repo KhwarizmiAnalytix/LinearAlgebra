@@ -22,7 +22,7 @@ template <typename T, linalg_backend Backend> struct trace
      * @param[in] lda Row stride of A in elements; must be at least n.
      * @return Sum of A[i * lda + i] for i from zero to n - 1.
      */
-    LINALG_API static T apply(const T* A, linalg_int n, linalg_int lda);
+    LINALG_API static T apply(const T* A, linalg_int n, linalg_int lda, void* stream = nullptr);
 };
 
 }  // namespace linalg

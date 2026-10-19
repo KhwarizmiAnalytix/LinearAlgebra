@@ -39,7 +39,8 @@ template <typename T, linalg_backend Backend> struct symmetric_eigen_backend
         T*                                eigenvectors,
         linalg_int                        ldv,
         void*                             workspace,
-        size_t                            workspace_size);
+        size_t                            workspace_size,
+        void*                             stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.
@@ -91,7 +92,8 @@ template <typename T, linalg_backend Backend> struct general_eigen_backend
         T*                                eigenvectors,
         linalg_int                        ldv,
         void*                             workspace,
-        size_t                            workspace_size);
+        size_t                            workspace_size,
+        void*                             stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

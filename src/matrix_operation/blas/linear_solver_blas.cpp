@@ -80,7 +80,8 @@ void linear_solver<float, linalg_backend::blas_lapacke>::apply(float* m,
     float*                                                             x,
     linear_solver_type                                                 type,
     void*                                                              workspace,
-    size_t                                                             workspace_size)
+    size_t                                                             workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/blas_lapacke<float>");
     check_solver_inputs(m, x, lda);
@@ -130,7 +131,8 @@ void linear_solver<double, linalg_backend::blas_lapacke>::apply(double* m,
     double*                                                              x,
     linear_solver_type                                                   type,
     void*                                                                workspace,
-    size_t                                                               workspace_size)
+    size_t                                                               workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/blas_lapacke<double>");
     check_solver_inputs(m, x, lda);

@@ -151,7 +151,8 @@ void linear_solver<float, linalg_backend::native>::apply(float* __restrict m,
     float* __restrict                                           x,
     linear_solver_type                                          type,
     void* /*workspace*/,
-    size_t /*workspace_size*/)
+    size_t /*workspace_size*/,
+    void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/native<float>");
     check_solver_inputs(m, x, lda);
@@ -165,7 +166,8 @@ void linear_solver<double, linalg_backend::native>::apply(double* __restrict m,
     double* __restrict                                            x,
     linear_solver_type                                            type,
     void* /*workspace*/,
-    size_t /*workspace_size*/)
+    size_t /*workspace_size*/,
+    void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/native<double>");
     check_solver_inputs(m, x, lda);

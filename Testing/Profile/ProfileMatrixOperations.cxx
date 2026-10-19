@@ -45,20 +45,7 @@
 #if LINALG_HAS_CUBLAS
 #include <cuda_runtime_api.h>
 
-#include "include/matrix_operation_gpu/cholesky_decomposition_gpu.h"
-#include "include/matrix_operation_gpu/eigen_gpu.h"
-#include "include/matrix_operation_gpu/inversion_gpu.h"
-#include "include/matrix_operation_gpu/least_squares_gpu.h"
-#include "include/matrix_operation_gpu/linear_solver_gpu.h"
-#include "include/matrix_operation_gpu/lu_decomposition_gpu.h"
-#include "include/matrix_operation_gpu/multiplication_gpu.h"
-#include "include/matrix_operation_gpu/norm_gpu.h"
-#include "include/matrix_operation_gpu/pseudo_inverse_gpu.h"
-#include "include/matrix_operation_gpu/qr_decomposition_gpu.h"
-#include "include/matrix_operation_gpu/rank_gpu.h"
-#include "include/matrix_operation_gpu/svd_decomposition_gpu.h"
-#include "include/matrix_operation_gpu/trace_gpu.h"
-#include "include/matrix_operation_gpu/transpose_gpu.h"
+#include "include/matrix_operation/multiplication_batched.h"
 #endif
 
 namespace
@@ -442,20 +429,23 @@ void profile_gpu_ops(linalg_int n)
 {
     PROFILER_SCOPE("gpu_cublas");
 
+    constexpr linalg_backend CB = linalg_backend::cuda_blas;
+
     const linalg_long rows = static_cast<linalg_long>(n + n / 2);
     const linalg_long cols = static_cast<linalg_long>(n);
 
     // multiplication --------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/multiplication");
-        auto   ha = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        auto   hb = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
-        double* da  = cuda_upload(ha);
-        double* db  = cuda_upload(hb);
-        double* dc  = cuda_alloc<double>(static_cast<std::size_t>(n * n));
+        auto    ha = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto    hb = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
+        double* da = cuda_upload(ha);
+        double* db = cuda_upload(hb);
+        double* dc = cuda_alloc<double>(static_cast<std::size_t>(n * n));
         if (da && db && dc)
         {
-            linalg::gpu::multiplication(false, false, n, n, n, da, n, db, n, dc, n);
+            linalg::multiplication<double, CB>::apply(
+                false, false, n, n, n, da, n, db, n, dc, n, nullptr, 0);
             cudaDeviceSynchronize();
         }
         cudaFree(da);
@@ -463,28 +453,18 @@ void profile_gpu_ops(linalg_int n)
         cudaFree(dc);
     }
 
-    // cholesky_decomposition ------------------------------------------------
+    // cholesky_decomposition — no workspace param; allocates internally -----
     {
         PROFILER_SCOPE("gpu/cholesky_decomposition");
         auto    hA = make_spd_matrix<double>(n);
         double* dA = cuda_upload(hA);
-        int*    d_info = cuda_alloc<int>(1);
-        const auto ws_bytes = linalg::gpu::cholesky_decomposition_workspace_size(
-            static_cast<const double*>(nullptr), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
-        void* d_ws = nullptr;
-        if (ws_bytes > 0)
+        if (dA)
         {
-            cudaMalloc(&d_ws, ws_bytes);
-        }
-        if (dA && d_info)
-        {
-            linalg::gpu::cholesky_decomposition(
-                dA, n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, d_info, d_ws, ws_bytes);
+            linalg::cholesky_decomposition<double, CB>::apply(
+                dA, n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
-        cudaFree(d_info);
-        cudaFree(d_ws);
     }
 
     // lu_decomposition ------------------------------------------------------
@@ -492,130 +472,121 @@ void profile_gpu_ops(linalg_int n)
         PROFILER_SCOPE("gpu/lu_decomposition");
         auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         double* dA = cuda_upload(hA);
-        int*    d_pivot = cuda_alloc<int>(static_cast<std::size_t>(n));
-        int*    d_info  = cuda_alloc<int>(1);
         const auto ws_bytes =
-            linalg::gpu::lu_decomposition_workspace_size(static_cast<const double*>(nullptr), n);
+            linalg::lu_decomposition<double, CB>::workspace_size(n);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_pivot && d_info)
+        if (dA)
         {
-            linalg::gpu::lu_decomposition(dA, n, d_pivot, d_info, d_ws, ws_bytes);
+            linalg::lu_decomposition<double, CB>::apply(dA, n, nullptr, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
-        cudaFree(d_pivot);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 
     // qr_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/qr_decomposition");
-        auto    hA    = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA    = cuda_upload(hA);
-        double* d_Q   = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
-        double* d_R   = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
-        int*    d_info = cuda_alloc<int>(1);
+        auto    hA  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double* dA  = cuda_upload(hA);
+        double* d_Q = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
+        double* d_R = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
         const auto ws_bytes =
-            linalg::gpu::qr_decomposition_workspace_size(static_cast<const double*>(nullptr), rows, cols);
+            linalg::qr_decomposition<double, CB>::workspace_size(rows, cols);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_Q && d_R && d_info)
+        if (dA && d_Q && d_R)
         {
-            linalg::gpu::qr_decomposition(rows, cols, dA, cols, d_Q, rows, d_R, cols, d_info, d_ws, ws_bytes);
+            linalg::qr_decomposition<double, CB>::apply(
+                rows, cols, dA, cols, d_Q, rows, d_R, cols, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(d_Q);
         cudaFree(d_R);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 
     // svd_decomposition -----------------------------------------------------
     {
         PROFILER_SCOPE("gpu/svd_decomposition");
-        auto    hA  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA  = cuda_upload(hA);
-        double* d_S = cuda_alloc<double>(static_cast<std::size_t>(cols));
-        double* d_U = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
+        auto    hA   = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double* dA   = cuda_upload(hA);
+        double* d_S  = cuda_alloc<double>(static_cast<std::size_t>(cols));
+        double* d_U  = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
         double* d_Vt = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
-        int*    d_info = cuda_alloc<int>(1);
         const auto ws_bytes =
-            linalg::gpu::svd_decomposition_workspace_size(static_cast<const double*>(nullptr), rows, cols);
+            linalg::svd_decomposition<double, CB>::workspace_size(rows, cols);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_S && d_U && d_Vt && d_info)
+        if (dA && d_S && d_U && d_Vt)
         {
-            linalg::gpu::svd_decomposition(rows, cols, dA, cols, d_S, d_U, rows, d_Vt, cols, d_info, d_ws, ws_bytes);
+            linalg::svd_decomposition<double, CB>::apply(
+                rows, cols, dA, cols, d_S, d_U, rows, d_Vt, cols, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(d_S);
         cudaFree(d_U);
         cudaFree(d_Vt);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 
     // symmetric_eigenvalue_decomposition ------------------------------------
     {
         PROFILER_SCOPE("gpu/eigen_symmetric");
-        auto    hA  = make_spd_matrix<double>(n);
-        double* dA  = cuda_upload(hA);
-        double* d_ev = cuda_alloc<double>(static_cast<std::size_t>(n));
+        auto    hA     = make_spd_matrix<double>(n);
+        double* dA     = cuda_upload(hA);
+        double* d_ev   = cuda_alloc<double>(static_cast<std::size_t>(n));
         double* d_vecs = cuda_alloc<double>(static_cast<std::size_t>(n * n));
-        int*    d_info = cuda_alloc<int>(1);
-        const auto ws_bytes = linalg::gpu::symmetric_eigenvalue_decomposition_workspace_size(
-            static_cast<const double*>(nullptr), n);
+        const auto ws_bytes =
+            linalg::symmetric_eigen_backend<double, CB>::workspace_size(n);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_ev && d_vecs && d_info)
+        if (dA && d_ev && d_vecs)
         {
-            linalg::gpu::symmetric_eigenvalue_decomposition(
-                dA, n, n, d_ev, d_vecs, n, d_info, d_ws, ws_bytes);
+            linalg::symmetric_eigen_backend<double, CB>::apply(
+                dA, n, n, d_ev, d_vecs, n, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(d_ev);
         cudaFree(d_vecs);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 
-    // matrix_invert ---------------------------------------------------------
+    // inversion -------------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/inversion");
         auto    hA = make_spd_matrix<double>(n);
         double* dA = cuda_upload(hA);
-        int*    d_info = cuda_alloc<int>(1);
-        const auto ws_bytes = linalg::gpu::matrix_invert_workspace_size(
-            static_cast<const double*>(nullptr), n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        const auto ws_bytes = linalg::inversion<double, CB>::workspace_size(
+            n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && d_info)
+        if (dA)
         {
-            linalg::gpu::matrix_invert(dA, n, d_info, linalg::linear_solver_type::LU_LINEAR_SOLVER, d_ws, ws_bytes);
+            linalg::inversion<double, CB>::apply(
+                dA, nullptr, n, linalg::linear_solver_type::LU_LINEAR_SOLVER, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 
@@ -626,35 +597,34 @@ void profile_gpu_ops(linalg_int n)
         auto    hb = make_random_matrix<double>(static_cast<std::size_t>(n), 1, 77);
         double* dA = cuda_upload(hA);
         double* db = cuda_upload(hb);
-        int*    d_info = cuda_alloc<int>(1);
-        const auto ws_bytes = linalg::gpu::linear_solver_workspace_size(
-            static_cast<const double*>(nullptr), n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
+        const auto ws_bytes = linalg::linear_solver<double, CB>::workspace_size(
+            n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
         }
-        if (dA && db && d_info)
+        if (dA && db)
         {
-            linalg::gpu::linear_solver(dA, n, db, linalg::linear_solver_type::LU_LINEAR_SOLVER, d_info, d_ws, ws_bytes);
+            linalg::linear_solver<double, CB>::apply(
+                dA, nullptr, n, db, linalg::linear_solver_type::LU_LINEAR_SOLVER, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(db);
-        cudaFree(d_info);
         cudaFree(d_ws);
     }
 
     // least_squares ---------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/least_squares");
-        auto    hA = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        auto    hb = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 55);
-        double* dA = cuda_upload(hA);
-        double* db = cuda_upload(hb);
+        auto    hA  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        auto    hb  = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 55);
+        double* dA  = cuda_upload(hA);
+        double* db  = cuda_upload(hb);
         double* d_X = cuda_alloc<double>(static_cast<std::size_t>(cols));
-        const auto ws_bytes = linalg::gpu::least_squares_solve_workspace_size(
-            static_cast<const double*>(nullptr), rows, cols);
+        const auto ws_bytes =
+            linalg::least_squares<double, CB>::workspace_size(rows, cols);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -662,7 +632,8 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA && db && d_X)
         {
-            linalg::gpu::least_squares_solve(rows, cols, linalg_long(1), dA, cols, db, linalg_long(1), d_X, cols, d_ws, ws_bytes);
+            linalg::least_squares<double, CB>::apply(
+                rows, cols, linalg_long(1), dA, cols, db, linalg_long(1), d_X, cols, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -674,11 +645,11 @@ void profile_gpu_ops(linalg_int n)
     // pseudo_inverse --------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/pseudo_inverse");
-        auto    hA      = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA      = cuda_upload(hA);
+        auto    hA       = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double* dA       = cuda_upload(hA);
         double* d_result = cuda_alloc<double>(static_cast<std::size_t>(cols * rows));
         const auto ws_bytes =
-            linalg::gpu::pseudo_inverse_workspace_size(static_cast<const double*>(nullptr), rows, cols);
+            linalg::pseudo_inverse<double, CB>::workspace_size(rows, cols);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -686,7 +657,8 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA && d_result)
         {
-            linalg::gpu::pseudo_inverse(rows, cols, dA, cols, d_result, rows, double(0), d_ws, ws_bytes);
+            linalg::pseudo_inverse<double, CB>::apply(
+                rows, cols, dA, cols, d_result, rows, double(0), d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -699,8 +671,8 @@ void profile_gpu_ops(linalg_int n)
         PROFILER_SCOPE("gpu/norm_frobenius");
         auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         double* dA = cuda_upload(hA);
-        const auto ws_bytes = linalg::gpu::matrix_norm_workspace_size(
-            static_cast<const double*>(nullptr), n, n, linalg::norm_type::FROBENIUS);
+        const auto ws_bytes = linalg::norm<double, CB>::workspace_size(
+            n, n, linalg::norm_type::FROBENIUS);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -708,32 +680,25 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA)
         {
-            linalg::gpu::norm(dA, n, n, n, linalg::norm_type::FROBENIUS, d_ws, ws_bytes);
+            linalg::norm<double, CB>::apply(
+                dA, n, n, n, linalg::norm_type::FROBENIUS, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
         cudaFree(d_ws);
     }
 
-    // trace -----------------------------------------------------------------
+    // trace — no workspace param; allocates internally ---------------------
     {
         PROFILER_SCOPE("gpu/trace");
         auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         double* dA = cuda_upload(hA);
-        const auto ws_bytes =
-            linalg::gpu::matrix_trace_workspace_size(static_cast<const double*>(nullptr));
-        void* d_ws = nullptr;
-        if (ws_bytes > 0)
-        {
-            cudaMalloc(&d_ws, ws_bytes);
-        }
         if (dA)
         {
-            linalg::gpu::trace(dA, n, n, d_ws, ws_bytes);
+            linalg::trace<double, CB>::apply(dA, n, n, nullptr);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
-        cudaFree(d_ws);
     }
 
     // transpose -------------------------------------------------------------
@@ -741,8 +706,7 @@ void profile_gpu_ops(linalg_int n)
         PROFILER_SCOPE("gpu/transpose");
         auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         double* dA = cuda_upload(hA);
-        const auto ws_bytes = linalg::gpu::matrix_transpose_workspace_size(
-            static_cast<const double*>(nullptr), n, n);
+        const auto ws_bytes = linalg::transpose<double, CB>::workspace_size(n, n);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -750,7 +714,7 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA)
         {
-            linalg::gpu::transpose(n, n, dA, d_ws, ws_bytes);
+            linalg::transpose<double, CB>::apply(n, n, dA, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);
@@ -762,8 +726,8 @@ void profile_gpu_ops(linalg_int n)
         PROFILER_SCOPE("gpu/rank");
         auto    hA = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         double* dA = cuda_upload(hA);
-        const auto ws_bytes = linalg::gpu::matrix_rank_workspace_size(
-            static_cast<const double*>(nullptr), rows, cols);
+        const auto ws_bytes =
+            linalg::rank<double, CB>::workspace_size(rows, cols);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -771,7 +735,7 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA)
         {
-            linalg::gpu::rank(dA, rows, cols, cols, double(0), d_ws, ws_bytes);
+            linalg::rank<double, CB>::apply(dA, rows, cols, cols, double(0), d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);

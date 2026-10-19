@@ -51,7 +51,7 @@ static void check_cholesky_type(cholesky_decomposition_enum type)
 
 template <>
 bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
-    float* C, linalg_int lda, cholesky_decomposition_enum type)
+    float* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/blas_lapacke<float>");
     detail::check_cholesky_inputs(C, lda);
@@ -62,7 +62,7 @@ bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
-    double* C, linalg_int lda, cholesky_decomposition_enum type)
+    double* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/blas_lapacke<double>");
     detail::check_cholesky_inputs(C, lda);

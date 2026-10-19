@@ -46,9 +46,10 @@ template <typename T, linalg_backend Backend> struct norm
         linalg_long                    rows,
         linalg_long                    columns,
         linalg_long                    lda,
-        norm_type               type,
+        norm_type                      type,
         void*                          workspace,
-        size_t                         workspace_size);
+        size_t                         workspace_size,
+        void*                          stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

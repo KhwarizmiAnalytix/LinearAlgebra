@@ -29,7 +29,7 @@ static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 // caller's pivot buffer is passed straight through to getrf.
 template <>
 bool lu_decomposition<float, linalg_backend::mkl>::apply(
-    float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+    float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/mkl<float>");
     check_lu_inputs(m, pivot, lda);
@@ -38,7 +38,7 @@ bool lu_decomposition<float, linalg_backend::mkl>::apply(
 
 template <>
 bool lu_decomposition<double, linalg_backend::mkl>::apply(
-    double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/)
+    double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/mkl<double>");
     check_lu_inputs(m, pivot, lda);

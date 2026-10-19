@@ -758,7 +758,8 @@ void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
     float* __restrict                                                   VT,
     linalg_long                                                          ldv,
     void*                                                                workspace,
-    size_t                                                               workspace_size)
+    size_t                                                               workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/native<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
@@ -776,7 +777,8 @@ void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
     double* __restrict                                                   VT,
     linalg_long                                                           ldv,
     void*                                                                 workspace,
-    size_t                                                                workspace_size)
+    size_t                                                                workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/native<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);

@@ -3,10 +3,10 @@
  *
  * `linalg::detail::workspace_arena` has no CUDA dependency (see
  * include/common/workspace_arena.h) and is shared verbatim between the CPU
- * and GPU matrix_operation backends; this header just keeps every existing
- * `#include "include/common/cuda_workspace.h"` in src/matrix_operation_gpu/
- * and include/matrix_operation_gpu/ working, gated the same way every other
- * GPU-only header in this codebase is.
+ * and GPU matrix_operation backends. This header is included by every
+ * src/matrix_operation/cublas/ translation unit that needs workspace
+ * arithmetic, gated behind LINALG_HAS_CUBLAS like every other GPU-only
+ * header in this codebase.
  */
 #pragma once
 

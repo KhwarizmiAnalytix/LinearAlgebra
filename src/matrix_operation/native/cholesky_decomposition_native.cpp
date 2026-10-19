@@ -257,7 +257,7 @@ bool cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decompositio
 
 template <>
 bool cholesky_decomposition<float, linalg_backend::native>::apply(
-    float* C, linalg_int lda, cholesky_decomposition_enum type)
+    float* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/native<float>");
     detail::check_cholesky_inputs(C, lda);
@@ -266,7 +266,7 @@ bool cholesky_decomposition<float, linalg_backend::native>::apply(
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::native>::apply(
-    double* C, linalg_int lda, cholesky_decomposition_enum type)
+    double* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/native<double>");
     detail::check_cholesky_inputs(C, lda);

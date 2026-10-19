@@ -162,7 +162,8 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long ro
     float*                                                              R,
     linalg_long                                                         ldr,
     void*                                                               workspace,
-    size_t                                                              workspace_size)
+    size_t                                                              workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("qr_decomposition/blas_lapacke<float>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);
@@ -215,7 +216,8 @@ void qr_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long r
     double*                                                              R,
     linalg_long                                                          ldr,
     void*                                                                workspace,
-    size_t                                                               workspace_size)
+    size_t                                                               workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("qr_decomposition/blas_lapacke<double>");
     check_qr_inputs(A, Q, R, rows, columns, lda, ldq, ldr);

@@ -600,7 +600,8 @@ void exponential<float, linalg_backend::native>::apply(const float* A,
     float*                                                          result,
     linalg_int                                                      ldc,
     void*                                                           workspace,
-    size_t                                                          workspace_size)
+    size_t                                                          workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("exponential/native<float>");
     LINALG_CHECK(
@@ -617,7 +618,8 @@ void exponential<double, linalg_backend::native>::apply(const double* A,
     double*                                                           result,
     linalg_int                                                        ldc,
     void*                                                             workspace,
-    size_t                                                            workspace_size)
+    size_t                                                            workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("exponential/native<double>");
     LINALG_CHECK(
@@ -646,7 +648,8 @@ void exponential<float, linalg_backend::blas_lapacke>::apply(const float* A,
     float*                                                                       result,
     linalg_int                                                                   ldc,
     void*                                                                        workspace,
-    size_t                                                                       workspace_size)
+    size_t                                                                       workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("exponential/blas_lapacke<float>");
     LINALG_CHECK(
@@ -663,7 +666,8 @@ void exponential<double, linalg_backend::blas_lapacke>::apply(const double* A,
     double*                                                                       result,
     linalg_int                                                                    ldc,
     void*                                                                         workspace,
-    size_t                                                                        workspace_size)
+    size_t                                                                        workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("exponential/blas_lapacke<double>");
     LINALG_CHECK(
@@ -696,7 +700,8 @@ void exponential<float, linalg_backend::mkl>::apply(const float* A,
     float*                                                         result,
     linalg_int                                                     ldc,
     void*                                                          workspace,
-    size_t                                                         workspace_size)
+    size_t                                                         workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("exponential/mkl<float>");
     LINALG_CHECK(
@@ -713,7 +718,8 @@ void exponential<double, linalg_backend::mkl>::apply(const double* A,
     double*                                                         result,
     linalg_int                                                      ldc,
     void*                                                           workspace,
-    size_t                                                          workspace_size)
+    size_t                                                          workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("exponential/mkl<double>");
     LINALG_CHECK(
