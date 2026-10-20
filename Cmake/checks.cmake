@@ -9,6 +9,40 @@
 # detection with cached results - Efficient compiler capability validation - Streamlined dependency
 # checking
 
+# Validate compiler minimums on every configure, including when feature checks are cached.
+# https://gcc.gnu.org/gcc-7/changes.html
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.1)
+    message(
+        FATAL_ERROR "GCC 7.1 or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+    )
+endif()
+
+# https://clang.llvm.org/cxx_status.html#cxx17
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)
+    message(
+        FATAL_ERROR
+            "LLVM Clang 5.0 or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+    )
+endif()
+
+# AppleClang 10 / Xcode 10 adds the C++17 <optional>, <any>, and <variant> headers.
+# https://developer.apple.com/documentation/xcode-release-notes/xcode-10-release-notes/
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
+    message(
+        FATAL_ERROR
+            "Apple Clang 10.0 (Xcode 10) or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+    )
+endif()
+
+# MSVC 19.14 / VS 2017 15.7 also supports /Zc:__cplusplus, used by platform.cmake.
+# https://learn.microsoft.com/en-us/cpp/overview/what-s-new-for-cpp-2017
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.14)
+    message(
+        FATAL_ERROR
+            "MSVC 19.14 (Visual Studio 2017 15.7) or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+    )
+endif()
+
 # Guard against multiple inclusions for performance
 if(TEMP_CHECKS_CONFIGURED)
   return()
@@ -53,78 +87,35 @@ if(NOT DEFINED TEMP_PLATFORM_DETECTED)
 endif()
 
 # =============================================================================
-# Compiler Version
-# Validation (Updated for Modern Requirements)
-
-# Updated minimum compiler versions for C++17 support and modern optimizations
-set(TEMP_MIN_GCC_VERSION "7.0")
-set(TEMP_MIN_CLANG_VERSION "5.0")
-set(TEMP_MIN_APPLE_CLANG_VERSION "9.0")
-set(TEMP_MIN_MSVC_VERSION "19.14") # VS 2017 15.7
-set(TEMP_MIN_INTEL_VERSION "18.0")
+# Compiler Detection
+# Version minimums are enforced above.
 
 set(TEMP_COMPILER_ID ${CMAKE_CXX_COMPILER_ID} CACHE INTERNAL "Compiler ID")
 mark_as_advanced(TEMP_COMPILER_ID)
 
-# GCC version check
+# GCC
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${TEMP_MIN_GCC_VERSION})
-    message(
-      FATAL_ERROR
-        "XSigma requires GCC ${TEMP_MIN_GCC_VERSION} or later for C++17 support and modern optimizations. Found: ${CMAKE_CXX_COMPILER_VERSION}"
-    )
-  endif()
   set(TEMP_COMPILER_GCC TRUE CACHE INTERNAL "GCC compiler detected")
   message(STATUS "XSigma: GCC ${CMAKE_CXX_COMPILER_VERSION} validated")
   set(TEMP_COMPILER_ID "gcc" CACHE INTERNAL "Compiler ID")
 
-  # Clang version check
+  # Clang
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${TEMP_MIN_CLANG_VERSION})
-    message(
-      FATAL_ERROR
-        "XSigma requires Clang ${TEMP_MIN_CLANG_VERSION} or later for C++17 support and modern optimizations. Found: ${CMAKE_CXX_COMPILER_VERSION}"
-    )
-  endif()
   set(TEMP_COMPILER_CLANG TRUE CACHE INTERNAL "Clang compiler detected")
   message(STATUS "XSigma: Clang ${CMAKE_CXX_COMPILER_VERSION} validated")
   set(TEMP_COMPILER_ID "clang" CACHE INTERNAL "Compiler ID")
 
-  # Apple Clang version check
+  # Apple Clang
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${TEMP_MIN_APPLE_CLANG_VERSION})
-    message(
-      FATAL_ERROR
-        "XSigma requires Apple Clang ${TEMP_MIN_APPLE_CLANG_VERSION} or later for C++17 support and modern optimizations. Found: ${CMAKE_CXX_COMPILER_VERSION}"
-    )
-  endif()
   set(TEMP_COMPILER_APPLE_CLANG TRUE CACHE INTERNAL "Apple Clang compiler detected")
   message(STATUS "XSigma: Apple Clang ${CMAKE_CXX_COMPILER_VERSION} validated")
   set(TEMP_COMPILER_ID "clang" CACHE INTERNAL "Compiler ID")
 
-  # MSVC version check
+  # MSVC
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${TEMP_MIN_MSVC_VERSION})
-    message(
-      FATAL_ERROR
-        "XSigma requires MSVC ${TEMP_MIN_MSVC_VERSION} or later (Visual Studio 2017 15.7+) for C++17 support and modern optimizations. Found: ${CMAKE_CXX_COMPILER_VERSION}"
-    )
-  endif()
   set(TEMP_COMPILER_MSVC TRUE CACHE INTERNAL "MSVC compiler detected")
   message(STATUS "XSigma: MSVC ${CMAKE_CXX_COMPILER_VERSION} validated")
   set(TEMP_COMPILER_ID "msvc" CACHE INTERNAL "Compiler ID")
-
-  # Intel C++ version check
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${TEMP_MIN_INTEL_VERSION})
-    message(
-      FATAL_ERROR
-        "XSigma requires Intel C++ ${TEMP_MIN_INTEL_VERSION} or later for C++17 support and modern optimizations. Found: ${CMAKE_CXX_COMPILER_VERSION}"
-    )
-  endif()
-  set(TEMP_COMPILER_INTEL TRUE CACHE INTERNAL "Intel compiler detected")
-  message(STATUS "XSigma: Intel C++ ${CMAKE_CXX_COMPILER_VERSION} validated")
-  set(TEMP_COMPILER_ID "intel" CACHE INTERNAL "Compiler ID")
 
 else()
   message(WARNING "XSigma: Unknown compiler '${CMAKE_CXX_COMPILER_ID}'. Build may fail.")

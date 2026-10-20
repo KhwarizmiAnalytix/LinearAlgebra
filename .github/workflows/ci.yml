@@ -49,6 +49,126 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure --no-tests=error
 
+  cmake-minimum-linux:
+    name: CMake minimum (${{ matrix.compiler }} ${{ matrix.version }}, C++17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            id: GNU
+            version: '7.1'
+          - compiler: clang
+            id: Clang
+            version: '5.0'
+    env:
+      MINIMUM_COMPILER: ${{ matrix.compiler }}
+      MINIMUM_COMPILER_ID: ${{ matrix.id }}
+      MINIMUM_COMPILER_VERSION: ${{ matrix.version }}
+    steps:
+      # Checkout on the host: JavaScript actions need a newer libc than this image.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download pinned build tools
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/minimum-tools/cmake"
+          curl -fsSL --retry 3 \
+            https://github.com/Kitware/CMake/releases/download/v3.27.9/cmake-3.27.9-linux-x86_64.tar.gz \
+            -o "$RUNNER_TEMP/cmake.tar.gz"
+          tar -xzf "$RUNNER_TEMP/cmake.tar.gz" --strip-components=1 \
+            -C "$RUNNER_TEMP/minimum-tools/cmake"
+          if [[ "$MINIMUM_COMPILER" == clang ]]; then
+            mkdir -p "$RUNNER_TEMP/minimum-tools/clang"
+            curl -fsSL --retry 3 \
+              https://releases.llvm.org/5.0.0/clang+llvm-5.0.0-x86_64-linux-gnu-debian8.tar.xz \
+              -o "$RUNNER_TEMP/clang.tar.xz"
+            tar -xJf "$RUNNER_TEMP/clang.tar.xz" --strip-components=1 \
+              -C "$RUNNER_TEMP/minimum-tools/clang"
+          fi
+
+      - name: Configure, build, and test the minimum compiler
+        shell: bash
+        run: |
+          docker run --rm -i --user "$(id -u):$(id -g)" \
+            -v "$PWD:/src" -v "$RUNNER_TEMP/minimum-tools:/ci-tools:ro" -w /src \
+            -e MINIMUM_COMPILER -e MINIMUM_COMPILER_ID -e MINIMUM_COMPILER_VERSION \
+            gcc:7.1.0 bash -euo pipefail <<'BASH'
+              export PATH="/ci-tools/cmake/bin:$PATH"
+              if [[ "$MINIMUM_COMPILER" == clang ]]; then
+                export CC=/ci-tools/clang/bin/clang CXX=/ci-tools/clang/bin/clang++
+                export CFLAGS=--gcc-toolchain=/usr/local CXXFLAGS=--gcc-toolchain=/usr/local
+              else
+                export CC=gcc CXX=g++
+              fi
+              cmake -S . -B build-minimum -G "Unix Makefiles" \
+                -C .github/cmake/minimum-options.cmake \
+                -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="$PWD/.github/cmake/check-compiler.cmake" \
+                -DLINALG_CI_COMPILER_ID="$MINIMUM_COMPILER_ID" \
+                -DLINALG_CI_COMPILER_VERSION="$MINIMUM_COMPILER_VERSION"
+              cmake --build build-minimum --parallel 4
+              ctest --test-dir build-minimum --output-on-failure --no-tests=error
+          BASH
+
+  cmake-minimum-appleclang:
+    name: CMake minimum (AppleClang 10.0, C++17)
+    # Enable after registering an Intel Mac with AppleClang 10.0 selected by xcrun.
+    if: github.event_name == 'push' && vars.LINALG_APPLECLANG_10_CI_ENABLED == 'true'
+    runs-on: [self-hosted, macOS, X64, appleclang-10]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build-minimum -G Ninja \
+            -C .github/cmake/minimum-options.cmake \
+            -DCMAKE_C_COMPILER="$(xcrun --find clang)" \
+            -DCMAKE_CXX_COMPILER="$(xcrun --find clang++)" \
+            -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="$PWD/.github/cmake/check-compiler.cmake" \
+            -DLINALG_CI_COMPILER_ID=AppleClang -DLINALG_CI_COMPILER_VERSION=10.0
+
+      - name: Build
+        run: cmake --build build-minimum --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build-minimum --output-on-failure --no-tests=error
+
+  cmake-minimum-msvc:
+    name: CMake minimum (MSVC 19.14, C++17)
+    # The runner supplies LINALG_MSVC_1914_VCVARSALL, pointing to vcvarsall.bat.
+    if: github.event_name == 'push' && vars.LINALG_MSVC_1914_CI_ENABLED == 'true'
+    runs-on: [self-hosted, Windows, X64, msvc-19.14]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure, build, and test
+        shell: cmd
+        run: |
+          if not defined LINALG_MSVC_1914_VCVARSALL exit /b 1
+          call "%LINALG_MSVC_1914_VCVARSALL%" x64 -vcvars_ver=14.14
+          if errorlevel 1 exit /b 1
+          cmake -S . -B build-minimum -G Ninja ^
+            -C .github/cmake/minimum-options.cmake ^
+            -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ^
+            -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="%CD%/.github/cmake/check-compiler.cmake" ^
+            -DLINALG_CI_COMPILER_ID=MSVC -DLINALG_CI_COMPILER_VERSION=19.14
+          if errorlevel 1 exit /b 1
+          cmake --build build-minimum --parallel 4
+          if errorlevel 1 exit /b 1
+          ctest --test-dir build-minimum --output-on-failure --no-tests=error
+          if errorlevel 1 exit /b 1
+
   cmake-mkl:
     name: CMake (Linux, Intel MKL backend)
     runs-on: ubuntu-latest

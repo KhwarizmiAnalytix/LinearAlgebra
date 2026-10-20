@@ -1,21 +1,3 @@
-# Make sure Crun is linked in with the native compiler; it is not used by default for shared
-# libraries and is required for things like Java to work.
-if(CMAKE_SYSTEM MATCHES "SunOS.*")
-  if(NOT CMAKE_COMPILER_IS_GNUCXX)
-    message(STATUS "SunOS + Sun CC: searching for Crun/Cstd runtime libraries")
-    find_library(PROJECT_SUNCC_CRUN_LIBRARY Crun /opt/SUNWspro/lib)
-    if(PROJECT_SUNCC_CRUN_LIBRARY)
-      message(STATUS "  Linking Crun: ${PROJECT_SUNCC_CRUN_LIBRARY}")
-      link_libraries(${PROJECT_SUNCC_CRUN_LIBRARY})
-    endif()
-    find_library(PROJECT_SUNCC_CSTD_LIBRARY Cstd /opt/SUNWspro/lib)
-    if(PROJECT_SUNCC_CSTD_LIBRARY)
-      message(STATUS "  Linking Cstd: ${PROJECT_SUNCC_CSTD_LIBRARY}")
-      link_libraries(${PROJECT_SUNCC_CSTD_LIBRARY})
-    endif()
-  endif()
-endif()
-
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   message(STATUS "Emscripten: enabling WebAssembly exception handling (-fwasm-exceptions)")
   # Enable exceptions because XSigma and third party code rely on C++ exceptions. Allow C++ to
@@ -61,98 +43,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   endif()
 endif()
 
-# A GCC compiler.
-if(CMAKE_COMPILER_IS_GNUCXX)
-  message(STATUS "GCC compiler detected")
-  if(WIN32)
-    # The platform is gcc on cygwin.
-    message(STATUS "  GCC/Cygwin: adding -mwin32, linking gdi32")
-    string(APPEND CMAKE_CXX_FLAGS " -mwin32")
-    string(APPEND CMAKE_C_FLAGS " -mwin32")
-    link_libraries(-lgdi32)
-  endif()
-  if(MINGW)
-    message(STATUS "  MinGW: adding -mthreads")
-    string(APPEND CMAKE_CXX_FLAGS " -mthreads")
-    string(APPEND CMAKE_C_FLAGS " -mthreads")
-    string(APPEND CMAKE_EXE_LINKER_FLAGS " -mthreads")
-    string(APPEND CMAKE_SHARED_LINKER_FLAGS " -mthreads")
-    string(APPEND CMAKE_MODULE_LINKER_FLAGS " -mthreads")
-  endif()
-  if(CMAKE_SYSTEM MATCHES "SunOS.*")
-    # Disable warnings that occur in X11 headers.
-    if(DART_ROOT AND BUILD_TESTING)
-      message(STATUS "  GCC/SunOS: suppressing unknown-pragmas warnings for X11 headers")
-      string(APPEND CMAKE_CXX_FLAGS " -Wno-unknown-pragmas")
-      string(APPEND CMAKE_C_FLAGS " -Wno-unknown-pragmas")
-    endif()
-  endif()
-else()
-  if(CMAKE_ANSI_CFLAGS)
-    message(STATUS "Non-GCC: appending ANSI C flags: ${CMAKE_ANSI_CFLAGS}")
-    string(APPEND CMAKE_C_FLAGS " ${CMAKE_ANSI_CFLAGS}")
-  endif()
-  if(CMAKE_SYSTEM MATCHES "OSF1-V.*")
-    message(STATUS "OSF1: adding -timplicit_local -no_implicit_include")
-    string(APPEND CMAKE_CXX_FLAGS " -timplicit_local -no_implicit_include")
-  endif()
-  if(CMAKE_SYSTEM MATCHES "AIX.*")
-    message(
-      STATUS "AIX: enabling RTTI (-qrtti=all), suppressing duplicate symbol warnings (-bhalt:5)"
-    )
-    # allow t-ypeid and d-ynamic_cast usage (normally off by default on xlC)
-    string(APPEND CMAKE_CXX_FLAGS " -qrtti=all")
-    # silence duplicate symbol warnings on AIX
-    string(APPEND CMAKE_EXE_LINKER_FLAGS " -bhalt:5")
-    string(APPEND CMAKE_SHARED_LINKER_FLAGS " -bhalt:5")
-    string(APPEND CMAKE_MODULE_LINKER_FLAGS " -bhalt:5")
-  endif()
-  if(CMAKE_SYSTEM MATCHES "HP-UX.*")
-    message(STATUS "HP-UX: adding compatibility warning flags (+W2111 +W2236 +W4276)")
-    string(APPEND CMAKE_C_FLAGS " +W2111 +W2236 +W4276")
-    string(APPEND CMAKE_CXX_FLAGS " +W2111 +W2236 +W4276")
-  endif()
-endif()
-
-# figure out whether the compiler might be the Intel compiler
-set(_MAY_BE_INTEL_COMPILER FALSE)
-if(UNIX)
-  if(CMAKE_CXX_COMPILER_ID)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
-      set(_MAY_BE_INTEL_COMPILER TRUE)
-    endif()
-  else()
-    if(NOT CMAKE_COMPILER_IS_GNUCXX)
-      set(_MAY_BE_INTEL_COMPILER TRUE)
-    endif()
-  endif()
-endif()
-
-# if so, test whether -i_dynamic is needed
-if(_MAY_BE_INTEL_COMPILER)
-  message(STATUS "Intel compiler detected: testing whether -i_dynamic is required")
-  include(${CMAKE_CURRENT_LIST_DIR}/TestNO_ICC_IDYNAMIC_NEEDED.cmake)
-  testno_icc_idynamic_needed(NO_ICC_IDYNAMIC_NEEDED ${CMAKE_CURRENT_LIST_DIR})
-  if(NO_ICC_IDYNAMIC_NEEDED)
-    message(STATUS "  Intel compiler: -i_dynamic not needed")
-  else()
-    message(STATUS "  Intel compiler: adding -i_dynamic")
-    string(APPEND CMAKE_CXX_FLAGS " -i_dynamic")
-  endif()
-endif()
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "PGI")
-  message(
-    STATUS
-      "PGI compiler: suppressing diagnostic 236 (constant value asserts) and 381 (redundant semicolons)"
-  )
-  # --diag_suppress=236 is for constant value asserts used for error handling This can be restricted
-  # to the implementation and doesn't need to propagate
-  string(APPEND CMAKE_CXX_FLAGS " --diag_suppress=236")
-
-  # --diag_suppress=381 is for redundant semi-colons used in macros This needs to propagate to
-  # anything that includes XSigma headers
-  string(APPEND CMAKE_CXX_FLAGS " --diag_suppress=381")
+# MinGW GCC threading support.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND MINGW)
+  message(STATUS "MinGW: adding -mthreads")
+  string(APPEND CMAKE_CXX_FLAGS " -mthreads")
+  string(APPEND CMAKE_C_FLAGS " -mthreads")
+  string(APPEND CMAKE_EXE_LINKER_FLAGS " -mthreads")
+  string(APPEND CMAKE_SHARED_LINKER_FLAGS " -mthreads")
+  string(APPEND CMAKE_MODULE_LINKER_FLAGS " -mthreads")
 endif()
 
 if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"

@@ -122,6 +122,26 @@ backend's design and known restrictions.
 
 ## CMake options
 
+C++17 is the default language standard. The compiler version checks require
+GCC 7.1+, LLVM Clang 5.0+, AppleClang 10.0+ (Xcode 10), or MSVC 19.14+
+(Visual Studio 2017 15.7). Configuration also probes C++17 language and standard
+library features. Dependencies and C++20/C++23 builds can require newer
+toolchains.
+
+CI builds and tests GCC 7.1.0 and Clang 5.0.0 in a pinned Linux container.
+The minimum-compiler jobs select C++17 for both LinearAlgebra and Logging,
+use bundled dependencies and scalar SIMD, and disable optional enum reflection
+(which requires GCC 9+) and auto-detected cpuinfo/Profiler packages. Each job
+checks CMake's detected compiler ID and version to catch toolchain fallback.
+
+AppleClang 10.0 and MSVC 19.14 jobs run on opt-in self-hosted runners for pushes
+to `main`. Install CMake 3.24+ and Ninja, then configure:
+
+| Compiler | Runner labels | Repository variable set to `true` | Runner setup |
+|---|---|---|---|
+| AppleClang 10.0 | `self-hosted`, `macOS`, `X64`, `appleclang-10` | `LINALG_APPLECLANG_10_CI_ENABLED` | Select the Xcode 10 toolchain through `xcode-select` or `DEVELOPER_DIR` so `xcrun` finds AppleClang 10.0.x. |
+| MSVC 19.14 | `self-hosted`, `Windows`, `X64`, `msvc-19.14` | `LINALG_MSVC_1914_CI_ENABLED` | Install the VS 2017 15.7 toolchain; set runner environment variable `LINALG_MSVC_1914_VCVARSALL` to its `vcvarsall.bat` path. |
+
 | CMake variable | Default | Summary |
 |-----------------|---------|---------|
 | `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigen); least_squares/pseudo_inverse/rank/norm/trace compose on top of svd_decomposition and pick up the same backend transitively |
