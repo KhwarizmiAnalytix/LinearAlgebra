@@ -22,7 +22,7 @@ lapack_int qr_lapack_lwork(Fn fn, linalg_long rows, linalg_long columns)
     const auto c = detail::checked_narrow<lapack_int>(columns);
     T          query{};
     LINALG_CHECK(fn(r, c, &query, -1) == 0, "QR workspace query failed");
-    return std::max(lapack_int(1), static_cast<lapack_int>(query));
+    return std::max(static_cast<lapack_int>(1), static_cast<lapack_int>(query));
 }
 
 template <typename T> size_t qr_lapack_size(lapack_int lwork)

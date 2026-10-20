@@ -84,7 +84,7 @@ void inversion<float, linalg_backend::MKL>::apply(float* m,
     const auto lwork = (type == linear_solver_type::LU_LINEAR_SOLVER ||
                            type == linear_solver_type::LU_UPFRONT_LINEAR_SOLVER)
                            ? getri_lwork<float>(LAPACKE_sgetri_work, n)
-                           : lapack_int(0);
+                           : static_cast<lapack_int>(0);
     LINALG_CHECK(workspace_size >= invert_mkl_workspace_from_lwork<float>(lwork, lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
@@ -138,7 +138,7 @@ void inversion<double, linalg_backend::MKL>::apply(double* m,
     const auto lwork = (type == linear_solver_type::LU_LINEAR_SOLVER ||
                            type == linear_solver_type::LU_UPFRONT_LINEAR_SOLVER)
                            ? getri_lwork<double>(LAPACKE_dgetri_work, n)
-                           : lapack_int(0);
+                           : static_cast<lapack_int>(0);
     LINALG_CHECK(workspace_size >= invert_mkl_workspace_from_lwork<double>(lwork, lda, type),
         "matrix_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
