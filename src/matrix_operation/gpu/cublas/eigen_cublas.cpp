@@ -136,7 +136,7 @@ size_t sym_eigen_ws_size<double>(linalg_int n)
 }  // namespace
 
 template <>
-void symmetric_eigen_backend<float, linalg_backend::cuda_blas>::apply(float* eigenvectors,
+void symmetric_eigen_backend<float, linalg_backend::CUDA_BLAS>::apply(float* eigenvectors,
     linalg_int                                                                 n,
     linalg_int                                                                 lda,
     float*                                                                     eigenvalues,
@@ -161,7 +161,7 @@ void symmetric_eigen_backend<float, linalg_backend::cuda_blas>::apply(float* eig
 }
 
 template <>
-void symmetric_eigen_backend<double, linalg_backend::cuda_blas>::apply(double* eigenvectors,
+void symmetric_eigen_backend<double, linalg_backend::CUDA_BLAS>::apply(double* eigenvectors,
     linalg_int                                                                   n,
     linalg_int                                                                   lda,
     double*                                                                      eigenvalues,
@@ -186,13 +186,13 @@ void symmetric_eigen_backend<double, linalg_backend::cuda_blas>::apply(double* e
 }
 
 template <>
-size_t symmetric_eigen_backend<float, linalg_backend::cuda_blas>::workspace_size(linalg_int n)
+size_t symmetric_eigen_backend<float, linalg_backend::CUDA_BLAS>::workspace_size(linalg_int n)
 {
     return sym_eigen_ws_size<float>(n);
 }
 
 template <>
-size_t symmetric_eigen_backend<double, linalg_backend::cuda_blas>::workspace_size(linalg_int n)
+size_t symmetric_eigen_backend<double, linalg_backend::CUDA_BLAS>::workspace_size(linalg_int n)
 {
     return sym_eigen_ws_size<double>(n);
 }

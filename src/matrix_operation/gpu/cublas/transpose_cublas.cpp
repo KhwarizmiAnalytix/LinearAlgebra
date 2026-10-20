@@ -102,7 +102,7 @@ void transpose_device(
 }  // namespace detail
 
 template <>
-void transpose<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void transpose<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long  columns,
     float*       m,
     void*        workspace,
@@ -115,7 +115,7 @@ void transpose<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
 }
 
 template <>
-void transpose<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void transpose<double, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long  columns,
     double*      m,
     void*        workspace,
@@ -128,14 +128,14 @@ void transpose<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
 }
 
 template <>
-size_t transpose<float, linalg_backend::cuda_blas>::workspace_size(
+size_t transpose<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return transpose_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t transpose<double, linalg_backend::cuda_blas>::workspace_size(
+size_t transpose<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return transpose_workspace_size_impl<double>(rows, columns);

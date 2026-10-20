@@ -594,7 +594,7 @@ void matrix_exponential_impl(const T* A_in,
 }  // namespace
 
 template <>
-void exponential<float, linalg_backend::native>::apply(const float* A,
+void exponential<float, linalg_backend::NATIVE>::apply(const float* A,
     linalg_int                                                      n,
     linalg_int                                                      lda,
     float*                                                          result,
@@ -607,12 +607,12 @@ void exponential<float, linalg_backend::native>::apply(const float* A,
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
-    matrix_exponential_impl<float, linalg_backend::native>(
+    matrix_exponential_impl<float, linalg_backend::NATIVE>(
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
 template <>
-void exponential<double, linalg_backend::native>::apply(const double* A,
+void exponential<double, linalg_backend::NATIVE>::apply(const double* A,
     linalg_int                                                        n,
     linalg_int                                                        lda,
     double*                                                           result,
@@ -625,24 +625,24 @@ void exponential<double, linalg_backend::native>::apply(const double* A,
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
-    matrix_exponential_impl<double, linalg_backend::native>(
+    matrix_exponential_impl<double, linalg_backend::NATIVE>(
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
-template <> size_t exponential<float, linalg_backend::native>::workspace_size(linalg_int n)
+template <> size_t exponential<float, linalg_backend::NATIVE>::workspace_size(linalg_int n)
 {
-    return matrix_exponential_workspace_size_impl<float, linalg_backend::native>(n);
+    return matrix_exponential_workspace_size_impl<float, linalg_backend::NATIVE>(n);
 }
 
-template <> size_t exponential<double, linalg_backend::native>::workspace_size(linalg_int n)
+template <> size_t exponential<double, linalg_backend::NATIVE>::workspace_size(linalg_int n)
 {
-    return matrix_exponential_workspace_size_impl<double, linalg_backend::native>(n);
+    return matrix_exponential_workspace_size_impl<double, linalg_backend::NATIVE>(n);
 }
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 template <>
-void exponential<float, linalg_backend::blas_lapacke>::apply(const float* A,
+void exponential<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
     linalg_int                                                                   n,
     linalg_int                                                                   lda,
     float*                                                                       result,
@@ -655,12 +655,12 @@ void exponential<float, linalg_backend::blas_lapacke>::apply(const float* A,
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
-    matrix_exponential_impl<float, linalg_backend::blas_lapacke>(
+    matrix_exponential_impl<float, linalg_backend::BLAS_LAPACKE>(
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
 template <>
-void exponential<double, linalg_backend::blas_lapacke>::apply(const double* A,
+void exponential<double, linalg_backend::BLAS_LAPACKE>::apply(const double* A,
     linalg_int                                                                    n,
     linalg_int                                                                    lda,
     double*                                                                       result,
@@ -673,20 +673,20 @@ void exponential<double, linalg_backend::blas_lapacke>::apply(const double* A,
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
-    matrix_exponential_impl<double, linalg_backend::blas_lapacke>(
+    matrix_exponential_impl<double, linalg_backend::BLAS_LAPACKE>(
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
 template <>
-size_t exponential<float, linalg_backend::blas_lapacke>::workspace_size(linalg_int n)
+size_t exponential<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int n)
 {
-    return matrix_exponential_workspace_size_impl<float, linalg_backend::blas_lapacke>(n);
+    return matrix_exponential_workspace_size_impl<float, linalg_backend::BLAS_LAPACKE>(n);
 }
 
 template <>
-size_t exponential<double, linalg_backend::blas_lapacke>::workspace_size(linalg_int n)
+size_t exponential<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int n)
 {
-    return matrix_exponential_workspace_size_impl<double, linalg_backend::blas_lapacke>(n);
+    return matrix_exponential_workspace_size_impl<double, linalg_backend::BLAS_LAPACKE>(n);
 }
 
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -694,7 +694,7 @@ size_t exponential<double, linalg_backend::blas_lapacke>::workspace_size(linalg_
 #if LINALG_HAS_MKL
 
 template <>
-void exponential<float, linalg_backend::mkl>::apply(const float* A,
+void exponential<float, linalg_backend::MKL>::apply(const float* A,
     linalg_int                                                     n,
     linalg_int                                                     lda,
     float*                                                         result,
@@ -707,12 +707,12 @@ void exponential<float, linalg_backend::mkl>::apply(const float* A,
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
-    matrix_exponential_impl<float, linalg_backend::mkl>(
+    matrix_exponential_impl<float, linalg_backend::MKL>(
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
 template <>
-void exponential<double, linalg_backend::mkl>::apply(const double* A,
+void exponential<double, linalg_backend::MKL>::apply(const double* A,
     linalg_int                                                      n,
     linalg_int                                                      lda,
     double*                                                         result,
@@ -725,18 +725,18 @@ void exponential<double, linalg_backend::mkl>::apply(const double* A,
     LINALG_CHECK(
         A != nullptr && result != nullptr, "exponential::apply: A and result must not be null");
     LINALG_CHECK(n > 0 && lda > 0 && ldc > 0, "exponential::apply: n/lda/ldc must be positive");
-    matrix_exponential_impl<double, linalg_backend::mkl>(
+    matrix_exponential_impl<double, linalg_backend::MKL>(
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
-template <> size_t exponential<float, linalg_backend::mkl>::workspace_size(linalg_int n)
+template <> size_t exponential<float, linalg_backend::MKL>::workspace_size(linalg_int n)
 {
-    return matrix_exponential_workspace_size_impl<float, linalg_backend::mkl>(n);
+    return matrix_exponential_workspace_size_impl<float, linalg_backend::MKL>(n);
 }
 
-template <> size_t exponential<double, linalg_backend::mkl>::workspace_size(linalg_int n)
+template <> size_t exponential<double, linalg_backend::MKL>::workspace_size(linalg_int n)
 {
-    return matrix_exponential_workspace_size_impl<double, linalg_backend::mkl>(n);
+    return matrix_exponential_workspace_size_impl<double, linalg_backend::MKL>(n);
 }
 
 #endif  // LINALG_HAS_MKL

@@ -65,7 +65,7 @@ void multiplication_impl(GemmFn gemm,
 }  // namespace
 
 template <>
-void multiplication<float, linalg_backend::cuda_blas>::apply(bool transpose_a,
+void multiplication<float, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
     bool           transpose_b,
     linalg_int     rows,
     linalg_int     columns,
@@ -89,7 +89,7 @@ void multiplication<float, linalg_backend::cuda_blas>::apply(bool transpose_a,
 }
 
 template <>
-void multiplication<double, linalg_backend::cuda_blas>::apply(bool transpose_a,
+void multiplication<double, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
     bool           transpose_b,
     linalg_int     rows,
     linalg_int     columns,
@@ -113,14 +113,14 @@ void multiplication<double, linalg_backend::cuda_blas>::apply(bool transpose_a,
 }
 
 template <>
-size_t multiplication<float, linalg_backend::cuda_blas>::workspace_size(
+size_t multiplication<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int /*rows*/, linalg_int /*columns*/, linalg_int /*depth*/)
 {
     return 0;
 }
 
 template <>
-size_t multiplication<double, linalg_backend::cuda_blas>::workspace_size(
+size_t multiplication<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int /*rows*/, linalg_int /*columns*/, linalg_int /*depth*/)
 {
     return 0;

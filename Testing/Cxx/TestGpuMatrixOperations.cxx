@@ -1,5 +1,5 @@
 // GPU matrix-operation tests exercising the struct-template API under
-// linalg_backend::cuda_blas. This file replaces the former linalg::gpu::*
+// linalg_backend::CUDA_BLAS. This file replaces the former linalg::gpu::*
 // free-function tests; the struct API is the only GPU entry point after the
 // two-layer architecture was collapsed into a single cublas TU per operation.
 // Like all backend-conditional tests in Testing/Cxx (e.g.
@@ -12,6 +12,8 @@
 #include <cstddef>
 #include <limits>
 #include <random>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <cuda_runtime_api.h>
@@ -43,7 +45,7 @@ using linalg::linalg_backend;
 using linalg_test::dense_matrix;
 
 // Short alias used throughout to reduce verbosity.
-constexpr linalg_backend CB = linalg_backend::cuda_blas;
+constexpr linalg_backend CB = linalg_backend::CUDA_BLAS;
 
 template <typename> struct GpuTolerance
 {
@@ -66,13 +68,22 @@ template <> struct GpuTolerance<double>
 // buffer (the library itself never calls cudaMalloc — see
 // include/common/cuda_workspace.h), so exercising them needs some minimal
 // device-memory ownership here, including for that workspace. Allocation
-// failures are not checked.
+// failures throw so the test reports the CUDA error before using a null pointer.
 template <typename T> class device_buffer
 {
 public:
     explicit device_buffer(std::size_t count) : count_(count)
     {
-        cudaMalloc(reinterpret_cast<void**>(&ptr_), count_ * sizeof(T));
+        if (count_ == 0)
+        {
+            return;
+        }
+        const auto status = cudaMalloc(reinterpret_cast<void**>(&ptr_), count_ * sizeof(T));
+        if (status != cudaSuccess)
+        {
+            throw std::runtime_error(
+                std::string("cudaMalloc failed: ") + cudaGetErrorString(status));
+        }
     }
     ~device_buffer() { cudaFree(ptr_); }
 
@@ -83,12 +94,14 @@ public:
 
     cudaError_t upload(const T* host) const
     {
-        return cudaMemcpy(ptr_, host, count_ * sizeof(T), cudaMemcpyHostToDevice);
+        return count_ == 0 ? cudaSuccess
+                           : cudaMemcpy(ptr_, host, count_ * sizeof(T), cudaMemcpyHostToDevice);
     }
 
     cudaError_t download(T* host) const
     {
-        return cudaMemcpy(host, ptr_, count_ * sizeof(T), cudaMemcpyDeviceToHost);
+        return count_ == 0 ? cudaSuccess
+                           : cudaMemcpy(host, ptr_, count_ * sizeof(T), cudaMemcpyDeviceToHost);
     }
 
 private:
@@ -267,6 +280,35 @@ template <typename value_t> void linear_solver_gpu_test(linalg::linear_solver_ty
 }
 
 }  // namespace
+
+TEST(MathGpu, DeviceMemoryAllocation)
+{
+    device_buffer<double> data(4);
+    cudaPointerAttributes attributes{};
+    ASSERT_EQ(cudaPointerGetAttributes(&attributes, data.get()), cudaSuccess);
+    EXPECT_EQ(attributes.type, cudaMemoryTypeDevice);
+
+    const auto bytes = linalg::transpose<double, CB>::workspace_size(2, 2);
+    ASSERT_GT(bytes, 0U);
+    device_buffer<unsigned char> workspace(bytes);
+    ASSERT_EQ(cudaPointerGetAttributes(&attributes, workspace.get()), cudaSuccess);
+    EXPECT_EQ(attributes.type, cudaMemoryTypeDevice);
+
+    const double input[] = {1., 2., 3., 4.};
+    double       output[4]{};
+    ASSERT_EQ(data.upload(input), cudaSuccess);
+    linalg::transpose<double, CB>::apply(2, 2, data.get(), workspace.get(), bytes);
+    ASSERT_EQ(data.download(output), cudaSuccess);
+    EXPECT_EQ(output[0], 1.);
+    EXPECT_EQ(output[1], 3.);
+    EXPECT_EQ(output[2], 2.);
+    EXPECT_EQ(output[3], 4.);
+
+    device_buffer<unsigned char> empty_workspace(0);
+    EXPECT_EQ(empty_workspace.get(), nullptr);
+    EXPECT_EQ(empty_workspace.upload(nullptr), cudaSuccess);
+    EXPECT_EQ(empty_workspace.download(nullptr), cudaSuccess);
+}
 
 TEST(MathGpu, MatrixMultiplication)
 {

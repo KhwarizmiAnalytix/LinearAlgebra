@@ -57,7 +57,7 @@ void trace_impl(const T* A, linalg_int n, linalg_int lda, T* result, void* strea
 }  // namespace
 
 template <>
-void trace<float, linalg_backend::cuda_blas>::apply(
+void trace<float, linalg_backend::CUDA_BLAS>::apply(
     const float* A, linalg_int n, linalg_int lda, float* result, void* stream)
 {
     LINALG_SCOPE("trace/cuda_blas<float>");
@@ -65,7 +65,7 @@ void trace<float, linalg_backend::cuda_blas>::apply(
 }
 
 template <>
-void trace<double, linalg_backend::cuda_blas>::apply(
+void trace<double, linalg_backend::CUDA_BLAS>::apply(
     const double* A, linalg_int n, linalg_int lda, double* result, void* stream)
 {
     LINALG_SCOPE("trace/cuda_blas<double>");

@@ -11,7 +11,7 @@ eigenvalue/eigenvector decomposition, and rank/condition-number/norm/trace
 estimation, with a portable scalar fallback, an optional **Intel MKL**
 (LAPACKE/BLAS) backend, an optional vendor-neutral **CBLAS/LAPACKE** backend
 (OpenBLAS, Accelerate, netlib, ...), and an optional **cuBLAS/cuSOLVER** GPU backend
-(same struct-template API, `linalg_backend::cuda_blas` specializations,
+(same struct-template API, `linalg_backend::CUDA_BLAS` specializations,
 device pointers only, no implicit host transfers) covering every CPU op
 except general (non-symmetric) eigenvalue decomposition, for which
 cuSOLVER's dense API has no `geev`-equivalent routine to call into. Error reporting always goes through
@@ -37,7 +37,7 @@ one consumer, not a required host.
   exception helper that used to live here is gone — error reporting goes
   straight through Logging's `LOGGING_THROW`/`logging::exception` now.
 - `include/matrix_operation/` — the public modules (CPU and GPU); the GPU
-  `linalg_backend::cuda_blas` specializations are in
+  `linalg_backend::CUDA_BLAS` specializations are in
   `src/matrix_operation/gpu/cublas/`, built when `LINALG_ENABLE_CUBLAS=ON`.
 - `src/` — implementation (`.cpp`/`.cu`) files, mirroring `include/`'s
   layout (e.g. `include/matrix_operation/lu_decomposition.h` pairs with
@@ -81,17 +81,17 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 All entry points are plain row-major raw-pointer C++ (`T* data, lda`) — no
 matrix class is part of the public API; callers own their own storage.
 
-### GPU backend (`linalg_backend::cuda_blas`, `LINALG_ENABLE_CUBLAS=ON`)
+### GPU backend (`linalg_backend::CUDA_BLAS`, `LINALG_ENABLE_CUBLAS=ON`)
 
 The GPU backend reuses the same struct-template API as every other backend.
 Include the same `include/matrix_operation/*.h` headers as the CPU path and
-use `linalg_backend::cuda_blas` as the template argument:
+use `linalg_backend::CUDA_BLAS` as the template argument:
 
 ```cpp
 #include "include/matrix_operation/svd_decomposition.h"
 
 // Query workspace, allocate on device, then call:
-linalg::svd_decomposition<double, linalg::linalg_backend::cuda_blas>::apply(
+linalg::svd_decomposition<double, linalg::linalg_backend::CUDA_BLAS>::apply(
     rows, cols, dA, lda, dS, dU, ldu, dVT, ldv, d_workspace, ws_size);
 ```
 
@@ -105,7 +105,7 @@ a caller-owned device `int* pivot`. Cholesky takes caller-owned workspace,
 queried with `workspace_size(n, triangle)`. CPU signatures are unchanged.
 
 ```cpp
-linalg::norm<double, linalg::linalg_backend::cuda_blas>::apply(
+linalg::norm<double, linalg::linalg_backend::CUDA_BLAS>::apply(
     dA, rows, cols, cols, linalg::norm_type::FROBENIUS,
     nullptr, 0, d_result, stream);
 ```
@@ -128,7 +128,7 @@ backend's design and known restrictions.
 | `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); uses an independent shared provider when MKL is also ON |
 | `LINALG_BLAS_RUNTIME_LIBRARY` | auto-detected OpenBLAS | Shared CBLAS provider (`.dll`, `.so`, `.dylib`) for combined MKL/BLAS builds |
 | `LINALG_LAPACKE_RUNTIME_LIBRARY` | empty | Optional separate shared LAPACKE provider; empty means LAPACKE is bundled in the CBLAS provider |
-| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::cuda_blas` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
+| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::CUDA_BLAS` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
 | `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
@@ -186,7 +186,7 @@ see the Implemented column.
 | **OpenBLAS** | CPU | ✅ | ✅* | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
 | **Apple Accelerate** | CPU / Apple Silicon | ✅ | ✅ | ✅ | ✅ | ✅ via `LINALG_ENABLE_BLAS` |
 | **Netlib BLAS/LAPACK** | CPU | ✅ | ✅ | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
-| **cuBLAS / cuSOLVER** | NVIDIA GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_CUBLAS` (`linalg_backend::cuda_blas`) |
+| **cuBLAS / cuSOLVER** | NVIDIA GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_CUBLAS` (`linalg_backend::CUDA_BLAS`) |
 | **BLIS** | CPU | ✅ | ❌ | ❌ | ❌ | ❌ not wired up |
 | **cuBLASLt** | NVIDIA GPU | ✅ | — | — | — | ❌ not wired up |
 | **cuSPARSE** | NVIDIA GPU | — | — | ✅ | — | ❌ out of scope (dense only) |
@@ -209,11 +209,11 @@ general, not something this repo calls.
 
 // In-place lower-triangular Cholesky factor of an n x n row-major matrix.
 // Choose native, blas_lapacke, or mkl explicitly for each operation.
-linalg::cholesky_decomposition<double, linalg::linalg_backend::native>::apply(
+linalg::cholesky_decomposition<double, linalg::linalg_backend::NATIVE>::apply(
     A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
 
 // Solve A x = b in place, reusing the Cholesky factor above.
-linalg::linear_solver<double, linalg::linalg_backend::native>::apply(
+linalg::linear_solver<double, linalg::linalg_backend::NATIVE>::apply(
     A.data(), pivot.data(), n, x.data(),
     linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER, nullptr, 0);
 ```

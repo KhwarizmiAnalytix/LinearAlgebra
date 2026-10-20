@@ -137,7 +137,7 @@ void cholesky_apply<double>(double* C,
 }  // namespace
 
 template <>
-void cholesky_decomposition<float, linalg_backend::cuda_blas>::apply(float* C,
+void cholesky_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* C,
     linalg_int                                                              lda,
     cholesky_decomposition_enum                                             type,
     void*                                                                   workspace,
@@ -149,14 +149,14 @@ void cholesky_decomposition<float, linalg_backend::cuda_blas>::apply(float* C,
 }
 
 template <>
-size_t cholesky_decomposition<float, linalg_backend::cuda_blas>::workspace_size(
+size_t cholesky_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, cholesky_decomposition_enum type)
 {
     return cholesky_ws_size<float>(lda, type);
 }
 
 template <>
-void cholesky_decomposition<double, linalg_backend::cuda_blas>::apply(double* C,
+void cholesky_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* C,
     linalg_int                                                                lda,
     cholesky_decomposition_enum                                               type,
     void*                                                                     workspace,
@@ -168,7 +168,7 @@ void cholesky_decomposition<double, linalg_backend::cuda_blas>::apply(double* C,
 }
 
 template <>
-size_t cholesky_decomposition<double, linalg_backend::cuda_blas>::workspace_size(
+size_t cholesky_decomposition<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, cholesky_decomposition_enum type)
 {
     return cholesky_ws_size<double>(lda, type);

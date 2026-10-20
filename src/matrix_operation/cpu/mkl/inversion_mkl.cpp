@@ -48,7 +48,7 @@ size_t invert_mkl_workspace_from_lwork(lapack_int lwork, linalg_int lda, linear_
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        arena.next<unsigned char>(lu_decomposition<T, linalg_backend::mkl>::workspace_size(lda));
+        arena.next<unsigned char>(lu_decomposition<T, linalg_backend::MKL>::workspace_size(lda));
         arena.next<T>(static_cast<size_t>(lwork));
         break;
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
@@ -70,7 +70,7 @@ size_t invert_mkl_workspace_size_impl(
 }  // namespace
 
 template <>
-void inversion<float, linalg_backend::mkl>::apply(float* m,
+void inversion<float, linalg_backend::MKL>::apply(float* m,
     linalg_int*                                               pivot,
     linalg_int                                                lda,
     linear_solver_type                                        type,
@@ -93,17 +93,17 @@ void inversion<float, linalg_backend::mkl>::apply(float* m,
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
         auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<float, linalg_backend::mkl>::workspace_size(lda));
+            arena.next<unsigned char>(lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda));
         auto* work = arena.next<float>(static_cast<size_t>(lwork));
-        if (lu_decomposition<float, linalg_backend::mkl>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<float, linalg_backend::mkl>::workspace_size(lda)))
+        if (lu_decomposition<float, linalg_backend::MKL>::apply(
+                m, lda, pivot, lu_ws, lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda)))
         {
             LAPACKE_sgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
         }
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<float, linalg_backend::mkl>::apply(
+        if (cholesky_decomposition<float, linalg_backend::MKL>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_spotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
@@ -124,7 +124,7 @@ void inversion<float, linalg_backend::mkl>::apply(float* m,
 }
 
 template <>
-void inversion<double, linalg_backend::mkl>::apply(double* m,
+void inversion<double, linalg_backend::MKL>::apply(double* m,
     linalg_int*                                                 pivot,
     linalg_int                                                  lda,
     linear_solver_type                                          type,
@@ -147,17 +147,17 @@ void inversion<double, linalg_backend::mkl>::apply(double* m,
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
         auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<double, linalg_backend::mkl>::workspace_size(lda));
+            arena.next<unsigned char>(lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda));
         auto* work = arena.next<double>(static_cast<size_t>(lwork));
-        if (lu_decomposition<double, linalg_backend::mkl>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<double, linalg_backend::mkl>::workspace_size(lda)))
+        if (lu_decomposition<double, linalg_backend::MKL>::apply(
+                m, lda, pivot, lu_ws, lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda)))
         {
             LAPACKE_dgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
         }
         break;
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<double, linalg_backend::mkl>::apply(
+        if (cholesky_decomposition<double, linalg_backend::MKL>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_dpotri(LAPACK_ROW_MAJOR, 'L', lda, m, lda);
@@ -178,14 +178,14 @@ void inversion<double, linalg_backend::mkl>::apply(double* m,
 }
 
 template <>
-size_t inversion<float, linalg_backend::mkl>::workspace_size(
+size_t inversion<float, linalg_backend::MKL>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return invert_mkl_workspace_size_impl<float>(LAPACKE_sgetri_work, lda, type);
 }
 
 template <>
-size_t inversion<double, linalg_backend::mkl>::workspace_size(
+size_t inversion<double, linalg_backend::MKL>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return invert_mkl_workspace_size_impl<double>(LAPACKE_dgetri_work, lda, type);

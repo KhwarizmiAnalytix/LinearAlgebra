@@ -40,7 +40,7 @@ static void check_matmul_inputs(const void* a,
 }
 
 template <>
-void multiplication<float, linalg_backend::blas_lapacke>::apply(bool transpose_a,
+void multiplication<float, linalg_backend::BLAS_LAPACKE>::apply(bool transpose_a,
     bool                                                             transpose_b,
     linalg_int                                                       rows,
     linalg_int                                                       columns,
@@ -85,7 +85,7 @@ void multiplication<float, linalg_backend::blas_lapacke>::apply(bool transpose_a
 }
 
 template <>
-void multiplication<double, linalg_backend::blas_lapacke>::apply(bool transpose_a,
+void multiplication<double, linalg_backend::BLAS_LAPACKE>::apply(bool transpose_a,
     bool                                                              transpose_b,
     linalg_int                                                        rows,
     linalg_int                                                        columns,
@@ -127,14 +127,14 @@ void multiplication<double, linalg_backend::blas_lapacke>::apply(bool transpose_
 }
 
 template <>
-size_t multiplication<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t multiplication<float, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_int /*rows*/, linalg_int /*columns*/, linalg_int /*depth*/)
 {
     return 0;
 }
 
 template <>
-size_t multiplication<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t multiplication<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_int /*rows*/, linalg_int /*columns*/, linalg_int /*depth*/)
 {
     return 0;

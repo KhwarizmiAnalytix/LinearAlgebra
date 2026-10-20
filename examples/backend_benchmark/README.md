@@ -1,5 +1,9 @@
 # CPU and GPU backend benchmark example
 
+Fresh comparison of native C++, OpenBLAS and MKL against CUDA:
+[20 October 2026 results](results/2026-10-20/comparison.md). The new run includes
+488 operation cases, 96 transfer cases and the current QR API.
+
 Read the [full matrix operation analysis](analysis.md) for measurements of
 native, OpenBLAS, MKL and CUDA backends on the recorded Windows host.
 The report includes float/double results, size crossovers, transfer costs,

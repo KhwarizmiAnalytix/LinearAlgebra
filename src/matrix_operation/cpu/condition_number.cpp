@@ -119,7 +119,7 @@ T matrix_condition_number_impl(const T* A,
 }  // namespace
 
 template <>
-float condition_number<float, linalg_backend::native>::apply(const float* A,
+float condition_number<float, linalg_backend::NATIVE>::apply(const float* A,
     linalg_long                                                                          rows,
     linalg_long                                                                          columns,
     linalg_long                                                                          lda,
@@ -131,12 +131,12 @@ float condition_number<float, linalg_backend::native>::apply(const float* A,
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "condition_number::apply: rows/columns/lda must be positive");
-    return matrix_condition_number_impl<float, linalg_backend::native>(
+    return matrix_condition_number_impl<float, linalg_backend::NATIVE>(
         A, rows, columns, lda, workspace, workspace_size);
 }
 
 template <>
-double condition_number<double, linalg_backend::native>::apply(const double* A,
+double condition_number<double, linalg_backend::NATIVE>::apply(const double* A,
     linalg_long                                                                             rows,
     linalg_long                                                                             columns,
     linalg_long                                                                             lda,
@@ -148,28 +148,28 @@ double condition_number<double, linalg_backend::native>::apply(const double* A,
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "condition_number::apply: rows/columns/lda must be positive");
-    return matrix_condition_number_impl<double, linalg_backend::native>(
+    return matrix_condition_number_impl<double, linalg_backend::NATIVE>(
         A, rows, columns, lda, workspace, workspace_size);
 }
 
 template <>
-size_t condition_number<float, linalg_backend::native>::workspace_size(
+size_t condition_number<float, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<float, linalg_backend::native>(rows, columns);
+    return singular_values_workspace_size_impl<float, linalg_backend::NATIVE>(rows, columns);
 }
 
 template <>
-size_t condition_number<double, linalg_backend::native>::workspace_size(
+size_t condition_number<double, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<double, linalg_backend::native>(rows, columns);
+    return singular_values_workspace_size_impl<double, linalg_backend::NATIVE>(rows, columns);
 }
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 template <>
-float condition_number<float, linalg_backend::blas_lapacke>::apply(const float* A,
+float condition_number<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
     linalg_long                                                                              rows,
     linalg_long                                                                              columns,
     linalg_long                                                                              lda,
@@ -181,12 +181,12 @@ float condition_number<float, linalg_backend::blas_lapacke>::apply(const float* 
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "condition_number::apply: rows/columns/lda must be positive");
-    return matrix_condition_number_impl<float, linalg_backend::blas_lapacke>(
+    return matrix_condition_number_impl<float, linalg_backend::BLAS_LAPACKE>(
         A, rows, columns, lda, workspace, workspace_size);
 }
 
 template <>
-double condition_number<double, linalg_backend::blas_lapacke>::apply(const double* A,
+double condition_number<double, linalg_backend::BLAS_LAPACKE>::apply(const double* A,
     linalg_long                                                                               rows,
     linalg_long                                                                               columns,
     linalg_long                                                                               lda,
@@ -198,22 +198,22 @@ double condition_number<double, linalg_backend::blas_lapacke>::apply(const doubl
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "condition_number::apply: rows/columns/lda must be positive");
-    return matrix_condition_number_impl<double, linalg_backend::blas_lapacke>(
+    return matrix_condition_number_impl<double, linalg_backend::BLAS_LAPACKE>(
         A, rows, columns, lda, workspace, workspace_size);
 }
 
 template <>
-size_t condition_number<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t condition_number<float, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<float, linalg_backend::blas_lapacke>(rows, columns);
+    return singular_values_workspace_size_impl<float, linalg_backend::BLAS_LAPACKE>(rows, columns);
 }
 
 template <>
-size_t condition_number<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t condition_number<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<double, linalg_backend::blas_lapacke>(rows, columns);
+    return singular_values_workspace_size_impl<double, linalg_backend::BLAS_LAPACKE>(rows, columns);
 }
 
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -221,7 +221,7 @@ size_t condition_number<double, linalg_backend::blas_lapacke>::workspace_size(
 #if LINALG_HAS_MKL
 
 template <>
-float condition_number<float, linalg_backend::mkl>::apply(const float* A,
+float condition_number<float, linalg_backend::MKL>::apply(const float* A,
     linalg_long                                                                   rows,
     linalg_long                                                                   columns,
     linalg_long                                                                   lda,
@@ -233,12 +233,12 @@ float condition_number<float, linalg_backend::mkl>::apply(const float* A,
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "condition_number::apply: rows/columns/lda must be positive");
-    return matrix_condition_number_impl<float, linalg_backend::mkl>(
+    return matrix_condition_number_impl<float, linalg_backend::MKL>(
         A, rows, columns, lda, workspace, workspace_size);
 }
 
 template <>
-double condition_number<double, linalg_backend::mkl>::apply(const double* A,
+double condition_number<double, linalg_backend::MKL>::apply(const double* A,
     linalg_long                                                                    rows,
     linalg_long                                                                    columns,
     linalg_long                                                                    lda,
@@ -250,22 +250,22 @@ double condition_number<double, linalg_backend::mkl>::apply(const double* A,
     LINALG_CHECK(A != nullptr, "condition_number::apply: A must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0,
         "condition_number::apply: rows/columns/lda must be positive");
-    return matrix_condition_number_impl<double, linalg_backend::mkl>(
+    return matrix_condition_number_impl<double, linalg_backend::MKL>(
         A, rows, columns, lda, workspace, workspace_size);
 }
 
 template <>
-size_t condition_number<float, linalg_backend::mkl>::workspace_size(
+size_t condition_number<float, linalg_backend::MKL>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<float, linalg_backend::mkl>(rows, columns);
+    return singular_values_workspace_size_impl<float, linalg_backend::MKL>(rows, columns);
 }
 
 template <>
-size_t condition_number<double, linalg_backend::mkl>::workspace_size(
+size_t condition_number<double, linalg_backend::MKL>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return singular_values_workspace_size_impl<double, linalg_backend::mkl>(rows, columns);
+    return singular_values_workspace_size_impl<double, linalg_backend::MKL>(rows, columns);
 }
 
 #endif  // LINALG_HAS_MKL

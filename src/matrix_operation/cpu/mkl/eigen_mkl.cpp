@@ -68,7 +68,7 @@ size_t general_eigen_mkl_workspace_size(linalg_int n, bool compute_eigenvectors)
 }  // namespace
 
 template <>
-bool symmetric_eigen_backend<float, linalg_backend::mkl>::apply(float* eigenvectors,
+bool symmetric_eigen_backend<float, linalg_backend::MKL>::apply(float* eigenvectors,
     linalg_int                                                            n,
     linalg_int                                                            /*lda*/,
     float*                                                                eigenvalues,
@@ -86,7 +86,7 @@ bool symmetric_eigen_backend<float, linalg_backend::mkl>::apply(float* eigenvect
 }
 
 template <>
-bool symmetric_eigen_backend<double, linalg_backend::mkl>::apply(double* eigenvectors,
+bool symmetric_eigen_backend<double, linalg_backend::MKL>::apply(double* eigenvectors,
     linalg_int                                                              n,
     linalg_int                                                              /*lda*/,
     double*                                                                 eigenvalues,
@@ -104,7 +104,7 @@ bool symmetric_eigen_backend<double, linalg_backend::mkl>::apply(double* eigenve
 }
 
 template <>
-bool general_eigen_backend<float, linalg_backend::mkl>::apply(float* eigenvectors,
+bool general_eigen_backend<float, linalg_backend::MKL>::apply(float* eigenvectors,
     linalg_int                                                          n,
     linalg_int                                                          /*lda*/,
     float*                                                              eigenvalues_real,
@@ -147,7 +147,7 @@ bool general_eigen_backend<float, linalg_backend::mkl>::apply(float* eigenvector
 }
 
 template <>
-bool general_eigen_backend<double, linalg_backend::mkl>::apply(double* eigenvectors,
+bool general_eigen_backend<double, linalg_backend::MKL>::apply(double* eigenvectors,
     linalg_int                                                            n,
     linalg_int                                                            /*lda*/,
     double*                                                               eigenvalues_real,
@@ -190,26 +190,26 @@ bool general_eigen_backend<double, linalg_backend::mkl>::apply(double* eigenvect
     return info == 0;
 }
 
-template <> size_t symmetric_eigen_backend<float, linalg_backend::mkl>::workspace_size(linalg_int n)
+template <> size_t symmetric_eigen_backend<float, linalg_backend::MKL>::workspace_size(linalg_int n)
 {
     return symmetric_eigen_mkl_workspace_size<float>(n);
 }
 
 template <>
-size_t symmetric_eigen_backend<double, linalg_backend::mkl>::workspace_size(linalg_int n)
+size_t symmetric_eigen_backend<double, linalg_backend::MKL>::workspace_size(linalg_int n)
 {
     return symmetric_eigen_mkl_workspace_size<double>(n);
 }
 
 template <>
-size_t general_eigen_backend<float, linalg_backend::mkl>::workspace_size(
+size_t general_eigen_backend<float, linalg_backend::MKL>::workspace_size(
     linalg_int n, bool compute_eigenvectors)
 {
     return general_eigen_mkl_workspace_size<float>(n, compute_eigenvectors);
 }
 
 template <>
-size_t general_eigen_backend<double, linalg_backend::mkl>::workspace_size(
+size_t general_eigen_backend<double, linalg_backend::MKL>::workspace_size(
     linalg_int n, bool compute_eigenvectors)
 {
     return general_eigen_mkl_workspace_size<double>(n, compute_eigenvectors);

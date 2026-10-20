@@ -242,7 +242,7 @@ void linear_solver_apply(BufSizeLuFn buf_size_lu,
 }  // namespace
 
 template <>
-void linear_solver<float, linalg_backend::cuda_blas>::apply(float* m,
+void linear_solver<float, linalg_backend::CUDA_BLAS>::apply(float* m,
     linalg_int*        /*pivot*/,
     linalg_int         lda,
     float*             x,
@@ -258,7 +258,7 @@ void linear_solver<float, linalg_backend::cuda_blas>::apply(float* m,
 }
 
 template <>
-void linear_solver<double, linalg_backend::cuda_blas>::apply(double* m,
+void linear_solver<double, linalg_backend::CUDA_BLAS>::apply(double* m,
     linalg_int*        /*pivot*/,
     linalg_int         lda,
     double*            x,
@@ -274,14 +274,14 @@ void linear_solver<double, linalg_backend::cuda_blas>::apply(double* m,
 }
 
 template <>
-size_t linear_solver<float, linalg_backend::cuda_blas>::workspace_size(
+size_t linear_solver<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return linear_solver_ws_size<float>(lda, type);
 }
 
 template <>
-size_t linear_solver<double, linalg_backend::cuda_blas>::workspace_size(
+size_t linear_solver<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return linear_solver_ws_size<double>(lda, type);

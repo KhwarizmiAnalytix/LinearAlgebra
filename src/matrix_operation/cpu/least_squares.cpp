@@ -86,7 +86,7 @@ void least_squares_solve_impl(linalg_long rows,
 }
 
 template <>
-void least_squares<float, linalg_backend::native>::apply(linalg_long rows,
+void least_squares<float, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                              columns,
     linalg_long                                                              nrhs,
     const float*                                                             A,
@@ -104,12 +104,12 @@ void least_squares<float, linalg_backend::native>::apply(linalg_long rows,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    least_squares_solve_impl<float, linalg_backend::native>(
+    least_squares_solve_impl<float, linalg_backend::NATIVE>(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
 }
 
 template <>
-void least_squares<double, linalg_backend::native>::apply(linalg_long rows,
+void least_squares<double, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                               columns,
     linalg_long                                                               nrhs,
     const double*                                                             A,
@@ -127,28 +127,28 @@ void least_squares<double, linalg_backend::native>::apply(linalg_long rows,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    least_squares_solve_impl<double, linalg_backend::native>(
+    least_squares_solve_impl<double, linalg_backend::NATIVE>(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
 }
 
 template <>
-size_t least_squares<float, linalg_backend::native>::workspace_size(
+size_t least_squares<float, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return least_squares_workspace_size_impl<float, linalg_backend::native>(rows, columns);
+    return least_squares_workspace_size_impl<float, linalg_backend::NATIVE>(rows, columns);
 }
 
 template <>
-size_t least_squares<double, linalg_backend::native>::workspace_size(
+size_t least_squares<double, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return least_squares_workspace_size_impl<double, linalg_backend::native>(rows, columns);
+    return least_squares_workspace_size_impl<double, linalg_backend::NATIVE>(rows, columns);
 }
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 template <>
-void least_squares<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void least_squares<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
     linalg_long                                                                       columns,
     linalg_long                                                                       nrhs,
     const float*                                                                      A,
@@ -166,12 +166,12 @@ void least_squares<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    least_squares_solve_impl<float, linalg_backend::blas_lapacke>(
+    least_squares_solve_impl<float, linalg_backend::BLAS_LAPACKE>(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
 }
 
 template <>
-void least_squares<double, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void least_squares<double, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
     linalg_long                                                                        columns,
     linalg_long                                                                        nrhs,
     const double*                                                                      A,
@@ -189,22 +189,22 @@ void least_squares<double, linalg_backend::blas_lapacke>::apply(linalg_long rows
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    least_squares_solve_impl<double, linalg_backend::blas_lapacke>(
+    least_squares_solve_impl<double, linalg_backend::BLAS_LAPACKE>(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
 }
 
 template <>
-size_t least_squares<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t least_squares<float, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return least_squares_workspace_size_impl<float, linalg_backend::blas_lapacke>(rows, columns);
+    return least_squares_workspace_size_impl<float, linalg_backend::BLAS_LAPACKE>(rows, columns);
 }
 
 template <>
-size_t least_squares<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t least_squares<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return least_squares_workspace_size_impl<double, linalg_backend::blas_lapacke>(rows, columns);
+    return least_squares_workspace_size_impl<double, linalg_backend::BLAS_LAPACKE>(rows, columns);
 }
 
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -212,7 +212,7 @@ size_t least_squares<double, linalg_backend::blas_lapacke>::workspace_size(
 #if LINALG_HAS_MKL
 
 template <>
-void least_squares<float, linalg_backend::mkl>::apply(linalg_long rows,
+void least_squares<float, linalg_backend::MKL>::apply(linalg_long rows,
     linalg_long                                                              columns,
     linalg_long                                                              nrhs,
     const float*                                                             A,
@@ -230,12 +230,12 @@ void least_squares<float, linalg_backend::mkl>::apply(linalg_long rows,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    least_squares_solve_impl<float, linalg_backend::mkl>(
+    least_squares_solve_impl<float, linalg_backend::MKL>(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
 }
 
 template <>
-void least_squares<double, linalg_backend::mkl>::apply(linalg_long rows,
+void least_squares<double, linalg_backend::MKL>::apply(linalg_long rows,
     linalg_long                                                               columns,
     linalg_long                                                               nrhs,
     const double*                                                             A,
@@ -253,22 +253,22 @@ void least_squares<double, linalg_backend::mkl>::apply(linalg_long rows,
         "least_squares::apply: A, B, and X must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && nrhs != 0 && lda != 0 && ldb != 0 && ldx != 0,
         "least_squares::apply: rows/columns/nrhs/lda/ldb/ldx must be positive");
-    least_squares_solve_impl<double, linalg_backend::mkl>(
+    least_squares_solve_impl<double, linalg_backend::MKL>(
         rows, columns, nrhs, A, lda, B, ldb, X, ldx, workspace, workspace_size);
 }
 
 template <>
-size_t least_squares<float, linalg_backend::mkl>::workspace_size(
+size_t least_squares<float, linalg_backend::MKL>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return least_squares_workspace_size_impl<float, linalg_backend::mkl>(rows, columns);
+    return least_squares_workspace_size_impl<float, linalg_backend::MKL>(rows, columns);
 }
 
 template <>
-size_t least_squares<double, linalg_backend::mkl>::workspace_size(
+size_t least_squares<double, linalg_backend::MKL>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return least_squares_workspace_size_impl<double, linalg_backend::mkl>(rows, columns);
+    return least_squares_workspace_size_impl<double, linalg_backend::MKL>(rows, columns);
 }
 
 #endif  // LINALG_HAS_MKL

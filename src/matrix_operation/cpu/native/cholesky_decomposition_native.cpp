@@ -256,7 +256,7 @@ bool cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decompositio
 }  // namespace
 
 template <>
-bool cholesky_decomposition<float, linalg_backend::native>::apply(
+bool cholesky_decomposition<float, linalg_backend::NATIVE>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/native<float>");
@@ -265,7 +265,7 @@ bool cholesky_decomposition<float, linalg_backend::native>::apply(
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::native>::apply(
+bool cholesky_decomposition<double, linalg_backend::NATIVE>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/native<double>");
@@ -393,7 +393,7 @@ void cholesky_decomposition_aad_impl(linalg_int n, T* C_aad, const T* C, linalg_
 // apply_aad has no vendor-library equivalent: the mkl and blas_lapacke
 // specializations forward to these native ones.
 template <>
-bool cholesky_decomposition<float, linalg_backend::native>::apply_aad(
+bool cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(
     float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
     switch (type)
@@ -412,7 +412,7 @@ bool cholesky_decomposition<float, linalg_backend::native>::apply_aad(
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::native>::apply_aad(
+bool cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(
     double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
     switch (type)

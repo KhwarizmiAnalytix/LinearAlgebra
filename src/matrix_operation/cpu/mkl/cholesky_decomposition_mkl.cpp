@@ -29,7 +29,7 @@ static void check_cholesky_inputs(const void* C, linalg_int lda)
 }  // namespace detail
 
 template <>
-bool cholesky_decomposition<float, linalg_backend::mkl>::apply(
+bool cholesky_decomposition<float, linalg_backend::MKL>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/mkl<float>");
@@ -39,7 +39,7 @@ bool cholesky_decomposition<float, linalg_backend::mkl>::apply(
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::mkl>::apply(
+bool cholesky_decomposition<double, linalg_backend::MKL>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/mkl<double>");
@@ -51,17 +51,17 @@ bool cholesky_decomposition<double, linalg_backend::mkl>::apply(
 // apply_aad has no vendor-library equivalent: forward to the native
 // scalar adjoint defined in cholesky_decomposition.cpp.
 template <>
-bool cholesky_decomposition<float, linalg_backend::mkl>::apply_aad(
+bool cholesky_decomposition<float, linalg_backend::MKL>::apply_aad(
     float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
-    return cholesky_decomposition<float, linalg_backend::native>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::mkl>::apply_aad(
+bool cholesky_decomposition<double, linalg_backend::MKL>::apply_aad(
     double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
-    return cholesky_decomposition<double, linalg_backend::native>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
 }
 
 }  // namespace linalg

@@ -163,7 +163,7 @@ void reduce_singular_values(const T* A,
 // ---- rank<T, cuda_blas> specializations ----
 
 template <>
-void rank<float, linalg_backend::cuda_blas>::apply(const float* A,
+void rank<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
     linalg_long                                                 rows,
     linalg_long                                                 columns,
     linalg_long                                                 lda,
@@ -187,7 +187,7 @@ void rank<float, linalg_backend::cuda_blas>::apply(const float* A,
 }
 
 template <>
-void rank<double, linalg_backend::cuda_blas>::apply(const double* A,
+void rank<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
     linalg_long                                                   rows,
     linalg_long                                                   columns,
     linalg_long                                                   lda,
@@ -211,14 +211,14 @@ void rank<double, linalg_backend::cuda_blas>::apply(const double* A,
 }
 
 template <>
-size_t rank<float, linalg_backend::cuda_blas>::workspace_size(
+size_t rank<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return singular_values_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t rank<double, linalg_backend::cuda_blas>::workspace_size(
+size_t rank<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return singular_values_workspace_size_impl<double>(rows, columns);
@@ -227,7 +227,7 @@ size_t rank<double, linalg_backend::cuda_blas>::workspace_size(
 // ---- condition_number<T, cuda_blas> specializations ----
 
 template <>
-void condition_number<float, linalg_backend::cuda_blas>::apply(const float* A,
+void condition_number<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
     linalg_long                                                             rows,
     linalg_long                                                             columns,
     linalg_long                                                             lda,
@@ -250,7 +250,7 @@ void condition_number<float, linalg_backend::cuda_blas>::apply(const float* A,
 }
 
 template <>
-void condition_number<double, linalg_backend::cuda_blas>::apply(const double* A,
+void condition_number<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
     linalg_long                                                               rows,
     linalg_long                                                               columns,
     linalg_long                                                               lda,
@@ -273,14 +273,14 @@ void condition_number<double, linalg_backend::cuda_blas>::apply(const double* A,
 }
 
 template <>
-size_t condition_number<float, linalg_backend::cuda_blas>::workspace_size(
+size_t condition_number<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return singular_values_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t condition_number<double, linalg_backend::cuda_blas>::workspace_size(
+size_t condition_number<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return singular_values_workspace_size_impl<double>(rows, columns);

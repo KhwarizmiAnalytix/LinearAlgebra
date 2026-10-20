@@ -31,7 +31,7 @@ template <typename T, linalg_backend Backend> struct trace
  * stream synchronization. The caller keeps buffers alive until work completes.
  * CUDA/cuBLAS/cuSOLVER API errors throw; numerical status stays on device.
  */
-template <typename T> struct trace<T, linalg_backend::cuda_blas>
+template <typename T> struct trace<T, linalg_backend::CUDA_BLAS>
 {
     LINALG_API static void apply(
         const T* A, linalg_int n, linalg_int lda, T* result, void* stream = nullptr);

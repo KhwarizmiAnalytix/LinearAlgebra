@@ -34,9 +34,9 @@ const char* backend_name(linalg::linalg_backend backend)
 {
     switch (backend)
     {
-    case linalg::linalg_backend::mkl:
+    case linalg::linalg_backend::MKL:
         return "mkl";
-    case linalg::linalg_backend::blas_lapacke:
+    case linalg::linalg_backend::BLAS_LAPACKE:
         return "blas_lapacke";
     default:
         return "native";
@@ -177,7 +177,7 @@ void BM_GeneralEigen(benchmark::State& state)
 
 }  // namespace
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::native, true)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::NATIVE, true)
     ->Arg(8)
     ->Arg(32)
     ->Arg(64)
@@ -188,7 +188,7 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::native, true)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::native, true)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::NATIVE, true)
     ->Arg(8)
     ->Arg(32)
     ->Arg(64)
@@ -199,20 +199,7 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::native, true
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::native)
-    ->Arg(8)
-    ->Arg(16)
-    ->Arg(32)
-    ->Arg(64)
-    ->Arg(96)
-    ->Arg(128)
-    ->Unit(benchmark::kMicrosecond)
-    ->MinTime(0.1)
-    ->Repetitions(3)
-    ->ReportAggregatesOnly(true)
-    ->Threads(1);
-
-BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::native)
+BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::NATIVE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -225,7 +212,7 @@ BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::native)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::native)
+BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::NATIVE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -238,7 +225,20 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::native)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::native)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::NATIVE)
+    ->Arg(8)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(96)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+
+BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::NATIVE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -252,7 +252,7 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::native)
     ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::blas_lapacke)
+BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -265,7 +265,7 @@ BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::blas_lapack
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::blas_lapacke)
+BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -278,7 +278,7 @@ BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::blas_lapac
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::blas_lapacke)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -291,7 +291,7 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::blas_lapacke)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::blas_lapacke)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -307,7 +307,7 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::blas_lapacke
 
 
 #if LINALG_HAS_MKL
-BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::mkl)
+BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::MKL)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -320,7 +320,7 @@ BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::mkl)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::mkl)
+BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::MKL)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -333,7 +333,7 @@ BENCHMARK_TEMPLATE(BM_SymmetricEigen, double, linalg::linalg_backend::mkl)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::mkl)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::MKL)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)
@@ -346,7 +346,7 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::mkl)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::mkl)
+BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::MKL)
     ->Arg(8)
     ->Arg(16)
     ->Arg(32)

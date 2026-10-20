@@ -27,7 +27,7 @@ function(linalg_configure_isolated_blas)
     if(WIN32)
         find_file(
             LINALG_BLAS_RUNTIME_LIBRARY
-            NAMES libopenblas.dll openblas.dll
+            NAMES libopenblas.dll openblas.dll libblis.dll blis.dll
             HINTS ${_runtime_hints}
             PATH_SUFFIXES bin lib
         )
@@ -40,7 +40,7 @@ function(linalg_configure_isolated_blas)
         endif()
         find_library(
             LINALG_BLAS_RUNTIME_LIBRARY
-            NAMES openblas
+            NAMES openblas blis
             HINTS ${_runtime_hints}
             PATH_SUFFIXES lib lib64
         )

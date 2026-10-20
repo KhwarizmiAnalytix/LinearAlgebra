@@ -20,7 +20,7 @@ template <typename T> T matrix_trace_impl(const T* A, linalg_int n, linalg_int l
 }
 
 template <>
-float trace<float, linalg_backend::native>::apply(
+float trace<float, linalg_backend::NATIVE>::apply(
     const float* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/native<float>");
@@ -28,7 +28,7 @@ float trace<float, linalg_backend::native>::apply(
 }
 
 template <>
-double trace<double, linalg_backend::native>::apply(
+double trace<double, linalg_backend::NATIVE>::apply(
     const double* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/native<double>");
@@ -38,7 +38,7 @@ double trace<double, linalg_backend::native>::apply(
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 template <>
-float trace<float, linalg_backend::blas_lapacke>::apply(
+float trace<float, linalg_backend::BLAS_LAPACKE>::apply(
     const float* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/blas_lapacke<float>");
@@ -46,7 +46,7 @@ float trace<float, linalg_backend::blas_lapacke>::apply(
 }
 
 template <>
-double trace<double, linalg_backend::blas_lapacke>::apply(
+double trace<double, linalg_backend::BLAS_LAPACKE>::apply(
     const double* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/blas_lapacke<double>");
@@ -58,7 +58,7 @@ double trace<double, linalg_backend::blas_lapacke>::apply(
 #if LINALG_HAS_MKL
 
 template <>
-float trace<float, linalg_backend::mkl>::apply(
+float trace<float, linalg_backend::MKL>::apply(
     const float* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/mkl<float>");
@@ -66,7 +66,7 @@ float trace<float, linalg_backend::mkl>::apply(
 }
 
 template <>
-double trace<double, linalg_backend::mkl>::apply(
+double trace<double, linalg_backend::MKL>::apply(
     const double* A, linalg_int n, linalg_int lda, void* /*stream*/)
 {
     LINALG_SCOPE("trace/mkl<double>");

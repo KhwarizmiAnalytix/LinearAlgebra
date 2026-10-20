@@ -748,7 +748,7 @@ inline void svd(  // NOLINT
 }  // namespace
 
 template <>
-void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
+void svd_decomposition<float, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                          columns,
     float* __restrict                                                   A,
     linalg_long                                                          lda,
@@ -767,7 +767,7 @@ void svd_decomposition<float, linalg_backend::native>::apply(linalg_long rows,
 }
 
 template <>
-void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
+void svd_decomposition<double, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                           columns,
     double* __restrict                                                   A,
     linalg_long                                                           lda,
@@ -786,14 +786,14 @@ void svd_decomposition<double, linalg_backend::native>::apply(linalg_long rows,
 }
 
 template <>
-size_t svd_decomposition<float, linalg_backend::native>::workspace_size(
+size_t svd_decomposition<float, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return svd_scalar_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t svd_decomposition<double, linalg_backend::native>::workspace_size(
+size_t svd_decomposition<double, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return svd_scalar_workspace_size_impl<double>(rows, columns);

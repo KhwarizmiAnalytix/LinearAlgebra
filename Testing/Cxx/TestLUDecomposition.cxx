@@ -117,8 +117,8 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
 
     // mkl/blas_lapacke always pivot (LAPACKE getrf); the scalar native path
     // only does when LINALG_HAS_LU_PIVOTING is on.
-    constexpr bool kBackendPivots = Backend == linalg::linalg_backend::mkl ||
-                                    Backend == linalg::linalg_backend::blas_lapacke ||
+    constexpr bool kBackendPivots = Backend == linalg::linalg_backend::MKL ||
+                                    Backend == linalg::linalg_backend::BLAS_LAPACKE ||
                                     LINALG_HAS_LU_PIVOTING;
     if (kBackendPivots)
     {
@@ -156,10 +156,10 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu(double 
         invert_ws_size);
 
     const auto det_ws_size =
-        linalg::determinant<value_t, linalg::linalg_backend::native>::workspace_size(
+        linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
             static_cast<linalg_int>(n), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
     std::vector<unsigned char> det_ws(det_ws_size);
-    linalg::determinant<value_t, linalg::linalg_backend::native>::apply(a1.data(),
+    linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(a1.data(),
         pivot.data(),
         static_cast<linalg_int>(n),
         linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER,

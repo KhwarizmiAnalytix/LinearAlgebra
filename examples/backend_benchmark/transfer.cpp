@@ -56,7 +56,7 @@ void run(std::ofstream& csv, int n, bool pinned, int uploads, bool compute = fal
         }
         if (compute)
         {
-            linalg::multiplication<T, linalg::linalg_backend::cuda_blas>::apply(false,
+            linalg::multiplication<T, linalg::linalg_backend::CUDA_BLAS>::apply(false,
                 false,
                 n,
                 n,

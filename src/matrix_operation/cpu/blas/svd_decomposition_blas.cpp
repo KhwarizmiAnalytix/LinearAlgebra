@@ -188,7 +188,7 @@ void svd_lapacke_impl(GesvdWorkFn gesvd_work,
 }  // namespace
 
 template <>
-void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void svd_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
     linalg_long                                                          columns,
     float*                                                               A,
     linalg_long                                                          lda,
@@ -253,7 +253,7 @@ void svd_decomposition<float, linalg_backend::blas_lapacke>::apply(linalg_long r
 }
 
 template <>
-void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void svd_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
     linalg_long                                                           columns,
     double*                                                               A,
     linalg_long                                                           lda,
@@ -318,14 +318,14 @@ void svd_decomposition<double, linalg_backend::blas_lapacke>::apply(linalg_long 
 }
 
 template <>
-size_t svd_decomposition<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t svd_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return svd_workspace_size_impl<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work), rows, columns);
 }
 
 template <>
-size_t svd_decomposition<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t svd_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return svd_workspace_size_impl<double>(

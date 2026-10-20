@@ -27,9 +27,9 @@ const char* backend_name(linalg::linalg_backend backend)
 {
     switch (backend)
     {
-    case linalg::linalg_backend::mkl:
+    case linalg::linalg_backend::MKL:
         return "mkl";
-    case linalg::linalg_backend::blas_lapacke:
+    case linalg::linalg_backend::BLAS_LAPACKE:
         return "blas_lapacke";
     default:
         return "native";
@@ -97,7 +97,7 @@ void BM_CholeskyDecomposition(benchmark::State& state)
 
 }  // namespace
 
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::native)
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::NATIVE)
     ->Arg(16)
     ->Arg(32)
     ->Arg(64)
@@ -109,7 +109,7 @@ BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::nati
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::native)
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::NATIVE)
     ->Arg(16)
     ->Arg(32)
     ->Arg(64)
@@ -122,7 +122,7 @@ BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::nat
     ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::blas_lapacke)
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(16)
     ->Arg(32)
     ->Arg(64)
@@ -134,7 +134,7 @@ BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::blas
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::blas_lapacke)
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(16)
     ->Arg(32)
     ->Arg(64)
@@ -148,7 +148,7 @@ BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::bla
 #endif
 
 #if LINALG_HAS_MKL
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::mkl)
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::MKL)
     ->Arg(16)
     ->Arg(32)
     ->Arg(64)
@@ -160,7 +160,7 @@ BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::mkl)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 
-BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::mkl)
+BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::MKL)
     ->Arg(16)
     ->Arg(32)
     ->Arg(64)

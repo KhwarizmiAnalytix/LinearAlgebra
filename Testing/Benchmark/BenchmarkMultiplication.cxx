@@ -28,9 +28,9 @@ const char* backend_name(linalg::linalg_backend backend)
 {
     switch (backend)
     {
-    case linalg::linalg_backend::mkl:
+    case linalg::linalg_backend::MKL:
         return "mkl";
-    case linalg::linalg_backend::blas_lapacke:
+    case linalg::linalg_backend::BLAS_LAPACKE:
         return "blas_lapacke";
     default:
         return "native";

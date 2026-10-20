@@ -328,7 +328,7 @@ void svd_on_device(linalg_long rows,
 }  // namespace detail
 
 template <>
-void svd_decomposition<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void svd_decomposition<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long  columns,
     float*       A,
     linalg_long  lda,
@@ -346,7 +346,7 @@ void svd_decomposition<float, linalg_backend::cuda_blas>::apply(linalg_long rows
 }
 
 template <>
-void svd_decomposition<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void svd_decomposition<double, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long  columns,
     double*      A,
     linalg_long  lda,
@@ -364,7 +364,7 @@ void svd_decomposition<double, linalg_backend::cuda_blas>::apply(linalg_long row
 }
 
 template <>
-size_t svd_decomposition<float, linalg_backend::cuda_blas>::workspace_size(
+size_t svd_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     const auto base = detail::svd_on_device_workspace_size(static_cast<const float*>(nullptr), rows, columns);
@@ -375,7 +375,7 @@ size_t svd_decomposition<float, linalg_backend::cuda_blas>::workspace_size(
 }
 
 template <>
-size_t svd_decomposition<double, linalg_backend::cuda_blas>::workspace_size(
+size_t svd_decomposition<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     const auto base = detail::svd_on_device_workspace_size(static_cast<const double*>(nullptr), rows, columns);

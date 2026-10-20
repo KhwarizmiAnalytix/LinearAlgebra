@@ -1759,7 +1759,7 @@ void matrix_multiplication_seq(  // NOLINT
 }  // namespace
 // C(i,j) =C[i*ldc + j] j belong to [0,columns] and i to [0,rows]
 template <>
-void multiplication<float, linalg_backend::native>::apply(bool transpose_a,
+void multiplication<float, linalg_backend::NATIVE>::apply(bool transpose_a,
     bool                                                       transpose_b,
     linalg_int                                                 rows,
     linalg_int                                                 columns,
@@ -1895,7 +1895,7 @@ void multiplication<float, linalg_backend::native>::apply(bool transpose_a,
 }
 
 template <>
-void multiplication<double, linalg_backend::native>::apply(bool transpose_a,
+void multiplication<double, linalg_backend::NATIVE>::apply(bool transpose_a,
     bool                                                        transpose_b,
     linalg_int                                                  rows,
     linalg_int                                                  columns,
@@ -1971,14 +1971,14 @@ void multiplication<double, linalg_backend::native>::apply(bool transpose_a,
 }
 
 template <>
-size_t multiplication<float, linalg_backend::native>::workspace_size(
+size_t multiplication<float, linalg_backend::NATIVE>::workspace_size(
     linalg_int rows, linalg_int columns, linalg_int depth)
 {
     return matmul_scalar_workspace_size<float>(rows, columns, depth);
 }
 
 template <>
-size_t multiplication<double, linalg_backend::native>::workspace_size(
+size_t multiplication<double, linalg_backend::NATIVE>::workspace_size(
     linalg_int rows, linalg_int columns, linalg_int depth)
 {
     return matmul_scalar_workspace_size<double>(rows, columns, depth);

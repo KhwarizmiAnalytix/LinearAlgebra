@@ -102,7 +102,7 @@ template <typename T> size_t general_scalar_mult_ws_size(linalg_int n)
     size_t sz = 0;
     for (linalg_int m = 1; m <= n; ++m)
     {
-        sz = std::max(sz, multiplication<T, linalg_backend::native>::workspace_size(m, m, m));
+        sz = std::max(sz, multiplication<T, linalg_backend::NATIVE>::workspace_size(m, m, m));
     }
     return sz;
 }
@@ -112,7 +112,7 @@ template <typename T> size_t general_scalar_qr_ws_size(linalg_int n)
     size_t sz = 0;
     for (linalg_int m = 1; m <= n; ++m)
     {
-        sz = std::max(sz, qr_decomposition<T, linalg_backend::native>::workspace_size(m, m));
+        sz = std::max(sz, qr_decomposition<T, linalg_backend::NATIVE>::workspace_size(m, m));
     }
     return sz;
 }
@@ -522,7 +522,7 @@ bool general_eigenvalues_qr(linalg_int n,
             // M <- Hm*Hm - tr*Hm + det*I, the implicit double-shift polynomial, via the
             // same native GEMM entry point multiplication.cpp exposes rather than a
             // hand-rolled triple loop.
-            multiplication<T, linalg_backend::native>::apply(
+            multiplication<T, linalg_backend::NATIVE>::apply(
                 false, false, m, m, m, Hm, m, Hm, m, M, m, mult_ws, mult_ws_size);
             for (linalg_int i = 0; i < m; ++i)
             {
@@ -534,16 +534,16 @@ bool general_eigenvalues_qr(linalg_int n,
         }
 
         // Form Q directly in M; the similarity update does not need R.
-        qr_decomposition<T, linalg_backend::native>::apply_r(m, m, M, m, tau, qr_ws, qr_ws_size);
-        qr_decomposition<T, linalg_backend::native>::apply_q(m, m, M, m, tau, qr_ws, qr_ws_size);
+        qr_decomposition<T, linalg_backend::NATIVE>::apply_r(m, m, M, m, tau, qr_ws, qr_ws_size);
+        qr_decomposition<T, linalg_backend::NATIVE>::apply_q(m, m, M, m, tau, qr_ws, qr_ws_size);
 
         {
             LINALG_SCOPE("general_eigen/similarity");
             // Hm <- Q^T * Hm * Q, again via the shared native GEMM entry point.
-            multiplication<T, linalg_backend::native>::apply(
+            multiplication<T, linalg_backend::NATIVE>::apply(
                 true, false, m, m, m, M, m, Hm, m, tmp, m, mult_ws, mult_ws_size);
             // Product goes to the free stride-m buffer Q, then to H's leading block.
-            multiplication<T, linalg_backend::native>::apply(
+            multiplication<T, linalg_backend::NATIVE>::apply(
                 false, false, m, m, m, tmp, m, M, m, Q, m, mult_ws, mult_ws_size);
             for (linalg_int i = 0; i < m; ++i)
             {
@@ -588,7 +588,7 @@ bool inverse_iteration(linalg_int n,
     // M is the same matrix across every iteration below, so factor it once via
     // the shared native LU entry point lu_decomposition.cpp exposes, instead of
     // a self-contained Gaussian elimination redone from scratch each time.
-    if (!lu_decomposition<T, linalg_backend::native>::apply(M, n, pivot, nullptr, 0))
+    if (!lu_decomposition<T, linalg_backend::NATIVE>::apply(M, n, pivot, nullptr, 0))
     {
         return false;
     }
@@ -598,7 +598,7 @@ bool inverse_iteration(linalg_int n,
     {
         // Solve M * x = x in place, reusing the LU factors above, via the
         // shared native linear_solver entry point.
-        linear_solver<T, linalg_backend::native>::apply(
+        linear_solver<T, linalg_backend::NATIVE>::apply(
             M, pivot, n, x, linear_solver_type::LU_UPFRONT_LINEAR_SOLVER, nullptr, 0);
 
         T norm = T(0);
@@ -630,7 +630,7 @@ bool inverse_iteration(linalg_int n,
 }  // namespace
 
 template <>
-bool symmetric_eigen_backend<float, linalg_backend::native>::apply(float* eigenvectors,
+bool symmetric_eigen_backend<float, linalg_backend::NATIVE>::apply(float* eigenvectors,
     linalg_int                                                                n,
     linalg_int                                                                lda,
     float*                                                                    eigenvalues,
@@ -650,7 +650,7 @@ bool symmetric_eigen_backend<float, linalg_backend::native>::apply(float* eigenv
 }
 
 template <>
-bool symmetric_eigen_backend<double, linalg_backend::native>::apply(double* eigenvectors,
+bool symmetric_eigen_backend<double, linalg_backend::NATIVE>::apply(double* eigenvectors,
     linalg_int                                                                  n,
     linalg_int                                                                  lda,
     double*                                                                     eigenvalues,
@@ -736,7 +736,7 @@ bool general_eigen_scalar_impl(T* eigenvectors,
 }
 
 template <>
-bool general_eigen_backend<float, linalg_backend::native>::apply(float* eigenvectors,
+bool general_eigen_backend<float, linalg_backend::NATIVE>::apply(float* eigenvectors,
     linalg_int                                                              n,
     linalg_int                                                              lda,
     float*                                                                  eigenvalues_real,
@@ -762,7 +762,7 @@ bool general_eigen_backend<float, linalg_backend::native>::apply(float* eigenvec
 }
 
 template <>
-bool general_eigen_backend<double, linalg_backend::native>::apply(double* eigenvectors,
+bool general_eigen_backend<double, linalg_backend::NATIVE>::apply(double* eigenvectors,
     linalg_int                                                                n,
     linalg_int                                                                lda,
     double*                                                                   eigenvalues_real,
@@ -788,26 +788,26 @@ bool general_eigen_backend<double, linalg_backend::native>::apply(double* eigenv
 }
 
 template <>
-size_t symmetric_eigen_backend<float, linalg_backend::native>::workspace_size(linalg_int n)
+size_t symmetric_eigen_backend<float, linalg_backend::NATIVE>::workspace_size(linalg_int n)
 {
     return jacobi_workspace_size<float>(n);
 }
 
 template <>
-size_t symmetric_eigen_backend<double, linalg_backend::native>::workspace_size(linalg_int n)
+size_t symmetric_eigen_backend<double, linalg_backend::NATIVE>::workspace_size(linalg_int n)
 {
     return jacobi_workspace_size<double>(n);
 }
 
 template <>
-size_t general_eigen_backend<float, linalg_backend::native>::workspace_size(
+size_t general_eigen_backend<float, linalg_backend::NATIVE>::workspace_size(
     linalg_int n, bool compute_eigenvectors)
 {
     return general_scalar_workspace_size<float>(n, compute_eigenvectors);
 }
 
 template <>
-size_t general_eigen_backend<double, linalg_backend::native>::workspace_size(
+size_t general_eigen_backend<double, linalg_backend::NATIVE>::workspace_size(
     linalg_int n, bool compute_eigenvectors)
 {
     return general_scalar_workspace_size<double>(n, compute_eigenvectors);

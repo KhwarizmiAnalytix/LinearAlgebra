@@ -26,9 +26,9 @@ template <typename value_t> struct Tolerance
 
 template <linalg::linalg_backend Backend> const char* backend_name()
 {
-    return Backend == linalg::linalg_backend::native
+    return Backend == linalg::linalg_backend::NATIVE
                ? "native"
-               : (Backend == linalg::linalg_backend::blas_lapacke ? "blas_lapacke" : "mkl");
+               : (Backend == linalg::linalg_backend::BLAS_LAPACKE ? "blas_lapacke" : "mkl");
 }
 
 template <typename value_t> const char* value_type_name()
@@ -272,7 +272,7 @@ void build_cholesky_matrix(
             details);
 
         IA = R;
-        linalg::determinant<value_t, linalg::linalg_backend::native>::apply(
+        linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(
             IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
@@ -335,7 +335,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_cholesky(s
 
     // mkl's cholesky_decomposition doesn't validate/throw on this invalid
     // enum the way native and blas_lapacke do.
-    if (Backend != linalg::linalg_backend::mkl)
+    if (Backend != linalg::linalg_backend::MKL)
     {
         bool threw = false;
         try

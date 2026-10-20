@@ -172,7 +172,7 @@ void pseudo_inverse_impl(linalg_long rows,
 }  // namespace
 
 template <>
-void pseudo_inverse<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void pseudo_inverse<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long   columns,
     const float*  A,
     linalg_long   lda,
@@ -197,7 +197,7 @@ void pseudo_inverse<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
 }
 
 template <>
-void pseudo_inverse<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void pseudo_inverse<double, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long    columns,
     const double*  A,
     linalg_long    lda,
@@ -222,14 +222,14 @@ void pseudo_inverse<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
 }
 
 template <>
-size_t pseudo_inverse<float, linalg_backend::cuda_blas>::workspace_size(
+size_t pseudo_inverse<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return pseudo_inverse_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t pseudo_inverse<double, linalg_backend::cuda_blas>::workspace_size(
+size_t pseudo_inverse<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return pseudo_inverse_workspace_size_impl<double>(rows, columns);

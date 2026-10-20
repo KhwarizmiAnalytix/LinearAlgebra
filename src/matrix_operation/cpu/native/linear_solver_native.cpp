@@ -17,7 +17,7 @@ namespace linalg
 // below, so callers (tests included) get the same validation regardless of
 // which backend is active. There is no non-detail linear_solver() wrapper
 // to put this in any more — callers use
-// linear_solver<T, linalg_backend::native>::apply directly.
+// linear_solver<T, linalg_backend::NATIVE>::apply directly.
 static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 {
     LINALG_CHECK(m != nullptr && x != nullptr, "linear_solver::apply: m and x must not be null");
@@ -115,7 +115,7 @@ void linear_solver_scalar_impl(T* __restrict m, linalg_int* __restrict pivot, li
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
         // Scalar lu_decomposition needs no scratch of its own.
-        if (lu_decomposition<T, linalg_backend::native>::apply(m, lda, pivot, nullptr, 0))
+        if (lu_decomposition<T, linalg_backend::NATIVE>::apply(m, lda, pivot, nullptr, 0))
         {
             lu_solve(m, pivot, lda, x);
         }
@@ -128,7 +128,7 @@ void linear_solver_scalar_impl(T* __restrict m, linalg_int* __restrict pivot, li
 
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
-        if (cholesky_decomposition<T, linalg_backend::native>::apply(
+        if (cholesky_decomposition<T, linalg_backend::NATIVE>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_solve(m, lda, x);
@@ -145,7 +145,7 @@ void linear_solver_scalar_impl(T* __restrict m, linalg_int* __restrict pivot, li
 }  // namespace
 
 template <>
-void linear_solver<float, linalg_backend::native>::apply(float* __restrict m,
+void linear_solver<float, linalg_backend::NATIVE>::apply(float* __restrict m,
     linalg_int* __restrict                                      pivot,
     linalg_int                                                  lda,
     float* __restrict                                           x,
@@ -160,7 +160,7 @@ void linear_solver<float, linalg_backend::native>::apply(float* __restrict m,
 }
 
 template <>
-void linear_solver<double, linalg_backend::native>::apply(double* __restrict m,
+void linear_solver<double, linalg_backend::NATIVE>::apply(double* __restrict m,
     linalg_int* __restrict                                        pivot,
     linalg_int                                                    lda,
     double* __restrict                                            x,
@@ -175,14 +175,14 @@ void linear_solver<double, linalg_backend::native>::apply(double* __restrict m,
 }
 
 template <>
-size_t linear_solver<float, linalg_backend::native>::workspace_size(
+size_t linear_solver<float, linalg_backend::NATIVE>::workspace_size(
     linalg_int /*lda*/, linear_solver_type /*type*/)
 {
     return 0;
 }
 
 template <>
-size_t linear_solver<double, linalg_backend::native>::workspace_size(
+size_t linear_solver<double, linalg_backend::NATIVE>::workspace_size(
     linalg_int /*lda*/, linear_solver_type /*type*/)
 {
     return 0;

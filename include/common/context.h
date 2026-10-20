@@ -8,7 +8,7 @@
  * to mirror more closely. What remains here is read-only introspection of
  * what a given build actually has available, for callers that want to know
  * before calling into an op (e.g. to decide whether the
- * linalg_backend::cuda_blas struct specializations are usable at all).
+ * linalg_backend::CUDA_BLAS struct specializations are usable at all).
  */
 #pragma once
 

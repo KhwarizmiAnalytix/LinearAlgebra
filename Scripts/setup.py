@@ -447,6 +447,7 @@ class LinearAlgebraFlags:
             "gtest",
             "mkl",
             "blas",
+            "blis",
             "cublas",
             "lupivoting",
             "win32warnings",
@@ -476,6 +477,8 @@ class LinearAlgebraFlags:
             "enable the Intel MKL-backed LAPACKE code paths",
             "enable a vendor-neutral CBLAS/LAPACKE backend "
             "(OpenBLAS, Accelerate, netlib, ...)",
+            "enable BLIS as the explicit CBLAS/LAPACKE provider "
+            "(pair with AOCL libflame or netlib LAPACKE for factorization ops)",
             "enable the cuBLAS/cuSOLVER GPU backend (requires the CUDA toolkit)",
             "enable partial pivoting in the scalar (non-MKL) LU fallback paths",
             "re-enable MSVC narrowing-conversion warnings (C4244) "
@@ -511,6 +514,7 @@ class LinearAlgebraFlags:
             "gtest": "LINALG_ENABLE_GTEST",
             "mkl": "LINALG_ENABLE_MKL",
             "blas": "LINALG_ENABLE_BLAS",
+            "blis": "LINALG_ENABLE_BLIS",
             "cublas": "LINALG_ENABLE_CUBLAS",
             "lupivoting": "LINALG_LU_PIVOTING",
             "win32warnings": "LINALG_DISPLAY_WIN32_WARNINGS",
@@ -699,6 +703,14 @@ class LinearAlgebraFlags:
             print_status(
                 "Both MKL and the vendor-neutral BLAS backend are enabled - "
                 "MKL takes precedence at compile time.",
+                "WARNING",
+            )
+
+        if self.__value.get("blas") == self.ON and self.__value.get("blis") == self.ON:
+            print_status(
+                "Both blas and blis are enabled - use one or the other. "
+                "blis sets LINALG_ENABLE_BLIS and activates the BLAS backend "
+                "automatically; enabling blas alongside it is redundant.",
                 "WARNING",
             )
 
@@ -1119,6 +1131,7 @@ def main():
         print("  5. Build against an optional backend:")
         print("     setup.py config.build.test.mkl")
         print("     setup.py config.build.test.blas")
+        print("     setup.py config.build.test.blis")
         print("     setup.py config.build.test.cublas")
         print("\nBuild commands:")
         print("  config    - Configure the build system")

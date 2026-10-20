@@ -67,8 +67,15 @@ option(LINALG_ENABLE_MKL "Enable Intel MKL-backed LAPACKE code paths for LinearA
 # so identical CBLAS/LAPACKE names cannot bind to MKL's ILP64 interface.
 option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for LinearAlgebra" OFF)
 
+# Explicit BLIS backend option (FLAME/AOCL-compatible CBLAS/LAPACKE provider).
+# When ON, prefix probing targets BLIS before falling through to find_package(BLAS).
+# LINALG_ENABLE_BLAS is activated automatically; enable only one of BLIS or BLAS.
+# BLIS does not ship LAPACKE — pair with AOCL libflame or netlib LAPACKE for
+# factorization ops (cholesky / lu / svd / inversion / linear_solver).
+option(LINALG_ENABLE_BLIS "Enable BLIS as the CBLAS/LAPACKE provider" OFF)
+
 # cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as
-# linalg_backend::cuda_blas specializations of the same struct-template API
+# linalg_backend::CUDA_BLAS specializations of the same struct-template API
 # used by the CPU backends (src/matrix_operation/gpu/cublas/). Requires the CUDA
 # toolkit; enables the CUDA language only when this option is ON so plain CPU
 # builds remain free of any CUDA toolchain requirement.
@@ -254,6 +261,11 @@ if(LINALG_ENABLE_MKL)
 endif()
 
 # --- Optional vendor-neutral BLAS/LAPACK backend ---
+# LINALG_ENABLE_BLIS activates the same blas_lapacke backend as
+# LINALG_ENABLE_BLAS; it just changes which provider is probed for.
+if(LINALG_ENABLE_BLIS AND NOT LINALG_ENABLE_BLAS)
+    set(LINALG_ENABLE_BLAS ON)
+endif()
 set(LINALG_BLAS_USE_ACCELERATE OFF)
 set(LINALG_BLAS_HAS_LAPACKE OFF)
 if(LINALG_ENABLE_BLAS)
@@ -266,48 +278,97 @@ if(LINALG_ENABLE_BLAS)
     # cmake/Modules/FindOpenBLAS.cmake takes the same approach — and append
     # any hit to CMAKE_PREFIX_PATH (not CMAKE_FIND_ROOT_PATH, which would
     # also constrain *what* can be found) so find_package/find_path below
-    # pick OpenBLAS up on their own, with no manual -DCMAKE_PREFIX_PATH
+    # pick the right vendor up on their own, with no manual -DCMAKE_PREFIX_PATH
     # needed on macOS, Linux, or Windows. A user-supplied CMAKE_PREFIX_PATH
     # entry always wins ties, since list order is find preference and these
     # are appended, not prepended.
+    set(LINALG_BLAS_INCLUDE_DIRS "")
     if(NOT DEFINED ENV{LINALG_NO_AUTO_BLAS_PREFIX})
         set(LINALG_BLAS_PREFIX_CANDIDATES "")
-
-        # Homebrew (macOS) / Linuxbrew (Linux) OpenBLAS keg: both are
-        # keg-only, i.e. deliberately unlinked from the default prefix so
-        # they don't shadow a system BLAS.
         find_program(LINALG_BREW_EXECUTABLE brew)
-        if(LINALG_BREW_EXECUTABLE)
-            execute_process(
-                COMMAND "${LINALG_BREW_EXECUTABLE}" --prefix openblas
-                OUTPUT_VARIABLE LINALG_HOMEBREW_OPENBLAS_PREFIX
-                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
-                RESULT_VARIABLE LINALG_HOMEBREW_OPENBLAS_RESULT
-            )
-            if(LINALG_HOMEBREW_OPENBLAS_RESULT EQUAL 0)
-                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "${LINALG_HOMEBREW_OPENBLAS_PREFIX}")
-            endif()
-        endif()
         mark_as_advanced(LINALG_BREW_EXECUTABLE)
 
-        # Conda-forge's openblas package (macOS/Linux/Windows): headers and
-        # library sit under the active environment's own prefix — Library/
-        # on Windows, the prefix root elsewhere — never the compiler default.
-        if(DEFINED ENV{CONDA_PREFIX})
-            if(WIN32)
-                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}/Library")
+        if(LINALG_ENABLE_BLIS)
+            # BLIS ships a CMake config package (find_package(BLIS)); try it
+            # first so an already-installed BLIS is picked up before any prefix
+            # probing — the same strategy PyTorch uses for its optional BLAS
+            # vendors in cmake/Modules/FindBLIS.cmake.
+            find_package(BLIS QUIET)
+            if(BLIS_FOUND)
+                message(STATUS "LinearAlgebra: found BLIS via its CMake config package")
+                # Wire BLIS's imported target / variables into the BLAS slot so
+                # the generic find_package(BLAS) below is not needed.
+                if(TARGET BLIS::BLIS)
+                    list(APPEND LINALG_DEPENDENCY_LIBS BLIS::BLIS)
+                elseif(BLIS_LIBRARIES)
+                    list(APPEND LINALG_DEPENDENCY_LIBS ${BLIS_LIBRARIES})
+                endif()
+                if(BLIS_INCLUDE_DIRS)
+                    list(APPEND LINALG_BLAS_INCLUDE_DIRS ${BLIS_INCLUDE_DIRS})
+                endif()
+                set(_linalg_blis_found_via_config ON)
             else()
-                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}")
-            endif()
-        endif()
+                # Homebrew / Linuxbrew blis keg (keg-only on macOS).
+                if(LINALG_BREW_EXECUTABLE)
+                    execute_process(
+                        COMMAND "${LINALG_BREW_EXECUTABLE}" --prefix blis
+                        OUTPUT_VARIABLE _linalg_brew_blis_prefix
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+                        RESULT_VARIABLE _linalg_brew_blis_result
+                    )
+                    if(_linalg_brew_blis_result EQUAL 0)
+                        list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "${_linalg_brew_blis_prefix}")
+                    endif()
+                endif()
 
-        # vcpkg's openblas port, for a VCPKG_ROOT set without the vcpkg
-        # toolchain file (which would otherwise have already wired
-        # CMAKE_PREFIX_PATH itself before this file ran).
-        if(DEFINED ENV{VCPKG_ROOT} AND DEFINED VCPKG_TARGET_TRIPLET)
-            list(APPEND LINALG_BLAS_PREFIX_CANDIDATES
-                 "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}"
-            )
+                # Conda-forge blis package.
+                if(DEFINED ENV{CONDA_PREFIX})
+                    if(WIN32)
+                        list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}/Library")
+                    else()
+                        list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}")
+                    endif()
+                endif()
+
+                # vcpkg blis port.
+                if(DEFINED ENV{VCPKG_ROOT} AND DEFINED VCPKG_TARGET_TRIPLET)
+                    list(APPEND LINALG_BLAS_PREFIX_CANDIDATES
+                         "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}"
+                    )
+                endif()
+            endif()
+        else()
+            # OpenBLAS (default CBLAS provider).
+            # Homebrew (macOS) / Linuxbrew (Linux) OpenBLAS keg: both are
+            # keg-only, i.e. deliberately unlinked from the default prefix so
+            # they don't shadow a system BLAS.
+            if(LINALG_BREW_EXECUTABLE)
+                execute_process(
+                    COMMAND "${LINALG_BREW_EXECUTABLE}" --prefix openblas
+                    OUTPUT_VARIABLE LINALG_HOMEBREW_OPENBLAS_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+                    RESULT_VARIABLE LINALG_HOMEBREW_OPENBLAS_RESULT
+                )
+                if(LINALG_HOMEBREW_OPENBLAS_RESULT EQUAL 0)
+                    list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "${LINALG_HOMEBREW_OPENBLAS_PREFIX}")
+                endif()
+            endif()
+
+            # Conda-forge's openblas package (macOS/Linux/Windows).
+            if(DEFINED ENV{CONDA_PREFIX})
+                if(WIN32)
+                    list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}/Library")
+                else()
+                    list(APPEND LINALG_BLAS_PREFIX_CANDIDATES "$ENV{CONDA_PREFIX}")
+                endif()
+            endif()
+
+            # vcpkg's openblas port.
+            if(DEFINED ENV{VCPKG_ROOT} AND DEFINED VCPKG_TARGET_TRIPLET)
+                list(APPEND LINALG_BLAS_PREFIX_CANDIDATES
+                     "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}"
+                )
+            endif()
         endif()
 
         foreach(LINALG_BLAS_PREFIX_CANDIDATE IN LISTS LINALG_BLAS_PREFIX_CANDIDATES)
@@ -315,7 +376,7 @@ if(LINALG_ENABLE_BLAS)
                 list(APPEND CMAKE_PREFIX_PATH "${LINALG_BLAS_PREFIX_CANDIDATE}")
                 message(
                     STATUS
-                        "LinearAlgebra: found candidate OpenBLAS prefix ${LINALG_BLAS_PREFIX_CANDIDATE}"
+                        "LinearAlgebra: found candidate BLAS prefix ${LINALG_BLAS_PREFIX_CANDIDATE}"
                 )
             endif()
         endforeach()
@@ -323,7 +384,11 @@ if(LINALG_ENABLE_BLAS)
         unset(LINALG_BLAS_PREFIX_CANDIDATE)
     endif()
 
-    if(NOT LINALG_ENABLE_MKL)
+    # When BLIS was resolved via its own CMake config package above its
+    # imported target / libraries are already appended; skip the generic
+    # FindBLAS/FindLAPACK probes to avoid picking up a second, unrelated
+    # provider and confusing the linker.
+    if(NOT LINALG_ENABLE_MKL AND NOT _linalg_blis_found_via_config)
         find_package(BLAS REQUIRED)
         find_package(LAPACK REQUIRED)
         # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
@@ -339,6 +404,7 @@ if(LINALG_ENABLE_BLAS)
             list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
         endif()
     endif()
+    unset(_linalg_blis_found_via_config)
 
     # BLAS::BLAS/LAPACK::LAPACK link the libraries but do not guarantee a
     # cblas.h/lapacke.h C declaration header is on the include path — Homebrew's
@@ -353,13 +419,19 @@ if(LINALG_ENABLE_BLAS)
     # ILP64 widths) and has produced silently wrong GEMM results in testing.
     set(_linalg_find_framework_save ${CMAKE_FIND_FRAMEWORK})
     set(CMAKE_FIND_FRAMEWORK LAST)
-    find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h)
+    # BLIS installs cblas.h under <prefix>/include/blis/ on some distros
+    # (e.g. Debian's libblis-dev); add that suffix so the header is found
+    # regardless of installation layout.
+    if(LINALG_ENABLE_BLIS)
+        find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h PATH_SUFFIXES include include/blis blis)
+    else()
+        find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h)
+    endif()
     find_path(LINALG_LAPACKE_INCLUDE_DIR NAMES lapacke.h)
     set(CMAKE_FIND_FRAMEWORK ${_linalg_find_framework_save})
     unset(_linalg_find_framework_save)
     mark_as_advanced(LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR)
 
-    set(LINALG_BLAS_INCLUDE_DIRS "")
     if(LINALG_CBLAS_INCLUDE_DIR MATCHES "\\.framework")
         # On macOS, the generic cblas.h search above commonly lands on
         # Accelerate's own vecLib.framework/Accelerate.framework header (Xcode's
@@ -382,9 +454,9 @@ if(LINALG_ENABLE_BLAS)
     if(NOT LINALG_CBLAS_INCLUDE_DIR AND NOT LINALG_BLAS_USE_ACCELERATE)
         message(
             FATAL_ERROR
-                "LINALG_ENABLE_BLAS is ON but cblas.h (or, on Apple, Accelerate/Accelerate.h) "
-                "was not found. Install a CBLAS-providing package (OpenBLAS, netlib, ...) "
-                "and/or extend CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_BLAS=OFF."
+                "LINALG_ENABLE_BLAS/BLIS is ON but cblas.h (or, on Apple, Accelerate/Accelerate.h) "
+                "was not found. Install a CBLAS-providing package (OpenBLAS, BLIS, netlib, ...) "
+                "and/or extend CMAKE_PREFIX_PATH, or disable the BLAS/BLIS option."
         )
     endif()
 
@@ -744,7 +816,11 @@ if(LINALG_STANDALONE)
     message("  Benchmark            : ${LINALG_ENABLE_BENCHMARK}")
     message("  Profiling            : ${LINALG_ENABLE_PROFILING}")
     message("  MKL                  : ${LINALG_ENABLE_MKL}")
-    message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
+    if(LINALG_ENABLE_BLIS)
+        message("  BLAS/LAPACK          : ON (BLIS)")
+    else()
+        message("  BLAS/LAPACK          : ${LINALG_ENABLE_BLAS}")
+    endif()
     message("  Accelerate (BLAS)    : ${LINALG_BLAS_USE_ACCELERATE}")
     message("  LAPACKE (BLAS)       : ${LINALG_BLAS_HAS_LAPACKE}")
     message("  cuBLAS               : ${LINALG_ENABLE_CUBLAS}")

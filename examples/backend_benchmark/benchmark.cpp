@@ -106,11 +106,11 @@ const char* backend_name(backend b)
 {
     switch (b)
     {
-    case backend::native:
+    case backend::NATIVE:
         return "native";
-    case backend::blas_lapacke:
+    case backend::BLAS_LAPACKE:
         return "openblas";
-    case backend::mkl:
+    case backend::MKL:
         return "mkl";
     default:
         return "gpu";
@@ -149,7 +149,7 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
     {
         return;
     }
-    constexpr bool gpu = B == backend::cuda_blas;
+    constexpr bool gpu = B == backend::CUDA_BLAS;
     auto           a   = random_matrix<T>(static_cast<std::size_t>(m) * k, 42);
     auto           b   = random_matrix<T>(static_cast<std::size_t>(k) * n, 43);
     if constexpr (Op == operation::chol || Op == operation::symmetric_eigen)
@@ -217,7 +217,8 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
     std::vector<linalg_int> pivot(n);
     std::vector<std::byte>  workspace(bytes);
     device_buffer<T> da(gpu ? a.size() : 0), db(gpu ? b.size() : 0), original(gpu ? a.size() : 0);
-    device_buffer<T> dc(gpu ? result.size() : 0), dout(gpu ? result.size() : 0), ds(gpu ? n : 0);
+    device_buffer<T>        dc(gpu ? result.size() : 0), device_output(gpu ? result.size() : 0),
+        ds(gpu ? n : 0);
     device_buffer<std::byte> dws(gpu ? bytes : 0);
     device_buffer<int>       dinfo(gpu ? 1 : 0), dpivot(gpu ? n : 0);
     stream_owner             stream;
@@ -235,7 +236,7 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
         ap   = da.get();
         bp   = db.get();
         cp   = dc.get();
-        outp = dout.get();
+        outp = device_output.get();
         sp   = ds.get();
         wsp  = dws.get();
     }
@@ -401,13 +402,13 @@ void all_backends(std::ofstream& csv,
 {
     if (!skip_native)
     {
-        run_case<T, backend::native, Op>(csv, m, n, k, ta, tb);
+        run_case<T, backend::NATIVE, Op>(csv, m, n, k, ta, tb);
     }
-    run_case<T, backend::blas_lapacke, Op>(csv, m, n, k, ta, tb);
-    run_case<T, backend::mkl, Op>(csv, m, n, k, ta, tb);
+    run_case<T, backend::BLAS_LAPACKE, Op>(csv, m, n, k, ta, tb);
+    run_case<T, backend::MKL, Op>(csv, m, n, k, ta, tb);
     if constexpr (Op != operation::general_eigen)
     {
-        run_case<T, backend::cuda_blas, Op>(csv, m, n, k, ta, tb);
+        run_case<T, backend::CUDA_BLAS, Op>(csv, m, n, k, ta, tb);
     }
 }
 

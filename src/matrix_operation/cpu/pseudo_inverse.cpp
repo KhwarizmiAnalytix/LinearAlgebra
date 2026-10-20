@@ -188,7 +188,7 @@ void pseudo_inverse_impl(linalg_long rows,
 }
 
 template <>
-void pseudo_inverse<float, linalg_backend::native>::apply(linalg_long rows,
+void pseudo_inverse<float, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                               columns,
     const float*                                                              A,
     linalg_long                                                               lda,
@@ -204,12 +204,12 @@ void pseudo_inverse<float, linalg_backend::native>::apply(linalg_long rows,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
-    pseudo_inverse_impl<float, linalg_backend::native>(
+    pseudo_inverse_impl<float, linalg_backend::NATIVE>(
         rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-void pseudo_inverse<double, linalg_backend::native>::apply(linalg_long rows,
+void pseudo_inverse<double, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                                columns,
     const double*                                                              A,
     linalg_long                                                                lda,
@@ -225,28 +225,28 @@ void pseudo_inverse<double, linalg_backend::native>::apply(linalg_long rows,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
-    pseudo_inverse_impl<double, linalg_backend::native>(
+    pseudo_inverse_impl<double, linalg_backend::NATIVE>(
         rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-size_t pseudo_inverse<float, linalg_backend::native>::workspace_size(
+size_t pseudo_inverse<float, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return pseudo_inverse_workspace_size_impl<float, linalg_backend::native>(rows, columns);
+    return pseudo_inverse_workspace_size_impl<float, linalg_backend::NATIVE>(rows, columns);
 }
 
 template <>
-size_t pseudo_inverse<double, linalg_backend::native>::workspace_size(
+size_t pseudo_inverse<double, linalg_backend::NATIVE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return pseudo_inverse_workspace_size_impl<double, linalg_backend::native>(rows, columns);
+    return pseudo_inverse_workspace_size_impl<double, linalg_backend::NATIVE>(rows, columns);
 }
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
 
 template <>
-void pseudo_inverse<float, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void pseudo_inverse<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
     linalg_long                                                                        columns,
     const float*                                                                       A,
     linalg_long                                                                        lda,
@@ -262,12 +262,12 @@ void pseudo_inverse<float, linalg_backend::blas_lapacke>::apply(linalg_long rows
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
-    pseudo_inverse_impl<float, linalg_backend::blas_lapacke>(
+    pseudo_inverse_impl<float, linalg_backend::BLAS_LAPACKE>(
         rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-void pseudo_inverse<double, linalg_backend::blas_lapacke>::apply(linalg_long rows,
+void pseudo_inverse<double, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
     linalg_long                                                                         columns,
     const double*                                                                       A,
     linalg_long                                                                         lda,
@@ -283,22 +283,22 @@ void pseudo_inverse<double, linalg_backend::blas_lapacke>::apply(linalg_long row
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
-    pseudo_inverse_impl<double, linalg_backend::blas_lapacke>(
+    pseudo_inverse_impl<double, linalg_backend::BLAS_LAPACKE>(
         rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-size_t pseudo_inverse<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t pseudo_inverse<float, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return pseudo_inverse_workspace_size_impl<float, linalg_backend::blas_lapacke>(rows, columns);
+    return pseudo_inverse_workspace_size_impl<float, linalg_backend::BLAS_LAPACKE>(rows, columns);
 }
 
 template <>
-size_t pseudo_inverse<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t pseudo_inverse<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return pseudo_inverse_workspace_size_impl<double, linalg_backend::blas_lapacke>(rows, columns);
+    return pseudo_inverse_workspace_size_impl<double, linalg_backend::BLAS_LAPACKE>(rows, columns);
 }
 
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -306,7 +306,7 @@ size_t pseudo_inverse<double, linalg_backend::blas_lapacke>::workspace_size(
 #if LINALG_HAS_MKL
 
 template <>
-void pseudo_inverse<float, linalg_backend::mkl>::apply(linalg_long rows,
+void pseudo_inverse<float, linalg_backend::MKL>::apply(linalg_long rows,
     linalg_long                                                               columns,
     const float*                                                              A,
     linalg_long                                                               lda,
@@ -322,12 +322,12 @@ void pseudo_inverse<float, linalg_backend::mkl>::apply(linalg_long rows,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
-    pseudo_inverse_impl<float, linalg_backend::mkl>(
+    pseudo_inverse_impl<float, linalg_backend::MKL>(
         rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-void pseudo_inverse<double, linalg_backend::mkl>::apply(linalg_long rows,
+void pseudo_inverse<double, linalg_backend::MKL>::apply(linalg_long rows,
     linalg_long                                                                columns,
     const double*                                                              A,
     linalg_long                                                                lda,
@@ -343,22 +343,22 @@ void pseudo_inverse<double, linalg_backend::mkl>::apply(linalg_long rows,
         "pseudo_inverse::apply: A and Ainv must not be null");
     LINALG_CHECK(rows != 0 && columns != 0 && lda != 0 && ldai != 0,
         "pseudo_inverse::apply: rows/columns/lda/ldai must be positive");
-    pseudo_inverse_impl<double, linalg_backend::mkl>(
+    pseudo_inverse_impl<double, linalg_backend::MKL>(
         rows, columns, A, lda, Ainv, ldai, tol, workspace, workspace_size);
 }
 
 template <>
-size_t pseudo_inverse<float, linalg_backend::mkl>::workspace_size(
+size_t pseudo_inverse<float, linalg_backend::MKL>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return pseudo_inverse_workspace_size_impl<float, linalg_backend::mkl>(rows, columns);
+    return pseudo_inverse_workspace_size_impl<float, linalg_backend::MKL>(rows, columns);
 }
 
 template <>
-size_t pseudo_inverse<double, linalg_backend::mkl>::workspace_size(
+size_t pseudo_inverse<double, linalg_backend::MKL>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    return pseudo_inverse_workspace_size_impl<double, linalg_backend::mkl>(rows, columns);
+    return pseudo_inverse_workspace_size_impl<double, linalg_backend::MKL>(rows, columns);
 }
 
 #endif  // LINALG_HAS_MKL

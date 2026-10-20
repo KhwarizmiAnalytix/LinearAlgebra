@@ -25,7 +25,7 @@ static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 }
 
 template <>
-void linear_solver<float, linalg_backend::mkl>::apply(float* m,
+void linear_solver<float, linalg_backend::MKL>::apply(float* m,
     linalg_int*                                               pivot,
     linalg_int                                                lda,
     float*                                                    x,
@@ -39,13 +39,13 @@ void linear_solver<float, linalg_backend::mkl>::apply(float* m,
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_decomposition<float, linalg_backend::mkl>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<float, linalg_backend::MKL>::apply(m, lda, pivot, workspace, workspace_size))
         {
             LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
         }
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<float, linalg_backend::mkl>::apply(
+        if (cholesky_decomposition<float, linalg_backend::MKL>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
@@ -61,7 +61,7 @@ void linear_solver<float, linalg_backend::mkl>::apply(float* m,
 }
 
 template <>
-void linear_solver<double, linalg_backend::mkl>::apply(double* m,
+void linear_solver<double, linalg_backend::MKL>::apply(double* m,
     linalg_int*                                                 pivot,
     linalg_int                                                  lda,
     double*                                                     x,
@@ -75,13 +75,13 @@ void linear_solver<double, linalg_backend::mkl>::apply(double* m,
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_decomposition<double, linalg_backend::mkl>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<double, linalg_backend::MKL>::apply(m, lda, pivot, workspace, workspace_size))
         {
             LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
         }
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
-        if (cholesky_decomposition<double, linalg_backend::mkl>::apply(
+        if (cholesky_decomposition<double, linalg_backend::MKL>::apply(
                 m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
@@ -97,26 +97,26 @@ void linear_solver<double, linalg_backend::mkl>::apply(double* m,
 }
 
 template <>
-size_t linear_solver<float, linalg_backend::mkl>::workspace_size(
+size_t linear_solver<float, linalg_backend::MKL>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        return lu_decomposition<float, linalg_backend::mkl>::workspace_size(lda);
+        return lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda);
     default:
         return 0;
     }
 }
 
 template <>
-size_t linear_solver<double, linalg_backend::mkl>::workspace_size(
+size_t linear_solver<double, linalg_backend::MKL>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        return lu_decomposition<double, linalg_backend::mkl>::workspace_size(lda);
+        return lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda);
     default:
         return 0;
     }

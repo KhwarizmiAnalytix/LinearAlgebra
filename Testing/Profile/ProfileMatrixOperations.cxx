@@ -430,7 +430,7 @@ void profile_gpu_ops(linalg_int n)
 {
     PROFILER_SCOPE("gpu_cublas");
 
-    constexpr linalg::linalg_backend CB = linalg::linalg_backend::cuda_blas;
+    constexpr linalg::linalg_backend CB = linalg::linalg_backend::CUDA_BLAS;
     struct output_buffers
     {
         double*      scalar = cuda_alloc<double>(1);
@@ -811,14 +811,14 @@ int main(int argc, char** argv)
             std::fprintf(stderr, "warning: CPU profiler session failed to start\n");
         }
 
-        profile_cpu_backend<linalg::linalg_backend::native>("cpu_native", n);
+        profile_cpu_backend<linalg::linalg_backend::NATIVE>("cpu_native", n);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-        profile_cpu_backend<linalg::linalg_backend::blas_lapacke>("cpu_blas_lapacke", n);
+        profile_cpu_backend<linalg::linalg_backend::BLAS_LAPACKE>("cpu_blas_lapacke", n);
 #endif
 
 #if LINALG_HAS_MKL
-        profile_cpu_backend<linalg::linalg_backend::mkl>("cpu_mkl", n);
+        profile_cpu_backend<linalg::linalg_backend::MKL>("cpu_mkl", n);
 #endif
 
         profile_scalar_only_ops(n);

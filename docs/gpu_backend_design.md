@@ -7,8 +7,8 @@ implementations live in `src/matrix_operation/cpu/`, with `native/`,
 `blas/` and `mkl/` subdirectories. CMake selects optional backend sources;
 Bazel selects CPU sources only.
 
-`linalg_backend::cuda_blas` is the GPU backend. Its name covers cuBLAS,
-cuSOLVER and custom CUDA kernels. `linalg_backend::native` is the CPU
+`linalg_backend::CUDA_BLAS` is the GPU backend. Its name covers cuBLAS,
+cuSOLVER and custom CUDA kernels. `linalg_backend::NATIVE` is the CPU
 implementation; there is no separate native CUDA backend.
 
 All matrix data, intermediate values, scalar results, pivots, numerical
@@ -86,10 +86,10 @@ For example, scalar outputs can feed another GPU operation directly:
 ```cpp
 using backend = linalg::linalg_backend;
 // dA, dnorm and dtrace are caller-owned device pointers.
-linalg::norm<double, backend::cuda_blas>::apply(
+linalg::norm<double, backend::CUDA_BLAS>::apply(
     dA, rows, cols, cols, linalg::norm_type::FROBENIUS,
     nullptr, 0, dnorm, stream);
-linalg::trace<double, backend::cuda_blas>::apply(
+linalg::trace<double, backend::CUDA_BLAS>::apply(
     dnorm, 1, 1, dtrace, stream);
 ```
 
@@ -123,6 +123,16 @@ test boundary. Tests cover device scalar pipelines on non-default
 streams, rank/condition/spectral norm/pseudo-inverse/determinant outputs,
 cuBLAS pointer-mode restoration, LU pivot reconstruction and device
 factorization failure status, alongside existing numerical tests.
+
+Enable `LINALG_ENABLE_CUBLAS=ON` together with `LINALG_ENABLE_TESTING=ON`
+to compile and register `LinearAlgebraCudaTests`. Run them with
+`ctest --test-dir <build> -C Release -L CUDA --output-on-failure`, or run
+`LinearAlgebraCxxTests --gtest_filter=MathGpu.*` directly. The CPU backend
+loop intentionally uses host buffers; GPU tests allocate device data and
+workspace separately. `MathGpu.DeviceMemoryAllocation` checks that both
+allocations are device memory and uses them for a transpose round trip.
+Allocation failures report the CUDA error. These small allocations are
+released at the end of each test and may be too brief to see in a GPU monitor.
 
 CUDA compilation and GPU execution require a CUDA-capable environment.
 A successful CPU build does not validate CUDA kernels or runtime behavior.

@@ -437,7 +437,7 @@ bool lu_decomposition_blocked_impl(
 }  // namespace
 
 template <>
-bool lu_decomposition<float, linalg_backend::native>::apply(float* __restrict m, linalg_int lda,
+bool lu_decomposition<float, linalg_backend::NATIVE>::apply(float* __restrict m, linalg_int lda,
     linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<float>");
@@ -446,7 +446,7 @@ bool lu_decomposition<float, linalg_backend::native>::apply(float* __restrict m,
 }
 
 template <>
-bool lu_decomposition<double, linalg_backend::native>::apply(double* __restrict m, linalg_int lda,
+bool lu_decomposition<double, linalg_backend::NATIVE>::apply(double* __restrict m, linalg_int lda,
     linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<double>");
@@ -455,13 +455,13 @@ bool lu_decomposition<double, linalg_backend::native>::apply(double* __restrict 
 }
 
 template <>
-size_t lu_decomposition<float, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
+size_t lu_decomposition<float, linalg_backend::NATIVE>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }
 
 template <>
-size_t lu_decomposition<double, linalg_backend::native>::workspace_size(linalg_int /*lda*/)
+size_t lu_decomposition<double, linalg_backend::NATIVE>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }

@@ -434,18 +434,18 @@ template <typename value_t> void test_cross_backend_agreement(std::size_t n)
     const auto sym = cross_backend_symmetric_input<value_t>(n);
     const auto gen = cross_backend_general_input<value_t>(n);
 
-    const auto sym_ref = run_symmetric<value_t, linalg::linalg_backend::native>(sym, n);
-    const auto gen_ref = run_general<value_t, linalg::linalg_backend::native>(gen, n);
+    const auto sym_ref = run_symmetric<value_t, linalg::linalg_backend::NATIVE>(sym, n);
+    const auto gen_ref = run_general<value_t, linalg::linalg_backend::NATIVE>(gen, n);
 
     linalg_test::for_each_available_backend(
         [&](auto backend)
         {
             constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-            if (Backend == linalg::linalg_backend::native)
+            if (Backend == linalg::linalg_backend::NATIVE)
             {
                 return;
             }
-            const char* name = (Backend == linalg::linalg_backend::mkl) ? "mkl" : "blas_lapacke";
+            const char* name = (Backend == linalg::linalg_backend::MKL) ? "mkl" : "blas_lapacke";
             const auto  s    = run_symmetric<value_t, Backend>(sym, n);
             compare_spectra(sym_ref, s, name);
             compare_symmetric_vectors(sym_ref, s, n, name);
@@ -522,7 +522,7 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
             // mkl's and blas_lapacke's LAPACKE *geev call packs complex
             // eigenvectors natively (see eigen.h); only the portable scalar
             // fallback, which has no complex arithmetic, throws for this case.
-            if (Backend == linalg::linalg_backend::native)
+            if (Backend == linalg::linalg_backend::NATIVE)
             {
                 EXPECT_THROW(
                     (linalg::general_eigen_backend<double, B::value>::apply(

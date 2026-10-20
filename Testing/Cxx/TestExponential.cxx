@@ -192,8 +192,8 @@ void test_against_taylor_series(std::size_t n, double scale = 1.0)
     for (int k = 1; k <= kTaylorTerms; ++k)
     {
         // Reference Taylor series always uses native to build the expected value.
-        auto gemm_ws = gemm_workspace<double, linalg::linalg_backend::native>(static_cast<linalg_int>(n));
-        linalg::multiplication<double, linalg::linalg_backend::native>::apply(false,
+        auto gemm_ws = gemm_workspace<double, linalg::linalg_backend::NATIVE>(static_cast<linalg_int>(n));
+        linalg::multiplication<double, linalg::linalg_backend::NATIVE>::apply(false,
             false,
             static_cast<linalg_int>(n),
             static_cast<linalg_int>(n),

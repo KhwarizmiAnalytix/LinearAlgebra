@@ -74,7 +74,7 @@ inline cusolverDnHandle_t cusolver_handle_for_current_device()
 }
 
 // Binds `stream` (nullptr = the legacy default stream) to `handle` before
-// the caller issues work on it. Every cuda_blas struct apply() overload takes
+// the caller issues work on it. Every CUDA_BLAS struct apply() overload takes
 // an explicit trailing stream parameter and routes it through here.
 inline void set_stream(cublasHandle_t handle, cudaStream_t stream)
 {

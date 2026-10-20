@@ -41,7 +41,7 @@ template <typename T>
 size_t least_squares_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
     const auto pinv_bytes =
-        pseudo_inverse<T, linalg_backend::cuda_blas>::workspace_size(rows, columns);
+        pseudo_inverse<T, linalg_backend::CUDA_BLAS>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     least_squares_plan<T>(arena, rows, columns, pinv_bytes);
     return arena.total_size();
@@ -70,17 +70,17 @@ void least_squares_solve_impl(linalg_long rows,
         "(lda == columns, ldb == nrhs, ldx == nrhs)");
 
     const auto pinv_bytes =
-        pseudo_inverse<T, linalg_backend::cuda_blas>::workspace_size(rows, columns);
+        pseudo_inverse<T, linalg_backend::CUDA_BLAS>::workspace_size(rows, columns);
     LINALG_CHECK(workspace_size >= least_squares_workspace_size_impl<T>(rows, columns),
         "least_squares: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto               bufs = least_squares_plan<T>(arena, rows, columns, pinv_bytes);
 
-    pseudo_inverse<T, linalg_backend::cuda_blas>::apply(rows, columns, A, lda, bufs.Ainv, rows,
+    pseudo_inverse<T, linalg_backend::CUDA_BLAS>::apply(rows, columns, A, lda, bufs.Ainv, rows,
         static_cast<T>(-1), bufs.pinv_workspace, pinv_bytes, stream);
 
     // X (columns x nrhs) = Ainv (columns x rows) * B (rows x nrhs).
-    multiplication<T, linalg_backend::cuda_blas>::apply(
+    multiplication<T, linalg_backend::CUDA_BLAS>::apply(
         false, false, static_cast<linalg_int>(columns), static_cast<linalg_int>(nrhs),
         static_cast<linalg_int>(rows), bufs.Ainv, static_cast<linalg_int>(rows), B,
         static_cast<linalg_int>(ldb), X, static_cast<linalg_int>(ldx), nullptr, 0, stream);
@@ -89,7 +89,7 @@ void least_squares_solve_impl(linalg_long rows,
 }  // namespace
 
 template <>
-void least_squares<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void least_squares<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long   columns,
     linalg_long   nrhs,
     const float*  A,
@@ -108,7 +108,7 @@ void least_squares<float, linalg_backend::cuda_blas>::apply(linalg_long rows,
 }
 
 template <>
-void least_squares<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
+void least_squares<double, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
     linalg_long    columns,
     linalg_long    nrhs,
     const double*  A,
@@ -127,14 +127,14 @@ void least_squares<double, linalg_backend::cuda_blas>::apply(linalg_long rows,
 }
 
 template <>
-size_t least_squares<float, linalg_backend::cuda_blas>::workspace_size(
+size_t least_squares<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return least_squares_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t least_squares<double, linalg_backend::cuda_blas>::workspace_size(
+size_t least_squares<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return least_squares_workspace_size_impl<double>(rows, columns);

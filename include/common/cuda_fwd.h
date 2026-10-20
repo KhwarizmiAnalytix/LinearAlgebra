@@ -1,7 +1,7 @@
 /*
  * LinearAlgebra — forward declaration of CUDA's opaque stream handle.
  *
- * Lets the cuda_blas struct-template specializations accept a caller's
+ * Lets the CUDA_BLAS struct-template specializations accept a caller's
  * stream parameter without requiring the CUDA toolkit's own headers on
  * every consumer's include path — in particular, a CPU-only build of this
  * library needs no CUDA toolchain at all (see CMakeLists.txt), and these

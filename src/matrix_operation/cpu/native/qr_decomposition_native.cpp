@@ -74,7 +74,9 @@ void qr_r(linalg_long rows,
         const T alpha     = A[i * lda + i];
         T       tail_norm = T(0);
         for (linalg_long r = i + 1; r < rows; ++r)
+        {
             tail_norm = std::hypot(tail_norm, A[r * lda + i]);
+        }
         if (tail_norm == T(0))
         {
             tau[i] = T(0);
@@ -82,16 +84,19 @@ void qr_r(linalg_long rows,
         }
         const T beta = -std::copysign(std::hypot(alpha, tail_norm), alpha);
         tau[i]       = (beta - alpha) / beta;
-        for (linalg_long r = i + 1; r < rows; ++r)
+        for (linalg_long r = i + 1; r < rows; ++r){
             A[r * lda + i] /= alpha - beta;
+        }
         A[i * lda + i]      = beta;
         const auto trailing = columns - i - 1;
         std::copy_n(A + i * lda + i + 1, static_cast<size_t>(trailing), w);
-        for (linalg_long r = i + 1; r < rows; ++r)
+        for (linalg_long r = i + 1; r < rows; ++r){
             qr_axpy(w, A + r * lda + i + 1, A[r * lda + i], trailing);
+        }
         qr_axpy(A + i * lda + i + 1, w, -tau[i], trailing);
-        for (linalg_long r = i + 1; r < rows; ++r)
+        for (linalg_long r = i + 1; r < rows; ++r){
             qr_axpy(A + r * lda + i + 1, w, -tau[i] * A[r * lda + i], trailing);
+        }
     }
 }
 
@@ -116,8 +121,9 @@ void qr_q(linalg_long rows,
         const auto i        = k - 1 - step;
         const auto trailing = k - i - 1;
         std::copy_n(A + i * lda + i + 1, static_cast<size_t>(trailing), w);
-        for (linalg_long r = i + 1; r < rows; ++r)
+        for (linalg_long r = i + 1; r < rows; ++r){
             qr_axpy(w, A + r * lda + i + 1, A[r * lda + i], trailing);
+        }
         qr_axpy(A + i * lda + i + 1, w, -tau[i], trailing);
         for (linalg_long r = i + 1; r < rows; ++r)
         {
@@ -125,19 +131,19 @@ void qr_q(linalg_long rows,
             A[r * lda + i] *= -tau[i];
         }
         A[i * lda + i] = T(1) - tau[i];
-        for (linalg_long r = 0; r < i; ++r)
-            A[r * lda + i] = T(0);
+        for (linalg_long r = 0; r < i; ++r){
+            A[r * lda + i] = T(0);}
     }
 }
 }  // namespace
 template <>
-size_t qr_decomposition<float, linalg_backend::native>::workspace_size_r(
+size_t qr_decomposition<float, linalg_backend::NATIVE>::workspace_size_r(
     linalg_long rows, linalg_long columns)
 {
     return qr_size<float>(rows, columns, columns);
 }
 template <>
-void qr_decomposition<float, linalg_backend::native>::apply_r(linalg_long rows,
+void qr_decomposition<float, linalg_backend::NATIVE>::apply_r(linalg_long rows,
     linalg_long                                                           columns,
     float*                                                                A,
     linalg_long                                                           lda,
@@ -150,13 +156,13 @@ void qr_decomposition<float, linalg_backend::native>::apply_r(linalg_long rows,
     qr_r(rows, columns, A, lda, tau, workspace, workspace_size);
 }
 template <>
-size_t qr_decomposition<float, linalg_backend::native>::workspace_size_q(
+size_t qr_decomposition<float, linalg_backend::NATIVE>::workspace_size_q(
     linalg_long rows, linalg_long columns)
 {
     return qr_size<float>(rows, columns, std::min(rows, columns));
 }
 template <>
-void qr_decomposition<float, linalg_backend::native>::apply_q(linalg_long rows,
+void qr_decomposition<float, linalg_backend::NATIVE>::apply_q(linalg_long rows,
     linalg_long                                                           columns,
     float*                                                                A,
     linalg_long                                                           lda,
@@ -169,13 +175,13 @@ void qr_decomposition<float, linalg_backend::native>::apply_q(linalg_long rows,
     qr_q(rows, columns, A, lda, tau, workspace, workspace_size);
 }
 template <>
-size_t qr_decomposition<double, linalg_backend::native>::workspace_size_r(
+size_t qr_decomposition<double, linalg_backend::NATIVE>::workspace_size_r(
     linalg_long rows, linalg_long columns)
 {
     return qr_size<double>(rows, columns, columns);
 }
 template <>
-void qr_decomposition<double, linalg_backend::native>::apply_r(linalg_long rows,
+void qr_decomposition<double, linalg_backend::NATIVE>::apply_r(linalg_long rows,
     linalg_long                                                            columns,
     double*                                                                A,
     linalg_long                                                            lda,
@@ -188,13 +194,13 @@ void qr_decomposition<double, linalg_backend::native>::apply_r(linalg_long rows,
     qr_r(rows, columns, A, lda, tau, workspace, workspace_size);
 }
 template <>
-size_t qr_decomposition<double, linalg_backend::native>::workspace_size_q(
+size_t qr_decomposition<double, linalg_backend::NATIVE>::workspace_size_q(
     linalg_long rows, linalg_long columns)
 {
     return qr_size<double>(rows, columns, std::min(rows, columns));
 }
 template <>
-void qr_decomposition<double, linalg_backend::native>::apply_q(linalg_long rows,
+void qr_decomposition<double, linalg_backend::NATIVE>::apply_q(linalg_long rows,
     linalg_long                                                            columns,
     double*                                                                A,
     linalg_long                                                            lda,

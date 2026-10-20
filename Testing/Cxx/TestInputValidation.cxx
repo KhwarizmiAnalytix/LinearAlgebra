@@ -88,7 +88,7 @@ TEST(Math, InputValidation)
     });
 
     EXPECT_ANY_THROW(
-        (linalg::determinant<double, linalg::linalg_backend::native>::apply(
+        (linalg::determinant<double, linalg::linalg_backend::NATIVE>::apply(
             static_cast<double*>(nullptr),
             pivot.data(),
             3,
@@ -96,7 +96,7 @@ TEST(Math, InputValidation)
             nullptr,
             0)));
 
-    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::linalg_backend::native>::apply(false,
+    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::linalg_backend::NATIVE>::apply(false,
         false,
         3,
         3,
@@ -109,11 +109,11 @@ TEST(Math, InputValidation)
         3,
         nullptr,
         0)));
-    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::linalg_backend::native>::apply(
+    EXPECT_ANY_THROW((linalg::multiplication<double, linalg::linalg_backend::NATIVE>::apply(
         false, false, 0, 3, 3, buf.data(), 3, buf.data(), 3, buf.data(), 3, nullptr, 0)));
 
-    EXPECT_ANY_THROW((linalg::transpose<double, linalg::linalg_backend::native>::apply(
+    EXPECT_ANY_THROW((linalg::transpose<double, linalg::linalg_backend::NATIVE>::apply(
         3ULL, 3ULL, static_cast<double*>(nullptr), nullptr, 0)));
-    EXPECT_ANY_THROW((linalg::transpose<double, linalg::linalg_backend::native>::apply(
+    EXPECT_ANY_THROW((linalg::transpose<double, linalg::linalg_backend::NATIVE>::apply(
         0ULL, 3ULL, buf.data(), nullptr, 0)));
 }

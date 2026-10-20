@@ -106,7 +106,7 @@ void qr_lapack_q(Fn orgqr,
 }  // namespace
 
 template <>
-size_t qr_decomposition<float, linalg_backend::blas_lapacke>::workspace_size_r(
+size_t qr_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size_r(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_lapack_lwork<float>(
@@ -120,7 +120,7 @@ size_t qr_decomposition<float, linalg_backend::blas_lapacke>::workspace_size_r(
     return qr_lapack_size<float>(lwork);
 }
 template <>
-size_t qr_decomposition<float, linalg_backend::blas_lapacke>::workspace_size_q(
+size_t qr_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size_q(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_lapack_lwork<float>(
@@ -135,7 +135,7 @@ size_t qr_decomposition<float, linalg_backend::blas_lapacke>::workspace_size_q(
     return qr_lapack_size<float>(lwork);
 }
 template <>
-void qr_decomposition<float, linalg_backend::blas_lapacke>::apply_r(linalg_long rows,
+void qr_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply_r(linalg_long rows,
     linalg_long                                                                 columns,
     float*                                                                      A,
     linalg_long                                                                 lda,
@@ -164,7 +164,7 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply_r(linalg_long 
         lwork);
 }
 template <>
-void qr_decomposition<float, linalg_backend::blas_lapacke>::apply_q(linalg_long rows,
+void qr_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply_q(linalg_long rows,
     linalg_long                                                                 columns,
     float*                                                                      A,
     linalg_long                                                                 lda,
@@ -194,7 +194,7 @@ void qr_decomposition<float, linalg_backend::blas_lapacke>::apply_q(linalg_long 
         lwork);
 }
 template <>
-size_t qr_decomposition<double, linalg_backend::blas_lapacke>::workspace_size_r(
+size_t qr_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size_r(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_lapack_lwork<double>(
@@ -208,7 +208,7 @@ size_t qr_decomposition<double, linalg_backend::blas_lapacke>::workspace_size_r(
     return qr_lapack_size<double>(lwork);
 }
 template <>
-size_t qr_decomposition<double, linalg_backend::blas_lapacke>::workspace_size_q(
+size_t qr_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size_q(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_lapack_lwork<double>(
@@ -223,7 +223,7 @@ size_t qr_decomposition<double, linalg_backend::blas_lapacke>::workspace_size_q(
     return qr_lapack_size<double>(lwork);
 }
 template <>
-void qr_decomposition<double, linalg_backend::blas_lapacke>::apply_r(linalg_long rows,
+void qr_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply_r(linalg_long rows,
     linalg_long                                                                  columns,
     double*                                                                      A,
     linalg_long                                                                  lda,
@@ -252,7 +252,7 @@ void qr_decomposition<double, linalg_backend::blas_lapacke>::apply_r(linalg_long
         lwork);
 }
 template <>
-void qr_decomposition<double, linalg_backend::blas_lapacke>::apply_q(linalg_long rows,
+void qr_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply_q(linalg_long rows,
     linalg_long                                                                  columns,
     double*                                                                      A,
     linalg_long                                                                  lda,

@@ -51,7 +51,7 @@ size_t transpose_blas_workspace_size_impl(linalg_long rows, linalg_long columns)
 }
 
 template <>
-void transpose<float, linalg_backend::blas_lapacke>::apply(
+void transpose<float, linalg_backend::BLAS_LAPACKE>::apply(
     linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("transpose/blas_lapacke<float>");
@@ -82,7 +82,7 @@ void transpose<float, linalg_backend::blas_lapacke>::apply(
 }
 
 template <>
-void transpose<double, linalg_backend::blas_lapacke>::apply(
+void transpose<double, linalg_backend::BLAS_LAPACKE>::apply(
     linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("transpose/blas_lapacke<double>");
@@ -110,14 +110,14 @@ void transpose<double, linalg_backend::blas_lapacke>::apply(
 }
 
 template <>
-size_t transpose<float, linalg_backend::blas_lapacke>::workspace_size(
+size_t transpose<float, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return transpose_blas_workspace_size_impl<float>(rows, columns);
 }
 
 template <>
-size_t transpose<double, linalg_backend::blas_lapacke>::workspace_size(
+size_t transpose<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
     return transpose_blas_workspace_size_impl<double>(rows, columns);

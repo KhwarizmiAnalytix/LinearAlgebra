@@ -57,7 +57,7 @@ static void check_cholesky_type(cholesky_decomposition_enum type)
 }  // namespace detail
 
 template <>
-bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
+bool cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(
     float* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/blas_lapacke<float>");
@@ -69,7 +69,7 @@ bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply(
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
+bool cholesky_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(
     double* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/blas_lapacke<double>");
@@ -83,17 +83,17 @@ bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply(
 // apply_aad has no vendor-library equivalent: forward to the native
 // scalar adjoint defined in cholesky_decomposition.cpp.
 template <>
-bool cholesky_decomposition<float, linalg_backend::blas_lapacke>::apply_aad(
+bool cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply_aad(
     float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
-    return cholesky_decomposition<float, linalg_backend::native>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::blas_lapacke>::apply_aad(
+bool cholesky_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply_aad(
     double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
-    return cholesky_decomposition<double, linalg_backend::native>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
 }
 }  // namespace linalg
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE

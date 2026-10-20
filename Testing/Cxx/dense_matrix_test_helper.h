@@ -68,10 +68,10 @@ dense_matrix<T> transpose(const dense_matrix<T>& a)
     // result into a new dense_matrix with swapped dimensions so that the
     // row-major accessor (i*cols_+j) uses the correct stride.
     dense_matrix<T> scratch(a);  // copy — same rows/cols as a
-    const auto      ws_size = linalg::transpose<T, linalg::linalg_backend::native>::workspace_size(
+    const auto      ws_size = linalg::transpose<T, linalg::linalg_backend::NATIVE>::workspace_size(
         static_cast<linalg_long>(a.rows()), static_cast<linalg_long>(a.cols()));
     std::vector<unsigned char> ws(ws_size);
-    linalg::transpose<T, linalg::linalg_backend::native>::apply(
+    linalg::transpose<T, linalg::linalg_backend::NATIVE>::apply(
         static_cast<linalg_long>(a.rows()),
         static_cast<linalg_long>(a.cols()),
         scratch.data(),
@@ -89,12 +89,12 @@ dense_matrix<T> matmul(const dense_matrix<T>& a, const dense_matrix<T>& b)
 {
     dense_matrix<T> c(a.rows(), b.cols());
     const auto      ws_size =
-        linalg::multiplication<T, linalg::linalg_backend::native>::workspace_size(
+        linalg::multiplication<T, linalg::linalg_backend::NATIVE>::workspace_size(
             static_cast<linalg_int>(a.rows()),
             static_cast<linalg_int>(b.cols()),
             static_cast<linalg_int>(a.cols()));
     std::vector<unsigned char> ws(ws_size);
-    linalg::multiplication<T, linalg::linalg_backend::native>::apply(false,
+    linalg::multiplication<T, linalg::linalg_backend::NATIVE>::apply(false,
         false,
         static_cast<linalg_int>(a.rows()),
         static_cast<linalg_int>(b.cols()),

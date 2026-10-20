@@ -202,7 +202,7 @@ void matrix_norm_impl(Nrm2Fn nrm2,
 }  // namespace
 
 template <>
-void norm<float, linalg_backend::cuda_blas>::apply(const float* A,
+void norm<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
     linalg_long                                                 rows,
     linalg_long                                                 columns,
     linalg_long                                                 lda,
@@ -225,14 +225,14 @@ void norm<float, linalg_backend::cuda_blas>::apply(const float* A,
 }
 
 template <>
-size_t norm<float, linalg_backend::cuda_blas>::workspace_size(
+size_t norm<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns, norm_type type)
 {
     return matrix_norm_workspace_size_impl<float>(rows, columns, type);
 }
 
 template <>
-void norm<double, linalg_backend::cuda_blas>::apply(const double* A,
+void norm<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
     linalg_long                                                   rows,
     linalg_long                                                   columns,
     linalg_long                                                   lda,
@@ -255,7 +255,7 @@ void norm<double, linalg_backend::cuda_blas>::apply(const double* A,
 }
 
 template <>
-size_t norm<double, linalg_backend::cuda_blas>::workspace_size(
+size_t norm<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns, norm_type type)
 {
     return matrix_norm_workspace_size_impl<double>(rows, columns, type);

@@ -109,7 +109,7 @@ void lu_apply_impl(BufSizeFn buffer_size,
 }  // namespace
 
 template <>
-void lu_decomposition<float, linalg_backend::cuda_blas>::apply(float* m,
+void lu_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* m,
     linalg_int                                                        lda,
     int*                                                              pivot,
     void*                                                             workspace,
@@ -130,7 +130,7 @@ void lu_decomposition<float, linalg_backend::cuda_blas>::apply(float* m,
 }
 
 template <>
-void lu_decomposition<double, linalg_backend::cuda_blas>::apply(double* m,
+void lu_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* m,
     linalg_int                                                          lda,
     int*                                                                pivot,
     void*                                                               workspace,
@@ -151,13 +151,13 @@ void lu_decomposition<double, linalg_backend::cuda_blas>::apply(double* m,
 }
 
 template <>
-size_t lu_decomposition<float, linalg_backend::cuda_blas>::workspace_size(linalg_int lda)
+size_t lu_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size(linalg_int lda)
 {
     return lu_ws_size<float>(lda);
 }
 
 template <>
-size_t lu_decomposition<double, linalg_backend::cuda_blas>::workspace_size(linalg_int lda)
+size_t lu_decomposition<double, linalg_backend::CUDA_BLAS>::workspace_size(linalg_int lda)
 {
     return lu_ws_size<double>(lda);
 }

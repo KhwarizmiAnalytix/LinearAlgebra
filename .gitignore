@@ -39,3 +39,21 @@ __pycache__/
 
 .lintbin/
 .dmypy.json
+examples/backend_benchmark/results/2026-10-20/final_results.csv
+examples/backend_benchmark/results/2026-10-20/gpu_retry_results.csv
+examples/backend_benchmark/results/2026-10-20/gpu_retry_selection.txt
+examples/backend_benchmark/results/2026-10-20/gpu_retry.log
+examples/backend_benchmark/results/2026-10-20/gpu_steady_results.csv
+examples/backend_benchmark/results/2026-10-20/gpu_steady_selection.txt
+examples/backend_benchmark/results/2026-10-20/gpu_steady.log
+examples/backend_benchmark/results/2026-10-20/metadata.json
+examples/backend_benchmark/results/2026-10-20/rerun_results.csv
+examples/backend_benchmark/results/2026-10-20/rerun_selection.txt
+examples/backend_benchmark/results/2026-10-20/rerun.log
+examples/backend_benchmark/results/2026-10-20/results.csv
+examples/backend_benchmark/results/2026-10-20/run.log
+examples/backend_benchmark/results/2026-10-20/tests.log
+examples/backend_benchmark/results/2026-10-20/timing.json
+examples/backend_benchmark/results/2026-10-20/transfer_run.log
+examples/backend_benchmark/results/2026-10-20/transfers.csv
+examples/backend_benchmark/results/2026-10-20/comparison.csv

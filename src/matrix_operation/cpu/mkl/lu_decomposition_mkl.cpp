@@ -28,7 +28,7 @@ static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 // No scratch needed: an ILP64 MKL build has MKL_INT == linalg_int, so the
 // caller's pivot buffer is passed straight through to getrf.
 template <>
-bool lu_decomposition<float, linalg_backend::mkl>::apply(
+bool lu_decomposition<float, linalg_backend::MKL>::apply(
     float* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/mkl<float>");
@@ -37,7 +37,7 @@ bool lu_decomposition<float, linalg_backend::mkl>::apply(
 }
 
 template <>
-bool lu_decomposition<double, linalg_backend::mkl>::apply(
+bool lu_decomposition<double, linalg_backend::MKL>::apply(
     double* m, linalg_int lda, linalg_int* pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/mkl<double>");
@@ -45,12 +45,12 @@ bool lu_decomposition<double, linalg_backend::mkl>::apply(
     return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, lda, lda, m, lda, pivot) == 0;
 }
 
-template <> size_t lu_decomposition<float, linalg_backend::mkl>::workspace_size(linalg_int /*lda*/)
+template <> size_t lu_decomposition<float, linalg_backend::MKL>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }
 
-template <> size_t lu_decomposition<double, linalg_backend::mkl>::workspace_size(linalg_int /*lda*/)
+template <> size_t lu_decomposition<double, linalg_backend::MKL>::workspace_size(linalg_int /*lda*/)
 {
     return 0;
 }

@@ -111,7 +111,7 @@ template <typename T, linalg_backend Backend> struct general_eigen_backend
 };
 
 /** CUDA symmetric eigensolver: in-place device matrix and caller-owned device status. */
-template <typename T> struct symmetric_eigen_backend<T, linalg_backend::cuda_blas>
+template <typename T> struct symmetric_eigen_backend<T, linalg_backend::CUDA_BLAS>
 {
     LINALG_API static void   apply(T* eigenvectors,
         linalg_int                  n,

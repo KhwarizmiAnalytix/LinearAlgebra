@@ -112,10 +112,10 @@ template <typename value_t, linalg::linalg_backend Backend> void test_inversion(
 
     {
         const auto                 ws_size = linalg::determinant<value_t,
-                            linalg::linalg_backend::native>::workspace_size(static_cast<linalg_int>(dim),
+                            linalg::linalg_backend::NATIVE>::workspace_size(static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::determinant<value_t, linalg::linalg_backend::native>::apply(A.data(),
+        linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(A.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
@@ -125,10 +125,10 @@ template <typename value_t, linalg::linalg_backend Backend> void test_inversion(
 
     {
         const auto                 ws_size = linalg::determinant<value_t,
-                            linalg::linalg_backend::native>::workspace_size(static_cast<linalg_int>(dim),
+                            linalg::linalg_backend::NATIVE>::workspace_size(static_cast<linalg_int>(dim),
             linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> ws(ws_size);
-        linalg::determinant<value_t, linalg::linalg_backend::native>::apply(A.data(),
+        linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(A.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             linalg::linear_solver_type::LU_LINEAR_SOLVER,
@@ -144,7 +144,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_inversion(
         0)));
 
     EXPECT_ANY_THROW(
-        (linalg::determinant<value_t, linalg::linalg_backend::native>::apply(
+        (linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(
             IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),

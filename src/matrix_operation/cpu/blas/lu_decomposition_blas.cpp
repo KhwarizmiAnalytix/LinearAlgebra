@@ -60,7 +60,7 @@ size_t lu_blas_workspace_size(linalg_int lda)
 }  // namespace
 
 template <>
-bool lu_decomposition<float, linalg_backend::blas_lapacke>::apply(
+bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(
     float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<float>");
@@ -79,7 +79,7 @@ bool lu_decomposition<float, linalg_backend::blas_lapacke>::apply(
 }
 
 template <>
-bool lu_decomposition<double, linalg_backend::blas_lapacke>::apply(
+bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(
     double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size, void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<double>");
@@ -97,12 +97,12 @@ bool lu_decomposition<double, linalg_backend::blas_lapacke>::apply(
     return info == 0;
 }
 
-template <> size_t lu_decomposition<float, linalg_backend::blas_lapacke>::workspace_size(linalg_int lda)
+template <> size_t lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)
 {
     return lu_blas_workspace_size(lda);
 }
 
-template <> size_t lu_decomposition<double, linalg_backend::blas_lapacke>::workspace_size(linalg_int lda)
+template <> size_t lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)
 {
     return lu_blas_workspace_size(lda);
 }

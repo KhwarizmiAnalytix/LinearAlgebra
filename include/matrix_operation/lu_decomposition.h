@@ -52,7 +52,7 @@ template <typename T, linalg_backend Backend> struct lu_decomposition
  * stream synchronization. The caller keeps buffers alive until work completes.
  * CUDA/cuBLAS/cuSOLVER API errors throw; numerical status stays on device.
  */
-template <typename T> struct lu_decomposition<T, linalg_backend::cuda_blas>
+template <typename T> struct lu_decomposition<T, linalg_backend::CUDA_BLAS>
 {
     LINALG_API static void   apply(T* m,
         linalg_int                  lda,

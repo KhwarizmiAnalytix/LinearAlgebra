@@ -605,7 +605,7 @@ void determinant_apply(BufSizeLuFn buf_size_lu,
 // ---- inversion<T, cuda_blas> specializations ----
 
 template <>
-void inversion<float, linalg_backend::cuda_blas>::apply(float* m,
+void inversion<float, linalg_backend::CUDA_BLAS>::apply(float* m,
     linalg_int*        /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
@@ -620,7 +620,7 @@ void inversion<float, linalg_backend::cuda_blas>::apply(float* m,
 }
 
 template <>
-void inversion<double, linalg_backend::cuda_blas>::apply(double* m,
+void inversion<double, linalg_backend::CUDA_BLAS>::apply(double* m,
     linalg_int*        /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
@@ -635,14 +635,14 @@ void inversion<double, linalg_backend::cuda_blas>::apply(double* m,
 }
 
 template <>
-size_t inversion<float, linalg_backend::cuda_blas>::workspace_size(
+size_t inversion<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return inversion_ws_size<float>(lda, type);
 }
 
 template <>
-size_t inversion<double, linalg_backend::cuda_blas>::workspace_size(
+size_t inversion<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return inversion_ws_size<double>(lda, type);
@@ -651,7 +651,7 @@ size_t inversion<double, linalg_backend::cuda_blas>::workspace_size(
 // ---- determinant<T, cuda_blas> specializations ----
 
 template <>
-void determinant<float, linalg_backend::cuda_blas>::apply(float* m,
+void determinant<float, linalg_backend::CUDA_BLAS>::apply(float* m,
     linalg_int* /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
@@ -675,7 +675,7 @@ void determinant<float, linalg_backend::cuda_blas>::apply(float* m,
 }
 
 template <>
-void determinant<double, linalg_backend::cuda_blas>::apply(double* m,
+void determinant<double, linalg_backend::CUDA_BLAS>::apply(double* m,
     linalg_int* /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
@@ -699,14 +699,14 @@ void determinant<double, linalg_backend::cuda_blas>::apply(double* m,
 }
 
 template <>
-size_t determinant<float, linalg_backend::cuda_blas>::workspace_size(
+size_t determinant<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return determinant_ws_size<float>(lda, type);
 }
 
 template <>
-size_t determinant<double, linalg_backend::cuda_blas>::workspace_size(
+size_t determinant<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return determinant_ws_size<double>(lda, type);

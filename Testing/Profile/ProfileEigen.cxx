@@ -194,14 +194,14 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "warning: profiler session failed to start\n");
     }
 
-    profile_backend<linalg::linalg_backend::native>("native", n);
+    profile_backend<linalg::linalg_backend::NATIVE>("native", n);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
-    profile_backend<linalg::linalg_backend::blas_lapacke>("blas_lapacke", n);
+    profile_backend<linalg::linalg_backend::BLAS_LAPACKE>("blas_lapacke", n);
 #endif
 
 #if LINALG_HAS_MKL
-    profile_backend<linalg::linalg_backend::mkl>("mkl", n);
+    profile_backend<linalg::linalg_backend::MKL>("mkl", n);
 #endif
 
     session.stop();

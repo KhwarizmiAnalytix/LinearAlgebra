@@ -157,14 +157,14 @@ void qr_q(Fn    orgqr,
 }
 }  // namespace
 template <>
-size_t qr_decomposition<float, linalg_backend::cuda_blas>::workspace_size_r(
+size_t qr_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size_r(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_r_lwork<float>(cusolverDnSgeqrf_bufferSize, rows, columns);
     return qr_size<float>(rows, columns, lwork);
 }
 template <>
-void qr_decomposition<float, linalg_backend::cuda_blas>::apply_r(linalg_long rows,
+void qr_decomposition<float, linalg_backend::CUDA_BLAS>::apply_r(linalg_long rows,
     linalg_long                                                              columns,
     float*                                                                   A,
     linalg_long                                                              lda,
@@ -178,14 +178,14 @@ void qr_decomposition<float, linalg_backend::cuda_blas>::apply_r(linalg_long row
     qr_r(cusolverDnSgeqrf, rows, columns, A, lda, tau, workspace, workspace_size, stream, lwork);
 }
 template <>
-size_t qr_decomposition<float, linalg_backend::cuda_blas>::workspace_size_q(
+size_t qr_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size_q(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_q_lwork<float>(cusolverDnSorgqr_bufferSize, rows, columns);
     return qr_size<float>(rows, std::min(rows, columns), lwork);
 }
 template <>
-void qr_decomposition<float, linalg_backend::cuda_blas>::apply_q(linalg_long rows,
+void qr_decomposition<float, linalg_backend::CUDA_BLAS>::apply_q(linalg_long rows,
     linalg_long                                                              columns,
     float*                                                                   A,
     linalg_long                                                              lda,
@@ -199,14 +199,14 @@ void qr_decomposition<float, linalg_backend::cuda_blas>::apply_q(linalg_long row
     qr_q(cusolverDnSorgqr, rows, columns, A, lda, tau, workspace, workspace_size, stream, lwork);
 }
 template <>
-size_t qr_decomposition<double, linalg_backend::cuda_blas>::workspace_size_r(
+size_t qr_decomposition<double, linalg_backend::CUDA_BLAS>::workspace_size_r(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_r_lwork<double>(cusolverDnDgeqrf_bufferSize, rows, columns);
     return qr_size<double>(rows, columns, lwork);
 }
 template <>
-void qr_decomposition<double, linalg_backend::cuda_blas>::apply_r(linalg_long rows,
+void qr_decomposition<double, linalg_backend::CUDA_BLAS>::apply_r(linalg_long rows,
     linalg_long                                                               columns,
     double*                                                                   A,
     linalg_long                                                               lda,
@@ -220,14 +220,14 @@ void qr_decomposition<double, linalg_backend::cuda_blas>::apply_r(linalg_long ro
     qr_r(cusolverDnDgeqrf, rows, columns, A, lda, tau, workspace, workspace_size, stream, lwork);
 }
 template <>
-size_t qr_decomposition<double, linalg_backend::cuda_blas>::workspace_size_q(
+size_t qr_decomposition<double, linalg_backend::CUDA_BLAS>::workspace_size_q(
     linalg_long rows, linalg_long columns)
 {
     const auto lwork = qr_q_lwork<double>(cusolverDnDorgqr_bufferSize, rows, columns);
     return qr_size<double>(rows, std::min(rows, columns), lwork);
 }
 template <>
-void qr_decomposition<double, linalg_backend::cuda_blas>::apply_q(linalg_long rows,
+void qr_decomposition<double, linalg_backend::CUDA_BLAS>::apply_q(linalg_long rows,
     linalg_long                                                               columns,
     double*                                                                   A,
     linalg_long                                                               lda,

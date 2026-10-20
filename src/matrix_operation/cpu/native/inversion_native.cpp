@@ -21,7 +21,7 @@ namespace linalg
 // Null checks shared by every inversion<T, Backend>::apply below, so
 // callers (tests included) get the same validation regardless of which
 // backend is active. There is no non-detail matrix_invert() wrapper to put
-// this in any more — callers use inversion<T, linalg_backend::native>::apply
+// this in any more — callers use inversion<T, linalg_backend::NATIVE>::apply
 // directly.
 static void check_invert_inputs(const void* m, linalg_int lda)
 {
@@ -419,7 +419,7 @@ void matrix_invert_scalar_impl(T* __restrict m,
     {
         auto* inv_m = arena.next<T>(n * n);
         if (type == linear_solver_type::LU_UPFRONT_LINEAR_SOLVER ||
-            lu_decomposition<T, linalg_backend::native>::apply(m, lda, pivot, nullptr, 0))
+            lu_decomposition<T, linalg_backend::NATIVE>::apply(m, lda, pivot, nullptr, 0))
         {
             lu_invert(m, pivot, lda, inv_m);
         }
@@ -431,7 +431,7 @@ void matrix_invert_scalar_impl(T* __restrict m,
         auto* col_scratch = arena.next<T>(n);
         auto* xt           = arena.next<T>(n * n);
         if (type == linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER ||
-            cholesky_decomposition<T, linalg_backend::native>::apply(
+            cholesky_decomposition<T, linalg_backend::NATIVE>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
         {
             cholesky_invert(m, lda, col_scratch, xt);
@@ -446,7 +446,7 @@ void matrix_invert_scalar_impl(T* __restrict m,
 }  // namespace
 
 template <>
-void inversion<float, linalg_backend::native>::apply(float* __restrict m,
+void inversion<float, linalg_backend::NATIVE>::apply(float* __restrict m,
     linalg_int* __restrict                                  pivot,
     linalg_int                                              lda,
     linear_solver_type                                      type,
@@ -460,7 +460,7 @@ void inversion<float, linalg_backend::native>::apply(float* __restrict m,
 }
 
 template <>
-void inversion<double, linalg_backend::native>::apply(double* __restrict m,
+void inversion<double, linalg_backend::NATIVE>::apply(double* __restrict m,
     linalg_int* __restrict                                    pivot,
     linalg_int                                                lda,
     linear_solver_type                                        type,
@@ -474,14 +474,14 @@ void inversion<double, linalg_backend::native>::apply(double* __restrict m,
 }
 
 template <>
-size_t inversion<float, linalg_backend::native>::workspace_size(
+size_t inversion<float, linalg_backend::NATIVE>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return invert_scalar_workspace_size<float>(lda, type);
 }
 
 template <>
-size_t inversion<double, linalg_backend::native>::workspace_size(
+size_t inversion<double, linalg_backend::NATIVE>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
     return invert_scalar_workspace_size<double>(lda, type);
