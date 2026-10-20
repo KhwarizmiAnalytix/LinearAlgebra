@@ -59,10 +59,10 @@ jobs:
         include:
           - compiler: gcc
             id: GNU
-            version: '7.1'
+            version: '9.1'
           - compiler: clang
             id: Clang
-            version: '5.0'
+            version: '9.0'
     env:
       MINIMUM_COMPILER: ${{ matrix.compiler }}
       MINIMUM_COMPILER_ID: ${{ matrix.id }}
@@ -85,7 +85,7 @@ jobs:
           if [[ "$MINIMUM_COMPILER" == clang ]]; then
             mkdir -p "$RUNNER_TEMP/minimum-tools/clang"
             curl -fsSL --retry 3 \
-              https://releases.llvm.org/5.0.0/clang+llvm-5.0.0-x86_64-linux-gnu-debian8.tar.xz \
+              https://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz \
               -o "$RUNNER_TEMP/clang.tar.xz"
             tar -xJf "$RUNNER_TEMP/clang.tar.xz" --strip-components=1 \
               -C "$RUNNER_TEMP/minimum-tools/clang"
@@ -97,7 +97,7 @@ jobs:
           docker run --rm -i --user "$(id -u):$(id -g)" \
             -v "$PWD:/src" -v "$RUNNER_TEMP/minimum-tools:/ci-tools:ro" -w /src \
             -e MINIMUM_COMPILER -e MINIMUM_COMPILER_ID -e MINIMUM_COMPILER_VERSION \
-            gcc:7.1.0 bash -euo pipefail <<'BASH'
+            gcc:9.1.0 bash -euo pipefail <<'BASH'
               export PATH="/ci-tools/cmake/bin:$PATH"
               if [[ "$MINIMUM_COMPILER" == clang ]]; then
                 export CC=/ci-tools/clang/bin/clang CXX=/ci-tools/clang/bin/clang++
@@ -115,10 +115,10 @@ jobs:
           BASH
 
   cmake-minimum-appleclang:
-    name: CMake minimum (AppleClang 10.0, C++17)
-    # Enable after registering an Intel Mac with AppleClang 10.0 selected by xcrun.
-    if: github.event_name == 'push' && vars.LINALG_APPLECLANG_10_CI_ENABLED == 'true'
-    runs-on: [self-hosted, macOS, X64, appleclang-10]
+    name: CMake minimum (AppleClang 11.0, C++17)
+    # Enable after registering a Mac with AppleClang 11.0 (Xcode 11) selected by xcrun.
+    if: github.event_name == 'push' && vars.LINALG_APPLECLANG_11_CI_ENABLED == 'true'
+    runs-on: [self-hosted, macOS, X64, appleclang-11]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -133,7 +133,7 @@ jobs:
             -DCMAKE_C_COMPILER="$(xcrun --find clang)" \
             -DCMAKE_CXX_COMPILER="$(xcrun --find clang++)" \
             -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="$PWD/.github/cmake/check-compiler.cmake" \
-            -DLINALG_CI_COMPILER_ID=AppleClang -DLINALG_CI_COMPILER_VERSION=10.0
+            -DLINALG_CI_COMPILER_ID=AppleClang -DLINALG_CI_COMPILER_VERSION=11.0
 
       - name: Build
         run: cmake --build build-minimum --parallel 4

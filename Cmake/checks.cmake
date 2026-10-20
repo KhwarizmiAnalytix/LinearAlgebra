@@ -46,14 +46,19 @@ elseif(_linalg_checks_min_standard STREQUAL "20")
     # https://devblogs.microsoft.com/cppblog/msvc-cpp20-and-the-std-cpp20-switch/
     set(_linalg_checks_min_msvc 19.29)
 else()
-    # C++17 baseline.
-    # https://gcc.gnu.org/gcc-7/changes.html
-    set(_linalg_checks_min_gcc 7.1)
-    # https://clang.llvm.org/cxx_status.html#cxx17
-    set(_linalg_checks_min_clang 5.0)
-    # AppleClang 10 / Xcode 10 adds the C++17 <optional>, <any>, and <variant> headers.
-    # https://developer.apple.com/documentation/xcode-release-notes/xcode-10-release-notes/
-    set(_linalg_checks_min_appleclang 10.0)
+    # C++17 baseline. Floor is set by <filesystem> (used unconditionally by Logging's
+    # string_util.h), not just language support: GCC 7.1/Clang 5.0 only have
+    # <experimental/filesystem> and lack the <filesystem> header entirely ("fatal error:
+    # filesystem: No such file or directory"), and GCC < 9.1 / Clang(LLVM) < 9.0 need an
+    # extra -lstdc++fs/-lc++fs link flag this build does not add.
+    # https://gcc.gnu.org/gcc-9/changes.html
+    set(_linalg_checks_min_gcc 9.1)
+    # https://releases.llvm.org/9.0.0/projects/libcxx/docs/UsingLibcxx.html
+    set(_linalg_checks_min_clang 9.0)
+    # AppleClang 11 / Xcode 11 is the first to ship the non-experimental <filesystem>
+    # header; AppleClang 10 / Xcode 10 only has <experimental/filesystem>.
+    # https://en.cppreference.com/w/cpp/compiler_support/17
+    set(_linalg_checks_min_appleclang 11.0)
     # MSVC 19.14 / VS 2017 15.7 also supports /Zc:__cplusplus, used by platform.cmake.
     # https://learn.microsoft.com/en-us/cpp/overview/what-s-new-for-cpp-2017
     set(_linalg_checks_min_msvc 19.14)
