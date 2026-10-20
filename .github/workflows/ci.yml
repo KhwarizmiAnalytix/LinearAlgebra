@@ -129,8 +129,6 @@ jobs:
 
   cmake-minimum-appleclang:
     name: CMake minimum (AppleClang 11.0, C++17)
-    # Enable after registering a Mac with AppleClang 11.0 (Xcode 11) selected by xcrun.
-    if: github.event_name == 'push' && vars.LINALG_APPLECLANG_11_CI_ENABLED == 'true'
     runs-on: [self-hosted, macOS, X64, appleclang-11]
     timeout-minutes: 30
     steps:
@@ -156,8 +154,6 @@ jobs:
 
   cmake-minimum-msvc:
     name: CMake minimum (MSVC 19.14, C++17)
-    # The runner supplies LINALG_MSVC_1914_VCVARSALL, pointing to vcvarsall.bat.
-    if: github.event_name == 'push' && vars.LINALG_MSVC_1914_CI_ENABLED == 'true'
     runs-on: [self-hosted, Windows, X64, msvc-19.14]
     timeout-minutes: 30
     steps:

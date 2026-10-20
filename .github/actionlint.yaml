@@ -2,4 +2,5 @@ self-hosted-runner:
   labels:
     - gpu
     - appleclang-10
+    - appleclang-11
     - msvc-19.14
