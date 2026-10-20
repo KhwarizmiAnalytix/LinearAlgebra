@@ -10,38 +10,100 @@
 # checking
 
 # Validate compiler minimums on every configure, including when feature checks are cached.
-# https://gcc.gnu.org/gcc-7/changes.html
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.1)
+# The floor scales with the selected C++ standard: each later standard needs a strictly
+# newer compiler to even recognize the -std=/-std:c++NN flag, let alone support the
+# language — a compiler that only clears the C++17 floor fails later with a raw
+# "unrecognized command line option" instead of this clear FATAL_ERROR.
+if(DEFINED LINALG_CXX_STANDARD AND NOT LINALG_CXX_STANDARD STREQUAL "")
+    set(_linalg_checks_min_standard "${LINALG_CXX_STANDARD}")
+elseif(DEFINED CMAKE_CXX_STANDARD AND NOT CMAKE_CXX_STANDARD STREQUAL "")
+    set(_linalg_checks_min_standard "${CMAKE_CXX_STANDARD}")
+else()
+    set(_linalg_checks_min_standard 17)
+endif()
+
+if(_linalg_checks_min_standard STREQUAL "23")
+    # -std=c++23 (previously -std=c++2b).
+    # https://gcc.gnu.org/gcc-11/changes.html
+    set(_linalg_checks_min_gcc 11.0)
+    # https://releases.llvm.org/17.0.0/tools/clang/docs/ReleaseNotes.html
+    set(_linalg_checks_min_clang 17.0)
+    # Apple has not published an explicit minimum for -std=c++23; best available estimate
+    # — verify against CI before relying on it.
+    set(_linalg_checks_min_appleclang 15.0)
+    # /std:c++23preview from VS 17.0 (19.30); stable /std:c++23 only in very recent toolsets.
+    # https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version
+    set(_linalg_checks_min_msvc 19.34)
+elseif(_linalg_checks_min_standard STREQUAL "20")
+    # -std=c++20 (previously only -std=c++2a).
+    # https://gcc.gnu.org/gcc-10/changes.html
+    set(_linalg_checks_min_gcc 10.0)
+    # https://releases.llvm.org/11.0.0/tools/clang/docs/ReleaseNotes.html
+    set(_linalg_checks_min_clang 11.0)
+    # Xcode 12 (AppleClang 12) still rejects -std=c++20 ("use c++2a"); Xcode 14
+    # (AppleClang 14) accepts it — 13 is a conservative floor pending CI confirmation.
+    set(_linalg_checks_min_appleclang 13.0)
+    # https://devblogs.microsoft.com/cppblog/msvc-cpp20-and-the-std-cpp20-switch/
+    set(_linalg_checks_min_msvc 19.29)
+else()
+    # C++17 baseline.
+    # https://gcc.gnu.org/gcc-7/changes.html
+    set(_linalg_checks_min_gcc 7.1)
+    # https://clang.llvm.org/cxx_status.html#cxx17
+    set(_linalg_checks_min_clang 5.0)
+    # AppleClang 10 / Xcode 10 adds the C++17 <optional>, <any>, and <variant> headers.
+    # https://developer.apple.com/documentation/xcode-release-notes/xcode-10-release-notes/
+    set(_linalg_checks_min_appleclang 10.0)
+    # MSVC 19.14 / VS 2017 15.7 also supports /Zc:__cplusplus, used by platform.cmake.
+    # https://learn.microsoft.com/en-us/cpp/overview/what-s-new-for-cpp-2017
+    set(_linalg_checks_min_msvc 19.14)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS _linalg_checks_min_gcc
+)
     message(
-        FATAL_ERROR "GCC 7.1 or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+        FATAL_ERROR
+            "GCC ${_linalg_checks_min_gcc} or later is required for C++${_linalg_checks_min_standard}. "
+            "Found: ${CMAKE_CXX_COMPILER_VERSION}"
     )
 endif()
 
-# https://clang.llvm.org/cxx_status.html#cxx17
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS _linalg_checks_min_clang
+)
     message(
         FATAL_ERROR
-            "LLVM Clang 5.0 or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+            "LLVM Clang ${_linalg_checks_min_clang} or later is required for C++${_linalg_checks_min_standard}. "
+            "Found: ${CMAKE_CXX_COMPILER_VERSION}"
     )
 endif()
 
-# AppleClang 10 / Xcode 10 adds the C++17 <optional>, <any>, and <variant> headers.
-# https://developer.apple.com/documentation/xcode-release-notes/xcode-10-release-notes/
-if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS _linalg_checks_min_appleclang
+)
     message(
         FATAL_ERROR
-            "Apple Clang 10.0 (Xcode 10) or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+            "Apple Clang ${_linalg_checks_min_appleclang} or later is required for C++${_linalg_checks_min_standard}. "
+            "Found: ${CMAKE_CXX_COMPILER_VERSION}"
     )
 endif()
 
-# MSVC 19.14 / VS 2017 15.7 also supports /Zc:__cplusplus, used by platform.cmake.
-# https://learn.microsoft.com/en-us/cpp/overview/what-s-new-for-cpp-2017
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.14)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS _linalg_checks_min_msvc
+)
     message(
         FATAL_ERROR
-            "MSVC 19.14 (Visual Studio 2017 15.7) or later is required for C++17. Found: ${CMAKE_CXX_COMPILER_VERSION}"
+            "MSVC ${_linalg_checks_min_msvc} or later is required for C++${_linalg_checks_min_standard}. "
+            "Found: ${CMAKE_CXX_COMPILER_VERSION}"
     )
 endif()
+
+unset(_linalg_checks_min_standard)
+unset(_linalg_checks_min_gcc)
+unset(_linalg_checks_min_clang)
+unset(_linalg_checks_min_appleclang)
+unset(_linalg_checks_min_msvc)
 
 # Guard against multiple inclusions for performance
 if(TEMP_CHECKS_CONFIGURED)
