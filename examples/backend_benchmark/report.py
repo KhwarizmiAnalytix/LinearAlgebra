@@ -33,12 +33,18 @@ KEYS = [
     "transpose_a",
     "transpose_b",
 ]
-BACKENDS = ["native", "openblas", "mkl", "gpu"]
+BACKEND_NAMES = {
+    "native": "Native",
+    "openblas": "OpenBLAS",
+    "blis": "BLIS",
+    "mkl": "MKL",
+    "gpu": "GPU",
+}
 NAMES = {
     "gemm": "GEMM",
     "cholesky": "Cholesky",
     "lu": "LU",
-    "qr": "QR (Q and R)",
+    "qr": "QR",
     "svd": "SVD (U, S, VT)",
     "symmetric_eigen": "Symmetric eigen (values + vectors)",
     "general_eigen_values": "General eigen (values only)",
@@ -46,6 +52,7 @@ NAMES = {
 COLORS = {
     "native": "#637a90",
     "openblas": "#d58a21",
+    "blis": "#ba5835",
     "mkl": "#1c9185",
     "gpu": "#7052c1",
 }
@@ -60,10 +67,36 @@ def key(row):
     return tuple(row[field] for field in KEYS)
 
 
-initial = read("results.csv")
-reruns = {key(row): row for row in read("rerun_results.csv")}
-steady = {key(row): row for row in read("gpu_steady_results.csv")}
-assert len(initial) == 488 and len(reruns) == 19 and len(steady) == 88
+def indexed(name):
+    result = {}
+    for row in read(name):
+        identity = key(row)
+        if identity in result:
+            raise ValueError(f"Duplicate case in {name}: {identity}")
+        if row["backend"] not in BACKEND_NAMES:
+            raise ValueError(f"Unknown backend in {name}: {row['backend']}")
+        result[identity] = row
+    return result
+
+
+initial_cases = indexed("results.csv")
+if not initial_cases:
+    raise ValueError("results.csv contains no measurements")
+initial = list(initial_cases.values())
+BACKENDS = [
+    backend
+    for backend in BACKEND_NAMES
+    if any(row["backend"] == backend for row in initial)
+]
+reruns = indexed("rerun_results.csv")
+steady = indexed("gpu_steady_results.csv")
+if (
+    not reruns.keys() <= initial_cases.keys()
+    or not steady.keys() <= initial_cases.keys()
+):
+    raise ValueError("Rerun and steady-input cases must match initial measurements")
+if any(row["backend"] != "gpu" for row in steady.values()):
+    raise ValueError("Steady-input measurements must use the GPU backend")
 rows = []
 for original in initial:
     identity = key(original)
@@ -85,7 +118,8 @@ with (DATA / "final_results.csv").open("w", newline="") as stream:
     writer.writerows(rows)
 
 transfers = read("transfers.csv")
-assert len(transfers) == 96
+if not transfers:
+    raise ValueError("transfers.csv contains no measurements")
 
 
 def number(row, field="mean_us"):
@@ -140,7 +174,9 @@ def comparison_table(precision, n, unit=1.0):
         record.append(speedup)
         records.append(record)
     return table(
-        ["Operation", "Native", "OpenBLAS", "MKL", "GPU", "GPU speedup over best CPU"],
+        ["Operation"]
+        + [BACKEND_NAMES[b] for b in BACKENDS]
+        + ["GPU speedup over best CPU"],
         records,
     )
 
@@ -226,7 +262,7 @@ handles = [
         [],
         [],
         color=COLORS[b],
-        label=b.upper() if b in ("gpu", "mkl") else b.capitalize(),
+        label=BACKEND_NAMES[b],
         linewidth=2,
     )
     for b in BACKENDS
@@ -239,11 +275,11 @@ figure.legend(
     handles=handles,
     loc="upper center",
     bbox_to_anchor=(0.5, 0.94),
-    ncol=6,
+    ncol=len(handles),
     frameon=False,
 )
 figure.suptitle(
-    "Matrix operation scaling · one CPU thread vs RTX 4060 Ti\nGPU data resident; allocation and input restoration excluded",
+    "Matrix operation scaling\nGPU data resident; allocation and input restoration excluded",
     fontsize=14,
     y=0.995,
 )
@@ -305,14 +341,16 @@ def paragraph(text):
     sections.append(text)
 
 
-paragraph("**Matrix operation benchmark analysis — 19 October 2026**")
+paragraph(
+    f"**Matrix operation benchmark analysis — {metadata.get('date', DATA.name)}**"
+)
 paragraph(
     f"[Reproduction instructions]({Path(os.path.relpath(ROOT / 'README.md', OUTPUT)).as_posix()}) · "
     f"[Recorded results]({Path(os.path.relpath(DATA / 'final_results.csv', OUTPUT)).as_posix()}) · "
     f"[Environment metadata]({Path(os.path.relpath(DATA / 'metadata.json', OUTPUT)).as_posix()})"
 )
 paragraph(
-    "The measured backends are the AVX2 native implementation, independently loaded OpenBLAS, Intel MKL and CUDA (cuBLAS/cuSOLVER). All four are called from the same analysis executable linked to the tested library. Large matrices generally favor the GPU under this single-thread CPU policy; small decompositions frequently favor a CPU backend. Precision and data transfers materially change the crossover."
+    f"The measured backends are {', '.join(BACKEND_NAMES[b] for b in BACKENDS)}. They are called from the same analysis executable linked to the tested library. BLIS supplies CBLAS operations; decompositions use its paired LAPACKE implementation. Provider names come from the recorded CSV labels, not assumptions about the host running this report."
 )
 paragraph("**Measurement environment and scope**")
 paragraph(
@@ -326,7 +364,7 @@ paragraph(
     )
 )
 paragraph(
-    "CTest applies PROCESSOR_AFFINITY=TRUE, PROCESSORS=1, MKL_NUM_THREADS=1 and OPENBLAS_NUM_THREADS=1. The harness affinity was observed as 0x1. This is a comparison against one CPU thread, not the full multicore capacity of the i9. The native backend is vectorized with AVX2/FMA; describing it as a purely scalar implementation would be inaccurate for this build."
+    f"Current CTest runs pin each process to one CPU and set MKL_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1 and BLIS_NUM_THREADS=1. The recorded CPU environment is {json.dumps(metadata.get('cpu_environment', dict()), sort_keys=True)}. Consult the recorded compiler and CPU configuration before comparing vectorization or thread counts."
 )
 paragraph(
     "The stock six benchmark executables currently register CPU cases only, even in a cuBLAS-enabled build. GPU results in this report come from the attached analysis harness, not from those stock registrations. The harness sources, this Markdown report, charts and recorded data live in examples/backend_benchmark alongside the repository include directory. Production library code is unchanged."
@@ -338,32 +376,32 @@ paragraph(
             [
                 "GEMM, NN",
                 "Square 32–2048; 64×1024×256 and 1024×64×256 (M,N,K)",
-                "All four; float and double",
+                "All measured backends; float and double",
             ],
             [
                 "GEMM, NT/TN/TT",
                 "Square 64, 256, 512, 1024",
-                "All four; float and double",
+                "All measured backends; float and double",
             ],
             [
                 "Cholesky, LU, QR",
                 "Square 16,32,64,128,256,512,1024",
-                "All four; float and double",
+                "All measured backends; float and double",
             ],
             [
                 "SVD",
                 "Square 16,32,64,128,256,512,1024",
-                "All four through 128; vendor CPU + GPU above 128",
+                "All measured backends through 128; vendor CPU + GPU above 128",
             ],
             [
                 "Symmetric eigen",
                 "Square 8,16,32,64,96,128,256,512,1024",
-                "All four through 128; vendor CPU + GPU above 128",
+                "All measured backends through 128; vendor CPU + GPU above 128",
             ],
             [
                 "General eigenvalues",
                 "Square 8,16,32,64,96,128",
-                "Three CPU backends; no GPU implementation exposed",
+                "Available CPU backends; no GPU implementation exposed",
             ],
         ],
     )
@@ -376,16 +414,16 @@ paragraph(
     "Completed-call wall time is measured with std::chrono::steady_clock. GPU calls run on a non-default, nonblocking stream and are followed by cudaStreamSynchronize inside the measured interval. Allocations, workspace queries, initial uploads and input restoration are outside that interval. Internal library copies, layout conversions, workspace queries performed by apply(), host API dispatch and completion waits remain included. Numerical status downloads occur after warm-up and timed repetition blocks, outside measured calls."
 )
 paragraph(
-    "CPU inputs are restored before each call, outside timing. GPU Cholesky and LU restore their overwritten inputs with an untimed device-to-device copy and completion wait. The final read-only GPU measurements reuse resident inputs without unnecessary per-call restoration. All paths reuse allocated buffers. These are warm repeated-input measurements, not cold-cache or first-call/JIT measurements."
+    "CPU inputs are restored before each call, outside timing. Overwritten GPU inputs are restored with an untimed device-to-device copy and completion wait. Current steady-input GPU runs reuse GEMM and SVD inputs while restoring QR and eigen inputs. All paths reuse allocated buffers. Historical revisions may have different restoration contracts; consult their recorded metadata."
 )
 paragraph(
     "Matrices use fixed mt19937 seeds 42 (A) and 43 (B). GEMM/QR/SVD use uniform random values in [-1,1]. Cholesky uses a random symmetric, strictly diagonally dominant SPD matrix (diagonal shifted by 2n); LU and general eigen use random matrices with the same diagonal shift. Symmetric eigen uses a random symmetric matrix. Shapes and inputs match between backends within this harness. The Cholesky construction and untimed SVD restoration differ from the stock benchmarks, so the raw timings from the two harnesses should not be combined."
 )
 paragraph(
-    "Initial cases used five repetitions, accumulating at least 50 ms of measured calls per repetition. Nineteen cases with >10% coefficient of variation (CV) were repeated with 200 ms warm-up and seven repetitions of at least 200 ms. The 88 read-only GPU cases were then measured with resident input reuse, 200 ms warm-up and seven repetitions of at least 100 ms. final_results.csv records the selected cohort, target duration and repetition count for every row; all earlier measurements are preserved. Each reported mean is the mean of per-repetition latency averages; median and sample standard deviation are also supplied. These CV values describe repetition stability, not confidence intervals for hardware-independent speedups."
+    f"Initial cases use five repetitions of at least 50 ms each. {len(reruns)} cases have longer-sample measurements with 200 ms warm-up and seven repetitions of at least 200 ms. {len(steady)} GPU cases have steady-input measurements with seven repetitions of at least 100 ms. final_results.csv records the selected cohort, target duration and repetition count. Means, medians and sample standard deviations describe this run, not hardware-independent speedups."
 )
 paragraph(
-    f"There are **488 operation cases**, **64 transfer-only cases** and **32 directly measured upload–GEMM–download cases**. Final operation CV: median **{statistics.median(cv):.2f}%**, maximum **{max(cv):.2f}%**, cases over 10%: **{sum(value > 10 for value in cv)}**. No numerical status failure or crash occurred. Success status and prior unit tests are not an exhaustive accuracy/conditioning study for every matrix size."
+    f"There are **{len(rows)} operation cases**, **{sum(row['measurement'] == 'transfer_only' for row in transfers)} transfer-only cases** and **{sum(row['measurement'] == 'gemm_end_to_end' for row in transfers)} directly measured upload–GEMM–download cases**. Final operation CV: median **{statistics.median(cv):.2f}%**, maximum **{max(cv):.2f}%**, cases over 10%: **{sum(value > 10 for value in cv)}**. These timing statistics are not an exhaustive accuracy or conditioning study."
 )
 paragraph("**Large matrices: mean latency in milliseconds, n=1024**")
 for precision in ("float", "double"):
@@ -414,22 +452,22 @@ paragraph(
     "A crossover is the first sampled square size where GPU latency beats the fastest measured CPU backend and stays ahead at all larger sampled sizes. It is not an exact threshold between samples, does not apply to every input or shape, and is for data-resident GPU calls. Comparisons near parity should be rechecked on the intended workload."
 )
 paragraph(
-    "GEMM has the strongest large-matrix GPU scaling, especially in float. MKL and OpenBLAS become close for large CPU GEMM, so preserving independent providers is useful even when one wins by only a few percent. GPU transpose flags are passed through cuBLAS with swapped row-major operands, without the library explicitly materializing transposes. The complete rectangular and transpose rows are included below rather than folded into the square results."
+    "Compare GEMM providers at the application's actual precision and dimensions. The tables include rectangular and transpose cases as well as square matrices. GPU transpose flags pass through cuBLAS with swapped row-major operands, without explicitly materializing transposes in the library."
 )
 paragraph(
-    "Cholesky and LU have much larger GPU overhead relative to tiny CPU factorizations. Native wins several tiny LU cases, but native LU was built with optional pivoting OFF while OpenBLAS, MKL and cuSOLVER use pivoted GETRF. Those small-LU results are not identical algorithm contracts. The strongly diagonally dominant input also avoids difficult pivoting behavior. MKL generally leads the larger CPU decomposition cases, with some size-specific OpenBLAS wins in Cholesky."
+    "For Cholesky and LU, compare the measured provider rows and check pivoting contracts. Native LU can be built without pivoting, while vendor GETRF paths pivot. BLIS itself supplies BLAS; its paired LAPACKE library determines factorization behavior and performance."
 )
 paragraph(
-    "QR returns explicit Q and R. Its GPU path includes layout conversion, GEQRF, ORGQR and clearing R's lower triangle, so these timings should not be compared with a factorization-only GEQRF result. GPU QR's substantial workspace is a separate cost, shown below. Native QR becomes expensive with size; large vendor CPU and GPU paths offer substantially better latency in this run."
+    "The current QR harness times apply_r followed by apply_q on the same packed input and tau, restoring the input outside timing. It does not extract a separate R. Historical data may use an earlier QR contract; consult the recorded library revision. A factorization-only GEQRF timing is a different workload."
 )
 paragraph(
-    "SVD computes singular vectors as well as singular values. Small cases favor CPU. MKL is substantially faster than OpenBLAS on larger SVD cases in this installation, and float/double timings do not follow a simple universal ratio. Both CPU adapters call GESVD, so this result is not evidence of a GESDD-versus-GESVD API mismatch. Backend implementations and convergence behavior differ; assigning a precise cause needs profiling. GPU's double-precision crossover is later than its float crossover."
+    "SVD computes singular vectors as well as singular values. CPU adapters call GESVD; the BLIS row measures the selected LAPACKE companion as well as BLIS. Compare each precision and matrix size directly rather than inferring a universal provider ranking."
 )
 paragraph(
-    "Symmetric eigen includes eigenvectors. The native implementation is much slower than vendor CPU libraries near the upper end of its measured range. GPU becomes attractive at larger sizes; general nonsymmetric eigen remains a CPU choice because this library does not expose that GPU specialization."
+    "Symmetric eigen includes eigenvectors. Compare its size-dependent rows separately from general nonsymmetric eigen, which remains a CPU operation because this library does not expose that GPU specialization."
 )
 paragraph(
-    "The GPU's float and double GEMM performance differ far more than the CPU's in this run. Treat precision as part of backend selection. NVIDIA's [native arithmetic throughput table](https://docs.nvidia.com/cuda/archive/12.9.1/cuda-c-programming-guide/index.html#arithmetic-instructions) documents architecture-dependent FP32/FP64 throughput; the measured result here should not be generalized to a GPU designed for high FP64 throughput. GPU clocks, driver scheduling and vendor algorithm selection can also make small-size curves nonmonotonic; this run does not isolate each cause."
+    "Treat precision as part of backend selection. GPU FP32/FP64 throughput depends on the architecture; compare measured float and double rows independently. Clocks, driver scheduling and vendor algorithm selection can also affect size-dependent results; this harness does not isolate each cause."
 )
 paragraph("![Scaling across all CPU and GPU backends](assets/scaling.png)")
 paragraph("**Transfers and directly measured end-to-end GEMM**")
@@ -490,32 +528,32 @@ for precision in ("float", "double"):
         )
 paragraph(
     table(
-        ["Precision", "Operation", "Native", "OpenBLAS", "MKL", "GPU"],
+        ["Precision", "Operation"] + [BACKEND_NAMES[b] for b in BACKENDS],
         workspace_records,
     )
 )
 paragraph(
-    "These are public workspace_size() results only. Input/output buffers, retained handles, vendor internal allocations and total peak VRAM are not included. In particular, GPU QR requests roughly 210 MiB in float and 419 MiB in double for a 1024 square matrix, despite an input of only 4 or 8 MiB. Plan memory capacity using the actual query, not just matrix storage. A small or zero caller workspace does not prove zero internal vendor memory use."
+    "These are public workspace_size() results only. Input/output buffers, retained handles, vendor internal allocations and total peak VRAM are excluded. Plan capacity using the actual workspace query. A small or zero caller workspace does not prove zero internal vendor memory use."
 )
 paragraph("**Practical choices supported by this run**")
 paragraph(
-    "Use native when its small-case latency and algorithm contract fit; tiny LU is an example, subject to the pivoting difference. Use a vendor CPU backend for small and medium factorizations and for general eigen. MKL is a strong CPU choice in this installation, but retain OpenBLAS as a distinct selectable provider and use measured operation/size data. Use the GPU for sufficiently large resident matrices, with separate float/double policies. For host-resident GEMM, consult the directly measured transfer-inclusive rows. Avoid one unconditional threshold for every operation."
+    "Choose a backend using the measured operation, precision, size and algorithm contract. For host-resident GEMM, consult the directly measured transfer-inclusive rows. BLIS and OpenBLAS are alternative providers for BLAS_LAPACKE; record their LAPACKE companions too. Avoid one unconditional threshold for every operation."
 )
 paragraph(
     "The next performance work should target real application sizes and residency patterns, then CPU thread scaling, batched small matrices and GPU memory reuse. Repeated workspace/layout queries and conversions visible in the current GPU adapters are profiling candidates; these measurements alone do not establish how much speedup removing them would deliver. Any multicore CPU comparison needs a deliberate new affinity/thread policy and separate stability validation because this report uses the validated one-core workaround."
 )
 paragraph("**Validation, limits and reproduction**")
 paragraph(
-    "At library commit 15534ab, python setup.py build.test.blas.cublas.mkl.benchmark passed all eight CTest entries: 92 unit tests (including 21 GPU tests and two provider-isolation tests), the GPU source-residency check and six stock CPU benchmark executables. QR and SVD then each passed 10/10 additional full CTest runs. The analysis harness's 488 cases, focused longer-sample runs, steady-input GPU runs and 96 transfer/E2E cases also completed successfully. This supports the current stability workaround on this host; it does not identify or permanently repair the underlying unpinned crash."
+    "Report generation reads CSV files and does not rerun numerical validation. Record the library revision, provider versions and build/test results with each measurement set. Successful timing samples alone do not establish numerical residuals, convergence on other inputs or correctness at every matrix size."
 )
 paragraph(
-    "This is one host, one compiler/library set, fixed random seeds, warm inputs, one CPU thread, no locked CPU/GPU clocks and Windows WDDM scheduling. Cases run in a fixed native/OpenBLAS/MKL/GPU order, not randomized across backend processes. Five or seven repetition averages do not establish universal statistical significance. No power/energy, cold-start, concurrent-stream, batched, full multicore, ill-conditioned-input or exhaustive numerical-accuracy study was performed."
+    f"This is one recorded host and configuration with fixed random seeds and warm inputs. Cases use the provider order {'/'.join(BACKEND_NAMES[b] for b in BACKENDS)}. Repetition averages do not establish universal statistical significance. Power, cold-start, concurrent-stream, batched, full multicore and exhaustive numerical-accuracy studies are outside this harness."
 )
 paragraph(
-    "Clang itself access-violated once while building the harness, and Python access-violated once while preparing plot dependencies. Both preparatory operations succeeded when pinned to one CPU. No measured benchmark failure followed. This is further reason to describe affinity as a validated workaround rather than a proven diagnosis of an MKL-specific bug."
+    "Consult the recorded runtime and test logs for failures and workarounds on the measured host. This report does not infer the cause of machine-specific failures."
 )
 paragraph(
-    "Build the example from the repository root with LINALG_BUILD_EXAMPLES=ON and the BLAS, LAPACKE, MKL and cuBLAS backends enabled. CMake links LinearAlgebra::LinearAlgebra directly; no path to a prebuilt import library is embedded in the example. The README describes configuration, CTest commands and Markdown regeneration. New runtime CSV files go to the example build directory; the dated recorded data remain under results/2026-10-19. This four-backend CUDA example currently uses CMake; the repository Bazel integration supports CPU sources only."
+    "Build with LINALG_BUILD_EXAMPLES=ON, BLAS or BLIS with LAPACKE, MKL and cuBLAS enabled. CMake links LinearAlgebra::LinearAlgebra directly. The README describes configuration, CTest and report regeneration. Fresh CSV files belong in the build tree. The CUDA example uses CMake; Bazel supports the CPU benchmark sources only."
 )
 paragraph("**Complete operation measurements**")
 paragraph(
@@ -567,11 +605,8 @@ for op in NAMES:
                 "Precision",
                 "Shape",
                 "Transpose",
-                "Native µs",
-                "OpenBLAS µs",
-                "MKL µs",
-                "GPU µs",
-            ],
+            ]
+            + [f"{BACKEND_NAMES[b]} µs" for b in BACKENDS],
             records,
         )
     )

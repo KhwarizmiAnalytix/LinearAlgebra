@@ -37,7 +37,11 @@ const char* backend_name(linalg::linalg_backend backend)
     case linalg::linalg_backend::MKL:
         return "mkl";
     case linalg::linalg_backend::BLAS_LAPACKE:
+#if LINALG_BENCHMARK_BLIS
+        return "blis";
+#else
         return "blas_lapacke";
+#endif
     default:
         return "native";
     }

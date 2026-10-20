@@ -126,6 +126,7 @@ backend's design and known restrictions.
 |-----------------|---------|---------|
 | `LINALG_ENABLE_MKL` | OFF | MKL-backed LAPACKE/BLAS code paths in every CPU module that has one directly (cholesky/lu/svd/qr/inversion/multiplication/transpose/linear_solver/eigen); least_squares/pseudo_inverse/rank/norm/trace compose on top of svd_decomposition and pick up the same backend transitively |
 | `LINALG_ENABLE_BLAS` | OFF | Vendor-neutral CBLAS/LAPACKE backend (OpenBLAS, Accelerate, netlib, ...); uses an independent shared provider when MKL is also ON |
+| `LINALG_ENABLE_BLIS` | OFF | Select BLIS as the CBLAS provider for `BLAS_LAPACKE`; activates BLAS support and requires a paired LAPACKE library for decompositions |
 | `LINALG_BLAS_RUNTIME_LIBRARY` | auto-detected OpenBLAS | Shared CBLAS provider (`.dll`, `.so`, `.dylib`) for combined MKL/BLAS builds |
 | `LINALG_LAPACKE_RUNTIME_LIBRARY` | empty | Optional separate shared LAPACKE provider; empty means LAPACKE is bundled in the CBLAS provider |
 | `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::CUDA_BLAS` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
@@ -155,7 +156,7 @@ For example, on Windows:
 ```powershell
 cmake -G Ninja -S . -B build_compare -DCMAKE_BUILD_TYPE=Release -DLINALG_ENABLE_MKL=ON -DLINALG_ENABLE_BLAS=ON -DLINALG_ENABLE_BENCHMARK=ON -DLINALG_CBLAS_INCLUDE_DIR=C:/tools/OpenBLAS/include -DLINALG_LAPACKE_INCLUDE_DIR=C:/tools/OpenBLAS/include -DLINALG_BLAS_RUNTIME_LIBRARY=C:/tools/OpenBLAS/bin/libopenblas.dll
 cmake --build build_compare --config Release
-./build_compare/bin/benchmark_linalg_multiplication.exe --benchmark_filter='double.*(blas_lapacke|mkl)>/64/64/64'
+./build_compare/bin/benchmark_linalg_multiplication.exe --benchmark_filter='double.*(BLAS_LAPACKE|MKL)>/64/64/64'
 ```
 
 Each benchmark executable reports both backends separately. Match vendor thread
@@ -187,7 +188,7 @@ see the Implemented column.
 | **Apple Accelerate** | CPU / Apple Silicon | ✅ | ✅ | ✅ | ✅ | ✅ via `LINALG_ENABLE_BLAS` |
 | **Netlib BLAS/LAPACK** | CPU | ✅ | ✅ | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLAS` |
 | **cuBLAS / cuSOLVER** | NVIDIA GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_CUBLAS` (`linalg_backend::CUDA_BLAS`) |
-| **BLIS** | CPU | ✅ | ❌ | ❌ | ❌ | ❌ not wired up |
+| **BLIS** | CPU | ✅ | ❌ | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLIS`; pair with LAPACKE for decompositions |
 | **cuBLASLt** | NVIDIA GPU | ✅ | — | — | — | ❌ not wired up |
 | **cuSPARSE** | NVIDIA GPU | — | — | ✅ | — | ❌ out of scope (dense only) |
 | **rocBLAS** | AMD GPU | ✅ | — | — | — | ❌ not wired up |
@@ -208,7 +209,7 @@ general, not something this repo calls.
 #include "include/matrix_operation/linear_solver.h"
 
 // In-place lower-triangular Cholesky factor of an n x n row-major matrix.
-// Choose native, blas_lapacke, or mkl explicitly for each operation.
+// Choose NATIVE, BLAS_LAPACKE, or MKL explicitly for each operation.
 linalg::cholesky_decomposition<double, linalg::linalg_backend::NATIVE>::apply(
     A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
 

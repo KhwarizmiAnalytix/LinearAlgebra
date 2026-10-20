@@ -109,7 +109,11 @@ const char* backend_name(backend b)
     case backend::NATIVE:
         return "native";
     case backend::BLAS_LAPACKE:
+#if LINALG_BENCHMARK_BLIS
+        return "blis";
+#else
         return "openblas";
+#endif
     case backend::MKL:
         return "mkl";
     default:

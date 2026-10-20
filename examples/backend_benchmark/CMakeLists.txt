@@ -14,6 +14,9 @@ set(_example_results "${CMAKE_CURRENT_BINARY_DIR}/results")
 file(MAKE_DIRECTORY "${_example_results}")
 
 add_executable(backend_analysis benchmark.cpp)
+target_compile_definitions(
+    backend_analysis PRIVATE "LINALG_BENCHMARK_BLIS=$<BOOL:${LINALG_ENABLE_BLIS}>"
+)
 add_executable(transfer_analysis transfer.cpp)
 foreach(_example IN ITEMS backend_analysis transfer_analysis)
     target_compile_features(${_example} PRIVATE cxx_std_17)
@@ -49,7 +52,7 @@ if(LINALG_ENABLE_TESTING)
                    TIMEOUT
                    1800
                    ENVIRONMENT
-                   "MKL_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1"
+                   "MKL_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1;BLIS_NUM_THREADS=1"
                    LABELS
                    "Example;Benchmark;Performance"
     )

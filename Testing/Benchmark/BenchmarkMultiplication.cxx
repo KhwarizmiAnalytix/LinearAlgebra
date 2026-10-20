@@ -31,7 +31,11 @@ const char* backend_name(linalg::linalg_backend backend)
     case linalg::linalg_backend::MKL:
         return "mkl";
     case linalg::linalg_backend::BLAS_LAPACKE:
+#if LINALG_BENCHMARK_BLIS
+        return "blis";
+#else
         return "blas_lapacke";
+#endif
     default:
         return "native";
     }
@@ -180,15 +184,15 @@ void BM_MultiplicationTranspose(benchmark::State& state)
 
 }  // namespace
 
-LINALG_BENCH_MATMUL(float, native);
-LINALG_BENCH_MATMUL(double, native);
+LINALG_BENCH_MATMUL(float, NATIVE);
+LINALG_BENCH_MATMUL(double, NATIVE);
 
 #if LINALG_HAS_BLAS
-LINALG_BENCH_MATMUL(float, blas_lapacke);
-LINALG_BENCH_MATMUL(double, blas_lapacke);
+LINALG_BENCH_MATMUL(float, BLAS_LAPACKE);
+LINALG_BENCH_MATMUL(double, BLAS_LAPACKE);
 #endif
 
 #if LINALG_HAS_MKL
-LINALG_BENCH_MATMUL(float, mkl);
-LINALG_BENCH_MATMUL(double, mkl);
+LINALG_BENCH_MATMUL(float, MKL);
+LINALG_BENCH_MATMUL(double, MKL);
 #endif

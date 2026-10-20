@@ -36,7 +36,40 @@ described in the [repository README](../../README.md). The example links the
 `LinearAlgebra::LinearAlgebra` target and inherits its backend definitions and
 dependencies. It does not link a hard-coded library path.
 
-CTest pins each process to one CPU and sets both vendor thread counts to one.
+The example uses the current `linalg::linalg_backend` enum values. CSV labels
+stay lowercase so the recorded selections and report script remain compatible:
+
+| Backend enum | CSV label |
+| --- | --- |
+| `NATIVE` | `native` |
+| `BLAS_LAPACKE` | `openblas` by default; `blis` with `LINALG_ENABLE_BLIS=ON` |
+| `MKL` | `mkl` |
+| `CUDA_BLAS` | `gpu` |
+
+To build the Google Benchmark executables alongside the examples, also set
+`-DLINALG_ENABLE_BENCHMARK=ON`. Their registered names contain the uppercase
+enum values. For example, compare double-precision 64-by-64 GEMM on both CPU
+vendor backends with:
+
+```powershell
+$env:MKL_NUM_THREADS = '1'
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:BLIS_NUM_THREADS = '1'
+./build_examples/bin/benchmark_linalg_multiplication.exe --benchmark_filter='double.*(BLAS_LAPACKE|MKL)>/64/64/64'
+```
+
+For a BLIS comparison, configure a fresh build tree with
+`-DLINALG_ENABLE_BLIS=ON` in place of `-DLINALG_ENABLE_BLAS=ON`. Both use
+`linalg_backend::BLAS_LAPACKE`; BLIS is a provider rather than a separate enum.
+Supply matching BLIS headers and runtime plus a LAPACKE implementation such as
+AOCL libflame or netlib LAPACKE. When MKL is also enabled, set
+`LINALG_BLAS_RUNTIME_LIBRARY` to the BLIS shared library and
+`LINALG_LAPACKE_RUNTIME_LIBRARY` to the separate LAPACKE shared library.
+Do not reuse cached OpenBLAS runtime paths for a BLIS-labeled run.
+The stock benchmarks label these cases `blis`; their registered template
+names still contain `BLAS_LAPACKE`.
+
+CTest pins each process to one CPU and sets MKL, OpenBLAS and BLIS thread counts to one.
 Use a Release build for timings. The recorded configuration used Clang/Ninja
 on Windows; other toolchains and platforms were not measured. This CUDA example
 uses CMake; the repository's Bazel configuration currently supports CPU sources.
@@ -81,3 +114,17 @@ must contain `results.csv`, `rerun_results.csv`, `gpu_steady_results.csv`,
 compiler, runtime versions and thread policy. The script also writes
 `final_results.csv` into that data directory. Do not reuse the historical host
 metadata for measurements from a different machine or configuration.
+
+The report reads provider labels from the CSV files. BLIS data produces BLIS
+columns and chart legends; OpenBLAS data retains OpenBLAS labels, and a merged
+dataset can contain both. Case and rerun counts come from the input files.
+For BLIS runs, record the BLIS and LAPACKE companion versions in `metadata.json`
+along with `BLIS_NUM_THREADS` in `cpu_environment`. Selection files must use
+the same provider label as the current executable (`blis` for a BLIS build).
+Changing a label on an old CSV does not constitute a new provider measurement.
+
+Run report regression tests after installing the plotting requirements:
+
+```sh
+python -m unittest discover -s examples/backend_benchmark -p test_report.py -v
+```
