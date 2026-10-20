@@ -89,6 +89,18 @@ jobs:
               -o "$RUNNER_TEMP/clang.tar.xz"
             tar -xJf "$RUNNER_TEMP/clang.tar.xz" --strip-components=1 \
               -C "$RUNNER_TEMP/minimum-tools/clang"
+
+            # This clang binary was built for Ubuntu 16.04 and needs the ncurses5
+            # ABI (libtinfo.so.5). The gcc:9.1.0 build container is Debian
+            # buster, which dropped libtinfo5 entirely in favor of libtinfo6.
+            # Debian Stretch is the last release to carry it; archive.debian.org
+            # is Debian's own permanent archive for EOL releases.
+            curl -fsSL --retry 3 \
+              https://archive.debian.org/debian/pool/main/n/ncurses/libtinfo5_6.0+20161126-1+deb9u2_amd64.deb \
+              -o "$RUNNER_TEMP/libtinfo5.deb"
+            dpkg-deb -x "$RUNNER_TEMP/libtinfo5.deb" "$RUNNER_TEMP/libtinfo5"
+            cp "$RUNNER_TEMP"/libtinfo5/lib/x86_64-linux-gnu/libtinfo.so.5* \
+              "$RUNNER_TEMP/minimum-tools/clang/lib/"
           fi
 
       - name: Configure, build, and test the minimum compiler
@@ -102,6 +114,7 @@ jobs:
               if [[ "$MINIMUM_COMPILER" == clang ]]; then
                 export CC=/ci-tools/clang/bin/clang CXX=/ci-tools/clang/bin/clang++
                 export CFLAGS=--gcc-toolchain=/usr/local CXXFLAGS=--gcc-toolchain=/usr/local
+                export LD_LIBRARY_PATH=/ci-tools/clang/lib
               else
                 export CC=gcc CXX=g++
               fi
