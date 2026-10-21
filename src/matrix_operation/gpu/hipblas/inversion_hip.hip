@@ -333,7 +333,7 @@ void lu_invert(BufferSizeFn buffer_size,
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
 
     int lwork = 0;
     if (buffer_size(handle, n, n, m, n, &lwork) != HIPSOLVER_STATUS_SUCCESS)
@@ -393,7 +393,7 @@ void cholesky_invert(BufferSizeFn buffer_size,
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
     const auto fill = HIPBLAS_FILL_MODE_UPPER;
 
     int lwork = 0;
@@ -447,7 +447,7 @@ T lu_determinant(BufferSizeFn buffer_size,
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
 
     int lwork = 0;
     if (buffer_size(handle, n, n, m, n, &lwork) != HIPSOLVER_STATUS_SUCCESS)
@@ -492,7 +492,7 @@ T cholesky_determinant(BufferSizeFn buffer_size,
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
     const auto fill = HIPBLAS_FILL_MODE_UPPER;
 
     int lwork = 0;

@@ -89,7 +89,7 @@ bool lu_apply_impl(BufSizeFn buffer_size,
     const auto stream_t = static_cast<hipStream_t>(stream);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream_t);
+    detail::set_hipsolver_stream(handle, stream_t);
 
     int lwork = 0;
     LINALG_CHECK(buffer_size(handle, n, n, m, n, &lwork) == HIPSOLVER_STATUS_SUCCESS,

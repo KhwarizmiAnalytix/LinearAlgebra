@@ -54,6 +54,14 @@ if(LinearAlgebra_HAS_CUBLAS)
     find_dependency(CUDAToolkit)
 endif()
 
+# --- Optional hipBLAS/hipSOLVER GPU backend (LINALG_ENABLE_ROCBLAS) ---
+set(LinearAlgebra_HAS_ROCBLAS @LINALG_ENABLE_ROCBLAS@)
+if(LinearAlgebra_HAS_ROCBLAS)
+    find_dependency(hip CONFIG)
+    find_dependency(hipblas CONFIG)
+    find_dependency(hipsolver CONFIG)
+endif()
+
 # --- Optional cpuinfo backend, auto-detected (LINALG_HAS_CPUINFO) ---
 # Only part of this package's link interface when find_package(cpuinfo)
 # succeeded for the installed LinearAlgebra's own build.

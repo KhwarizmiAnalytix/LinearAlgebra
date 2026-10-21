@@ -114,7 +114,7 @@ void qr_r(Fn    geqrf,
     const auto c      = detail::checked_narrow<int>(columns);
     const auto stream = static_cast<hipStream_t>(stream_ptr);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              p = qr_plan<T>(arena, rows, columns, lwork);
     qr_pack<<<qr_blocks(r, c), 256, 0, stream>>>(A, static_cast<size_t>(lda), p.packed, r, c);
@@ -144,7 +144,7 @@ void qr_q(Fn    orgqr,
     LINALG_CHECK(workspace_size >= qr_size<T>(rows, k, lwork), "QR apply_q: workspace too small");
     const auto stream = static_cast<hipStream_t>(stream_ptr);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              p = qr_plan<T>(arena, rows, k, lwork);
     qr_pack<<<qr_blocks(r, k), 256, 0, stream>>>(A, static_cast<size_t>(lda), p.packed, r, k);

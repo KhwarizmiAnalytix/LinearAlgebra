@@ -488,7 +488,10 @@ if(LINALG_ENABLE_ROCBLAS)
         set(CMAKE_HIP_STANDARD_REQUIRED ON)
     endif()
     enable_language(HIP)
-    list(APPEND LINALG_DEPENDENCY_LIBS hip::host hip::device hipblas::hipblas hipsolver::hipsolver)
+    # CMake's HIP language supplies device compilation/linking for .hip files.
+    # hip::device instead injects -x hip/--hip-link into ordinary C++ sources
+    # and consumers, which may use GCC rather than ROCm's Clang.
+    list(APPEND LINALG_DEPENDENCY_LIBS hip::host roc::hipblas roc::hipsolver)
 endif()
 
 # --- Optional cpuinfo backend (pytorch/cpuinfo), auto-detected ---
@@ -555,6 +558,10 @@ if(NOT TARGET Logging::Logging)
             )
         endfunction()
         linalg_add_logging()
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND MSVC_VERSION LESS 1920)
+            include("${LINALG_SOURCE_DIR}/Cmake/LoggingMsvcCompatibility.cmake")
+            linalg_apply_logging_msvc_compatibility()
+        endif()
         set(_linalg_owns_logging ON)
     endif()
 endif()

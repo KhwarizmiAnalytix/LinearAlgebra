@@ -135,7 +135,7 @@ void svd_core(GesvdFn gesvd,
     const auto k = std::min(r, c);
 
     auto handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
 
     const auto rc = static_cast<size_t>(r) * static_cast<size_t>(c);
     const auto rk = static_cast<size_t>(r) * static_cast<size_t>(k);

@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.24)
+
 # Runs even on CPU-only CI: prevent implicit host transfers from returning.
 file(GLOB_RECURSE gpu_sources "${SOURCE_ROOT}/src/matrix_operation/gpu/*.cpp"
                               "${SOURCE_ROOT}/src/matrix_operation/gpu/*.cu"

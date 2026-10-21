@@ -80,7 +80,7 @@ bool sym_eigen_impl(BufSizeFn buffer_size,
 
     const auto nn      = detail::checked_narrow<int>(n);
     auto       handle  = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream_t);
+    detail::set_hipsolver_stream(handle, stream_t);
     // Symmetric matrix: A == A^T, so (unlike qr/svd) no transpose is needed
     // on input — a row-major-LOWER-supplied matrix and a
     // column-major-UPPER-read of the same bytes describe the identical

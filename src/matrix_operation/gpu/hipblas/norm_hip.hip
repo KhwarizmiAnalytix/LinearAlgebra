@@ -160,7 +160,7 @@ T matrix_norm_impl(Nrm2Fn nrm2,
         const int count =
             detail::checked_narrow<int>(static_cast<size_t>(r) * static_cast<size_t>(c));
         auto handle = detail::hipblas_handle_for_current_device();
-        detail::set_stream(handle, stream);
+        detail::set_hipblas_stream(handle, stream);
         // Default (host) hipblas pointer mode: nrm2 synchronizes internally
         // and writes straight to host memory, so no device scratch or
         // explicit stream sync is needed for this branch.

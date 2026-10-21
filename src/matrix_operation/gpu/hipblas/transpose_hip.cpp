@@ -31,7 +31,7 @@ void transpose_device_impl(
     const auto c = detail::checked_narrow<int>(columns);
 
     auto handle = detail::hipblas_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipblas_stream(handle, stream);
 
     const T alpha = static_cast<T>(1);
     const T beta  = static_cast<T>(0);

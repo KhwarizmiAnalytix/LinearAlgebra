@@ -83,7 +83,7 @@ void cholesky_apply<float>(float* C,
     LINALG_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream_t);
+    detail::set_hipsolver_stream(handle, stream_t);
     const auto fill = to_fill_mode(type);
 
     int lwork = 0;
@@ -116,7 +116,7 @@ void cholesky_apply<double>(double* C,
     LINALG_CHECK(lda > 0, "cholesky_decomposition: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream_t);
+    detail::set_hipsolver_stream(handle, stream_t);
     const auto fill = to_fill_mode(type);
 
     int lwork = 0;

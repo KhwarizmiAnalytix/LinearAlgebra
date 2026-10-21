@@ -42,7 +42,7 @@ void multiplication_impl(GemmFn gemm,
     LINALG_CHECK(rows > 0 && columns > 0 && depth > 0 && lda > 0 && ldb > 0 && ldc > 0,
         "multiplication: rows/columns/depth/lda/ldb/ldc must be positive");
     auto handle = detail::hipblas_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipblas_stream(handle, stream);
     if (gemm(handle,
             transpose_b ? HIPBLAS_OP_T : HIPBLAS_OP_N,
             transpose_a ? HIPBLAS_OP_T : HIPBLAS_OP_N,

@@ -74,10 +74,10 @@ inline hipsolverDnHandle_t hipsolver_handle_for_current_device()
     return handle;
 }
 
-// Binds `stream` (nullptr = the legacy default stream) to `handle` before
-// the caller issues work on it. Every ROCM_BLAS struct apply() overload takes
-// an explicit trailing stream parameter and routes it through here.
-inline void set_stream(hipblasHandle_t handle, hipStream_t stream)
+// Both HIP libraries typedef their handles to void*, so these helpers need
+// distinct names rather than overloads. Each ROCM_BLAS operation binds its
+// explicit stream (nullptr = the legacy default stream) before issuing work.
+inline void set_hipblas_stream(hipblasHandle_t handle, hipStream_t stream)
 {
     if (hipblasSetStream(handle, stream) != HIPBLAS_STATUS_SUCCESS)
     {
@@ -85,7 +85,7 @@ inline void set_stream(hipblasHandle_t handle, hipStream_t stream)
     }
 }
 
-inline void set_stream(hipsolverDnHandle_t handle, hipStream_t stream)
+inline void set_hipsolver_stream(hipsolverDnHandle_t handle, hipStream_t stream)
 {
     if (hipsolverDnSetStream(handle, stream) != HIPSOLVER_STATUS_SUCCESS)
     {

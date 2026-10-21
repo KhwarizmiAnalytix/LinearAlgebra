@@ -137,7 +137,7 @@ void lu_solve(BufferSizeFn buffer_size,
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
 
     int lwork = 0;
     LINALG_CHECK(!(buffer_size(handle, n, n, m, n, &lwork) != HIPSOLVER_STATUS_SUCCESS),
@@ -173,7 +173,7 @@ void cholesky_solve(BufferSizeFn buffer_size,
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::hipsolver_handle_for_current_device();
-    detail::set_stream(handle, stream);
+    detail::set_hipsolver_stream(handle, stream);
     // Row-major LOWER factor <-> column-major UPPER fill, see
     // cholesky_decomposition_hip.cpp.
     const auto fill = HIPBLAS_FILL_MODE_UPPER;
