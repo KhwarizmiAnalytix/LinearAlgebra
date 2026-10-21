@@ -27,16 +27,21 @@ struct is_streamable<T,
 {
 };
 
-template <typename T> std::string value_string(const T& value)
+// MSVC 19.14 can instantiate underlying_type for non-enums even inside a
+// discarded if constexpr branch. Select the enum overload before its body.
+template <typename T, std::enable_if_t<std::is_enum<T>::value, int> = 0>
+std::string value_string(const T& value)
+{
+    return std::to_string(static_cast<typename std::underlying_type<T>::type>(value));
+}
+
+template <typename T, std::enable_if_t<!std::is_enum<T>::value, int> = 0>
+std::string value_string(const T& value)
 {
     using value_type = typename std::decay<T>::type;
     if constexpr (std::is_same<value_type, bool>::value)
     {
         return value ? "true" : "false";
-    }
-    else if constexpr (std::is_enum<value_type>::value)
-    {
-        return std::to_string(static_cast<typename std::underlying_type<value_type>::type>(value));
     }
     else if constexpr (std::is_pointer<value_type>::value)
     {

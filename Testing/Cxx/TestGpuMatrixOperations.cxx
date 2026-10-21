@@ -42,9 +42,8 @@ using cudaError_t  = hipError_t;
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaMemoryTypeDevice hipMemoryTypeDevice
 
-// hipPointerAttribute_t names its field `memoryType`, not CUDA's `type`;
-// this wrapper keeps DeviceMemoryAllocation's `attributes.type` call site
-// identical across both backends.
+// Expose only the pointer type used by DeviceMemoryAllocation; ROCm 6
+// names this field `type`, matching CUDA's spelling.
 struct cudaPointerAttributes
 {
     hipMemoryType type;
@@ -53,7 +52,7 @@ inline hipError_t cudaPointerGetAttributes(cudaPointerAttributes* attributes, co
 {
     hipPointerAttribute_t native{};
     const auto            status = hipPointerGetAttributes(&native, ptr);
-    attributes->type             = native.memoryType;
+    attributes->type             = native.type;
     return status;
 }
 #endif

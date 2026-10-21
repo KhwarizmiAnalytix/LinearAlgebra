@@ -37,7 +37,10 @@ foreach(source IN LISTS gpu_sources)
     # managed-memory migration and host result accessors are not. Checked for
     # both CUDA and HIP spellings (hipBLAS/hipSOLVER mirror cuBLAS/cuSOLVER's
     # API names 1:1).
-    if(contents MATCHES "(cuda|hip)Memcpy(HostToDevice|DeviceToHost|Default)|(cuda|hip)(Device|Stream)Synchronize|(cuda|hip)(MallocManaged|HostMalloc)|(cuda|hip)MemPrefetchAsync|(cublas|hipblas)(Get|Set)(Vector|Matrix)")
+    # Split runtime and BLAS patterns to stay below CMake 3.24's limit of
+    # nine capturing groups per regular expression.
+    if(contents MATCHES "(cuda|hip)(Memcpy(HostToDevice|DeviceToHost|Default)|(Device|Stream)Synchronize|MallocManaged|HostMalloc|MemPrefetchAsync)"
+       OR contents MATCHES "(cublas|hipblas)(Get|Set)(Vector|Matrix)")
         message(FATAL_ERROR "GPU residency violation in ${source}")
     endif()
     string(REGEX MATCHALL "(cuda|hip)Memcpy[A-Za-z0-9_]*[ \t\r\n]*\\([^;]*" copies "${contents}")
