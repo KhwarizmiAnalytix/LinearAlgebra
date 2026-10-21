@@ -4,6 +4,10 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#if LINALG_HAS_ROCBLAS
+#include <hip/hip_runtime_api.h>
+#endif
+
 #if LINALG_HAS_MKL
 #include <mkl.h>
 
@@ -47,6 +51,16 @@ bool Context::has_cuda() const noexcept
 #if LINALG_HAS_CUBLAS
     int count = 0;
     return cudaGetDeviceCount(&count) == cudaSuccess && count > 0;
+#else
+    return false;
+#endif
+}
+
+bool Context::has_rocm() const noexcept
+{
+#if LINALG_HAS_ROCBLAS
+    int count = 0;
+    return hipGetDeviceCount(&count) == hipSuccess && count > 0;
 #else
     return false;
 #endif

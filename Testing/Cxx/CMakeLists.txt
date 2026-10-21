@@ -49,6 +49,18 @@ if(LINALG_ENABLE_GTEST)
         )
     endif()
 
+    # LINALG_ENABLE_CUBLAS and LINALG_ENABLE_ROCBLAS are mutually exclusive
+    # (CMakeLists.txt), so this is the same MathGpu.* suite as
+    # LinearAlgebraCudaTests above, compiled against ROCM_BLAS instead.
+    if(LINALG_ENABLE_ROCBLAS)
+        add_test(NAME LinearAlgebraRocmTests COMMAND LinearAlgebraCxxTests --gtest_filter=MathGpu.*
+                 WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        )
+        set_tests_properties(
+            LinearAlgebraRocmTests PROPERTIES TIMEOUT 120 LABELS "LinearAlgebra;Unit;ROCM"
+        )
+    endif()
+
     if(COMMAND linalg_set_target_output_directories)
         linalg_set_target_output_directories(LinearAlgebraCxxTests)
     endif()

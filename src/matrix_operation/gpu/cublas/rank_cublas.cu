@@ -57,6 +57,8 @@ struct singular_values_layout
     T*             U;
     T*             VT;
     int*           info;
+    linalg_long*   rank_result;
+    T*             condition_result;
     unsigned char* svd_workspace;
 };
 
@@ -67,11 +69,13 @@ singular_values_layout<T> singular_values_plan(
 {
     const auto k = std::min(rows, columns);
     singular_values_layout<T> p;
-    p.S             = arena.next<T>(static_cast<size_t>(k));
-    p.U             = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(k));
-    p.VT            = arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(columns));
-    p.info          = arena.next<int>(1);
-    p.svd_workspace = arena.next<unsigned char>(svd_workspace_bytes);
+    p.S                = arena.next<T>(static_cast<size_t>(k));
+    p.U                = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(k));
+    p.VT               = arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(columns));
+    p.info             = arena.next<int>(1);
+    p.rank_result      = arena.next<linalg_long>(1);
+    p.condition_result = arena.next<T>(1);
+    p.svd_workspace    = arena.next<unsigned char>(svd_workspace_bytes);
     return p;
 }
 
@@ -121,20 +125,16 @@ static __global__ void singular_values_reduce(const T* S,
 }
 
 template <typename T>
-void reduce_singular_values(const T* A,
-    linalg_long                      rows,
-    linalg_long                      columns,
-    linalg_long                      lda,
-    T                                tol,
-    void*                            workspace,
-    size_t                           workspace_size,
-    linalg_long*                     rank_result,
-    T*                               condition_result,
-    cudaStream_t                     stream)
+singular_values_layout<T> reduce_singular_values(const T* A,
+    linalg_long                                           rows,
+    linalg_long                                           columns,
+    linalg_long                                           lda,
+    T                                                      tol,
+    void*                                                 workspace,
+    size_t                                                workspace_size,
+    cudaStream_t                                          stream)
 {
     LINALG_CHECK(A != nullptr, "A must not be null");
-    LINALG_CHECK(
-        rank_result != nullptr || condition_result != nullptr, "device result must not be null");
     LINALG_CHECK(rows > 0 && columns > 0, "rows and columns must be positive");
     LINALG_CHECK(lda == columns, "rank/condition_number requires tightly packed lda");
     const auto k = std::min(rows, columns);
@@ -153,61 +153,62 @@ void reduce_singular_values(const T* A,
         tol,
         std::numeric_limits<T>::epsilon(),
         bufs.info,
-        rank_result,
-        condition_result);
+        bufs.rank_result,
+        bufs.condition_result);
     LINALG_CHECK(cudaGetLastError() == cudaSuccess, "singular_values_reduce launch failed");
+    return bufs;
 }
 
 }  // namespace
 
 // ---- rank<T, cuda_blas> specializations ----
+//
+// These synchronize the stream internally and return the result by value, to
+// match the primary (Backend-templated) template's signature exactly rather
+// than writing through a caller-owned device pointer.
 
 template <>
-void rank<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
-    linalg_long                                                 rows,
-    linalg_long                                                 columns,
-    linalg_long                                                 lda,
-    float                                                       tol,
-    void*                                                       workspace,
-    size_t                                                      workspace_size,
-    linalg_long*                                                result,
-    void*                                                       stream)
+linalg_long rank<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
+    linalg_long                                                        rows,
+    linalg_long                                                        columns,
+    linalg_long                                                        lda,
+    float                                                              tol,
+    void*                                                              workspace,
+    size_t                                                             workspace_size,
+    void*                                                              stream)
 {
     LINALG_SCOPE("rank/cuda_blas<float>");
-    reduce_singular_values(A,
-        rows,
-        columns,
-        lda,
-        tol,
-        workspace,
-        workspace_size,
-        result,
-        static_cast<float*>(nullptr),
-        static_cast<cudaStream_t>(stream));
+    const auto stream_t = static_cast<cudaStream_t>(stream);
+    const auto bufs      = reduce_singular_values(A, rows, columns, lda, tol, workspace,
+        workspace_size, stream_t);
+    linalg_long host_result = 0;
+    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.rank_result, sizeof(linalg_long),
+                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+        "rank: result copy failed");
+    LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "rank: stream sync failed");
+    return host_result;
 }
 
 template <>
-void rank<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
-    linalg_long                                                   rows,
-    linalg_long                                                   columns,
-    linalg_long                                                   lda,
-    double                                                        tol,
-    void*                                                         workspace,
-    size_t                                                        workspace_size,
-    linalg_long*                                                  result,
-    void*                                                         stream)
+linalg_long rank<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
+    linalg_long                                                         rows,
+    linalg_long                                                         columns,
+    linalg_long                                                         lda,
+    double                                                              tol,
+    void*                                                               workspace,
+    size_t                                                              workspace_size,
+    void*                                                               stream)
 {
     LINALG_SCOPE("rank/cuda_blas<double>");
-    reduce_singular_values(A,
-        rows,
-        columns,
-        lda,
-        tol,
-        workspace,
-        workspace_size,
-        result,
-        static_cast<double*>(nullptr),
-        static_cast<cudaStream_t>(stream));
+    const auto stream_t = static_cast<cudaStream_t>(stream);
+    const auto bufs      = reduce_singular_values(A, rows, columns, lda, tol, workspace,
+        workspace_size, stream_t);
+    linalg_long host_result = 0;
+    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.rank_result, sizeof(linalg_long),
+                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+        "rank: result copy failed");
+    LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "rank: stream sync failed");
+    return host_result;
 }
 
 template <>
@@ -225,51 +226,53 @@ size_t rank<double, linalg_backend::CUDA_BLAS>::workspace_size(
 }
 
 // ---- condition_number<T, cuda_blas> specializations ----
+//
+// tol is irrelevant to the condition number itself; reduce_singular_values
+// still computes a (discarded) rank alongside it since both reductions share
+// one kernel launch.
 
 template <>
-void condition_number<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
-    linalg_long                                                             rows,
-    linalg_long                                                             columns,
-    linalg_long                                                             lda,
-    void*                                                                   workspace,
-    size_t                                                                  workspace_size,
-    float*                                                                  result,
-    void*                                                                   stream)
+float condition_number<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
+    linalg_long                                                            rows,
+    linalg_long                                                            columns,
+    linalg_long                                                            lda,
+    void*                                                                  workspace,
+    size_t                                                                 workspace_size,
+    void*                                                                  stream)
 {
     LINALG_SCOPE("condition_number/cuda_blas<float>");
-    reduce_singular_values(A,
-        rows,
-        columns,
-        lda,
-        float(-1),
-        workspace,
-        workspace_size,
-        nullptr,
-        result,
-        static_cast<cudaStream_t>(stream));
+    const auto stream_t = static_cast<cudaStream_t>(stream);
+    const auto bufs      = reduce_singular_values(A, rows, columns, lda, float(-1), workspace,
+        workspace_size, stream_t);
+    float host_result = 0;
+    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.condition_result, sizeof(float),
+                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+        "condition_number: result copy failed");
+    LINALG_CHECK(
+        cudaStreamSynchronize(stream_t) == cudaSuccess, "condition_number: stream sync failed");
+    return host_result;
 }
 
 template <>
-void condition_number<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
-    linalg_long                                                               rows,
-    linalg_long                                                               columns,
-    linalg_long                                                               lda,
-    void*                                                                     workspace,
-    size_t                                                                    workspace_size,
-    double*                                                                   result,
-    void*                                                                     stream)
+double condition_number<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
+    linalg_long                                                              rows,
+    linalg_long                                                              columns,
+    linalg_long                                                              lda,
+    void*                                                                    workspace,
+    size_t                                                                   workspace_size,
+    void*                                                                    stream)
 {
     LINALG_SCOPE("condition_number/cuda_blas<double>");
-    reduce_singular_values(A,
-        rows,
-        columns,
-        lda,
-        double(-1),
-        workspace,
-        workspace_size,
-        nullptr,
-        result,
-        static_cast<cudaStream_t>(stream));
+    const auto stream_t = static_cast<cudaStream_t>(stream);
+    const auto bufs      = reduce_singular_values(A, rows, columns, lda, double(-1), workspace,
+        workspace_size, stream_t);
+    double host_result = 0;
+    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.condition_result, sizeof(double),
+                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+        "condition_number: result copy failed");
+    LINALG_CHECK(
+        cudaStreamSynchronize(stream_t) == cudaSuccess, "condition_number: stream sync failed");
+    return host_result;
 }
 
 template <>

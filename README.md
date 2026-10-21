@@ -10,11 +10,13 @@ inversion/multiplication/transpose/pseudo-inverse, symmetric and general
 eigenvalue/eigenvector decomposition, and rank/condition-number/norm/trace
 estimation, with a portable scalar fallback, an optional **Intel MKL**
 (LAPACKE/BLAS) backend, an optional vendor-neutral **CBLAS/LAPACKE** backend
-(OpenBLAS, Accelerate, netlib, ...), and an optional **cuBLAS/cuSOLVER** GPU backend
-(same struct-template API, `linalg_backend::CUDA_BLAS` specializations,
-device pointers only, no implicit host transfers) covering every CPU op
-except general (non-symmetric) eigenvalue decomposition, for which
-cuSOLVER's dense API has no `geev`-equivalent routine to call into. Error reporting always goes through
+(OpenBLAS, Accelerate, netlib, ...), and an optional **cuBLAS/cuSOLVER**
+(NVIDIA) or **hipBLAS/hipSOLVER** (AMD) GPU backend — mutually exclusive,
+same struct-template API, `linalg_backend::CUDA_BLAS`/`ROCM_BLAS`
+specializations, device pointers only, no implicit host transfers —
+covering every CPU op except general (non-symmetric) eigenvalue
+decomposition, for which neither cuSOLVER's nor hipSOLVER's dense API has
+a `geev`-equivalent routine to call into. Error reporting always goes through
 [KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)
 (vendored at `ThirdParty/Logging`, a required dependency, not an optional
 backend). See [`docs/gpu_backend_design.md`](docs/gpu_backend_design.md)
@@ -27,23 +29,27 @@ one consumer, not a required host.
 ## Layout
 
 - `CMakeLists.txt` — `LINALG_ENABLE_MKL`, `LINALG_ENABLE_BLAS`,
-  `LINALG_ENABLE_CUBLAS`, `LINALG_LU_PIVOTING`, `LINALG_ENABLE_*`.
-- `BUILD.bazel` — `//:LinearAlgebra` (CPU only — the GPU tree below is
-  CMake-only, see `LINALG_ENABLE_CUBLAS` below).
+  `LINALG_ENABLE_CUBLAS`, `LINALG_ENABLE_ROCBLAS` (mutually exclusive with
+  `LINALG_ENABLE_CUBLAS`), `LINALG_LU_PIVOTING`, `LINALG_ENABLE_*`.
+- `BUILD.bazel` — `//:LinearAlgebra` (CPU only — the GPU trees below are
+  CMake-only, see `LINALG_ENABLE_CUBLAS`/`LINALG_ENABLE_ROCBLAS` below).
 - `include/common/` — export macro, feature macros, cuBLAS/cuSOLVER handle
-  pool (`cuda_handle.h`).
+  pool (`cuda_handle.h`) and hipBLAS/hipSOLVER handle pool (`hip_handle.h`).
 - `include/memory/` — minimal scratch-buffer allocator.
 - `include/util/` — conservative CPU cache-size defaults (`cpu_info.h`); the
   exception helper that used to live here is gone — error reporting goes
   straight through Logging's `LOGGING_THROW`/`logging::exception` now.
 - `include/matrix_operation/` — the public modules (CPU and GPU); the GPU
   `linalg_backend::CUDA_BLAS` specializations are in
-  `src/matrix_operation/gpu/cublas/`, built when `LINALG_ENABLE_CUBLAS=ON`.
-- `src/` — implementation (`.cpp`/`.cu`) files, mirroring `include/`'s
+  `src/matrix_operation/gpu/cublas/` (built when `LINALG_ENABLE_CUBLAS=ON`),
+  and `linalg_backend::ROCM_BLAS` specializations are in
+  `src/matrix_operation/gpu/hipblas/` (built when `LINALG_ENABLE_ROCBLAS=ON`).
+- `src/` — implementation (`.cpp`/`.cu`/`.hip`) files, mirroring `include/`'s
   layout (e.g. `include/matrix_operation/lu_decomposition.h` pairs with
   `src/matrix_operation/cpu/native/lu_decomposition_native.cpp` on the scalar
-  path and `src/matrix_operation/gpu/cublas/lu_decomposition_cublas.cpp` on the
-  GPU path).
+  path, `src/matrix_operation/gpu/cublas/lu_decomposition_cublas.cpp` on the
+  CUDA path, and `src/matrix_operation/gpu/hipblas/lu_decomposition_hip.cpp`
+  on the ROCm path).
 - `Testing/Cxx/` — GoogleTest unit tests.
 - `ThirdParty/` — vendored `googletest` submodule, plus `Logging`
   ([KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)),
@@ -81,17 +87,22 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 All entry points are plain row-major raw-pointer C++ (`T* data, lda`) — no
 matrix class is part of the public API; callers own their own storage.
 
-### GPU backend (`linalg_backend::CUDA_BLAS`, `LINALG_ENABLE_CUBLAS=ON`)
+### GPU backend (`linalg_backend::CUDA_BLAS`/`ROCM_BLAS`, `LINALG_ENABLE_CUBLAS=ON`/`LINALG_ENABLE_ROCBLAS=ON`)
 
 The GPU backend reuses the same struct-template API as every other backend.
 Include the same `include/matrix_operation/*.h` headers as the CPU path and
-use `linalg_backend::CUDA_BLAS` as the template argument:
+use `linalg_backend::CUDA_BLAS` (NVIDIA, cuBLAS/cuSOLVER) or
+`linalg_backend::ROCM_BLAS` (AMD, hipBLAS/hipSOLVER) as the template
+argument — the two options are mutually exclusive in a given build:
 
 ```cpp
 #include "include/matrix_operation/svd_decomposition.h"
 
 // Query workspace, allocate on device, then call:
 linalg::svd_decomposition<double, linalg::linalg_backend::CUDA_BLAS>::apply(
+    rows, cols, dA, lda, dS, dU, ldu, dVT, ldv, d_workspace, ws_size);
+// Or, in a LINALG_ENABLE_ROCBLAS build:
+linalg::svd_decomposition<double, linalg::linalg_backend::ROCM_BLAS>::apply(
     rows, cols, dA, lda, dS, dU, ldu, dVT, ldv, d_workspace, ws_size);
 ```
 
@@ -136,13 +147,18 @@ use bundled dependencies and scalar SIMD, and disable optional enum reflection
 (which requires GCC 9+) and auto-detected cpuinfo/Profiler packages. Each job
 checks CMake's detected compiler ID and version to catch toolchain fallback.
 
-AppleClang 11.0 and MSVC 19.14 jobs run on opt-in self-hosted runners for pushes
-to `main`. Install CMake 3.24+ and Ninja, then configure:
+The MSVC 19.14 job runs on GitHub-hosted `windows-2022` runners for pushes and
+pull requests to `main`. It installs the VS 2017 v14.14 toolset and Windows SDK
+10.0.19041.0, selects them explicitly, and verifies that CMake detects MSVC
+19.14.x. No self-hosted Windows runner or repository variable is required.
+`LINALG_MSVC_1914_CI_ENABLED` is no longer used.
+
+AppleClang 11.0 runs on an opt-in self-hosted runner for pushes to `main`.
+Install CMake 3.24+ and Ninja, then configure:
 
 | Compiler | Runner labels | Repository variable set to `true` | Runner setup |
 |---|---|---|---|
 | AppleClang 11.0 | `self-hosted`, `macOS`, `X64`, `appleclang-11` | `LINALG_APPLECLANG_11_CI_ENABLED` | Select the Xcode 11 toolchain through `xcode-select` or `DEVELOPER_DIR` so `xcrun` finds AppleClang 11.0.x. |
-| MSVC 19.14 | `self-hosted`, `Windows`, `X64`, `msvc-19.14` | `LINALG_MSVC_1914_CI_ENABLED` | Install the VS 2017 15.7 toolchain; set runner environment variable `LINALG_MSVC_1914_VCVARSALL` to its `vcvarsall.bat` path. |
 
 | CMake variable | Default | Summary |
 |-----------------|---------|---------|
@@ -151,8 +167,9 @@ to `main`. Install CMake 3.24+ and Ninja, then configure:
 | `LINALG_ENABLE_BLIS` | OFF | Select BLIS as the CBLAS provider for `BLAS_LAPACKE`; activates BLAS support and requires a paired LAPACKE library for decompositions |
 | `LINALG_BLAS_RUNTIME_LIBRARY` | auto-detected OpenBLAS | Shared CBLAS provider (`.dll`, `.so`, `.dylib`) for combined MKL/BLAS builds |
 | `LINALG_LAPACKE_RUNTIME_LIBRARY` | empty | Optional separate shared LAPACKE provider; empty means LAPACKE is bundled in the CBLAS provider |
-| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::CUDA_BLAS` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON |
-| `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS |
+| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::CUDA_BLAS` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON; mutually exclusive with `LINALG_ENABLE_ROCBLAS` |
+| `LINALG_ENABLE_ROCBLAS` | OFF | hipBLAS/hipSOLVER GPU backend (`linalg_backend::ROCM_BLAS` specializations, `src/matrix_operation/gpu/hipblas/`); requires a ROCm/HIP toolchain, enables the HIP language only when ON; mutually exclusive with `LINALG_ENABLE_CUBLAS` |
+| `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS or hipBLAS |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | Standalone: ON; embedded: host setting or OFF | Build the test suite; `BUILD_TESTING=OFF` disables it |
@@ -171,6 +188,10 @@ always uses its own headers and leaves LAPACKE disabled. Without LAPACKE, the ba
 `multiplication`/`transpose` and every other op falls back to
 scalar (a `STATUS` message reports which case applies). When
 `LINALG_ENABLE_CUBLAS` is `ON`, `find_package(CUDAToolkit)` must resolve.
+When `LINALG_ENABLE_ROCBLAS` is `ON`, `find_package(hip)`,
+`find_package(hipblas)` and `find_package(hipsolver)` must all resolve.
+Configuration fails with `FATAL_ERROR` if both `LINALG_ENABLE_CUBLAS` and
+`LINALG_ENABLE_ROCBLAS` are `ON` at once.
 
 SIMD defaults to SSE2 on x86_64, NEON on arm64, and scalar elsewhere. Higher
 x86 ISAs require an explicit `LINALG_VECTORIZATION_ISA` setting and a CPU that
@@ -236,8 +257,7 @@ see the Implemented column.
 | **BLIS** | CPU | ✅ | ❌ | ❌ | ❌ | ✅ via `LINALG_ENABLE_BLIS`; pair with LAPACKE for decompositions |
 | **cuBLASLt** | NVIDIA GPU | ✅ | — | — | — | ❌ not wired up |
 | **cuSPARSE** | NVIDIA GPU | — | — | ✅ | — | ❌ out of scope (dense only) |
-| **rocBLAS** | AMD GPU | ✅ | — | — | — | ❌ not wired up |
-| **hipSOLVER** | AMD GPU | — | ✅ | — | — | ❌ not wired up |
+| **hipBLAS / hipSOLVER** | AMD GPU | ✅ | ✅ | ❌ | ❌ | ✅ `LINALG_ENABLE_ROCBLAS` (`linalg_backend::ROCM_BLAS`) |
 | **rocSPARSE** | AMD GPU | — | — | ✅ | — | ❌ out of scope (dense only) |
 
 \* OpenBLAS ships LAPACK only when built with its bundled reference LAPACK
@@ -245,7 +265,9 @@ see the Implemented column.
 back to the scalar path here for LAPACK-level ops (see `LINALG_ENABLE_BLAS`
 above). FFT and sparse routines are out of scope for LinearAlgebra, which is
 dense-only; the FFT/Sparse columns above describe each vendor library in
-general, not something this repo calls.
+general, not something this repo calls. `LINALG_ENABLE_CUBLAS` and
+`LINALG_ENABLE_ROCBLAS` are mutually exclusive — enable only the one
+matching the target GPU vendor (see `docs/gpu_backend_design.md`).
 
 ## Public API (abridged)
 
@@ -275,9 +297,12 @@ ctest --test-dir build --output-on-failure
 
 Enable the MKL backend with `-DLINALG_ENABLE_MKL=ON` (requires Intel oneMKL
 discoverable by `find_package(MKL)`), the vendor-neutral BLAS backend with
-`-DLINALG_ENABLE_BLAS=ON`, or the GPU backend with `-DLINALG_ENABLE_CUBLAS=ON`
-(requires the CUDA toolkit; set `CMAKE_CUDA_ARCHITECTURES` for your GPU, or
-leave it to `native` detection).
+`-DLINALG_ENABLE_BLAS=ON`, the NVIDIA GPU backend with
+`-DLINALG_ENABLE_CUBLAS=ON` (requires the CUDA toolkit; set
+`CMAKE_CUDA_ARCHITECTURES` for your GPU, or leave it to `native` detection),
+or the AMD GPU backend with `-DLINALG_ENABLE_ROCBLAS=ON` (requires a
+ROCm/HIP toolchain; set `CMAKE_HIP_ARCHITECTURES` for your GPU). The two GPU
+backends are mutually exclusive.
 
 C++-only hosts can use `add_subdirectory`; bundled Logging's C language needs
 are enabled automatically. An existing `Logging::Logging` target is reused.
@@ -363,6 +388,19 @@ self-hosted runner with labels `linux`, `x64`, and `gpu` is registered. That run
 needs Docker, a compatible NVIDIA driver, and the NVIDIA Container Toolkit;
 the job installs its build tools inside the CUDA container. Until that runner
 is available, GPU numerical correctness requires manual hardware testing.
+
+HIP is compiled without a GPU on Linux the same way, inside a
+`rocm/dev-ubuntu-22.04` container, across the same OpenBLAS/MKL/examples
+matrix (`LINALG_ENABLE_ROCBLAS=ON` in place of `LINALG_ENABLE_CUBLAS=ON`;
+the two are mutually exclusive, so this is a separate `hip-compile` job
+rather than another matrix row on `cuda-compile`). There is no HIP Windows
+compile job: unlike CUDA, there is no maintained GitHub Action for
+installing the ROCm HIP SDK on Windows runners. HIP GPU runtime tests run
+the same way as CUDA's, gated behind the repository variable
+`LINALG_ROCM_GPU_CI_ENABLED` and a self-hosted runner with labels `linux`,
+`x64`, and `rocm`; that runner needs Docker, the `amdgpu` kernel driver, and
+`/dev/kfd`/`/dev/dri` exposed to the container. Until that runner is
+available, HIP numerical correctness likewise requires manual hardware testing.
 See [CONTRIBUTING.md](CONTRIBUTING.md)
 for running the same checks locally, plus sanitizers and lintrunner (not yet
 wired into CI).

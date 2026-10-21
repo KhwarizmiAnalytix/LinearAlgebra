@@ -48,23 +48,4 @@ template <typename T, linalg_backend Backend> struct condition_number
     LINALG_API static size_t workspace_size(linalg_long rows, linalg_long columns);
 };
 
-/**
- * GPU specialization: all matrix, result, pivot, info and workspace pointers
- * refer to device memory. Enqueues work on stream without host transfers or
- * stream synchronization. The caller keeps buffers alive until work completes.
- * CUDA/cuBLAS/cuSOLVER API errors throw; numerical status stays on device.
- */
-template <typename T> struct condition_number<T, linalg_backend::CUDA_BLAS>
-{
-    LINALG_API static void   apply(const T* A,
-        linalg_long                       rows,
-        linalg_long                       columns,
-        linalg_long                       lda,
-        void*                             workspace,
-        size_t                            workspace_size,
-        T*                                result,
-        void*                             stream = nullptr);
-    LINALG_API static size_t workspace_size(linalg_long rows, linalg_long columns);
-};
-
 }  // namespace linalg

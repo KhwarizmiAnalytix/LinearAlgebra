@@ -26,11 +26,14 @@ enum class cholesky_decomposition_enum : char
  * scratch space and report status synchronously, so they ignore workspace/workspace_size and
  * always return a definitive result; CUDA_BLAS needs caller-owned device scratch and cannot
  * report the numerical result synchronously, so it fills those parameters and returns only
- * whether the work was launched without an API error (see apply()'s return-value note). This
- * mirrors lu_decomposition's shared workspace/workspace_size parameters
- * (include/matrix_operation/lu_decomposition.h); PyTorch's torch.linalg.cholesky_ex and
- * Eigen's LLT similarly separate a decomposition's own success/failure status from exceptions
- * raised for misuse.
+ * whether the work was launched without an API error (see apply()'s return-value note); this
+ * mirrors inversion's and determinant's own CUDA_BLAS/ROCM_BLAS specializations
+ * (include/matrix_operation/inversion.h, include/matrix_operation/determinant.h), unlike
+ * lu_decomposition's CUDA_BLAS/ROCM_BLAS specializations, which synchronize internally and
+ * return a numerically definitive bool on every backend instead
+ * (include/matrix_operation/lu_decomposition.h). PyTorch's torch.linalg.cholesky_ex and Eigen's
+ * LLT similarly separate a decomposition's own success/failure status from exceptions raised
+ * for misuse.
  */
 template <typename T, linalg_backend Backend> struct cholesky_decomposition
 {

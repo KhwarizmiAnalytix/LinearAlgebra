@@ -31,10 +31,16 @@ cmake --build build_examples --config Release --target backend_analysis transfer
 ctest --test-dir build_examples -C Release -R '^example_' --output-on-failure
 ```
 
-Supply your BLAS include/runtime paths and MKL/CUDA discovery settings as
-described in the [repository README](../../README.md). The example links the
-`LinearAlgebra::LinearAlgebra` target and inherits its backend definitions and
-dependencies. It does not link a hard-coded library path.
+Substitute `-DLINALG_ENABLE_ROCBLAS=ON` for `-DLINALG_ENABLE_CUBLAS=ON` to
+benchmark the AMD/ROCm GPU backend instead (the two are mutually
+exclusive — see the [repository README](../../README.md)); the same
+source files and CSV labels apply.
+
+Supply your BLAS include/runtime paths and MKL/CUDA (or ROCm) discovery
+settings as described in the [repository README](../../README.md). The
+example links the `LinearAlgebra::LinearAlgebra` target and inherits its
+backend definitions and dependencies. It does not link a hard-coded library
+path.
 
 The example uses the current `linalg::linalg_backend` enum values. CSV labels
 stay lowercase so the recorded selections and report script remain compatible:
@@ -44,7 +50,7 @@ stay lowercase so the recorded selections and report script remain compatible:
 | `NATIVE` | `native` |
 | `BLAS_LAPACKE` | `openblas` by default; `blis` with `LINALG_ENABLE_BLIS=ON` |
 | `MKL` | `mkl` |
-| `CUDA_BLAS` | `gpu` |
+| `CUDA_BLAS` / `ROCM_BLAS` | `gpu` |
 
 To build the Google Benchmark executables alongside the examples, also set
 `-DLINALG_ENABLE_BENCHMARK=ON`. Their registered names contain the uppercase

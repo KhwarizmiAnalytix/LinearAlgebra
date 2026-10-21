@@ -25,11 +25,12 @@ package(default_visibility = ["//visibility:public"])
 # Combined MKL/BLAS builds also need LINALG_BLAS_RUNTIME_PATH defined as a
 # string naming an independent shared provider (and optionally
 # LINALG_LAPACKE_RUNTIME_PATH for a separate LAPACKE provider), plus libdl on ELF.
-# CMake configures these paths automatically. LINALG_HAS_CUBLAS
-# (and its helper macros) has no Bazel toggle at all — CMake is this repo's
+# CMake configures these paths automatically. LINALG_HAS_CUBLAS / LINALG_HAS_ROCBLAS
+# (and their helper macros) have no Bazel toggle at all — CMake is this repo's
 # primary, exercised build system for the mkl / blas_lapack backends and the
-# cuBLAS/cuSOLVER GPU backend (src/matrix_operation/gpu/cublas/ +
-# include/matrix_operation/multiplication_batched.h, not part of this glob).
+# cuBLAS/cuSOLVER (src/matrix_operation/gpu/cublas/) and hipBLAS/hipSOLVER
+# (src/matrix_operation/gpu/hipblas/) GPU backends, mutually exclusive, plus
+# include/matrix_operation/multiplication_batched.h, not part of this glob.
 
 filegroup(
     name = "linear_algebra_hdrs",

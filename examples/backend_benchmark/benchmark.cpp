@@ -16,7 +16,33 @@
 #include <type_traits>
 #include <vector>
 
+// This file is written against CUDA's runtime API names; LINALG_ENABLE_CUBLAS
+// and LINALG_ENABLE_ROCBLAS are mutually exclusive (CMakeLists.txt), and under
+// the latter those names are aliased to their HIP equivalents here (HIP
+// mirrors CUDA's runtime API 1:1 for everything this file uses), so the rest
+// of the file is backend-agnostic via the GPU_BACKEND constant below.
+#if LINALG_HAS_CUBLAS
 #include <cuda_runtime_api.h>
+#elif LINALG_HAS_ROCBLAS
+#include <hip/hip_runtime_api.h>
+using cudaError_t  = hipError_t;
+using cudaStream_t = hipStream_t;
+#define cudaSuccess hipSuccess
+#define cudaMalloc hipMalloc
+#define cudaFree hipFree
+#define cudaMemcpy hipMemcpy
+#define cudaMemcpyAsync hipMemcpyAsync
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define cudaMemcpyDeviceToDevice hipMemcpyDeviceToDevice
+#define cudaStreamCreateWithFlags hipStreamCreateWithFlags
+#define cudaStreamNonBlocking hipStreamNonBlocking
+#define cudaStreamSynchronize hipStreamSynchronize
+#define cudaStreamDestroy hipStreamDestroy
+#define cudaGetErrorString hipGetErrorString
+#else
+#error "backend_analysis requires LINALG_ENABLE_CUBLAS or LINALG_ENABLE_ROCBLAS"
+#endif
 
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/eigen.h"
@@ -26,6 +52,11 @@
 #include "include/matrix_operation/svd_decomposition.h"
 
 using backend        = linalg::linalg_backend;
+#if LINALG_HAS_CUBLAS
+constexpr auto GPU_BACKEND = backend::CUDA_BLAS;
+#else
+constexpr auto GPU_BACKEND = backend::ROCM_BLAS;
+#endif
 using clock_type     = std::chrono::steady_clock;
 bool rerun_mode      = false;
 bool steady_gpu_mode = false;
@@ -153,7 +184,7 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
     {
         return;
     }
-    constexpr bool gpu = B == backend::CUDA_BLAS;
+    constexpr bool gpu = B == GPU_BACKEND;
     auto           a   = random_matrix<T>(static_cast<std::size_t>(m) * k, 42);
     auto           b   = random_matrix<T>(static_cast<std::size_t>(k) * n, 43);
     if constexpr (Op == operation::chol || Op == operation::symmetric_eigen)
@@ -224,7 +255,8 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
     device_buffer<T>        dc(gpu ? result.size() : 0), device_output(gpu ? result.size() : 0),
         ds(gpu ? n : 0);
     device_buffer<std::byte> dws(gpu ? bytes : 0);
-    device_buffer<int>       dinfo(gpu ? 1 : 0), dpivot(gpu ? n : 0);
+    device_buffer<int>       dinfo(gpu ? 1 : 0);
+    device_buffer<linalg_int> dpivot(gpu ? n : 0);
     stream_owner             stream;
     T*                       ap   = work.data();
     T*                       bp   = b.data();
@@ -285,10 +317,13 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
         }
         if constexpr (Op == operation::lu)
         {
+            // Same signature on every backend now (CUDA/ROCm synchronize
+            // internally and return bool directly), so no gpu/non-gpu split
+            // is needed here; CPU backends simply ignore the stream.
             if constexpr (gpu)
             {
-                linalg::lu_decomposition<T, B>::apply(
-                    ap, n, dpivot.get(), wsp, bytes, dinfo.get(), stream.get());
+                ok = linalg::lu_decomposition<T, B>::apply(
+                    ap, n, dpivot.get(), wsp, bytes, stream.get());
             }
             else
             {
@@ -307,15 +342,11 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
         }
         if constexpr (Op == operation::symmetric_eigen)
         {
-            if constexpr (gpu)
-            {
-                linalg::symmetric_eigen_backend<T, B>::apply(
-                    ap, n, n, sp, n, wsp, bytes, dinfo.get(), stream.get());
-            }
-            else
-            {
-                ok = linalg::symmetric_eigen_backend<T, B>::apply(ap, n, n, sp, n, wsp, bytes);
-            }
+            // Same signature on every backend now (CUDA/ROCm synchronize
+            // internally and return bool directly), so no gpu/non-gpu split
+            // is needed here; CPU backends simply ignore the stream.
+            ok = linalg::symmetric_eigen_backend<T, B>::apply(
+                ap, n, n, sp, n, wsp, bytes, stream.get());
         }
         if constexpr (Op == operation::general_eigen)
         {
@@ -333,14 +364,18 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
     };
     auto check_info = [&]
     {
-        if constexpr (gpu && Op != operation::gemm)
+        // symmetric_eigen's and lu's bool results are already checked via
+        // `ok` above; their GPU paths no longer write a device info slot to
+        // read here.
+        if constexpr (gpu && Op != operation::gemm && Op != operation::symmetric_eigen &&
+                      Op != operation::lu)
         {
             int         info = -999;
             const void* p    = (Op == operation::qr || Op == operation::svd) ? wsp : dinfo.get();
             cuda_check(cudaMemcpy(&info, p, sizeof(info), cudaMemcpyDeviceToHost));
             if (info != 0)
             {
-                throw std::runtime_error("cuSOLVER info=" + std::to_string(info));
+                throw std::runtime_error("GPU solver info=" + std::to_string(info));
             }
         }
     };
@@ -412,7 +447,7 @@ void all_backends(std::ofstream& csv,
     run_case<T, backend::MKL, Op>(csv, m, n, k, ta, tb);
     if constexpr (Op != operation::general_eigen)
     {
-        run_case<T, backend::CUDA_BLAS, Op>(csv, m, n, k, ta, tb);
+        run_case<T, GPU_BACKEND, Op>(csv, m, n, k, ta, tb);
     }
 }
 

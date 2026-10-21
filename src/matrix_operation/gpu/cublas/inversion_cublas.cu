@@ -169,6 +169,7 @@ struct lu_determinant_layout
     int* dev_ipiv;
     int* dev_info;
     T*   transpose_scratch;
+    T*   dev_result;
 };
 
 template <typename T>
@@ -179,6 +180,7 @@ lu_determinant_layout<T> lu_determinant_plan(detail::workspace_arena& arena, int
     p.dev_ipiv          = arena.next<int>(static_cast<size_t>(n));
     p.dev_info          = arena.next<int>(1);
     p.transpose_scratch = arena.next<T>(static_cast<size_t>(n) * static_cast<size_t>(n));
+    p.dev_result        = arena.next<T>(1);
     return p;
 }
 
@@ -187,14 +189,16 @@ struct cholesky_determinant_layout
 {
     T*   workspace;
     int* dev_info;
+    T*   dev_result;
 };
 
 template <typename T>
 cholesky_determinant_layout<T> cholesky_determinant_plan(detail::workspace_arena& arena, int lwork)
 {
     cholesky_determinant_layout<T> p;
-    p.workspace = arena.next<T>(static_cast<size_t>(lwork));
-    p.dev_info  = arena.next<int>(1);
+    p.workspace  = arena.next<T>(static_cast<size_t>(lwork));
+    p.dev_info   = arena.next<int>(1);
+    p.dev_result = arena.next<T>(1);
     return p;
 }
 
@@ -433,14 +437,13 @@ void cholesky_invert(BufferSizeFn buffer_size,
 }
 
 template <typename T, typename BufferSizeFn, typename GetrfFn>
-void lu_determinant(BufferSizeFn buffer_size,
-    GetrfFn                      getrf,
-    T*                           m,
-    linalg_int                   lda,
-    void*                        workspace,
-    size_t                       workspace_size,
-    T*                           result,
-    cudaStream_t                 stream)
+T lu_determinant(BufferSizeFn buffer_size,
+    GetrfFn                   getrf,
+    T*                        m,
+    linalg_int                lda,
+    void*                     workspace,
+    size_t                    workspace_size,
+    cudaStream_t              stream)
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
@@ -467,21 +470,25 @@ void lu_determinant(BufferSizeFn buffer_size,
         LINALG_THROW("cusolverDn*getrf failed");
     }
 
-    lu_determinant_kernel<T><<<1, 1, 0, stream>>>(m, bufs.dev_ipiv, n, bufs.dev_info, result);
-    const auto launch_err = cudaGetLastError();
+    lu_determinant_kernel<T><<<1, 1, 0, stream>>>(m, bufs.dev_ipiv, n, bufs.dev_info, bufs.dev_result);
+    LINALG_CHECK(cudaGetLastError() == cudaSuccess, "determinant kernel launch failed");
 
-    LINALG_CHECK(launch_err == cudaSuccess, "determinant kernel launch failed");
+    T host_result = T(0);
+    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.dev_result, sizeof(T), cudaMemcpyDeviceToHost,
+                     stream) == cudaSuccess,
+        "determinant: result copy failed");
+    LINALG_CHECK(cudaStreamSynchronize(stream) == cudaSuccess, "determinant: stream sync failed");
+    return host_result;
 }
 
 template <typename T, typename BufferSizeFn, typename PotrfFn>
-void cholesky_determinant(BufferSizeFn buffer_size,
-    PotrfFn                            potrf,
-    T*                                 m,
-    linalg_int                         lda,
-    void*                              workspace,
-    size_t                             workspace_size,
-    T*                                 result,
-    cudaStream_t                       stream)
+T cholesky_determinant(BufferSizeFn buffer_size,
+    PotrfFn                         potrf,
+    T*                              m,
+    linalg_int                      lda,
+    void*                           workspace,
+    size_t                          workspace_size,
+    cudaStream_t                    stream)
 {
     const auto n      = detail::checked_narrow<int>(lda);
     auto       handle = detail::cusolver_handle_for_current_device();
@@ -507,10 +514,15 @@ void cholesky_determinant(BufferSizeFn buffer_size,
         LINALG_THROW("cusolverDn*potrf failed");
     }
 
-    cholesky_determinant_kernel<T><<<1, 1, 0, stream>>>(m, n, bufs.dev_info, result);
-    const auto launch_err = cudaGetLastError();
+    cholesky_determinant_kernel<T><<<1, 1, 0, stream>>>(m, n, bufs.dev_info, bufs.dev_result);
+    LINALG_CHECK(cudaGetLastError() == cudaSuccess, "determinant kernel launch failed");
 
-    LINALG_CHECK(launch_err == cudaSuccess, "determinant kernel launch failed");
+    T host_result = T(0);
+    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.dev_result, sizeof(T), cudaMemcpyDeviceToHost,
+                     stream) == cudaSuccess,
+        "determinant: result copy failed");
+    LINALG_CHECK(cudaStreamSynchronize(stream) == cudaSuccess, "determinant: stream sync failed");
+    return host_result;
 }
 
 template <typename T, typename BufSizeLuFn, typename GetrfFn, typename GetrsFn,
@@ -563,19 +575,17 @@ template <typename T,
     typename GetrfFn,
     typename BufSizeChFn,
     typename PotrfFn>
-void determinant_apply(BufSizeLuFn buf_size_lu,
-    GetrfFn                        getrf,
-    BufSizeChFn                    buf_size_ch,
-    PotrfFn                        potrf,
-    T*                             m,
-    linalg_int                     lda,
-    linear_solver_type             type,
-    void*                          workspace,
-    size_t                         workspace_size,
-    T*                             result,
-    void*                          stream)
+T determinant_apply(BufSizeLuFn buf_size_lu,
+    GetrfFn                     getrf,
+    BufSizeChFn                 buf_size_ch,
+    PotrfFn                     potrf,
+    T*                          m,
+    linalg_int                  lda,
+    linear_solver_type          type,
+    void*                       workspace,
+    size_t                      workspace_size,
+    void*                       stream)
 {
-    LINALG_CHECK(result != nullptr, "device result must not be null");
     if (m == nullptr)
     {
         LINALG_THROW("determinant: m must not be null");
@@ -590,12 +600,11 @@ void determinant_apply(BufSizeLuFn buf_size_lu,
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-        return lu_determinant(
-            buf_size_lu, getrf, m, lda, workspace, workspace_size, result, stream_t);
+        return lu_determinant(buf_size_lu, getrf, m, lda, workspace, workspace_size, stream_t);
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
         return cholesky_determinant(
-            buf_size_ch, potrf, m, lda, workspace, workspace_size, result, stream_t);
+            buf_size_ch, potrf, m, lda, workspace, workspace_size, stream_t);
     }
     LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
@@ -651,17 +660,16 @@ size_t inversion<double, linalg_backend::CUDA_BLAS>::workspace_size(
 // ---- determinant<T, cuda_blas> specializations ----
 
 template <>
-void determinant<float, linalg_backend::CUDA_BLAS>::apply(float* m,
-    linalg_int* /*pivot*/,
+float determinant<float, linalg_backend::CUDA_BLAS>::apply(float* m,
+    linalg_int*                                                   /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
     void*              workspace,
     size_t             workspace_size,
-    float*             result,
     void*              stream)
 {
     LINALG_SCOPE("determinant/cuda_blas<float>");
-    determinant_apply(cusolverDnSgetrf_bufferSize,
+    return determinant_apply(cusolverDnSgetrf_bufferSize,
         cusolverDnSgetrf,
         cusolverDnSpotrf_bufferSize,
         cusolverDnSpotrf,
@@ -670,22 +678,20 @@ void determinant<float, linalg_backend::CUDA_BLAS>::apply(float* m,
         type,
         workspace,
         workspace_size,
-        result,
         stream);
 }
 
 template <>
-void determinant<double, linalg_backend::CUDA_BLAS>::apply(double* m,
-    linalg_int* /*pivot*/,
+double determinant<double, linalg_backend::CUDA_BLAS>::apply(double* m,
+    linalg_int*                                                    /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
     void*              workspace,
     size_t             workspace_size,
-    double*            result,
     void*              stream)
 {
     LINALG_SCOPE("determinant/cuda_blas<double>");
-    determinant_apply(cusolverDnDgetrf_bufferSize,
+    return determinant_apply(cusolverDnDgetrf_bufferSize,
         cusolverDnDgetrf,
         cusolverDnDpotrf_bufferSize,
         cusolverDnDpotrf,
@@ -694,7 +700,6 @@ void determinant<double, linalg_backend::CUDA_BLAS>::apply(double* m,
         type,
         workspace,
         workspace_size,
-        result,
         stream);
 }
 

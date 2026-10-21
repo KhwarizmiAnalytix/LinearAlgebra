@@ -6,18 +6,24 @@
 # eigenvalue), linear solve, matrix inversion/multiplication/transpose/norm/
 # rank/trace, least squares, pseudo-inverse, matrix exponential, and
 # tri-/pentadiagonal operations, with optional Intel MKL, vendor-neutral
-# CBLAS/LAPACKE, and cuBLAS/cuSOLVER GPU backends.
+# CBLAS/LAPACKE, cuBLAS/cuSOLVER, and hipBLAS/hipSOLVER GPU backends.
 #
 # Public compile definitions: LINALG_HAS_MKL — MKL-backed LAPACKE code
 # paths; LINALG_HAS_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
 # LINALG_HAS_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
-# src/matrix_operation/gpu/cublas/. These (and LINALG_HAS_LAPACKE,
-# LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION, LINALG_HAS_LU_PIVOTING,
-# LINALG_HAS_WIN32_WARNINGS below) are always-defined 0/1 macros, checked in
-# C++ with plain #if (never #ifdef/#if defined), not conditionally-defined
-# ones. Active for every CPU op except exponential and the
-# tri-/pentadiagonal operations (scalar only), and every GPU op except
-# general (non-symmetric) eigenvalue decomposition.
+# src/matrix_operation/gpu/cublas/; LINALG_HAS_ROCBLAS — hipBLAS/hipSOLVER
+# GPU code paths under src/matrix_operation/gpu/hipblas/. These (and
+# LINALG_HAS_LAPACKE, LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION,
+# LINALG_HAS_LU_PIVOTING, LINALG_HAS_WIN32_WARNINGS below) are
+# always-defined 0/1 macros, checked in C++ with plain #if (never
+# #ifdef/#if defined), not conditionally-defined ones. Active for every CPU
+# op except exponential and the tri-/pentadiagonal operations (scalar
+# only), and every GPU op except general (non-symmetric) eigenvalue
+# decomposition. LINALG_ENABLE_CUBLAS and LINALG_ENABLE_ROCBLAS are
+# mutually exclusive (see the guard below): both target a single
+# `batched_matrix_multiplication` free-function symbol
+# (include/matrix_operation/multiplication_batched.h), which is not
+# backend-templated.
 # =============================================================================
 cmake_minimum_required(VERSION 3.24)
 
@@ -79,6 +85,25 @@ option(LINALG_ENABLE_BLIS "Enable BLIS as the CBLAS/LAPACKE provider" OFF)
 # toolkit; enables the CUDA language only when this option is ON so plain CPU
 # builds remain free of any CUDA toolchain requirement.
 option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
+
+# hipBLAS (GEMM) / hipSOLVER (factorizations) GPU backend, exposed as
+# linalg_backend::ROCM_BLAS specializations of the same struct-template API
+# used by the CPU and CUDA_BLAS backends (src/matrix_operation/gpu/hipblas/).
+# Requires a ROCm/HIP toolchain; enables the HIP language only when this
+# option is ON so plain CPU/CUDA builds remain free of any ROCm toolchain
+# requirement. Mutually exclusive with LINALG_ENABLE_CUBLAS (see the guard
+# below multiplication_batched's free functions are not backend-templated).
+option(LINALG_ENABLE_ROCBLAS "Enable a hipBLAS/hipSOLVER GPU backend for LinearAlgebra" OFF)
+
+if(LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS)
+    message(FATAL_ERROR
+        "LINALG_ENABLE_CUBLAS and LINALG_ENABLE_ROCBLAS are mutually exclusive: "
+        "both backends define the same batched_matrix_multiplication symbols "
+        "(include/matrix_operation/multiplication_batched.h is not "
+        "backend-templated), so enabling both would be a duplicate-symbol link "
+        "error. Enable only the GPU backend that matches the target hardware."
+    )
+endif()
 
 option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
 
@@ -445,6 +470,27 @@ if(LINALG_ENABLE_CUBLAS)
     list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
 endif()
 
+# --- Optional hipBLAS / hipSOLVER GPU backend ---
+# hipBLAS/hipSOLVER themselves are host-callable C APIs, linked into ordinary
+# .cpp translation units with no HIP toolchain needed.
+# Several operations under src/matrix_operation/gpu/hipblas/ are genuine
+# HIP-kernel .hip files (batched matmul, norm, QR, SVD, pseudo-inverse,
+# inversion/determinant, trace — the same set as their cuBLAS .cu
+# counterparts), so `enable_language(HIP)` and a ROCm toolchain are only
+# required — and only enabled — when this option is ON; plain CPU/CUDA
+# builds remain free of any ROCm toolchain requirement.
+if(LINALG_ENABLE_ROCBLAS)
+    find_package(hip CONFIG REQUIRED)
+    find_package(hipblas CONFIG REQUIRED)
+    find_package(hipsolver CONFIG REQUIRED)
+    if(NOT DEFINED CMAKE_HIP_STANDARD)
+        set(CMAKE_HIP_STANDARD ${LINALG_CXX_STANDARD})
+        set(CMAKE_HIP_STANDARD_REQUIRED ON)
+    endif()
+    enable_language(HIP)
+    list(APPEND LINALG_DEPENDENCY_LIBS hip::host hip::device hipblas::hipblas hipsolver::hipsolver)
+endif()
+
 # --- Optional cpuinfo backend (pytorch/cpuinfo), auto-detected ---
 # CPU cache-size introspection via find_package(cpuinfo) — no vendored copy,
 # no enable option: silently absent when not installed. When found,
@@ -550,7 +596,7 @@ file(GLOB_RECURSE linalg_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
 # mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /
 # LINALG_ENABLE_BLAS turned on the matching backend above.
-list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/cublas)/")
+list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/(cublas|hipblas))/")
 if(LINALG_ENABLE_MKL)
     file(GLOB linalg_mkl_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/mkl/*.cpp"
@@ -577,6 +623,21 @@ if(LINALG_ENABLE_CUBLAS)
          "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
     )
     list(APPEND linalg_sources ${linalg_cuda_sources})
+endif()
+
+# hipBLAS/hipSOLVER bridge sources and .hip kernel sources (all under
+# src/matrix_operation/gpu/hipblas/) need a ROCm/HIP toolchain, so they are
+# only globbed in — and only compilable — when LINALG_ENABLE_ROCBLAS turned
+# on HIP above.
+if(LINALG_ENABLE_ROCBLAS)
+    file(GLOB linalg_hipblas_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/hipblas/*.cpp"
+    )
+    list(APPEND linalg_sources ${linalg_hipblas_sources})
+    file(GLOB_RECURSE linalg_hip_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hip"
+    )
+    list(APPEND linalg_sources ${linalg_hip_sources})
 endif()
 
 # --- Target definition ---
@@ -652,6 +713,7 @@ target_compile_definitions(
            "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
            "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
            "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
+           "LINALG_HAS_ROCBLAS=$<BOOL:${LINALG_ENABLE_ROCBLAS}>"
            "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
            "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
            "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"

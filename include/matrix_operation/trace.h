@@ -25,16 +25,4 @@ template <typename T, linalg_backend Backend> struct trace
     LINALG_API static T apply(const T* A, linalg_int n, linalg_int lda, void* stream = nullptr);
 };
 
-/**
- * GPU specialization: all matrix, result, pivot, info and workspace pointers
- * refer to device memory. Enqueues work on stream without host transfers or
- * stream synchronization. The caller keeps buffers alive until work completes.
- * CUDA/cuBLAS/cuSOLVER API errors throw; numerical status stays on device.
- */
-template <typename T> struct trace<T, linalg_backend::CUDA_BLAS>
-{
-    LINALG_API static void apply(
-        const T* A, linalg_int n, linalg_int lda, T* result, void* stream = nullptr);
-};
-
 }  // namespace linalg

@@ -20,10 +20,11 @@ namespace linalg
 class LINALG_API Context
 {
 public:
-    // Compiled-in AND usable right now (for cuda: a device is actually present).
+    // Compiled-in AND usable right now (for cuda/rocm: a device is actually present).
     bool has_mkl() const noexcept;
     bool has_blas() const noexcept;
     bool has_cuda() const noexcept;
+    bool has_rocm() const noexcept;
 };
 
 LINALG_API Context& globalContext();

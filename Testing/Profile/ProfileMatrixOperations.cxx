@@ -436,8 +436,8 @@ void profile_gpu_ops(linalg_int n)
         double*      scalar = cuda_alloc<double>(1);
         linalg_long* rank   = cuda_alloc<linalg_long>(1);
         int*         info   = cuda_alloc<int>(1);
-        int*         pivot;
-        explicit output_buffers(linalg_int n) : pivot(cuda_alloc<int>(static_cast<size_t>(n))) {}
+        linalg_int*  pivot;
+        explicit output_buffers(linalg_int n) : pivot(cuda_alloc<linalg_int>(static_cast<size_t>(n))) {}
         ~output_buffers()
         {
             cudaFree(scalar);
@@ -506,8 +506,7 @@ void profile_gpu_ops(linalg_int n)
         }
         if (dA)
         {
-            linalg::lu_decomposition<double, CB>::apply(
-                dA, n, outputs.pivot, d_ws, ws_bytes, outputs.info);
+            linalg::lu_decomposition<double, CB>::apply(dA, n, outputs.pivot, d_ws, ws_bytes);
             cudaDeviceSynchronize();
         }
         cudaFree(dA);

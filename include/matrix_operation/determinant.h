@@ -55,23 +55,4 @@ template <typename T, linalg_backend Backend> struct determinant
     LINALG_API static size_t workspace_size(linalg_int lda, linalg::linear_solver_type type);
 };
 
-/**
- * GPU specialization: all matrix, result, pivot, info and workspace pointers
- * refer to device memory. Enqueues work on stream without host transfers or
- * stream synchronization. The caller keeps buffers alive until work completes.
- * CUDA/cuBLAS/cuSOLVER API errors throw; numerical status stays on device.
- */
-template <typename T> struct determinant<T, linalg_backend::CUDA_BLAS>
-{
-    LINALG_API static void   apply(T* m,
-        linalg_int*                 pivot,
-        linalg_int                  lda,
-        linear_solver_type          type,
-        void*                       workspace,
-        size_t                      workspace_size,
-        T*                          result,
-        void*                       stream = nullptr);
-    LINALG_API static size_t workspace_size(linalg_int lda, linear_solver_type type);
-};
-
 }  // namespace linalg

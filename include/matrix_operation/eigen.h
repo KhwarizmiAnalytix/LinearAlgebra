@@ -110,19 +110,4 @@ template <typename T, linalg_backend Backend> struct general_eigen_backend
     LINALG_API static size_t workspace_size(linalg_int n, bool compute_eigenvectors);
 };
 
-/** CUDA symmetric eigensolver: in-place device matrix and caller-owned device status. */
-template <typename T> struct symmetric_eigen_backend<T, linalg_backend::CUDA_BLAS>
-{
-    LINALG_API static void   apply(T* eigenvectors,
-        linalg_int                  n,
-        linalg_int                  lda,
-        T*                          eigenvalues,
-        linalg_int                  ldv,
-        void*                       workspace,
-        size_t                      workspace_size,
-        int*                        info,
-        void*                       stream = nullptr);
-    LINALG_API static size_t workspace_size(linalg_int n);
-};
-
 }  // namespace linalg

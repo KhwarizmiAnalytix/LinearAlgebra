@@ -133,7 +133,7 @@ Strengths worth preserving:
 | Apple Accelerate, full LAPACK | GEMM/transpose only | High on macOS | Low–medium | macOS 13.3+ ships LAPACK 3.9 behind `ACCELERATE_NEW_LAPACK` (+ `ACCELERATE_LAPACK_ILP64`). Column-major Fortran-style entry points, no LAPACKE, so it needs the transpose/relabel bookkeeping the GPU ops already use. |
 | cuBLAS/cuSOLVER | Shipped, no CI | High | Medium | Move to the 64-bit `cusolverDnX*` / `cublas*_64` APIs. Newer cuSOLVER releases (CUDA 12.6 Update 2 onward) add `cusolverDnXgeev`, which may close the one GPU coverage gap — verify against the targeted toolkit before relying on it. |
 | Eigen3 (optional CPU backend) | Not present | Medium–high | Medium | Header-only, MPL-2.0 (compatible with this repository's licensing). Supplies a vectorized GEMM, pivoted LU, BDCSVD and eigen-solvers without a system BLAS, and supersedes the dead GEMM code from §2.3. |
-| ROCm (hipBLAS/hipSOLVER) | Not present | Medium | Medium–high | hipSOLVER mirrors cuSOLVER closely; PyTorch reaches ROCm by hipifying its CUDA sources the same way. |
+| ROCm (hipBLAS/hipSOLVER) | Shipped, no CI | Medium | Medium–high | hipSOLVER mirrors cuSOLVER closely; PyTorch reaches ROCm by hipifying its CUDA sources the same way. `linalg_backend::ROCM_BLAS` / `LINALG_ENABLE_ROCBLAS`, mutually exclusive with `LINALG_ENABLE_CUBLAS` (both would define the same non-backend-templated `batched_matrix_multiplication` symbols). |
 | MAGMA | Not present (non-goal in `gpu_backend_design.md` §2) | Low–medium | Medium | Hybrid CPU/GPU `geev`. Only worth it if `cusolverDnXgeev` is unusable on the targeted toolkits. |
 | oneMKL SYCL, Apple MPS | Not present | Low | High | MPS is `float`-only; SYCL has a small audience here. Deferred. |
 
@@ -326,11 +326,17 @@ contract matches what the code does.
 - [ ] Optional Eigen3 CPU backend (`LINALG_ENABLE_EIGEN`), vendored under
       `ThirdParty/` per [the dependency rules](../.augment/rules/ThirdParty.md).
       Define precedence relative to MKL and BLAS explicitly.
-- [ ] ROCm through hipBLAS/hipSOLVER: factor the GPU tree so shared code is
-      vendor-neutral, with `cuda_handle.h` generalized to a device-handle
-      header that has CUDA and HIP implementations. The Memory library
-      already has a HIP backend, so callers can provision HIP workspace
-      with no change to the workspace contract.
+- [x] ROCm through hipBLAS/hipSOLVER, shipped as `linalg_backend::ROCM_BLAS`
+      / `LINALG_ENABLE_ROCBLAS` under `src/matrix_operation/gpu/hipblas/`,
+      with a parallel `hip_handle.h`/`hip_fwd.h`/`hip_workspace.h` rather
+      than generalizing `cuda_handle.h` itself (kept the CUDA tree
+      untouched; `linalg_backend` already provides the vendor-neutral
+      dispatch point `detail::transpose_device`-style free functions would
+      have duplicated). CI-exercised compile-only on every push/PR
+      (`hip-compile`, no ROCm runner needed); GPU runtime is gated behind a
+      self-hosted ROCm runner (`hip-runtime`, `LINALG_ROCM_GPU_CI_ENABLED`),
+      the same pattern as CUDA's `cuda-runtime`. See `gpu_backend_design.md`
+      for the per-op hipBLAS/hipSOLVER mapping.
 - [ ] Re-evaluate MAGMA, oneMKL SYCL, and Apple MPS against actual demand.
 
 ### Phase 6 — Release
@@ -362,9 +368,10 @@ contract matches what the code does.
   the sum of their sub-ops' workspace and partition one buffer between
   them. Decide early whether alignment is fixed (for example 64 bytes) or
   reported per op.
-- **GPU CI**: a compile-only CUDA job catches build breaks but not
+- **GPU CI**: compile-only CUDA and HIP jobs catch build breaks but not
   numerical regressions; GPU correctness stays a manual, on-hardware check
-  until a GPU runner is available.
+  until a self-hosted CUDA (`LINALG_GPU_CI_ENABLED`) or ROCm
+  (`LINALG_ROCM_GPU_CI_ENABLED`) GPU runner is available.
 
 ## 8. Recommended order and quick wins
 

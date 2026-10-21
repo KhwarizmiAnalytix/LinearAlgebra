@@ -105,9 +105,11 @@ size_t matrix_norm_workspace_size_impl(linalg_long rows, linalg_long columns, no
         break;
     case norm_type::ONE:
         arena.next<T>(static_cast<size_t>(c));
+        arena.next<T>(1);  // device scratch for the reduced result
         break;
     case norm_type::INFINITY_NORM:
         arena.next<T>(static_cast<size_t>(r));
+        arena.next<T>(1);  // device scratch for the reduced result
         break;
     case norm_type::TWO:
     {
@@ -119,6 +121,7 @@ size_t matrix_norm_workspace_size_impl(linalg_long rows, linalg_long columns, no
         arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(columns));
         arena.next<int>(1);
         arena.next<unsigned char>(svd_bytes);
+        arena.next<T>(1);  // device scratch for the reduced result
         break;
     }
     default:
@@ -128,19 +131,17 @@ size_t matrix_norm_workspace_size_impl(linalg_long rows, linalg_long columns, no
 }
 
 template <typename T, typename Nrm2Fn>
-void matrix_norm_impl(Nrm2Fn nrm2,
-    const T*                 A,
-    linalg_long              rows,
-    linalg_long              columns,
-    linalg_long              lda,
-    norm_type                type,
-    void*                    workspace,
-    size_t                   workspace_size,
-    T*                       result,
-    cudaStream_t             stream)
+T matrix_norm_impl(Nrm2Fn nrm2,
+    const T*             A,
+    linalg_long          rows,
+    linalg_long          columns,
+    linalg_long          lda,
+    norm_type            type,
+    void*                workspace,
+    size_t               workspace_size,
+    cudaStream_t         stream)
 {
-    LINALG_CHECK(
-        A != nullptr && result != nullptr, "norm: device input and result must not be null");
+    LINALG_CHECK(A != nullptr, "norm: device input must not be null");
     LINALG_CHECK(rows > 0 && columns > 0, "norm: dimensions must be positive");
     LINALG_CHECK(lda == columns, "norm requires tightly packed lda");
     const int r = detail::checked_narrow<int>(rows);
@@ -148,27 +149,35 @@ void matrix_norm_impl(Nrm2Fn nrm2,
     LINALG_CHECK(workspace_size >= matrix_norm_workspace_size_impl<T>(rows, columns, type),
         "norm: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
+    T                        host_result = T(0);
     if (type == norm_type::FROBENIUS)
     {
         const int count =
             detail::checked_narrow<int>(static_cast<size_t>(r) * static_cast<size_t>(c));
         auto handle = detail::cublas_handle_for_current_device();
         detail::set_stream(handle, stream);
-        detail::device_pointer_mode guard(handle);
-        LINALG_CHECK(
-            nrm2(handle, count, A, 1, result) == CUBLAS_STATUS_SUCCESS, "cublas nrm2 failed");
+        // Default (host) cublas pointer mode: nrm2 synchronizes internally
+        // and writes straight to host memory, so no device scratch or
+        // explicit stream sync is needed for this branch.
+        LINALG_CHECK(nrm2(handle, count, A, 1, &host_result) == CUBLAS_STATUS_SUCCESS,
+            "cublas nrm2 failed");
     }
     else if (type == norm_type::ONE || type == norm_type::INFINITY_NORM)
     {
         const int  count = type == norm_type::ONE ? c : r;
         T*         sums  = arena.next<T>(static_cast<size_t>(count));
+        T*         dev_result = arena.next<T>(1);
         const dim3 block(256), grid((static_cast<unsigned>(count) + 255) / 256);
         if (type == norm_type::ONE)
             abs_col_sum_kernel<T><<<grid, block, 0, stream>>>(A, r, c, sums);
         else
             abs_row_sum_kernel<T><<<grid, block, 0, stream>>>(A, r, c, sums);
         LINALG_CHECK(cudaGetLastError() == cudaSuccess, "norm sum kernel launch failed");
-        reduce_max(sums, count, result, stream);
+        reduce_max(sums, count, dev_result, stream);
+        LINALG_CHECK(cudaMemcpyAsync(&host_result, dev_result, sizeof(T), cudaMemcpyDeviceToHost,
+                         stream) == cudaSuccess,
+            "norm: result copy failed");
+        LINALG_CHECK(cudaStreamSynchronize(stream) == cudaSuccess, "norm: stream sync failed");
     }
     else if (type == norm_type::TWO)
     {
@@ -180,6 +189,7 @@ void matrix_norm_impl(Nrm2Fn nrm2,
         T*    VT            = arena.next<T>(static_cast<size_t>(k) * static_cast<size_t>(columns));
         int*  info          = arena.next<int>(1);
         auto* svd_workspace = arena.next<unsigned char>(svd_bytes);
+        T*    dev_result    = arena.next<T>(1);
         detail::svd_on_device(rows,
             columns,
             A,
@@ -193,26 +203,30 @@ void matrix_norm_impl(Nrm2Fn nrm2,
             svd_workspace,
             svd_bytes,
             stream);
-        reduce_max(S, detail::checked_narrow<int>(k), result, stream, info);
+        reduce_max(S, detail::checked_narrow<int>(k), dev_result, stream, info);
+        LINALG_CHECK(cudaMemcpyAsync(&host_result, dev_result, sizeof(T), cudaMemcpyDeviceToHost,
+                         stream) == cudaSuccess,
+            "norm: result copy failed");
+        LINALG_CHECK(cudaStreamSynchronize(stream) == cudaSuccess, "norm: stream sync failed");
     }
     else
         LINALG_THROW("unsupported norm_type");
+    return host_result;
 }
 
 }  // namespace
 
 template <>
-void norm<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
-    linalg_long                                                 rows,
-    linalg_long                                                 columns,
-    linalg_long                                                 lda,
-    norm_type                                                   type,
-    void*                                                       workspace,
-    size_t                                                      workspace_size,
-    float*                                                      result,
-    void*                                                       stream)
+float norm<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
+    linalg_long                                                  rows,
+    linalg_long                                                  columns,
+    linalg_long                                                  lda,
+    norm_type                                                    type,
+    void*                                                        workspace,
+    size_t                                                       workspace_size,
+    void*                                                        stream)
 {
-    matrix_norm_impl(cublasSnrm2,
+    return matrix_norm_impl(cublasSnrm2,
         A,
         rows,
         columns,
@@ -220,7 +234,6 @@ void norm<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
         type,
         workspace,
         workspace_size,
-        result,
         static_cast<cudaStream_t>(stream));
 }
 
@@ -232,17 +245,16 @@ size_t norm<float, linalg_backend::CUDA_BLAS>::workspace_size(
 }
 
 template <>
-void norm<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
-    linalg_long                                                   rows,
-    linalg_long                                                   columns,
-    linalg_long                                                   lda,
-    norm_type                                                     type,
-    void*                                                         workspace,
-    size_t                                                        workspace_size,
-    double*                                                       result,
-    void*                                                         stream)
+double norm<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
+    linalg_long                                                    rows,
+    linalg_long                                                    columns,
+    linalg_long                                                    lda,
+    norm_type                                                      type,
+    void*                                                          workspace,
+    size_t                                                         workspace_size,
+    void*                                                          stream)
 {
-    matrix_norm_impl(cublasDnrm2,
+    return matrix_norm_impl(cublasDnrm2,
         A,
         rows,
         columns,
@@ -250,7 +262,6 @@ void norm<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
         type,
         workspace,
         workspace_size,
-        result,
         static_cast<cudaStream_t>(stream));
 }
 

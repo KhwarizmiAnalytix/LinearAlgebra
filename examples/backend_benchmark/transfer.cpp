@@ -1,7 +1,6 @@
 #include "include/matrix_operation/multiplication.h"
 #include <chrono>
 #include <cstdio>
-#include <cuda_runtime_api.h>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -9,6 +8,37 @@
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
+
+// This file is written against CUDA's runtime API names; LINALG_ENABLE_CUBLAS
+// and LINALG_ENABLE_ROCBLAS are mutually exclusive (CMakeLists.txt), and under
+// the latter those names are aliased to their HIP equivalents here (HIP
+// mirrors CUDA's runtime API 1:1 for everything this file uses), so the rest
+// of the file is backend-agnostic.
+#if LINALG_HAS_CUBLAS
+#include <cuda_runtime_api.h>
+constexpr auto GPU_BACKEND = linalg::linalg_backend::CUDA_BLAS;
+#elif LINALG_HAS_ROCBLAS
+#include <hip/hip_runtime_api.h>
+using cudaError_t  = hipError_t;
+using cudaStream_t = hipStream_t;
+#define cudaSuccess hipSuccess
+#define cudaMalloc hipMalloc
+#define cudaFree hipFree
+#define cudaMallocHost hipHostMalloc
+#define cudaFreeHost hipHostFree
+#define cudaMemset hipMemset
+#define cudaMemcpyAsync hipMemcpyAsync
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define cudaStreamCreateWithFlags hipStreamCreateWithFlags
+#define cudaStreamNonBlocking hipStreamNonBlocking
+#define cudaStreamSynchronize hipStreamSynchronize
+#define cudaStreamDestroy hipStreamDestroy
+#define cudaGetErrorString hipGetErrorString
+constexpr auto GPU_BACKEND = linalg::linalg_backend::ROCM_BLAS;
+#else
+#error "transfer_analysis requires LINALG_ENABLE_CUBLAS or LINALG_ENABLE_ROCBLAS"
+#endif
 
 void check(cudaError_t result)
 {
@@ -56,7 +86,7 @@ void run(std::ofstream& csv, int n, bool pinned, int uploads, bool compute = fal
         }
         if (compute)
         {
-            linalg::multiplication<T, linalg::linalg_backend::CUDA_BLAS>::apply(false,
+            linalg::multiplication<T, GPU_BACKEND>::apply(false,
                 false,
                 n,
                 n,
