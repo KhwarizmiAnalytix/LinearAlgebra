@@ -152,6 +152,11 @@ class ConfigurationChecks(unittest.TestCase):
             f'add_executable(probe "{source.as_posix()}")\n'
             'target_link_libraries(probe PRIVATE Logging::Logging)\n'
             'target_compile_definitions(probe PRIVATE FMT_HEADER_ONLY=1)\n'
+            # fmt requires UTF-8 on MSVC; the parent probe does not inherit
+            # the library's private compiler options.
+            'if(MSVC)\n'
+            'target_compile_options(probe PRIVATE /utf-8)\n'
+            'endif()\n'
             'target_include_directories(probe PRIVATE '
             '"${LINALG_BINARY_DIR}/ThirdParty/logging-msvc-compat/fmt-include")\n'
             'file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/probe-path.txt" '
