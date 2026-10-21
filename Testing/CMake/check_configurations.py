@@ -163,8 +163,13 @@ class ConfigurationChecks(unittest.TestCase):
 
     def test_missing_cache_is_rejected(self):
         body = (
-            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int x;")\n'
-            'add_library(probe STATIC "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n'
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int answer() { return 42; }")\n'
+            'add_library(probe ${PROBE_LIBRARY_TYPE} "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n'
+            "set_target_properties(probe PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/main.cpp" '
+            '"int answer(); int main() { return answer() != 42; }")\n'
+            'add_executable(consumer "${CMAKE_CURRENT_BINARY_DIR}/main.cpp")\n'
+            "target_link_libraries(consumer PRIVATE probe)\n"
             'include("${LINALG_SOURCE_DIR}/Cmake/cache.cmake")\n'
             "set(ENABLE_CACHE ON)\nset(CACHE_BACKEND ccache)\n"
             'set(LINALG_CCACHE_PROGRAM "${CMAKE_CURRENT_BINARY_DIR}/missing-ccache")\n'
@@ -288,13 +293,33 @@ class ConfigurationChecks(unittest.TestCase):
             'message(FATAL_ERROR "Missing sanitizer runtime requirement")\nendif()\n'
             'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/compiler.txt" "${CMAKE_CXX_COMPILER_ID}")\n'
         )
-        build = self.configure("sanitizer-regeneration", body)
+        build = self.configure(
+            "sanitizer-regeneration", body, ["-DPROBE_LIBRARY_TYPE=STATIC"]
+        )
         if "Clang" in (build / "compiler.txt").read_text():
             ignore = build / "sanitizer_ignore.txt"
             self.assertTrue(ignore.is_file())
             ignore.unlink()
-            self.configure("sanitizer-regeneration", body)
+            self.configure(
+                "sanitizer-regeneration", body, ["-DPROBE_LIBRARY_TYPE=STATIC"]
+            )
             self.assertTrue(ignore.is_file())
+        # The consumer must select the same ASan runtime as the instrumented
+        # library. Exercise both archive and DLL links on Windows as well.
+        for library_type in ("STATIC", "SHARED"):
+            with self.subTest(library_type=library_type):
+                build = self.configure(
+                    "sanitizer-link-" + library_type.lower(),
+                    body,
+                    ["-DPROBE_LIBRARY_TYPE=" + library_type],
+                )
+                result = subprocess.run(
+                    ["cmake", "--build", str(build)],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_benchmark_fetchcontent_and_vendored_paths(self):
         body = (

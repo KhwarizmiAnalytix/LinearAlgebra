@@ -348,10 +348,14 @@ bool lu_decomposition_blocked_impl(
     {
         const size_type bs = std::min(kLuBlockSize, lda - k);
 
+#if LINALG_HAS_LU_PIVOTING
         if (!lu_panel_factor(m, lda, k, bs, pivot, tolerance))
         {
             return false;
         }
+#else
+        lu_panel_factor(m, lda, k, bs, pivot, tolerance);
+#endif
 
         const size_type rest = lda - k - bs;
         if (rest == 0)

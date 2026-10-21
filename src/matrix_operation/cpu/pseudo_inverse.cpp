@@ -147,9 +147,9 @@ void pseudo_inverse_impl(linalg_long rows,
     for (linalg_long c = 0; c < columns; ++c)
     {
         T* const     Ainv_col = Ainv + c * ldai;
-        const T*     W_col    = W + c;
 #if LINALG_HAS_VECTORIZATION
         {
+            const T* W_col = W + c;
             using P                   = packet<T>;
             constexpr linalg_long vpw = static_cast<linalg_long>(P::size);
             const linalg_int      col_stride = static_cast<linalg_int>(columns);

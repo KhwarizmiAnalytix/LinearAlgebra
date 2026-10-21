@@ -50,9 +50,10 @@ def runtime_skip(flags):
     return None
 
 
-def installed_logging(source, work, shared, env, log):
+def installed_logging(source, work, shared, config, env, log):
     """Produce a real reusable Logging package through the project's integration boundary."""
-    build, prefix = work / f"logging-{shared}", work / f"logging-{shared}-prefix"
+    package = f"logging-{shared}-{config}"
+    build, prefix = work / package, work / f"{package}-prefix"
     if not (prefix / "lib/cmake/Logging/LoggingConfig.cmake").is_file():
         command(
             [
@@ -65,18 +66,28 @@ def installed_logging(source, work, shared, env, log):
                 "Ninja",
                 f"-DLINALG_SOURCE_DIR={source}",
                 f"-DBUILD_SHARED_LIBS={shared}",
-                "-DCMAKE_BUILD_TYPE=Release",
+                f"-DCMAKE_BUILD_TYPE={config}",
                 f"-DCMAKE_INSTALL_PREFIX={prefix}",
             ],
             log,
             env,
         )
         command(
-            ["cmake", "--build", build, "--target", "Logging", "--parallel", "4"],
+            [
+                "cmake",
+                "--build",
+                build,
+                "--config",
+                config,
+                "--target",
+                "Logging",
+                "--parallel",
+                "4",
+            ],
             log,
             env,
         )
-        command(["cmake", "--install", build / "logging"], log, env)
+        command(["cmake", "--install", build / "logging", "--config", config], log, env)
     return prefix
 
 
@@ -160,10 +171,22 @@ def run_case(case_id, case, source, work):
     # Logging packages, optional BLAS DLLs, and Clang's ASan runtime must be on PATH on Windows.
     prefix = os.environ.get("CMAKE_PREFIX_PATH", "")
     if flags["LINALG_USE_SYSTEM_LOGGING"] == "ON":
-        logging = installed_logging(source, work, flags["BUILD_SHARED_LIBS"], env, log)
+        logging = installed_logging(
+            source,
+            work,
+            flags["BUILD_SHARED_LIBS"],
+            flags["CMAKE_BUILD_TYPE"],
+            env,
+            log,
+        )
         prefix = str(logging) + (";" + prefix if prefix else "")
         env["PATH"] = str(logging / "bin") + os.pathsep + env["PATH"]
     options = [f"-D{key}={value}" for key, value in flags.items() if key != "generator"]
+    if flags["generator"] == "Ninja Multi-Config":
+        # Ninja's defaults omit MinSizeRel, which is part of the flag domain.
+        options.append(
+            "-DCMAKE_CONFIGURATION_TYPES=Debug;Release;RelWithDebInfo;MinSizeRel"
+        )
     options.extend(
         [
             "-DCMAKE_DISABLE_FIND_PACKAGE_cpuinfo=ON",

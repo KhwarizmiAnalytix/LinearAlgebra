@@ -95,10 +95,10 @@ if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_F
     string(APPEND CMAKE_CXX_FLAGS " /bigobj")
     string(APPEND CMAKE_C_FLAGS " /bigobj")
 
-    # Enable faster PDB generation
-    message(STATUS "  MSVC: enabling PDB debug info (/Zi)")
-    string(APPEND CMAKE_CXX_FLAGS " /Zi")
-    string(APPEND CMAKE_C_FLAGS " /Zi")
+    # Ninja launches independent compiler processes that share the target PDB.
+    message(STATUS "  MSVC: enabling synchronized PDB debug info (/Zi /FS)")
+    string(APPEND CMAKE_CXX_FLAGS " /Zi /FS")
+    string(APPEND CMAKE_C_FLAGS " /Zi /FS")
 
     # Use /utf-8 so that MSVC uses utf-8 in source files and object files
     message(STATUS "  MSVC: setting source/output encoding to UTF-8 (/utf-8)")

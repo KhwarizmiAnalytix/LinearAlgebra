@@ -258,9 +258,14 @@ jobs:
           "MKL_DIR=$($config.DirectoryName)" >> $env:GITHUB_ENV
           Get-ChildItem $pythonPrefix -Recurse -Filter mkl_core*.dll |
             ForEach-Object { $_.DirectoryName } | Select-Object -Unique | Out-File -Append $env:GITHUB_PATH
-          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install openblas:x64-windows
+          # vcpkg's openblas:x64-windows is MSVC-built with no Fortran toolchain,
+          # so it ships BLAS only (no cheev_/LAPACK symbols), which fails
+          # find_package(LAPACK REQUIRED) once BLA_VENDOR=OpenBLAS is pinned.
+          # conda-forge's Windows OpenBLAS build bundles full LAPACK, so use the
+          # Miniconda preinstalled on this runner image ($env:CONDA) instead.
+          & "$env:CONDA/Scripts/conda.exe" install -y -c conda-forge openblas
           if ($LASTEXITCODE -ne 0) { throw 'OpenBLAS installation failed' }
-          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows"
+          $prefix = "$env:CONDA/Library"
           "CMAKE_PREFIX_PATH=$prefix" >> $env:GITHUB_ENV
           "$prefix/bin" >> $env:GITHUB_PATH
       - name: Configure, build, and test both vendor interfaces

@@ -36,4 +36,10 @@ function(linalg_configure_sanitizer target prefix)
         )
     endif()
     target_link_options(${target} PUBLIC "-fsanitize=${_types}")
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND "address" IN_LIST _type_list)
+        # CMake expresses the dynamic CRT with -D_DLL/--dependent-lib for the
+        # GNU driver. Clang's ASan linker selection only recognizes /MD, so
+        # explicitly use the DLL runtime for the library and its consumers.
+        target_link_options(${target} PUBLIC -shared-libasan)
+    endif()
 endfunction()

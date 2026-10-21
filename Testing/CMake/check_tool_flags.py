@@ -7,9 +7,7 @@ Profiler, or GPU workloads were executed against the library.
 import itertools
 import json
 import os
-import shlex
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,25 +20,27 @@ class ToolFlagChecks(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.temporary = tempfile.TemporaryDirectory(prefix="linalg-tool-flags-")
+        cls.temporary = tempfile.TemporaryDirectory(prefix="linalg tool flags ")
         cls.work = Path(cls.temporary.name)
-        script = cls.work / "record.py"
-        script.write_text(
-            "import json, os, sys\n"
-            "if '--version' in sys.argv:\n"
-            "    print('clang-tidy version 19.0.0')\n"
-            "else:\n"
-            "    with open(os.environ['LINALG_CI_TOOL_LOG'], 'a') as log:\n"
-            "        log.write(json.dumps(sys.argv[1:]) + '\\n')\n",
+        recorder = cls.work / "recorder"
+        recorder.mkdir()
+        (recorder / "CMakeLists.txt").write_text(
+            "cmake_minimum_required(VERSION 3.24)\n"
+            "project(RecordingTool LANGUAGES CXX)\n"
+            f'add_executable(record-tool "{SOURCE.as_posix()}/Testing/CMake/record_tool.cpp")\n',
             encoding="utf-8",
         )
-        cls.tool = cls.work / ("record-tool.cmd" if os.name == "nt" else "record-tool")
-        if os.name == "nt":
-            contents = f'@"{sys.executable}" "{script}" %*\n'
-        else:
-            contents = f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(script))} "$@"\n'
-        cls.tool.write_text(contents, encoding="utf-8")
-        cls.tool.chmod(0o755)
+        build = recorder / "build"
+        # A native executable preserves regex metacharacters in analyzer arguments.
+        # A .cmd recorder sends them through cmd.exe and turns '|' into a pipe.
+        for args in (
+            ["cmake", "-S", str(recorder), "-B", str(build), "-G", "Ninja"],
+            ["cmake", "--build", str(build)],
+        ):
+            result = subprocess.run(args, capture_output=True, text=True, check=False)
+            if result.returncode:
+                raise RuntimeError(result.stdout + result.stderr)
+        cls.tool = build / ("record-tool.exe" if os.name == "nt" else "record-tool")
 
     @classmethod
     def tearDownClass(cls):
