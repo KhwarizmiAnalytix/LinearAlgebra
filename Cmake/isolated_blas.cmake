@@ -48,10 +48,41 @@ function(linalg_configure_isolated_blas)
     set(LINALG_BLAS_RUNTIME_LIBRARY "${LINALG_BLAS_RUNTIME_LIBRARY}"
         CACHE FILEPATH "Shared CBLAS provider loaded independently of MKL"
     )
-    set(LINALG_LAPACKE_RUNTIME_LIBRARY ""
+    # linalg_check_blas_provider() only sets LINALG_LAPACKE_LIBRARY when LAPACKE lives in a
+    # library separate from BLAS_LIBRARIES (e.g. Debian/Ubuntu's liblapacke.so, distinct from
+    # libopenblas.so). Re-resolve it the same shared-only way as LINALG_BLAS_RUNTIME_LIBRARY above,
+    # so resolve_blas_symbol() looks LAPACKE_* up in the library that actually exports it instead
+    # of always falling back to LINALG_BLAS_RUNTIME_LIBRARY.
+    set(_linalg_lapacke_runtime_default "")
+    if(LINALG_LAPACKE_LIBRARY AND NOT LINALG_LAPACKE_LIBRARY STREQUAL LINALG_BLAS_RUNTIME_LIBRARY)
+        if(WIN32)
+            find_file(
+                _linalg_lapacke_runtime_default
+                NAMES liblapacke.dll lapacke.dll
+                HINTS ${_runtime_hints}
+                PATH_SUFFIXES bin lib
+            )
+        else()
+            get_filename_component(_linalg_lapacke_library_dir "${LINALG_LAPACKE_LIBRARY}" DIRECTORY)
+            find_library(
+                _linalg_lapacke_runtime_default
+                NAMES lapacke
+                HINTS ${_runtime_hints} "${_linalg_lapacke_library_dir}"
+                PATH_SUFFIXES lib lib64
+            )
+            unset(_linalg_lapacke_library_dir)
+        endif()
+        if(NOT _linalg_lapacke_runtime_default)
+            # Fall back to the configure-time library even if it did not match the
+            # shared-only search above (e.g. a non-standard name find_library missed).
+            set(_linalg_lapacke_runtime_default "${LINALG_LAPACKE_LIBRARY}")
+        endif()
+    endif()
+    set(LINALG_LAPACKE_RUNTIME_LIBRARY "${_linalg_lapacke_runtime_default}"
         CACHE FILEPATH
               "Separate shared LAPACKE provider, or empty when bundled with the CBLAS provider"
     )
+    unset(_linalg_lapacke_runtime_default)
     if(NOT EXISTS "${LINALG_BLAS_RUNTIME_LIBRARY}")
         message(
             FATAL_ERROR
