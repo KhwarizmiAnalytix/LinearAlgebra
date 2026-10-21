@@ -27,3 +27,11 @@ llvm_ignore_regex = [
     ".*Testing[/\\\\].*",
     ".*ThirdParty[/\\\\].*",
 ]
+
+[coverage.gcc]
+# lcov 2.x treats an exclude pattern that matched nothing in a given run as an
+# error ("'exclude' pattern '*Testing*' is unused") instead of a no-op; add
+# "unused" to coverage-tool's default ignore list so a backend/compiler combo
+# that happens not to touch ThirdParty/Testing paths (e.g. this module's flat
+# layout) doesn't fail CI over it.
+lcov_ignore_errors = ["mismatch", "negative", "gcov", "unused"]
