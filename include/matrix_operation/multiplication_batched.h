@@ -9,9 +9,11 @@ namespace linalg
 /**
  * @brief Batched multiplication of @p count independent square matrices.
  *
- * Computes C_i = A_i * B_i for i in [0, count) using a CUDA kernel. All
- * inputs and outputs are CUDA device pointers; only available when the
- * library is built with LINALG_HAS_CUBLAS.
+ * Computes C_i = A_i * B_i for i in [0, count). Only available when the
+ * library is built with LINALG_HAS_CUBLAS (CUDA kernel, CUDA device
+ * pointers), LINALG_HAS_ROCBLAS (HIP kernel, HIP device pointers), or
+ * LINALG_HAS_METAL (float overload only, via MPSMatrixMultiplication;
+ * page-aligned host-visible pointers, see include/common/metal_handle.h).
  *
  * @param[in]  dim    Side length of each square matrix; must be positive.
  * @param[in]  count  Number of independent matrix pairs; must be positive.

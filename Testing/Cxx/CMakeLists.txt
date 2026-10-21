@@ -61,6 +61,20 @@ if(LINALG_ENABLE_GTEST)
         )
     endif()
 
+    # LINALG_ENABLE_METAL is mutually exclusive with LINALG_ENABLE_CUBLAS/
+    # LINALG_ENABLE_ROCBLAS (CMakeLists.txt). TestGpuMatrixOperationsMetal.cxx
+    # reuses the same MathGpu.* suite name (narrower coverage: float only,
+    # multiplication/batched multiplication/transpose/norm/trace), so this
+    # mirrors LinearAlgebraCudaTests/LinearAlgebraRocmTests exactly.
+    if(LINALG_ENABLE_METAL)
+        add_test(NAME LinearAlgebraMetalTests COMMAND LinearAlgebraCxxTests --gtest_filter=MathGpu.*
+                 WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        )
+        set_tests_properties(
+            LinearAlgebraMetalTests PROPERTIES TIMEOUT 120 LABELS "LinearAlgebra;Unit;Metal"
+        )
+    endif()
+
     if(COMMAND linalg_set_target_output_directories)
         linalg_set_target_output_directories(LinearAlgebraCxxTests)
     endif()

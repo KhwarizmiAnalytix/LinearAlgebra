@@ -135,7 +135,8 @@ Strengths worth preserving:
 | Eigen3 (optional CPU backend) | Not present | Medium–high | Medium | Header-only, MPL-2.0 (compatible with this repository's licensing). Supplies a vectorized GEMM, pivoted LU, BDCSVD and eigen-solvers without a system BLAS, and supersedes the dead GEMM code from §2.3. |
 | ROCm (hipBLAS/hipSOLVER) | Shipped, no CI | Medium | Medium–high | hipSOLVER mirrors cuSOLVER closely; PyTorch reaches ROCm by hipifying its CUDA sources the same way. `linalg_backend::ROCM_BLAS` / `LINALG_ENABLE_ROCBLAS`, mutually exclusive with `LINALG_ENABLE_CUBLAS` (both would define the same non-backend-templated `batched_matrix_multiplication` symbols). |
 | MAGMA | Not present (non-goal in `gpu_backend_design.md` §2) | Low–medium | Medium | Hybrid CPU/GPU `geev`. Only worth it if `cusolverDnXgeev` is unusable on the targeted toolkits. |
-| oneMKL SYCL, Apple MPS | Not present | Low | High | MPS is `float`-only; SYCL has a small audience here. Deferred. |
+| Apple MPS (Metal Performance Shaders) | Shipped, no CI | Medium on Apple platforms | — (shipped) | `float`-only (no native Metal `double`), and covers only multiplication / batched multiplication / transpose / norm / trace — MPS has no QR/SVD/general-solver routines, so cholesky/LU/QR/SVD/eigen/linear_solver/inversion/determinant/rank/pseudo_inverse/least_squares have no `METAL_BLAS` specialization (same shape as the general-eigenvalue gap row 134 describes for CUDA/HIP). `linalg_backend::METAL_BLAS` / `LINALG_ENABLE_METAL`, mutually exclusive with `LINALG_ENABLE_CUBLAS`/`LINALG_ENABLE_ROCBLAS` (all three define the same non-backend-templated `batched_matrix_multiplication` symbols). Pointers must be page-aligned (wrapped zero-copy via `newBufferWithBytesNoCopy:`, see `include/common/metal_handle.h`). |
+| oneMKL SYCL | Not present | Low | High | Small audience here. Deferred. |
 
 ## 4. Architectural direction
 

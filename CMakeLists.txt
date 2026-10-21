@@ -6,22 +6,28 @@
 # eigenvalue), linear solve, matrix inversion/multiplication/transpose/norm/
 # rank/trace, least squares, pseudo-inverse, matrix exponential, and
 # tri-/pentadiagonal operations, with optional Intel MKL, vendor-neutral
-# CBLAS/LAPACKE, cuBLAS/cuSOLVER, and hipBLAS/hipSOLVER GPU backends.
+# CBLAS/LAPACKE, cuBLAS/cuSOLVER, hipBLAS/hipSOLVER, and Metal Performance
+# Shaders GPU backends.
 #
 # Public compile definitions: LINALG_HAS_MKL — MKL-backed LAPACKE code
 # paths; LINALG_HAS_BLAS — vendor-neutral CBLAS/LAPACKE code paths;
 # LINALG_HAS_CUBLAS — cuBLAS/cuSOLVER GPU code paths under
 # src/matrix_operation/gpu/cublas/; LINALG_HAS_ROCBLAS — hipBLAS/hipSOLVER
-# GPU code paths under src/matrix_operation/gpu/hipblas/. These (and
+# GPU code paths under src/matrix_operation/gpu/hipblas/; LINALG_HAS_METAL —
+# Metal Performance Shaders GPU code paths under
+# src/matrix_operation/gpu/metal/ (float only; multiplication, batched
+# multiplication, transpose, norm, and trace only — see linalg_backend::
+# METAL_BLAS's doc comment in include/common/backend.h). These (and
 # LINALG_HAS_LAPACKE, LINALG_HAS_ACCELERATE, LINALG_HAS_VECTORIZATION,
 # LINALG_HAS_LU_PIVOTING, LINALG_HAS_WIN32_WARNINGS below) are
 # always-defined 0/1 macros, checked in C++ with plain #if (never
 # #ifdef/#if defined), not conditionally-defined ones. Active for every CPU
 # op except exponential and the tri-/pentadiagonal operations (scalar
 # only), and every GPU op except general (non-symmetric) eigenvalue
-# decomposition. LINALG_ENABLE_CUBLAS and LINALG_ENABLE_ROCBLAS are
-# mutually exclusive (see the guard below): both target a single
-# `batched_matrix_multiplication` free-function symbol
+# decomposition (METAL_BLAS covers a narrower subset still, see above).
+# LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL are
+# pairwise mutually exclusive (see the guard below): all three target a
+# single `batched_matrix_multiplication` free-function symbol
 # (include/matrix_operation/multiplication_batched.h), which is not
 # backend-templated.
 # =============================================================================
@@ -95,13 +101,34 @@ option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlge
 # below multiplication_batched's free functions are not backend-templated).
 option(LINALG_ENABLE_ROCBLAS "Enable a hipBLAS/hipSOLVER GPU backend for LinearAlgebra" OFF)
 
-if(LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS)
+# Metal Performance Shaders GPU backend, exposed as linalg_backend::METAL_BLAS
+# specializations of the same struct-template API used by the CPU and other
+# GPU backends (src/matrix_operation/gpu/metal/). Apple platforms only
+# (enforced below); float only, since Apple GPUs have no native double
+# type, and covering only multiplication / batched multiplication /
+# transpose / norm / trace, since Metal Performance Shaders has no QR/SVD/
+# general-solver routines (see linalg_backend::METAL_BLAS's doc comment in
+# include/common/backend.h and docs/backend_roadmap.md §3, which deferred
+# Apple MPS support as "float-only ... high effort" before this backend
+# existed). Mutually exclusive with LINALG_ENABLE_CUBLAS/LINALG_ENABLE_ROCBLAS
+# (see the guard below).
+option(LINALG_ENABLE_METAL "Enable a Metal Performance Shaders GPU backend (float-only; Apple platforms) for LinearAlgebra" OFF)
+
+if(LINALG_ENABLE_METAL AND NOT APPLE)
+    message(FATAL_ERROR "LINALG_ENABLE_METAL requires an Apple platform (Metal is not available elsewhere).")
+endif()
+
+if((LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS)
+   OR (LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_METAL)
+   OR (LINALG_ENABLE_ROCBLAS AND LINALG_ENABLE_METAL)
+)
     message(FATAL_ERROR
-        "LINALG_ENABLE_CUBLAS and LINALG_ENABLE_ROCBLAS are mutually exclusive: "
-        "both backends define the same batched_matrix_multiplication symbols "
+        "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL are "
+        "pairwise mutually exclusive: every GPU backend defines the same "
+        "batched_matrix_multiplication symbols "
         "(include/matrix_operation/multiplication_batched.h is not "
-        "backend-templated), so enabling both would be a duplicate-symbol link "
-        "error. Enable only the GPU backend that matches the target hardware."
+        "backend-templated), so enabling more than one would be a duplicate-symbol "
+        "link error. Enable only the GPU backend that matches the target hardware."
     )
 endif()
 
@@ -494,6 +521,24 @@ if(LINALG_ENABLE_ROCBLAS)
     list(APPEND LINALG_DEPENDENCY_LIBS hip::host roc::hipblas roc::hipsolver)
 endif()
 
+# --- Optional Metal Performance Shaders GPU backend ---
+# Metal/MetalPerformanceShaders are Objective-C frameworks, so the bridge
+# sources under src/matrix_operation/gpu/metal/ are Objective-C++ (.mm); a
+# plain C++ (.cpp) source lives alongside them for trace, which needs no
+# Metal API calls at all (see trace_metal.cpp). OBJCXX is CMake's own
+# language for .mm files (Clang-only, which every Apple toolchain ships),
+# enabled only when this option is ON so plain CPU/CUDA/HIP builds need no
+# Objective-C++ support at all.
+if(LINALG_ENABLE_METAL)
+    enable_language(OBJCXX)
+    find_library(LINALG_METAL_FRAMEWORK Metal REQUIRED)
+    find_library(LINALG_MPS_FRAMEWORK MetalPerformanceShaders REQUIRED)
+    find_library(LINALG_FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    list(APPEND LINALG_DEPENDENCY_LIBS
+         ${LINALG_METAL_FRAMEWORK} ${LINALG_MPS_FRAMEWORK} ${LINALG_FOUNDATION_FRAMEWORK}
+    )
+endif()
+
 # --- Optional cpuinfo backend (pytorch/cpuinfo), auto-detected ---
 # CPU cache-size introspection via find_package(cpuinfo) — no vendored copy,
 # no enable option: silently absent when not installed. When found,
@@ -603,7 +648,7 @@ file(GLOB_RECURSE linalg_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
 # mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /
 # LINALG_ENABLE_BLAS turned on the matching backend above.
-list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/(cublas|hipblas))/")
+list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/(cublas|hipblas|metal))/")
 if(LINALG_ENABLE_MKL)
     file(GLOB linalg_mkl_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/mkl/*.cpp"
@@ -645,6 +690,31 @@ if(LINALG_ENABLE_ROCBLAS)
          "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hip"
     )
     list(APPEND linalg_sources ${linalg_hip_sources})
+endif()
+
+# Metal bridge sources (all under src/matrix_operation/gpu/metal/) need an
+# Objective-C++ (.mm) compiler, so they are only globbed in -- and only
+# compilable -- when LINALG_ENABLE_METAL turned on OBJCXX above. trace's
+# Metal source is plain C++ (no Metal API calls, see trace_metal.cpp) but
+# lives alongside its .mm siblings and is globbed in the same way.
+#
+# The .mm files use ordinary alloc/init Objective-C object lifetimes (no
+# explicit `release`, relying on @autoreleasepool for the per-call
+# MPSMatrix/MPSMatrixMultiplication objects and on leaking the lazily-
+# created process-wide device/queue/pipeline-state singletons on purpose),
+# so they require ARC -- `enable_language(OBJCXX)` alone does not turn it
+# on -- scoped to just these sources so the rest of the library is
+# unaffected.
+if(LINALG_ENABLE_METAL)
+    file(GLOB linalg_metal_mm_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/metal/*.mm"
+    )
+    set_source_files_properties(${linalg_metal_mm_sources} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    list(APPEND linalg_sources ${linalg_metal_mm_sources})
+    file(GLOB linalg_metal_cpp_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/metal/*.cpp"
+    )
+    list(APPEND linalg_sources ${linalg_metal_cpp_sources})
 endif()
 
 # --- Target definition ---
@@ -721,6 +791,7 @@ target_compile_definitions(
            "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
            "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
            "LINALG_HAS_ROCBLAS=$<BOOL:${LINALG_ENABLE_ROCBLAS}>"
+           "LINALG_HAS_METAL=$<BOOL:${LINALG_ENABLE_METAL}>"
            "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
            "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
            "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
