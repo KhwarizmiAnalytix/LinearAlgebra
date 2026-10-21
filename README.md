@@ -207,6 +207,11 @@ MSVC debug information is embedded in object files (`/Z7`) so parallel compiler
 cache invocations do not share a compiler PDB.
 Valgrind checks run through `ctest -T memcheck` when `LINALG_ENABLE_VALGRIND=ON`.
 
+From `Scripts/`, use `python3 setup.py config.build.test.hipblas` to enable
+the hipBLAS/hipSOLVER backend (`LINALG_ENABLE_ROCBLAS=ON`). This requires a
+ROCm/HIP toolchain with hipBLAS and hipSOLVER installed. The `hipblas` and
+`cublas` tokens are mutually exclusive.
+
 Icecream can be combined with `ccache` or `sccache`, for example with
 `python3 setup.py config.build.test.ICECC.SCCACHE` from `Scripts/`.
 Cache hits reuse existing objects; cache misses compile through Icecream.

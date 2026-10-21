@@ -6,13 +6,14 @@ XSigmaFlags/XSigmaConfiguration split, coverage-tool integration) scaled down
 to the CMake options this standalone repo actually defines
 (LINALG_ENABLE_*/LINALG_* in CMakeLists.txt) — there is no multi-module
 Library/* tree or --project.* scoping here, just one flat set of flags plus
-LinearAlgebra's own optional MKL / vendor-neutral BLAS-LAPACK / cuBLAS-cuSOLVER
-backends.
+LinearAlgebra's own optional MKL / vendor-neutral BLAS-LAPACK / cuBLAS-cuSOLVER /
+hipBLAS-hipSOLVER backends.
 
 Usage:
     python Scripts/setup.py config.build.test
     python Scripts/setup.py config.build.test.coverage
     python Scripts/setup.py config.build.test.mkl
+    python Scripts/setup.py config.build.test.hipblas
     python Scripts/setup.py config.build.test.gcc.release
 """
 
@@ -425,9 +426,9 @@ class LinearAlgebraFlags:
     Scoped 1:1 to the options CMakeLists.txt actually defines — unlike
     XSigma's XSigmaFlags there is no multi-module fan-out (LinearAlgebra is a
     single flat CMake target) and no --project.* scoping. LinearAlgebra does
-    own three optional backends: MKL, a vendor-neutral BLAS/LAPACK backend,
-    and a cuBLAS/cuSOLVER GPU backend — all wired through here, unlike
-    Logging's single LOGGING_BACKEND selector.
+    own optional MKL and vendor-neutral BLAS/LAPACK backends, plus
+    cuBLAS/cuSOLVER and hipBLAS/hipSOLVER GPU backends — all wired through here,
+    unlike Logging's single LOGGING_BACKEND selector.
     """
 
     OFF = "OFF"
@@ -449,6 +450,7 @@ class LinearAlgebraFlags:
             "blas",
             "blis",
             "cublas",
+            "hipblas",
             "lupivoting",
             "win32warnings",
             "icecc",
@@ -480,6 +482,8 @@ class LinearAlgebraFlags:
             "enable BLIS as the explicit CBLAS/LAPACKE provider "
             "(pair with AOCL libflame or netlib LAPACKE for factorization ops)",
             "enable the cuBLAS/cuSOLVER GPU backend (requires the CUDA toolkit)",
+            "enable the hipBLAS/hipSOLVER GPU backend "
+            "(requires ROCm/HIP; mutually exclusive with cublas)",
             "enable partial pivoting in the scalar (non-MKL) LU fallback paths",
             "re-enable MSVC narrowing-conversion warnings (C4244) "
             "around the scalar fallback",
@@ -516,6 +520,7 @@ class LinearAlgebraFlags:
             "blas": "LINALG_ENABLE_BLAS",
             "blis": "LINALG_ENABLE_BLIS",
             "cublas": "LINALG_ENABLE_CUBLAS",
+            "hipblas": "LINALG_ENABLE_ROCBLAS",
             "lupivoting": "LINALG_LU_PIVOTING",
             "win32warnings": "LINALG_DISPLAY_WIN32_WARNINGS",
             "icecc": "LINALG_ENABLE_ICECC",
@@ -656,6 +661,16 @@ class LinearAlgebraFlags:
                     self.builder_suffix += f"_{arg}"
 
     def __validate_flags(self):
+        if (
+            self.__value.get("cublas") == self.ON
+            and self.__value.get("hipblas") == self.ON
+        ):
+            print_status(
+                "cublas and hipblas are mutually exclusive - enable only one GPU backend.",
+                "ERROR",
+            )
+            sys.exit(1)
+
         if (
             self.__value.get("sanitizer") == self.ON
             and self.__value.get("valgrind") == self.ON
@@ -1117,7 +1132,10 @@ def main():
         print("DEFAULT CONFIGURATION:")
         print("  Build System: Ninja (fast, cross-platform)")
         print("  Compiler:     Clang (clang/clang++)")
-        print("  Backend:      Scalar fallback (MKL/BLAS/cuBLAS all OFF by default)")
+        print(
+            "  Backend:      Scalar fallback "
+            "(MKL/BLAS/BLIS/cuBLAS/hipBLAS all OFF by default)"
+        )
         print("=" * 80)
         print("\nUsage examples:")
         print("  1. Default build (Ninja + Clang):")
@@ -1133,6 +1151,7 @@ def main():
         print("     setup.py config.build.test.blas")
         print("     setup.py config.build.test.blis")
         print("     setup.py config.build.test.cublas")
+        print("     setup.py config.build.test.hipblas")
         print("\nBuild commands:")
         print("  config    - Configure the build system")
         print("  build     - Build the project")
