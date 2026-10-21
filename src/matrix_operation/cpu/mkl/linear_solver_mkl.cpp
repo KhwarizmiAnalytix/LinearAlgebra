@@ -46,7 +46,7 @@ void linear_solver<float, linalg_backend::MKL>::apply(float* m,
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
         if (cholesky_decomposition<float, linalg_backend::MKL>::apply(
-                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             LAPACKE_spotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
         }
@@ -82,7 +82,7 @@ void linear_solver<double, linalg_backend::MKL>::apply(double* m,
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
         if (cholesky_decomposition<double, linalg_backend::MKL>::apply(
-                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             LAPACKE_dpotrs(LAPACK_ROW_MAJOR, 'L', lda, 1, m, lda, x, 1);
         }

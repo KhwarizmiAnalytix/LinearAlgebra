@@ -137,7 +137,7 @@ void cholesky_apply<double>(double* C,
 }  // namespace
 
 template <>
-void cholesky_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* C,
+bool cholesky_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* C,
     linalg_int                                                              lda,
     cholesky_decomposition_enum                                             type,
     void*                                                                   workspace,
@@ -146,6 +146,7 @@ void cholesky_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* C,
     void*                                                                   stream)
 {
     cholesky_apply<float>(C, lda, type, workspace, workspace_size, info, stream);
+    return true;
 }
 
 template <>
@@ -156,7 +157,7 @@ size_t cholesky_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size(
 }
 
 template <>
-void cholesky_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* C,
+bool cholesky_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* C,
     linalg_int                                                                lda,
     cholesky_decomposition_enum                                               type,
     void*                                                                     workspace,
@@ -165,6 +166,7 @@ void cholesky_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* C,
     void*                                                                     stream)
 {
     cholesky_apply<double>(C, lda, type, workspace, workspace_size, info, stream);
+    return true;
 }
 
 template <>

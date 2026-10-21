@@ -280,7 +280,7 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
             }
             else
             {
-                ok = linalg::cholesky_decomposition<T, B>::apply(ap, n, lower);
+                ok = linalg::cholesky_decomposition<T, B>::apply(ap, n, lower, nullptr, 0, nullptr);
             }
         }
         if constexpr (Op == operation::lu)

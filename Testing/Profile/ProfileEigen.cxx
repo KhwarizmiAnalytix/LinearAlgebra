@@ -72,33 +72,30 @@ std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
 template <linalg::linalg_backend Backend>
 void profile_eigen_at_size(linalg_int n)
 {
-    // symmetric_eigen: eigenvalues + eigenvectors of SPD matrix
+    // symmetric_eigen: eigenvalues + eigenvectors of SPD matrix. apply() is
+    // in place -- A holds the symmetric input on entry and the eigenvectors
+    // on exit (see include/matrix_operation/eigen.h) -- so there is no
+    // separate output buffer to pass.
     {
         PROFILER_SCOPE("symmetric/with_vectors");
-        auto                A            = make_spd_matrix<double>(n);
+        auto                A           = make_spd_matrix<double>(n);
         std::vector<double> eigenvalues(static_cast<std::size_t>(n));
-        std::vector<double> eigenvectors(static_cast<std::size_t>(n * n));
-        const auto          ws           = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
+        const auto          ws          = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
         linalg::symmetric_eigen_backend<double, Backend>::apply(
-            A.data(), n, n, eigenvalues.data(), eigenvectors.data(), n, workspace.data(), ws);
+            A.data(), n, n, eigenvalues.data(), n, workspace.data(), ws);
     }
 
-    // symmetric_eigen: eigenvalues only (eigenvectors buffer still provided but
-    // we time the same call; the backend decides what to skip internally)
+    // symmetric_eigen: a second SPD matrix. The backend has no
+    // eigenvalues-only mode, so this times the same in-place call as above.
     {
         PROFILER_SCOPE("symmetric/eigenvalues_only");
         auto                A          = make_spd_matrix<double>(n, 43);
         std::vector<double> eigenvalues(static_cast<std::size_t>(n));
         const auto          ws         = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
-        // Pass nullptr for eigenvectors — backend must accept a null pointer
-        // when only eigenvalues are needed (matches the general_eigen_backend
-        // convention; symmetric_eigen_backend's apply signature requires a
-        // non-null eigenvectors pointer, so reuse a small buffer instead).
-        std::vector<double> dummy_vecs(static_cast<std::size_t>(n * n));
         linalg::symmetric_eigen_backend<double, Backend>::apply(
-            A.data(), n, n, eigenvalues.data(), dummy_vecs.data(), n, workspace.data(), ws);
+            A.data(), n, n, eigenvalues.data(), n, workspace.data(), ws);
     }
 
     // general_eigen: eigenvalues only (no eigenvectors)
@@ -110,10 +107,13 @@ void profile_eigen_at_size(linalg_int n)
         const auto          ws        = linalg::general_eigen_backend<double, Backend>::workspace_size(n, false);
         std::vector<unsigned char> workspace(ws);
         linalg::general_eigen_backend<double, Backend>::apply(
-            A.data(), n, n, ev_real.data(), ev_imag.data(), nullptr, n, workspace.data(), ws);
+            A.data(), n, n, ev_real.data(), ev_imag.data(), false, n, workspace.data(), ws);
     }
 
-    // general_eigen: eigenvalues + right eigenvectors
+    // general_eigen: eigenvalues + right eigenvectors. apply() is in place --
+    // A holds the input matrix on entry and the eigenvectors on exit -- so
+    // there is no separate output buffer to pass, and compute_eigenvectors
+    // is a bool, not a pointer.
     // The native scalar backend raises an exception when a random matrix has
     // complex eigenvalues; catch it and note the skip so the rest of the
     // profile continues unaffected.
@@ -123,11 +123,10 @@ void profile_eigen_at_size(linalg_int n)
         auto                A            = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
         std::vector<double> ev_real(static_cast<std::size_t>(n));
         std::vector<double> ev_imag(static_cast<std::size_t>(n));
-        std::vector<double> eigenvectors(static_cast<std::size_t>(n * n));
         const auto          ws           = linalg::general_eigen_backend<double, Backend>::workspace_size(n, true);
         std::vector<unsigned char> workspace(ws);
         linalg::general_eigen_backend<double, Backend>::apply(
-            A.data(), n, n, ev_real.data(), ev_imag.data(), eigenvectors.data(), n, workspace.data(), ws);
+            A.data(), n, n, ev_real.data(), ev_imag.data(), true, n, workspace.data(), ws);
     }
     catch (const std::exception& ex)
     {

@@ -80,7 +80,7 @@ T matrix_determinant_helper(T* __restrict m,
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
         if (cholesky_decomposition<T, Backend>::apply(
-                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             ret = cholesky_determinant(m, lda);
         }

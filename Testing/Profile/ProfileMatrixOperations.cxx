@@ -121,7 +121,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         PROFILER_SCOPE("cholesky_decomposition");
         auto A = make_spd_matrix<double>(n);
         linalg::cholesky_decomposition<double, Backend>::apply(
-            A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
+            A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr);
     }
 
     // lu_decomposition ------------------------------------------------------

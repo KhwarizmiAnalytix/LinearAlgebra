@@ -183,7 +183,7 @@ void build_cholesky_matrix(
 
     dense_matrix<value_t> R = A;
     linalg::cholesky_decomposition<value_t, Backend>::apply(
-        R.begin(), static_cast<linalg_int>(dim), type);
+        R.begin(), static_cast<linalg_int>(dim), type, nullptr, 0, nullptr);
     for (std::size_t i = 0; i < dim; ++i)
     {
         for (std::size_t j = i + 1; j < dim; ++j)
@@ -341,7 +341,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_cholesky(s
         try
         {
             linalg::cholesky_decomposition<value_t, Backend>::apply(
-                &values[0], 1, (linalg::cholesky_decomposition_enum)'5');
+                &values[0], 1, (linalg::cholesky_decomposition_enum)'5', nullptr, 0, nullptr);
         }
         catch (...)
         {

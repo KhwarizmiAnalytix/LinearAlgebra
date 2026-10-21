@@ -130,7 +130,7 @@ void inversion<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
         if (cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(
-                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             LINALG_BLAS_FUNCTION(LAPACKE_spotri)(LAPACK_ROW_MAJOR, 'L', n, m, n);
         }
@@ -188,7 +188,7 @@ void inversion<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
     }
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
         if (cholesky_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(
-                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             LINALG_BLAS_FUNCTION(LAPACKE_dpotri)(LAPACK_ROW_MAJOR, 'L', n, m, n);
         }

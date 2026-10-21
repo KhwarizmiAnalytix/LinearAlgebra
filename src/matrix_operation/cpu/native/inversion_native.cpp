@@ -432,7 +432,7 @@ void matrix_invert_scalar_impl(T* __restrict m,
         auto* xt           = arena.next<T>(n * n);
         if (type == linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER ||
             cholesky_decomposition<T, linalg_backend::NATIVE>::apply(
-                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             cholesky_invert(m, lda, col_scratch, xt);
         }

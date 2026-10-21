@@ -129,7 +129,7 @@ void linear_solver_scalar_impl(T* __restrict m, linalg_int* __restrict pivot, li
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     {
         if (cholesky_decomposition<T, linalg_backend::NATIVE>::apply(
-                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR))
+                m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
         {
             cholesky_solve(m, lda, x);
         }

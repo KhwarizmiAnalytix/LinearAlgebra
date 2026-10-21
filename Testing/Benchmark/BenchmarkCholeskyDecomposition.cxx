@@ -84,7 +84,10 @@ void BM_CholeskyDecomposition(benchmark::State& state)
 
         bool ok = linalg::cholesky_decomposition<T, Backend>::apply(work.data(),
             static_cast<linalg_int>(n),
-            linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR);
+            linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR,
+            nullptr,
+            0,
+            nullptr);
         benchmark::DoNotOptimize(ok);
     }
 

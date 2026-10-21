@@ -225,18 +225,22 @@ linalg_int cholesky_decomposition_blocked_lower(linalg_int n, T* A, linalg_int l
     return 0;  // Success
 }
 
+// Returns the LAPACK-style status: zero on success, the 1-based index of the first
+// non-positive-definite leading minor otherwise. apply() below both converts this to its own
+// bool return and, when the caller asked for it, forwards it verbatim through info.
 template <typename T>
-bool cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decomposition_enum type)
+linalg_int cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decomposition_enum type)
 {
     switch (type)
     {
     case cholesky_decomposition_enum::LOWER_TRIANGULAR:
-        return cholesky_decomposition_blocked_lower<T>(n, C, n) == 0;
+        return cholesky_decomposition_blocked_lower<T>(n, C, n);
     case cholesky_decomposition_enum::UPPER_TRIANGULAR:
     {
-        if (cholesky_decomposition_blocked_lower<T>(n, C, n) != 0)
+        const linalg_int rc = cholesky_decomposition_blocked_lower<T>(n, C, n);
+        if (rc != 0)
         {
-            return false;
+            return rc;
         }
         for (linalg_int i = 0; i < n; ++i)
         {
@@ -246,7 +250,7 @@ bool cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decompositio
                 C[i * n + j] = 0.;
             }
         }
-        return true;
+        return 0;
     }
     default:
         LINALG_THROW("Unsupported enum type!");
@@ -256,21 +260,55 @@ bool cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decompositio
 }  // namespace
 
 template <>
-bool cholesky_decomposition<float, linalg_backend::NATIVE>::apply(
-    float* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
+bool cholesky_decomposition<float, linalg_backend::NATIVE>::apply(float* C,
+    linalg_int                                                         lda,
+    cholesky_decomposition_enum                                        type,
+    void* /*workspace*/,
+    size_t /*workspace_size*/,
+    int* info,
+    void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/native<float>");
     detail::check_cholesky_inputs(C, lda);
-    return cholesky_decomposition_apply_impl<float>(C, lda, type);
+    const linalg_int rc = cholesky_decomposition_apply_impl<float>(C, lda, type);
+    if (info != nullptr)
+    {
+        *info = static_cast<int>(rc);
+    }
+    return rc == 0;
 }
 
 template <>
-bool cholesky_decomposition<double, linalg_backend::NATIVE>::apply(
-    double* C, linalg_int lda, cholesky_decomposition_enum type, void* /*stream*/)
+bool cholesky_decomposition<double, linalg_backend::NATIVE>::apply(double* C,
+    linalg_int                                                          lda,
+    cholesky_decomposition_enum                                         type,
+    void* /*workspace*/,
+    size_t /*workspace_size*/,
+    int* info,
+    void* /*stream*/)
 {
     LINALG_SCOPE("cholesky_decomposition/native<double>");
     detail::check_cholesky_inputs(C, lda);
-    return cholesky_decomposition_apply_impl<double>(C, lda, type);
+    const linalg_int rc = cholesky_decomposition_apply_impl<double>(C, lda, type);
+    if (info != nullptr)
+    {
+        *info = static_cast<int>(rc);
+    }
+    return rc == 0;
+}
+
+template <>
+size_t cholesky_decomposition<float, linalg_backend::NATIVE>::workspace_size(
+    linalg_int /*lda*/, cholesky_decomposition_enum /*type*/)
+{
+    return 0;
+}
+
+template <>
+size_t cholesky_decomposition<double, linalg_backend::NATIVE>::workspace_size(
+    linalg_int /*lda*/, cholesky_decomposition_enum /*type*/)
+{
+    return 0;
 }
 
 // Reverse-mode adjoint of cholesky_decomposition<T, Backend>::apply_aad: no vendor

@@ -27,9 +27,10 @@ TEST(Math, InputValidation)
         using B = decltype(backend);
 
         EXPECT_ANY_THROW((linalg::cholesky_decomposition<double, B::value>::apply(
-            static_cast<double*>(nullptr), 3, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)));
+            static_cast<double*>(nullptr), 3, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR,
+            nullptr, 0, nullptr)));
         EXPECT_ANY_THROW((linalg::cholesky_decomposition<double, B::value>::apply(
-            buf.data(), 0, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR)));
+            buf.data(), 0, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr)));
 
         EXPECT_ANY_THROW((linalg::lu_decomposition<double, B::value>::apply(
             static_cast<double*>(nullptr), 3, pivot.data(), nullptr, 0)));
