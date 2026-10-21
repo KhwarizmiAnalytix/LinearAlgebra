@@ -3,6 +3,10 @@
 #include "include/common/linalg_macros.h"
 #include "include/common/linalg_profiler.h"
 
+#if LINALG_HAS_VECTORIZATION
+#include "src/common/packet.h"
+#endif
+
 namespace linalg::banded_operations
 {
 
@@ -29,35 +33,172 @@ void decomposition(std::vector<T>& output,
     {
         LINALG_SCOPE("banded/decomposition/3");
 
-        for (size_t l = 0; l < outer_dim; ++l)
+#if LINALG_HAS_VECTORIZATION
+        using P                = packet<T>;
+        constexpr size_t width = static_cast<size_t>(P::size);
+        // Same row-vs-lag reasoning as solve_decomposed above: the boundary row has no
+        // recurrence at all (always safe to pack), but the main loop's lag is exactly
+        // inner_dim, so packing it is only safe when width <= inner_dim. When inner_dim is
+        // too narrow for that but outer_dim is wide enough, pack across outer_dim instead
+        // (gather/scatter, stride n) -- see solve_decomposed and the _aad functions below.
+        const bool       can_vectorize_inner = width <= inner_dim;
+        const bool       can_vectorize_outer = !can_vectorize_inner && width <= outer_dim;
+        const linalg_int gstride             = static_cast<linalg_int>(n);
+
+        typename P::packet_t vzero, vone, vnegone;
+        P::set(T{0}, vzero);
+        P::set(T{1}, vone);
+        P::set(T{-1}, vnegone);
+#endif
+
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const auto offset = l * n;
+            auto* __restrict band0 = output.data();
+            auto* __restrict band1 = band0 + stride;
+            auto* __restrict band2 = band1 + stride;
 
-            auto* __restrict itr0 = output.data() + 0 * stride + offset;
-            auto* __restrict itr1 = output.data() + 1 * stride + offset;
-            auto* __restrict itr2 = output.data() + 2 * stride + offset;
-
-            for (size_t i = 0; i < inner_dim; ++i)
+            for (size_t row = 0; row < inner_dim; ++row)
             {
-                const T inv_diag = T{1} / (*itr1);
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + row;
 
-                *itr0++ = inv_diag;
-                *itr1++ = T{0};
-                *itr2++ *= inv_diag;
+                    typename P::packet_t v1, v2, vinv, vout;
+                    P::gather(band1 + base, gstride, v1);
+                    P::gather(band2 + base, gstride, v2);
+                    P::div(vone, v1, vinv);
+                    P::scatter(vinv, gstride, band0 + base);
+                    P::scatter(vzero, gstride, band1 + base);
+                    P::fma(v2, vinv, vzero, vout);
+                    P::scatter(vout, gstride, band2 + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base     = l * n + row;
+                    const T      inv_diag = T{1} / band1[base];
+
+                    band0[base] = inv_diag;
+                    band1[base] = T{0};
+                    band2[base] *= inv_diag;
+                }
             }
-            for (size_t i = inner_dim; i < n; ++i)
-            {
-                const auto tmp      = *(itr2 - inner_dim);
-                const auto alpha    = -*itr0;
-                const T    inv_diag = T{1} / (*itr1 + alpha * tmp);
 
-                *itr0++ = inv_diag;
-                *itr1++ = alpha * inv_diag;
-                *itr2++ *= inv_diag;
+            for (size_t row = inner_dim; row < n; ++row)
+            {
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + row;
+
+                    typename P::packet_t v0, v1, v2, vlag, vneg0, vsum, vinv, vout;
+                    P::gather(band0 + base, gstride, v0);
+                    P::gather(band1 + base, gstride, v1);
+                    P::gather(band2 + base, gstride, v2);
+                    P::gather(band2 + base - inner_dim, gstride, vlag);
+                    P::fma(v0, vnegone, vzero, vneg0);
+                    P::fma(vneg0, vlag, v1, vsum);
+                    P::div(vone, vsum, vinv);
+                    P::scatter(vinv, gstride, band0 + base);
+                    P::fma(vneg0, vinv, vzero, vout);
+                    P::scatter(vout, gstride, band1 + base);
+                    P::fma(v2, vinv, vzero, vout);
+                    P::scatter(vout, gstride, band2 + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base  = l * n + row;
+                    const auto   tmp   = band2[base - inner_dim];
+                    const auto   alpha = -band0[base];
+                    const T      inv_diag = T{1} / (band1[base] + alpha * tmp);
+
+                    band0[base] = inv_diag;
+                    band1[base] = alpha * inv_diag;
+                    band2[base] *= inv_diag;
+                }
+            }
+        }
+        else
+#endif
+        {
+            for (size_t l = 0; l < outer_dim; ++l)
+            {
+                const auto offset = l * n;
+
+                auto* __restrict itr0 = output.data() + offset;
+                auto* __restrict itr1 = itr0 + stride;
+                auto* __restrict itr2 = itr1 + stride;
+
+                size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+                for (; i + width <= inner_dim;
+                    i += width, itr0 += width, itr1 += width, itr2 += width)
+                {
+                    typename P::packet_t v1, v2, vinv, vout;
+                    P::loadu(itr1, v1);
+                    P::loadu(itr2, v2);
+                    P::div(vone, v1, vinv);
+                    P::storeu(vinv, itr0);
+                    P::storeu(vzero, itr1);
+                    P::fma(v2, vinv, vzero, vout);
+                    P::storeu(vout, itr2);
+                }
+#endif
+                for (; i < inner_dim; ++i)
+                {
+                    const T inv_diag = T{1} / (*itr1);
+
+                    *itr0++ = inv_diag;
+                    *itr1++ = T{0};
+                    *itr2++ *= inv_diag;
+                }
+
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; i + width <= n; i += width, itr0 += width, itr1 += width, itr2 += width)
+                    {
+                        typename P::packet_t v0, v1, v2, vlag, vneg0, vsum, vinv, vout;
+                        P::loadu(itr0, v0);
+                        P::loadu(itr1, v1);
+                        P::loadu(itr2, v2);
+                        P::loadu(itr2 - inner_dim, vlag);
+                        P::fma(v0, vnegone, vzero, vneg0);
+                        P::fma(vneg0, vlag, v1, vsum);
+                        P::div(vone, vsum, vinv);
+                        P::storeu(vinv, itr0);
+                        P::fma(vneg0, vinv, vzero, vout);
+                        P::storeu(vout, itr1);
+                        P::fma(v2, vinv, vzero, vout);
+                        P::storeu(vout, itr2);
+                    }
+                }
+#endif
+                for (; i < n; ++i)
+                {
+                    const auto tmp      = *(itr2 - inner_dim);
+                    const auto alpha    = -*itr0;
+                    const T    inv_diag = T{1} / (*itr1 + alpha * tmp);
+
+                    *itr0++ = inv_diag;
+                    *itr1++ = alpha * inv_diag;
+                    *itr2++ *= inv_diag;
+                }
             }
         }
 
-        for (size_t i = 0; i < stride; ++i)
+        size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+        for (; i + width <= stride; i += width)
+        {
+            typename P::packet_t v, vout;
+            P::loadu(output.data() + 2 * stride + i, v);
+            P::fma(v, vnegone, vzero, vout);
+            P::storeu(vout, output.data() + 2 * stride + i);
+        }
+#endif
+        for (; i < stride; ++i)
         {
             output[2 * stride + i] = -output[2 * stride + i];
         }
@@ -66,75 +207,416 @@ void decomposition(std::vector<T>& output,
     {
         LINALG_SCOPE("banded/decomposition/5");
 
-        for (size_t l = 0; l < outer_dim; ++l)
+        const auto two_inner_dim = 2 * inner_dim;
+
+#if LINALG_HAS_VECTORIZATION
+        using P                = packet<T>;
+        constexpr size_t width = static_cast<size_t>(P::size);
+        // Phase 1 has no recurrence (always safe). Phases 2 and 3 read lags of inner_dim and
+        // two_inner_dim, both >= inner_dim, so width <= inner_dim is the safety condition for
+        // both, same reasoning as solve_decomposed<T,5> above. When inner_dim is too narrow
+        // for that but outer_dim is wide enough, pack across outer_dim instead.
+        const bool       can_vectorize_inner = width <= inner_dim;
+        const bool       can_vectorize_outer = !can_vectorize_inner && width <= outer_dim;
+        const linalg_int gstride             = static_cast<linalg_int>(n);
+
+        typename P::packet_t vzero, vone, vnegone;
+        P::set(T{0}, vzero);
+        P::set(T{1}, vone);
+        P::set(T{-1}, vnegone);
+#endif
+
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const auto offset = l * n;
+            auto* __restrict band0 = output.data();
+            auto* __restrict band1 = band0 + stride;
+            auto* __restrict band2 = band1 + stride;
+            auto* __restrict band3 = band2 + stride;
+            auto* __restrict band4 = band3 + stride;
 
-            auto* itr0 = output.data() + 0 * stride + offset;
-            auto* itr1 = output.data() + 1 * stride + offset;
-            auto* itr2 = output.data() + 2 * stride + offset;
-            auto* itr3 = output.data() + 3 * stride + offset;
-            auto* itr4 = output.data() + 4 * stride + offset;
-
-            size_t i = 0;
-            for (; i < inner_dim; ++i)
+            for (size_t row = 0; row < inner_dim; ++row)
             {
-                const auto e = *itr0;
-                const auto c = *itr1;
-                const auto d = *itr2;
-                const auto a = *itr3;
-                const auto b = *itr4;
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + row;
 
-                const auto gamma = c;
-                const T    mu    = T{1} / d;
+                    typename P::packet_t ve, vc, vd, va, vb, vmu, vnegc, vnege, vout;
+                    P::gather(band0 + base, gstride, ve);
+                    P::gather(band1 + base, gstride, vc);
+                    P::gather(band2 + base, gstride, vd);
+                    P::gather(band3 + base, gstride, va);
+                    P::gather(band4 + base, gstride, vb);
 
-                *itr0++ = mu;
-                *itr1++ = -gamma * mu;
-                *itr2++ = -e * mu;
-                *itr3++ = a * mu;
-                *itr4++ = b * mu;
+                    P::div(vone, vd, vmu);
+                    P::scatter(vmu, gstride, band0 + base);
+
+                    P::fma(vc, vnegone, vzero, vnegc);
+                    P::fma(vnegc, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band1 + base);
+
+                    P::fma(ve, vnegone, vzero, vnege);
+                    P::fma(vnege, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band2 + base);
+
+                    P::fma(va, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band3 + base);
+
+                    P::fma(vb, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band4 + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * n + row;
+
+                    const auto e = band0[base];
+                    const auto c = band1[base];
+                    const auto d = band2[base];
+                    const auto a = band3[base];
+                    const auto b = band4[base];
+
+                    const auto gamma = c;
+                    const T    mu    = T{1} / d;
+
+                    band0[base] = mu;
+                    band1[base] = -gamma * mu;
+                    band2[base] = -e * mu;
+                    band3[base] = a * mu;
+                    band4[base] = b * mu;
+                }
             }
-            for (; i < 2 * inner_dim; ++i)
+
+            for (size_t row = inner_dim; row < two_inner_dim; ++row)
             {
-                const auto e = *itr0;
-                const auto c = *itr1;
-                const auto d = *itr2;
-                const auto a = *itr3;
-                const auto b = *itr4;
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + row;
 
-                const auto alpha = *(itr3 - inner_dim);
-                const auto beta  = *(itr4 - inner_dim);
+                    typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, vnegalpha, vdenom, vmu,
+                        vnegc, vnege, vnegbeta, vt3, vout;
+                    P::gather(band0 + base, gstride, ve);
+                    P::gather(band1 + base, gstride, vc);
+                    P::gather(band2 + base, gstride, vd);
+                    P::gather(band3 + base, gstride, va);
+                    P::gather(band4 + base, gstride, vb);
+                    P::gather(band3 + base - inner_dim, gstride, valpha);
+                    P::gather(band4 + base - inner_dim, gstride, vbeta);
 
-                const auto gamma = c;
-                const T    mu    = T{1} / (d - alpha * gamma);
+                    P::fma(valpha, vnegone, vzero, vnegalpha);
+                    P::fma(vnegalpha, vc, vd, vdenom);
+                    P::div(vone, vdenom, vmu);
+                    P::scatter(vmu, gstride, band0 + base);
 
-                *itr0++ = mu;
-                *itr1++ = -gamma * mu;
-                *itr2++ = -e * mu;
-                *itr3++ = (a - beta * gamma) * mu;
-                *itr4++ = b * mu;
+                    P::fma(vc, vnegone, vzero, vnegc);
+                    P::fma(vnegc, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band1 + base);
+
+                    P::fma(ve, vnegone, vzero, vnege);
+                    P::fma(vnege, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band2 + base);
+
+                    P::fma(vbeta, vnegone, vzero, vnegbeta);
+                    P::fma(vnegbeta, vc, va, vt3);
+                    P::fma(vt3, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band3 + base);
+
+                    P::fma(vb, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band4 + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * n + row;
+
+                    const auto e = band0[base];
+                    const auto c = band1[base];
+                    const auto d = band2[base];
+                    const auto a = band3[base];
+                    const auto b = band4[base];
+
+                    const auto alpha = band3[base - inner_dim];
+                    const auto beta  = band4[base - inner_dim];
+
+                    const auto gamma = c;
+                    const T    mu    = T{1} / (d - alpha * gamma);
+
+                    band0[base] = mu;
+                    band1[base] = -gamma * mu;
+                    band2[base] = -e * mu;
+                    band3[base] = (a - beta * gamma) * mu;
+                    band4[base] = b * mu;
+                }
             }
-            for (; i < n; ++i)
+
+            for (size_t row = two_inner_dim; row < n; ++row)
             {
-                const auto e = *itr0;
-                const auto c = *itr1;
-                const auto d = *itr2;
-                const auto a = *itr3;
-                const auto b = *itr4;
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + row;
 
-                const auto alpha      = *(itr3 - inner_dim);
-                const auto beta       = *(itr4 - inner_dim);
-                const auto alpha_prev = *(itr3 - 2 * inner_dim);
-                const auto beta_prev  = *(itr4 - 2 * inner_dim);
+                    typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, valpha_prev, vbeta_prev,
+                        vneg_alpha_prev, vgamma, vneg_alpha, vt1, vneg_beta_prev, vdenom, vmu,
+                        vneg_gamma, vnege, vneg_beta, vt3, vout;
+                    P::gather(band0 + base, gstride, ve);
+                    P::gather(band1 + base, gstride, vc);
+                    P::gather(band2 + base, gstride, vd);
+                    P::gather(band3 + base, gstride, va);
+                    P::gather(band4 + base, gstride, vb);
+                    P::gather(band3 + base - inner_dim, gstride, valpha);
+                    P::gather(band4 + base - inner_dim, gstride, vbeta);
+                    P::gather(band3 + base - two_inner_dim, gstride, valpha_prev);
+                    P::gather(band4 + base - two_inner_dim, gstride, vbeta_prev);
 
-                const auto gamma = c - alpha_prev * e;
-                const T    mu    = T{1} / (d - alpha * gamma - beta_prev * e);
+                    // gamma = c - alpha_prev * e
+                    P::fma(valpha_prev, vnegone, vzero, vneg_alpha_prev);
+                    P::fma(vneg_alpha_prev, ve, vc, vgamma);
 
-                *itr0++ = mu;
-                *itr1++ = -gamma * mu;
-                *itr2++ = -e * mu;
-                *itr3++ = (a - beta * gamma) * mu;
-                *itr4++ = b * mu;
+                    // mu = 1 / (d - alpha * gamma - beta_prev * e)
+                    P::fma(valpha, vnegone, vzero, vneg_alpha);
+                    P::fma(vneg_alpha, vgamma, vd, vt1);
+                    P::fma(vbeta_prev, vnegone, vzero, vneg_beta_prev);
+                    P::fma(vneg_beta_prev, ve, vt1, vdenom);
+                    P::div(vone, vdenom, vmu);
+                    P::scatter(vmu, gstride, band0 + base);
+
+                    P::fma(vgamma, vnegone, vzero, vneg_gamma);
+                    P::fma(vneg_gamma, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band1 + base);
+
+                    P::fma(ve, vnegone, vzero, vnege);
+                    P::fma(vnege, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band2 + base);
+
+                    // (a - beta * gamma) * mu
+                    P::fma(vbeta, vnegone, vzero, vneg_beta);
+                    P::fma(vneg_beta, vgamma, va, vt3);
+                    P::fma(vt3, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band3 + base);
+
+                    P::fma(vb, vmu, vzero, vout);
+                    P::scatter(vout, gstride, band4 + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * n + row;
+
+                    const auto e = band0[base];
+                    const auto c = band1[base];
+                    const auto d = band2[base];
+                    const auto a = band3[base];
+                    const auto b = band4[base];
+
+                    const auto alpha      = band3[base - inner_dim];
+                    const auto beta       = band4[base - inner_dim];
+                    const auto alpha_prev = band3[base - two_inner_dim];
+                    const auto beta_prev  = band4[base - two_inner_dim];
+
+                    const auto gamma = c - alpha_prev * e;
+                    const T    mu    = T{1} / (d - alpha * gamma - beta_prev * e);
+
+                    band0[base] = mu;
+                    band1[base] = -gamma * mu;
+                    band2[base] = -e * mu;
+                    band3[base] = (a - beta * gamma) * mu;
+                    band4[base] = b * mu;
+                }
+            }
+        }
+        else
+#endif
+        {
+            for (size_t l = 0; l < outer_dim; ++l)
+            {
+                const auto offset = l * n;
+
+                auto* __restrict itr0 = output.data() + offset;
+                auto* __restrict itr1 = itr0 + stride;
+                auto* __restrict itr2 = itr1 + stride;
+                auto* __restrict itr3 = itr2 + stride;
+                auto* __restrict itr4 = itr3 + stride;
+
+                size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+                for (; i + width <= inner_dim;
+                    i += width, itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+                {
+                    typename P::packet_t ve, vc, vd, va, vb, vmu, vnegc, vnege, vout;
+                    P::loadu(itr0, ve);
+                    P::loadu(itr1, vc);
+                    P::loadu(itr2, vd);
+                    P::loadu(itr3, va);
+                    P::loadu(itr4, vb);
+
+                    P::div(vone, vd, vmu);
+                    P::storeu(vmu, itr0);
+
+                    P::fma(vc, vnegone, vzero, vnegc);
+                    P::fma(vnegc, vmu, vzero, vout);
+                    P::storeu(vout, itr1);
+
+                    P::fma(ve, vnegone, vzero, vnege);
+                    P::fma(vnege, vmu, vzero, vout);
+                    P::storeu(vout, itr2);
+
+                    P::fma(va, vmu, vzero, vout);
+                    P::storeu(vout, itr3);
+
+                    P::fma(vb, vmu, vzero, vout);
+                    P::storeu(vout, itr4);
+                }
+#endif
+                for (; i < inner_dim; ++i)
+                {
+                    const auto e = *itr0;
+                    const auto c = *itr1;
+                    const auto d = *itr2;
+                    const auto a = *itr3;
+                    const auto b = *itr4;
+
+                    const auto gamma = c;
+                    const T    mu    = T{1} / d;
+
+                    *itr0++ = mu;
+                    *itr1++ = -gamma * mu;
+                    *itr2++ = -e * mu;
+                    *itr3++ = a * mu;
+                    *itr4++ = b * mu;
+                }
+
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; i + width <= two_inner_dim; i += width,
+                        itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+                    {
+                        typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, vnegalpha, vdenom, vmu,
+                            vnegc, vnege, vnegbeta, vt3, vout;
+                        P::loadu(itr0, ve);
+                        P::loadu(itr1, vc);
+                        P::loadu(itr2, vd);
+                        P::loadu(itr3, va);
+                        P::loadu(itr4, vb);
+                        P::loadu(itr3 - inner_dim, valpha);
+                        P::loadu(itr4 - inner_dim, vbeta);
+
+                        P::fma(valpha, vnegone, vzero, vnegalpha);
+                        P::fma(vnegalpha, vc, vd, vdenom);
+                        P::div(vone, vdenom, vmu);
+                        P::storeu(vmu, itr0);
+
+                        P::fma(vc, vnegone, vzero, vnegc);
+                        P::fma(vnegc, vmu, vzero, vout);
+                        P::storeu(vout, itr1);
+
+                        P::fma(ve, vnegone, vzero, vnege);
+                        P::fma(vnege, vmu, vzero, vout);
+                        P::storeu(vout, itr2);
+
+                        P::fma(vbeta, vnegone, vzero, vnegbeta);
+                        P::fma(vnegbeta, vc, va, vt3);
+                        P::fma(vt3, vmu, vzero, vout);
+                        P::storeu(vout, itr3);
+
+                        P::fma(vb, vmu, vzero, vout);
+                        P::storeu(vout, itr4);
+                    }
+                }
+#endif
+                for (; i < two_inner_dim; ++i)
+                {
+                    const auto e = *itr0;
+                    const auto c = *itr1;
+                    const auto d = *itr2;
+                    const auto a = *itr3;
+                    const auto b = *itr4;
+
+                    const auto alpha = *(itr3 - inner_dim);
+                    const auto beta  = *(itr4 - inner_dim);
+
+                    const auto gamma = c;
+                    const T    mu    = T{1} / (d - alpha * gamma);
+
+                    *itr0++ = mu;
+                    *itr1++ = -gamma * mu;
+                    *itr2++ = -e * mu;
+                    *itr3++ = (a - beta * gamma) * mu;
+                    *itr4++ = b * mu;
+                }
+
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; i + width <= n; i += width,
+                        itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+                    {
+                        typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, valpha_prev, vbeta_prev,
+                            vneg_alpha_prev, vgamma, vneg_alpha, vt1, vneg_beta_prev, vdenom, vmu,
+                            vneg_gamma, vnege, vneg_beta, vt3, vout;
+                        P::loadu(itr0, ve);
+                        P::loadu(itr1, vc);
+                        P::loadu(itr2, vd);
+                        P::loadu(itr3, va);
+                        P::loadu(itr4, vb);
+                        P::loadu(itr3 - inner_dim, valpha);
+                        P::loadu(itr4 - inner_dim, vbeta);
+                        P::loadu(itr3 - two_inner_dim, valpha_prev);
+                        P::loadu(itr4 - two_inner_dim, vbeta_prev);
+
+                        // gamma = c - alpha_prev * e
+                        P::fma(valpha_prev, vnegone, vzero, vneg_alpha_prev);
+                        P::fma(vneg_alpha_prev, ve, vc, vgamma);
+
+                        // mu = 1 / (d - alpha * gamma - beta_prev * e)
+                        P::fma(valpha, vnegone, vzero, vneg_alpha);
+                        P::fma(vneg_alpha, vgamma, vd, vt1);
+                        P::fma(vbeta_prev, vnegone, vzero, vneg_beta_prev);
+                        P::fma(vneg_beta_prev, ve, vt1, vdenom);
+                        P::div(vone, vdenom, vmu);
+                        P::storeu(vmu, itr0);
+
+                        P::fma(vgamma, vnegone, vzero, vneg_gamma);
+                        P::fma(vneg_gamma, vmu, vzero, vout);
+                        P::storeu(vout, itr1);
+
+                        P::fma(ve, vnegone, vzero, vnege);
+                        P::fma(vnege, vmu, vzero, vout);
+                        P::storeu(vout, itr2);
+
+                        // (a - beta * gamma) * mu
+                        P::fma(vbeta, vnegone, vzero, vneg_beta);
+                        P::fma(vneg_beta, vgamma, va, vt3);
+                        P::fma(vt3, vmu, vzero, vout);
+                        P::storeu(vout, itr3);
+
+                        P::fma(vb, vmu, vzero, vout);
+                        P::storeu(vout, itr4);
+                    }
+                }
+#endif
+                for (; i < n; ++i)
+                {
+                    const auto e = *itr0;
+                    const auto c = *itr1;
+                    const auto d = *itr2;
+                    const auto a = *itr3;
+                    const auto b = *itr4;
+
+                    const auto alpha      = *(itr3 - inner_dim);
+                    const auto beta       = *(itr4 - inner_dim);
+                    const auto alpha_prev = *(itr3 - 2 * inner_dim);
+                    const auto beta_prev  = *(itr4 - 2 * inner_dim);
+
+                    const auto gamma = c - alpha_prev * e;
+                    const T    mu    = T{1} / (d - alpha * gamma - beta_prev * e);
+
+                    *itr0++ = mu;
+                    *itr1++ = -gamma * mu;
+                    *itr2++ = -e * mu;
+                    *itr3++ = (a - beta * gamma) * mu;
+                    *itr4++ = b * mu;
+                }
             }
         }
     }
@@ -166,24 +648,124 @@ void solve_decomposed(std::vector<T>& x,
         }
 
         auto* __restrict itr_x      = x.data();
-        auto const* __restrict itr1 = decomposed.data() + 1 * stride;
-        auto const* __restrict itr2 = decomposed.data() + 2 * stride;
+        auto const* __restrict itr1 = decomposed.data() + stride;
+        auto const* __restrict itr2 = itr1 + stride;
 
-        for (size_t l = 0; l < outer_dim; ++l)
+#if LINALG_HAS_VECTORIZATION
+        using P                = packet<T>;
+        constexpr size_t width = static_cast<size_t>(P::size);
+        // Lanes 0..inner_dim-1 within a row are independent interleaved systems (see the
+        // layout note in banded_operations.h); the only recurrence is row-to-row, at a fixed
+        // lag of inner_dim (forward sweep) or -inner_dim (backward sweep). A packet of `width`
+        // consecutive elements only ever reads a row that is strictly outside its own write
+        // range when width <= inner_dim, so that is the condition under which packing across
+        // inner_dim is safe. When inner_dim is too narrow for that but outer_dim is wide
+        // enough, pack across outer_dim instead (gather/scatter, stride n): different l groups
+        // never alias, so that axis has no such constraint and the row recurrence just stays
+        // serial, exactly like the _aad functions below.
+        const bool       can_vectorize_inner = width <= inner_dim;
+        const bool       can_vectorize_outer = !can_vectorize_inner && width <= outer_dim;
+        const linalg_int gstride             = static_cast<linalg_int>(n);
+#endif
+
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const auto offset               = l * n;
-            auto* __restrict tmp            = itr_x + offset;
-            auto const* __restrict tmp_itr1 = itr1 + offset;
-            auto const* __restrict tmp_itr2 = itr2 + offset;
-
-            for (size_t i = inner_dim; i < n; ++i)
+            size_t r = inner_dim;
+            for (; r < n; ++r)
             {
-                tmp[i] += tmp_itr1[i] * tmp[i - inner_dim];
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + r;
+
+                    typename P::packet_t va, vprev, vcur, vout;
+                    P::gather(itr1 + base, gstride, va);
+                    P::gather(itr_x + base - inner_dim, gstride, vprev);
+                    P::gather(itr_x + base, gstride, vcur);
+                    P::fma(va, vprev, vcur, vout);
+                    P::scatter(vout, gstride, itr_x + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * n + r;
+                    itr_x[base] += itr1[base] * itr_x[base - inner_dim];
+                }
             }
 
-            for (int j = end; j >= 0; --j)
+            int rj = end;
+            for (; rj >= 0; --rj)
             {
-                tmp[j] += tmp_itr2[j] * tmp[j + inner_dim];
+                size_t l = 0;
+                for (; l + width <= outer_dim; l += width)
+                {
+                    const size_t base = l * n + static_cast<size_t>(rj);
+
+                    typename P::packet_t va, vnext, vcur, vout;
+                    P::gather(itr2 + base, gstride, va);
+                    P::gather(itr_x + base + inner_dim, gstride, vnext);
+                    P::gather(itr_x + base, gstride, vcur);
+                    P::fma(va, vnext, vcur, vout);
+                    P::scatter(vout, gstride, itr_x + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * n + static_cast<size_t>(rj);
+                    itr_x[base] += itr2[base] * itr_x[base + inner_dim];
+                }
+            }
+        }
+        else
+#endif
+        {
+            for (size_t l = 0; l < outer_dim; ++l)
+            {
+                const auto offset               = l * n;
+                auto* __restrict tmp            = itr_x + offset;
+                auto const* __restrict tmp_itr1 = itr1 + offset;
+                auto const* __restrict tmp_itr2 = itr2 + offset;
+
+                size_t i = inner_dim;
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; i + width <= n; i += width)
+                    {
+                        typename P::packet_t va, vprev, vcur, vout;
+                        P::loadu(tmp_itr1 + i, va);
+                        P::loadu(tmp + i - inner_dim, vprev);
+                        P::loadu(tmp + i, vcur);
+                        P::fma(va, vprev, vcur, vout);
+                        P::storeu(vout, tmp + i);
+                    }
+                }
+#endif
+                for (; i < n; ++i)
+                {
+                    tmp[i] += tmp_itr1[i] * tmp[i - inner_dim];
+                }
+
+                int j = end;
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; j - static_cast<int>(width) + 1 >= 0; j -= static_cast<int>(width))
+                    {
+                        const size_t base = static_cast<size_t>(j) - width + 1;
+
+                        typename P::packet_t va, vnext, vcur, vout;
+                        P::loadu(tmp_itr2 + base, va);
+                        P::loadu(tmp + base + inner_dim, vnext);
+                        P::loadu(tmp + base, vcur);
+                        P::fma(va, vnext, vcur, vout);
+                        P::storeu(vout, tmp + base);
+                    }
+                }
+#endif
+                for (; j >= 0; --j)
+                {
+                    tmp[j] += tmp_itr2[j] * tmp[j + inner_dim];
+                }
             }
         }
     }
@@ -209,50 +791,238 @@ void solve_decomposed(std::vector<T>& x,
             x[i] *= decomposed[0 * stride + i];
         }
 
-        for (size_t l = 0; l < outer_dim; ++l)
+#if LINALG_HAS_VECTORIZATION
+        using P                = packet<T>;
+        constexpr int width    = P::size;
+        // Same safety condition as the 3-band case above: a packet is only safe across a
+        // recurrence lag of inner_dim (or two_inner_dim, which is always >= inner_dim) when
+        // width <= inner_dim. When inner_dim is too narrow for that but outer_dim is wide
+        // enough, pack across outer_dim instead (gather/scatter, stride n) -- see the 3-band
+        // case and the _aad functions below for the full rationale.
+        const bool can_vectorize_inner = width <= static_cast<int>(inner_dim);
+        const bool can_vectorize_outer =
+            !can_vectorize_inner && static_cast<size_t>(width) <= outer_dim;
+        const linalg_int gstride = static_cast<linalg_int>(n);
+
+        typename P::packet_t vzero, vnegone;
+        P::set(T{0}, vzero);
+        P::set(T{-1}, vnegone);
+#endif
+
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const auto offset = l * static_cast<size_t>(n);
+            auto const* __restrict band1 = decomposed.data() + 1 * stride;
+            auto const* __restrict band2 = band1 + stride;
+            auto const* __restrict band3 = band2 + stride;
+            auto const* __restrict band4 = band3 + stride;
 
-            auto*       itr_x = x.data() + offset;
-            auto const* itr1  = decomposed.data() + 1 * stride + offset;
-            auto const* itr2  = decomposed.data() + 2 * stride + offset;
-            auto const* itr3  = decomposed.data() + 3 * stride + (offset + static_cast<size_t>(end_1));
-            auto const* itr4  = decomposed.data() + 4 * stride + (offset + static_cast<size_t>(end_2));
-
-            auto* itr_x_l = itr_x;
-
-            int i = static_cast<int>(inner_dim);
-            itr_x_l += inner_dim;
-
-            auto const* itr1_l = itr1 + inner_dim;
-            auto const* itr2_l = itr2 + inner_dim;
-
-            for (; i < two_inner_dim; ++i, ++itr_x_l, ++itr1_l, ++itr2_l)
+            int idx = static_cast<int>(inner_dim);
+            for (; idx < two_inner_dim; ++idx)
             {
-                *itr_x_l += *itr1_l * *(itr_x_l - inner_dim);
+                size_t l = 0;
+                for (; l + static_cast<size_t>(width) <= outer_dim; l += static_cast<size_t>(width))
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+
+                    typename P::packet_t va, vprev, vcur, vout;
+                    P::gather(band1 + base, gstride, va);
+                    P::gather(x.data() + base - inner_dim, gstride, vprev);
+                    P::gather(x.data() + base, gstride, vcur);
+                    P::fma(va, vprev, vcur, vout);
+                    P::scatter(vout, gstride, x.data() + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+                    x[base] += band1[base] * x[base - inner_dim];
+                }
             }
 
-            for (; i < n; ++i, ++itr_x_l, ++itr1_l, ++itr2_l)
+            for (; idx < n; ++idx)
             {
-                *itr_x_l += *itr1_l * *(itr_x_l - inner_dim) + *itr2_l * *(itr_x_l - two_inner_dim);
+                size_t l = 0;
+                for (; l + static_cast<size_t>(width) <= outer_dim; l += static_cast<size_t>(width))
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+
+                    typename P::packet_t v1, v2, vprev1, vprev2, vcur, vs, vout;
+                    P::gather(band1 + base, gstride, v1);
+                    P::gather(band2 + base, gstride, v2);
+                    P::gather(x.data() + base - inner_dim, gstride, vprev1);
+                    P::gather(x.data() + base - static_cast<size_t>(two_inner_dim), gstride, vprev2);
+                    P::gather(x.data() + base, gstride, vcur);
+                    P::fma(v2, vprev2, vcur, vs);
+                    P::fma(v1, vprev1, vs, vout);
+                    P::scatter(vout, gstride, x.data() + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+                    x[base] += band1[base] * x[base - inner_dim] +
+                               band2[base] * x[base - static_cast<size_t>(two_inner_dim)];
+                }
             }
 
-            itr_x_l -= static_cast<int>(inner_dim) + 1;
-            i -= static_cast<int>(inner_dim) + 1;
-
-            auto const* itr3_l = itr3;
-            auto const* itr4_l = itr4;
-
-            for (int k = static_cast<int>(inner_dim) - 1; k >= 0; --k, --itr_x_l, --itr3_l)
+            idx = n - two_inner_dim;
+            for (; idx <= end_1; ++idx)
             {
-                *itr_x_l -= *itr3_l * *(itr_x_l + inner_dim);
+                size_t l = 0;
+                for (; l + static_cast<size_t>(width) <= outer_dim; l += static_cast<size_t>(width))
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+
+                    typename P::packet_t v3, vnext, vcur, vs, vout;
+                    P::gather(band3 + base, gstride, v3);
+                    P::gather(x.data() + base + inner_dim, gstride, vnext);
+                    P::gather(x.data() + base, gstride, vcur);
+                    P::fma(v3, vnext, vzero, vs);
+                    P::fma(vs, vnegone, vcur, vout);
+                    P::scatter(vout, gstride, x.data() + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+                    x[base] -= band3[base] * x[base + inner_dim];
+                }
             }
 
-            i -= static_cast<int>(inner_dim);
-
-            for (; i >= 0; --i, --itr_x_l, --itr3_l, --itr4_l)
+            idx = end_2;
+            for (; idx >= 0; --idx)
             {
-                *itr_x_l -= *itr3_l * *(itr_x_l + inner_dim) + *itr4_l * *(itr_x_l + two_inner_dim);
+                size_t l = 0;
+                for (; l + static_cast<size_t>(width) <= outer_dim; l += static_cast<size_t>(width))
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+
+                    typename P::packet_t v3, v4, vnext1, vnext2, vcur, vs, vout;
+                    P::gather(band3 + base, gstride, v3);
+                    P::gather(band4 + base, gstride, v4);
+                    P::gather(x.data() + base + inner_dim, gstride, vnext1);
+                    P::gather(x.data() + base + static_cast<size_t>(two_inner_dim), gstride, vnext2);
+                    P::gather(x.data() + base, gstride, vcur);
+                    P::fma(v4, vnext2, vzero, vs);
+                    P::fma(v3, vnext1, vs, vs);
+                    P::fma(vs, vnegone, vcur, vout);
+                    P::scatter(vout, gstride, x.data() + base);
+                }
+                for (; l < outer_dim; ++l)
+                {
+                    const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
+                    x[base] -= band3[base] * x[base + inner_dim] +
+                               band4[base] * x[base + static_cast<size_t>(two_inner_dim)];
+                }
+            }
+        }
+        else
+#endif
+        {
+            for (size_t l = 0; l < outer_dim; ++l)
+            {
+                const auto offset = l * static_cast<size_t>(n);
+
+                auto* __restrict itr_x  = x.data() + offset;
+                auto const* __restrict band1 = decomposed.data() + 1 * stride + offset;
+                auto const* __restrict band2 = band1 + stride;
+                auto const* __restrict band3 = band2 + stride;
+                auto const* __restrict band4 = band3 + stride;
+
+                // Forward sweep: idx in [inner_dim, two_inner_dim) depends only on
+                // idx - inner_dim; idx in [two_inner_dim, n) also depends on idx -
+                // two_inner_dim. Both lags are >= inner_dim.
+                int idx = static_cast<int>(inner_dim);
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; idx + width <= two_inner_dim; idx += width)
+                    {
+                        typename P::packet_t va, vprev, vcur, vout;
+                        P::loadu(band1 + idx, va);
+                        P::loadu(itr_x + idx - static_cast<int>(inner_dim), vprev);
+                        P::loadu(itr_x + idx, vcur);
+                        P::fma(va, vprev, vcur, vout);
+                        P::storeu(vout, itr_x + idx);
+                    }
+                }
+#endif
+                for (; idx < two_inner_dim; ++idx)
+                {
+                    itr_x[idx] += band1[idx] * itr_x[idx - static_cast<int>(inner_dim)];
+                }
+
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; idx + width <= n; idx += width)
+                    {
+                        typename P::packet_t v1, v2, vprev1, vprev2, vcur, vs, vout;
+                        P::loadu(band1 + idx, v1);
+                        P::loadu(band2 + idx, v2);
+                        P::loadu(itr_x + idx - static_cast<int>(inner_dim), vprev1);
+                        P::loadu(itr_x + idx - two_inner_dim, vprev2);
+                        P::loadu(itr_x + idx, vcur);
+                        P::fma(v2, vprev2, vcur, vs);
+                        P::fma(v1, vprev1, vs, vout);
+                        P::storeu(vout, itr_x + idx);
+                    }
+                }
+#endif
+                for (; idx < n; ++idx)
+                {
+                    itr_x[idx] += band1[idx] * itr_x[idx - static_cast<int>(inner_dim)] +
+                                  band2[idx] * itr_x[idx - two_inner_dim];
+                }
+
+                // Backward sweep. idx in [n - two_inner_dim, end_1] reads only the untouched
+                // boundary rows (idx + inner_dim is never written by this sweep), so those
+                // entries are mutually independent of each other and can vectorize
+                // unconditionally. idx in [0, end_2] is a genuine backward recurrence with
+                // lags inner_dim and two_inner_dim, so it needs the same width <= inner_dim
+                // guard, processed from high idx to low idx.
+                idx = n - two_inner_dim;
+#if LINALG_HAS_VECTORIZATION
+                for (; idx + width <= end_1 + 1; idx += width)
+                {
+                    typename P::packet_t v3, vnext, vcur, vs, vout;
+                    P::loadu(band3 + idx, v3);
+                    P::loadu(itr_x + idx + static_cast<int>(inner_dim), vnext);
+                    P::loadu(itr_x + idx, vcur);
+                    P::fma(v3, vnext, vzero, vs);
+                    P::fma(vs, vnegone, vcur, vout);
+                    P::storeu(vout, itr_x + idx);
+                }
+#endif
+                for (; idx <= end_1; ++idx)
+                {
+                    itr_x[idx] -= band3[idx] * itr_x[idx + static_cast<int>(inner_dim)];
+                }
+
+                idx = end_2;
+#if LINALG_HAS_VECTORIZATION
+                if (can_vectorize_inner)
+                {
+                    for (; idx - width + 1 >= 0; idx -= width)
+                    {
+                        const int base = idx - width + 1;
+
+                        typename P::packet_t v3, v4, vnext1, vnext2, vcur, vs, vout;
+                        P::loadu(band3 + base, v3);
+                        P::loadu(band4 + base, v4);
+                        P::loadu(itr_x + base + static_cast<int>(inner_dim), vnext1);
+                        P::loadu(itr_x + base + two_inner_dim, vnext2);
+                        P::loadu(itr_x + base, vcur);
+                        P::fma(v4, vnext2, vzero, vs);
+                        P::fma(v3, vnext1, vs, vs);
+                        P::fma(vs, vnegone, vcur, vout);
+                        P::storeu(vout, itr_x + base);
+                    }
+                }
+#endif
+                for (; idx >= 0; --idx)
+                {
+                    itr_x[idx] -= band3[idx] * itr_x[idx + static_cast<int>(inner_dim)] +
+                                  band4[idx] * itr_x[idx + two_inner_dim];
+                }
             }
         }
     }
@@ -279,17 +1049,47 @@ void multiply(std::vector<T>& result,
         const auto n      = inner_dim * dim;
         const auto stride = outer_dim * n;
 
+#if LINALG_HAS_VECTORIZATION
+        using P                = packet<T>;
+        constexpr size_t width = static_cast<size_t>(P::size);
+
+        typename P::packet_t vzero, vtm;
+        P::set(T{0}, vzero);
+        P::set(time_multiplier, vtm);
+#endif
+
         for (size_t l = 0; l < outer_dim; ++l)
         {
             const auto offset = l * n;
 
             auto* __restrict itr           = result.data() + offset;
             auto const* __restrict itr_tmp = in.data() + offset;
-            auto const* __restrict itr0    = mat.data() + 0 * stride + offset;
-            auto const* __restrict itr1    = mat.data() + 1 * stride + offset;
-            auto const* __restrict itr2    = mat.data() + 2 * stride + offset;
+            auto const* __restrict itr0    = mat.data() + offset;
+            auto const* __restrict itr1    = itr0 + stride;
+            auto const* __restrict itr2    = itr1 + stride;
 
+            // Pure stencil accumulation (result/in/mat never alias each other and nothing fed
+            // back into `in` or the mat bands), so unlike decomposition/solve_decomposed above
+            // there is no recurrence hazard at all here: every row position is fully
+            // independent and can be packed regardless of how wide the packet is relative to
+            // inner_dim.
             size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+            for (; i + width <= inner_dim; i += width, itr += width, itr_tmp += width, itr0 += width,
+                itr1 += width, itr2 += width)
+            {
+                typename P::packet_t vb, vc, vx0, vx1, vr, vs, vout;
+                P::loadu(itr1, vb);
+                P::loadu(itr2, vc);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr_tmp + inner_dim, vx1);
+                P::loadu(itr, vr);
+                P::fma(vc, vx1, vzero, vs);
+                P::fma(vb, vx0, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
             for (; i < inner_dim; ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
             {
                 const auto b = *itr1;
@@ -298,6 +1098,25 @@ void multiply(std::vector<T>& result,
                 *itr += time_multiplier * (b * *itr_tmp + c * *(itr_tmp + inner_dim));
             }
 
+#if LINALG_HAS_VECTORIZATION
+            for (; i + width <= n - inner_dim; i += width, itr += width, itr_tmp += width,
+                itr0 += width, itr1 += width, itr2 += width)
+            {
+                typename P::packet_t va, vb, vc, vxm1, vx0, vx1, vr, vs, vout;
+                P::loadu(itr0, va);
+                P::loadu(itr1, vb);
+                P::loadu(itr2, vc);
+                P::loadu(itr_tmp - inner_dim, vxm1);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr_tmp + inner_dim, vx1);
+                P::loadu(itr, vr);
+                P::fma(vc, vx1, vzero, vs);
+                P::fma(vb, vx0, vs, vs);
+                P::fma(va, vxm1, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
             for (; i < n - inner_dim; ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
             {
                 const auto a = *itr0;
@@ -308,6 +1127,22 @@ void multiply(std::vector<T>& result,
                         (a * *(itr_tmp - inner_dim) + b * *itr_tmp + c * *(itr_tmp + inner_dim));
             }
 
+#if LINALG_HAS_VECTORIZATION
+            for (; i + width <= n; i += width, itr += width, itr_tmp += width, itr0 += width,
+                itr1 += width, itr2 += width)
+            {
+                typename P::packet_t va, vb, vxm1, vx0, vr, vs, vout;
+                P::loadu(itr0, va);
+                P::loadu(itr1, vb);
+                P::loadu(itr_tmp - inner_dim, vxm1);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr, vr);
+                P::fma(vb, vx0, vzero, vs);
+                P::fma(va, vxm1, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
             for (; i < n; ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
             {
                 const auto a = *itr0;
@@ -325,6 +1160,15 @@ void multiply(std::vector<T>& result,
         const auto two_inner_dim = 2 * inner_dim;
         const auto stride        = outer_dim * n;
 
+#if LINALG_HAS_VECTORIZATION
+        using P                = packet<T>;
+        constexpr size_t width = static_cast<size_t>(P::size);
+
+        typename P::packet_t vzero, vtm;
+        P::set(T{0}, vzero);
+        P::set(time_multiplier, vtm);
+#endif
+
         // The unrolled block loop below assumes 5 distinct band-position regions (first/second/
         // middle/second-to-last/last block, each inner_dim wide), which only partitions a row of
         // n = dim * inner_dim elements correctly when dim >= 4. For dim < 4 the "second" and
@@ -334,30 +1178,139 @@ void multiply(std::vector<T>& result,
             for (size_t l = 0; l < outer_dim; ++l)
             {
                 const auto offset = l * n;
+
+                const T* __restrict band0 = mat.data() + offset;
+                const T* __restrict band1 = band0 + stride;
+                const T* __restrict band2 = band1 + stride;
+                const T* __restrict band3 = band2 + stride;
+                const T* __restrict band4 = band3 + stride;
+
+                // Which bands apply depends only on b, not p, so check each condition once per
+                // b (hoisting the `for p` loop inside each `if` instead of the other way
+                // around) rather than inner_dim times per b. Each resulting p-loop is a plain,
+                // branch-free elementwise accumulation over contiguous idx, which also leaves
+                // the auto-vectorizer a clean loop to work with instead of a branchy one.
                 for (size_t b = 0; b < dim; ++b)
                 {
-                    for (size_t p = 0; p < inner_dim; ++p)
+                    const size_t row = b * inner_dim;
+
+                    if (b >= 2)
                     {
-                        const size_t idx  = b * inner_dim + p;
-                        T            acc  = T{0};
-                        if (b >= 2)
+                        size_t p = 0;
+#if LINALG_HAS_VECTORIZATION
+                        for (; p + width <= inner_dim; p += width)
                         {
-                            acc += mat[0 * stride + offset + idx] * in[offset + idx - two_inner_dim];
+                            const size_t idx = row + p;
+
+                            typename P::packet_t vband, vin, vr, vprod, vout;
+                            P::loadu(band0 + idx, vband);
+                            P::loadu(in.data() + offset + idx - two_inner_dim, vin);
+                            P::loadu(result.data() + offset + idx, vr);
+                            P::fma(vband, vin, vzero, vprod);
+                            P::fma(vtm, vprod, vr, vout);
+                            P::storeu(vout, result.data() + offset + idx);
                         }
-                        if (b >= 1)
+#endif
+                        for (; p < inner_dim; ++p)
                         {
-                            acc += mat[1 * stride + offset + idx] * in[offset + idx - inner_dim];
+                            const size_t idx = row + p;
+                            result[offset + idx] +=
+                                time_multiplier * band0[idx] * in[offset + idx - two_inner_dim];
                         }
-                        acc += mat[2 * stride + offset + idx] * in[offset + idx];
-                        if (b + 1 < dim)
+                    }
+                    if (b >= 1)
+                    {
+                        size_t p = 0;
+#if LINALG_HAS_VECTORIZATION
+                        for (; p + width <= inner_dim; p += width)
                         {
-                            acc += mat[3 * stride + offset + idx] * in[offset + idx + inner_dim];
+                            const size_t idx = row + p;
+
+                            typename P::packet_t vband, vin, vr, vprod, vout;
+                            P::loadu(band1 + idx, vband);
+                            P::loadu(in.data() + offset + idx - inner_dim, vin);
+                            P::loadu(result.data() + offset + idx, vr);
+                            P::fma(vband, vin, vzero, vprod);
+                            P::fma(vtm, vprod, vr, vout);
+                            P::storeu(vout, result.data() + offset + idx);
                         }
-                        if (b + 2 < dim)
+#endif
+                        for (; p < inner_dim; ++p)
                         {
-                            acc += mat[4 * stride + offset + idx] * in[offset + idx + two_inner_dim];
+                            const size_t idx = row + p;
+                            result[offset + idx] +=
+                                time_multiplier * band1[idx] * in[offset + idx - inner_dim];
                         }
-                        result[offset + idx] += time_multiplier * acc;
+                    }
+                    {
+                        size_t p = 0;
+#if LINALG_HAS_VECTORIZATION
+                        for (; p + width <= inner_dim; p += width)
+                        {
+                            const size_t idx = row + p;
+
+                            typename P::packet_t vband, vin, vr, vprod, vout;
+                            P::loadu(band2 + idx, vband);
+                            P::loadu(in.data() + offset + idx, vin);
+                            P::loadu(result.data() + offset + idx, vr);
+                            P::fma(vband, vin, vzero, vprod);
+                            P::fma(vtm, vprod, vr, vout);
+                            P::storeu(vout, result.data() + offset + idx);
+                        }
+#endif
+                        for (; p < inner_dim; ++p)
+                        {
+                            const size_t idx = row + p;
+                            result[offset + idx] += time_multiplier * band2[idx] * in[offset + idx];
+                        }
+                    }
+                    if (b + 1 < dim)
+                    {
+                        size_t p = 0;
+#if LINALG_HAS_VECTORIZATION
+                        for (; p + width <= inner_dim; p += width)
+                        {
+                            const size_t idx = row + p;
+
+                            typename P::packet_t vband, vin, vr, vprod, vout;
+                            P::loadu(band3 + idx, vband);
+                            P::loadu(in.data() + offset + idx + inner_dim, vin);
+                            P::loadu(result.data() + offset + idx, vr);
+                            P::fma(vband, vin, vzero, vprod);
+                            P::fma(vtm, vprod, vr, vout);
+                            P::storeu(vout, result.data() + offset + idx);
+                        }
+#endif
+                        for (; p < inner_dim; ++p)
+                        {
+                            const size_t idx = row + p;
+                            result[offset + idx] +=
+                                time_multiplier * band3[idx] * in[offset + idx + inner_dim];
+                        }
+                    }
+                    if (b + 2 < dim)
+                    {
+                        size_t p = 0;
+#if LINALG_HAS_VECTORIZATION
+                        for (; p + width <= inner_dim; p += width)
+                        {
+                            const size_t idx = row + p;
+
+                            typename P::packet_t vband, vin, vr, vprod, vout;
+                            P::loadu(band4 + idx, vband);
+                            P::loadu(in.data() + offset + idx + two_inner_dim, vin);
+                            P::loadu(result.data() + offset + idx, vr);
+                            P::fma(vband, vin, vzero, vprod);
+                            P::fma(vtm, vprod, vr, vout);
+                            P::storeu(vout, result.data() + offset + idx);
+                        }
+#endif
+                        for (; p < inner_dim; ++p)
+                        {
+                            const size_t idx = row + p;
+                            result[offset + idx] +=
+                                time_multiplier * band4[idx] * in[offset + idx + two_inner_dim];
+                        }
                     }
                 }
             }
@@ -368,15 +1321,36 @@ void multiply(std::vector<T>& result,
         {
             const auto offset = l * n;
 
-            auto*       itr     = result.data() + offset;
-            auto const* itr_tmp = in.data() + offset;
-            auto const* itr0    = mat.data() + 0 * stride + offset;
-            auto const* itr1    = mat.data() + 1 * stride + offset;
-            auto const* itr2    = mat.data() + 2 * stride + offset;
-            auto const* itr3    = mat.data() + 3 * stride + offset;
-            auto const* itr4    = mat.data() + 4 * stride + offset;
+            auto* __restrict itr        = result.data() + offset;
+            auto const* __restrict itr_tmp = in.data() + offset;
+            auto const* __restrict itr0 = mat.data() + offset;
+            auto const* __restrict itr1 = itr0 + stride;
+            auto const* __restrict itr2 = itr1 + stride;
+            auto const* __restrict itr3 = itr2 + stride;
+            auto const* __restrict itr4 = itr3 + stride;
 
+            // Same pure-stencil reasoning as the 3-band case: result/in/mat never alias, so
+            // every output position is independent and any packet width is safe.
             size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+            for (; i + width <= inner_dim;
+                i += width, itr += width, itr_tmp += width, itr2 += width, itr3 += width, itr4 += width)
+            {
+                typename P::packet_t v2, v3, v4, vx0, vx1, vx2, vr, vs, vout;
+                P::loadu(itr2, v2);
+                P::loadu(itr3, v3);
+                P::loadu(itr4, v4);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr_tmp + inner_dim, vx1);
+                P::loadu(itr_tmp + two_inner_dim, vx2);
+                P::loadu(itr, vr);
+                P::fma(v4, vx2, vzero, vs);
+                P::fma(v3, vx1, vs, vs);
+                P::fma(v2, vx0, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
             for (; i < inner_dim; ++i, ++itr, ++itr_tmp, ++itr2, ++itr3, ++itr4)
             {
                 *itr += time_multiplier * (*itr2 * *itr_tmp + *itr3 * *(itr_tmp + inner_dim) +
@@ -384,6 +1358,28 @@ void multiply(std::vector<T>& result,
             }
 
             itr1 += inner_dim;
+#if LINALG_HAS_VECTORIZATION
+            for (; i + width <= two_inner_dim; i += width, itr += width,
+                itr_tmp += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+            {
+                typename P::packet_t v1, v2, v3, v4, vxm1, vx0, vx1, vx2, vr, vs, vout;
+                P::loadu(itr1, v1);
+                P::loadu(itr2, v2);
+                P::loadu(itr3, v3);
+                P::loadu(itr4, v4);
+                P::loadu(itr_tmp - inner_dim, vxm1);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr_tmp + inner_dim, vx1);
+                P::loadu(itr_tmp + two_inner_dim, vx2);
+                P::loadu(itr, vr);
+                P::fma(v4, vx2, vzero, vs);
+                P::fma(v3, vx1, vs, vs);
+                P::fma(v2, vx0, vs, vs);
+                P::fma(v1, vxm1, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
             for (; i < two_inner_dim; ++i, ++itr, ++itr_tmp, ++itr1, ++itr2, ++itr3, ++itr4)
             {
                 *itr += time_multiplier *
@@ -392,6 +1388,31 @@ void multiply(std::vector<T>& result,
             }
 
             itr0 += two_inner_dim;
+#if LINALG_HAS_VECTORIZATION
+            for (; i + width <= n - two_inner_dim; i += width, itr += width, itr_tmp += width,
+                itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+            {
+                typename P::packet_t v0, v1, v2, v3, v4, vxm2, vxm1, vx0, vx1, vx2, vr, vs, vout;
+                P::loadu(itr0, v0);
+                P::loadu(itr1, v1);
+                P::loadu(itr2, v2);
+                P::loadu(itr3, v3);
+                P::loadu(itr4, v4);
+                P::loadu(itr_tmp - two_inner_dim, vxm2);
+                P::loadu(itr_tmp - inner_dim, vxm1);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr_tmp + inner_dim, vx1);
+                P::loadu(itr_tmp + two_inner_dim, vx2);
+                P::loadu(itr, vr);
+                P::fma(v4, vx2, vzero, vs);
+                P::fma(v3, vx1, vs, vs);
+                P::fma(v2, vx0, vs, vs);
+                P::fma(v1, vxm1, vs, vs);
+                P::fma(v0, vxm2, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
             for (; i < n - two_inner_dim;
                 ++i, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3, ++itr4)
             {
@@ -401,7 +1422,30 @@ void multiply(std::vector<T>& result,
                             *itr4 * *(itr_tmp + two_inner_dim));
             }
 
-            for (size_t k = 0; k < inner_dim;
+            size_t k = 0;
+#if LINALG_HAS_VECTORIZATION
+            for (; k + width <= inner_dim; k += width, itr += width, itr_tmp += width, itr0 += width,
+                itr1 += width, itr2 += width, itr3 += width)
+            {
+                typename P::packet_t v0, v1, v2, v3, vxm2, vxm1, vx0, vx1, vr, vs, vout;
+                P::loadu(itr0, v0);
+                P::loadu(itr1, v1);
+                P::loadu(itr2, v2);
+                P::loadu(itr3, v3);
+                P::loadu(itr_tmp - two_inner_dim, vxm2);
+                P::loadu(itr_tmp - inner_dim, vxm1);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr_tmp + inner_dim, vx1);
+                P::loadu(itr, vr);
+                P::fma(v3, vx1, vzero, vs);
+                P::fma(v2, vx0, vs, vs);
+                P::fma(v1, vxm1, vs, vs);
+                P::fma(v0, vxm2, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
+            for (; k < inner_dim;
                 ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3)
             {
                 *itr += time_multiplier *
@@ -409,7 +1453,27 @@ void multiply(std::vector<T>& result,
                             *itr2 * *itr_tmp + *itr3 * *(itr_tmp + inner_dim));
             }
 
-            for (size_t k = 0; k < inner_dim; ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
+            k = 0;
+#if LINALG_HAS_VECTORIZATION
+            for (; k + width <= inner_dim; k += width, itr += width, itr_tmp += width, itr0 += width,
+                itr1 += width, itr2 += width)
+            {
+                typename P::packet_t v0, v1, v2, vxm2, vxm1, vx0, vr, vs, vout;
+                P::loadu(itr0, v0);
+                P::loadu(itr1, v1);
+                P::loadu(itr2, v2);
+                P::loadu(itr_tmp - two_inner_dim, vxm2);
+                P::loadu(itr_tmp - inner_dim, vxm1);
+                P::loadu(itr_tmp, vx0);
+                P::loadu(itr, vr);
+                P::fma(v2, vx0, vzero, vs);
+                P::fma(v1, vxm1, vs, vs);
+                P::fma(v0, vxm2, vs, vs);
+                P::fma(vtm, vs, vr, vout);
+                P::storeu(vout, itr);
+            }
+#endif
+            for (; k < inner_dim; ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2)
             {
                 *itr += time_multiplier * (*itr0 * *(itr_tmp - two_inner_dim) +
                                               *itr1 * *(itr_tmp - inner_dim) + *itr2 * *itr_tmp);
@@ -432,9 +1496,27 @@ void decomposition_aad(std::vector<T>& output_aad,
     const auto n      = dim * inner_dim;
     const auto stride = outer_dim * n;
 
-    for (size_t i = 0; i < stride; ++i)
+#if LINALG_HAS_VECTORIZATION
+    using P                = packet<T>;
+    constexpr size_t width = static_cast<size_t>(P::size);
+    typename P::packet_t vzero, vnegone;
+    P::set(T{0}, vzero);
+    P::set(T{-1}, vnegone);
+#endif
+
+    size_t neg_i = 0;
+#if LINALG_HAS_VECTORIZATION
+    for (; neg_i + width <= stride; neg_i += width)
     {
-        output_aad[2 * stride + i] = -output_aad[2 * stride + i];
+        typename P::packet_t v, vout;
+        P::loadu(output_aad.data() + 2 * stride + neg_i, v);
+        P::fma(v, vnegone, vzero, vout);
+        P::storeu(vout, output_aad.data() + 2 * stride + neg_i);
+    }
+#endif
+    for (; neg_i < stride; ++neg_i)
+    {
+        output_aad[2 * stride + neg_i] = -output_aad[2 * stride + neg_i];
     }
 
     if (output.size() != 3 * stride)
@@ -442,58 +1524,166 @@ void decomposition_aad(std::vector<T>& output_aad,
         throw std::invalid_argument("banded decomposition_aad output has the wrong size!");
     }
 
-    for (size_t l = outer_dim; l > 0; --l)
+    // Vectorized across outer_dim instead of within a row: different l groups never alias
+    // each other (disjoint memory, offset by l*n), so gather/scatter with stride n lets us
+    // batch `width` independent groups' row r together while keeping the recurrence over r
+    // (which runs through *(itr2_aad - inner_dim), a genuine carry into a row this same
+    // reverse sweep will visit later) fully serial, exactly as the scalar loop already does.
+    // This sidesteps the within-row accumulation hazard that blocked vectorizing this
+    // function along inner_dim instead.
+    auto const* __restrict b0 = output.data();
+    auto const* __restrict b1 = b0 + stride;
+    auto const* __restrict b2 = b1 + stride;
+
+    auto* __restrict b0a = output_aad.data();
+    auto* __restrict b1a = b0a + stride;
+    auto* __restrict b2a = b1a + stride;
+
+#if LINALG_HAS_VECTORIZATION
+    const bool       can_vectorize_outer = width <= outer_dim;
+    const linalg_int gstride             = static_cast<linalg_int>(n);
+#endif
+
+    for (size_t r = n; r > inner_dim;)
     {
-        const auto offset = (l - 1) * n + n - 1;
+        --r;
 
-        auto const* __restrict itr0 = output.data() + 0 * stride + offset;
-        auto const* __restrict itr1 = output.data() + 1 * stride + offset;
-        auto const* __restrict itr2 = output.data() + 2 * stride + offset;
-
-        auto* __restrict itr0_aad = output_aad.data() + 0 * stride + offset;
-        auto* __restrict itr1_aad = output_aad.data() + 1 * stride + offset;
-        auto* __restrict itr2_aad = output_aad.data() + 2 * stride + offset;
-
-        for (size_t i = n; i > inner_dim;
-            --i, --itr0, --itr1, --itr2, --itr0_aad, --itr1_aad, --itr2_aad)
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const auto inv_diag = *itr0;
-            const auto alpha    = *itr1 / inv_diag;
-            const auto tmp      = -*(itr2 - inner_dim);
-            const auto tmp_itr2 = -*itr2 / inv_diag;
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n;
 
-            auto inv_diag_aad = *itr2_aad * tmp_itr2;
-            *itr2_aad *= inv_diag;
+                typename P::packet_t v_inv_diag, v_b1, v_b2, v_b2_lag, v_b0a, v_b1a, v_b2a;
+                P::gather(b0 + base + r, gstride, v_inv_diag);
+                P::gather(b1 + base + r, gstride, v_b1);
+                P::gather(b2 + base + r, gstride, v_b2);
+                P::gather(b2 + base + (r - inner_dim), gstride, v_b2_lag);
+                P::gather(b0a + base + r, gstride, v_b0a);
+                P::gather(b1a + base + r, gstride, v_b1a);
+                P::gather(b2a + base + r, gstride, v_b2a);
 
-            inv_diag_aad += *itr1_aad * alpha;
-            auto alpha_aad = *itr1_aad * inv_diag;
+                typename P::packet_t v_alpha, v_tmp, v_ratio, v_tmp_itr2;
+                P::div(v_b1, v_inv_diag, v_alpha);
+                P::fma(v_b2_lag, vnegone, vzero, v_tmp);
+                P::div(v_b2, v_inv_diag, v_ratio);
+                P::fma(v_ratio, vnegone, vzero, v_tmp_itr2);
 
-            inv_diag_aad += *itr0_aad;
+                typename P::packet_t v_inv_diag_aad, v_alpha_aad;
+                P::fma(v_b2a, v_tmp_itr2, vzero, v_inv_diag_aad);
+                P::fma(v_b2a, v_inv_diag, vzero, v_b2a);
+
+                P::fma(v_b1a, v_alpha, v_inv_diag_aad, v_inv_diag_aad);
+                P::fma(v_b1a, v_inv_diag, vzero, v_alpha_aad);
+
+                P::add(v_inv_diag_aad, v_b0a, v_inv_diag_aad);
+
+                typename P::packet_t v_sq, v_negsq;
+                P::fma(v_inv_diag, v_inv_diag, vzero, v_sq);
+                P::fma(v_sq, vnegone, vzero, v_negsq);
+                P::fma(v_inv_diag_aad, v_negsq, vzero, v_inv_diag_aad);
+
+                v_b1a = v_inv_diag_aad;
+
+                P::fma(v_inv_diag_aad, v_tmp, v_alpha_aad, v_alpha_aad);
+                typename P::packet_t v_tmp_aad;
+                P::fma(v_inv_diag_aad, v_alpha, vzero, v_tmp_aad);
+
+                P::fma(v_alpha_aad, vnegone, vzero, v_b0a);
+
+                P::scatter(v_b0a, gstride, b0a + base + r);
+                P::scatter(v_b1a, gstride, b1a + base + r);
+                P::scatter(v_b2a, gstride, b2a + base + r);
+
+                typename P::packet_t v_b2a_lag;
+                P::gather(b2a + base + (r - inner_dim), gstride, v_b2a_lag);
+                P::add(v_b2a_lag, v_tmp_aad, v_b2a_lag);
+                P::scatter(v_b2a_lag, gstride, b2a + base + (r - inner_dim));
+            }
+        }
+#endif
+        for (; l < outer_dim; ++l)
+        {
+            const auto base = l * n;
+
+            const auto inv_diag = b0[base + r];
+            const auto alpha    = b1[base + r] / inv_diag;
+            const auto tmp      = -b2[base + (r - inner_dim)];
+            const auto tmp_itr2 = -b2[base + r] / inv_diag;
+
+            auto inv_diag_aad = b2a[base + r] * tmp_itr2;
+            b2a[base + r] *= inv_diag;
+
+            inv_diag_aad += b1a[base + r] * alpha;
+            auto alpha_aad = b1a[base + r] * inv_diag;
+
+            inv_diag_aad += b0a[base + r];
 
             inv_diag_aad *= -(inv_diag * inv_diag);
-            *itr1_aad = inv_diag_aad;
+            b1a[base + r] = inv_diag_aad;
             alpha_aad += inv_diag_aad * tmp;
             auto tmp_aad = inv_diag_aad * alpha;
 
-            *itr0_aad = -alpha_aad;
+            b0a[base + r] = -alpha_aad;
 
-            *(itr2_aad - inner_dim) += tmp_aad;
+            b2a[base + (r - inner_dim)] += tmp_aad;
         }
-        for (size_t i = inner_dim; i > 0;
-            --i, --itr0, --itr1, --itr2, --itr0_aad, --itr1_aad, --itr2_aad)
+    }
+
+    for (size_t r = inner_dim; r > 0;)
+    {
+        --r;
+
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const T inv_diag = *itr0;
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n;
 
-            *itr1_aad = T{0};
+                typename P::packet_t v_inv_diag, v_b2, v_b2a, v_b0a;
+                P::gather(b0 + base + r, gstride, v_inv_diag);
+                P::gather(b2 + base + r, gstride, v_b2);
+                P::gather(b2a + base + r, gstride, v_b2a);
+                P::gather(b0a + base + r, gstride, v_b0a);
 
-            auto tmp_itr2     = -*itr2 / inv_diag;
-            auto inv_diag_aad = *itr2_aad * tmp_itr2;
-            *itr2_aad         = *itr2_aad * inv_diag;
+                typename P::packet_t v_ratio, v_tmp_itr2;
+                P::div(v_b2, v_inv_diag, v_ratio);
+                P::fma(v_ratio, vnegone, vzero, v_tmp_itr2);
 
-            inv_diag_aad += *itr0_aad;
+                typename P::packet_t v_inv_diag_aad;
+                P::fma(v_b2a, v_tmp_itr2, vzero, v_inv_diag_aad);
+                P::fma(v_b2a, v_inv_diag, vzero, v_b2a);
 
-            *itr1_aad = -inv_diag_aad * inv_diag * inv_diag;
-            *itr0_aad = T{0};
+                P::add(v_inv_diag_aad, v_b0a, v_inv_diag_aad);
+
+                typename P::packet_t v_sq, v_b1a;
+                P::fma(v_inv_diag, v_inv_diag, vzero, v_sq);
+                P::fma(v_inv_diag_aad, v_sq, vzero, v_b1a);
+                P::fma(v_b1a, vnegone, vzero, v_b1a);
+
+                P::scatter(v_b2a, gstride, b2a + base + r);
+                P::scatter(v_b1a, gstride, b1a + base + r);
+                P::scatter(vzero, gstride, b0a + base + r);
+            }
+        }
+#endif
+        for (; l < outer_dim; ++l)
+        {
+            const auto base = l * n;
+            const T    inv_diag = b0[base + r];
+
+            auto tmp_itr2     = -b2[base + r] / inv_diag;
+            auto inv_diag_aad = b2a[base + r] * tmp_itr2;
+            b2a[base + r]     = b2a[base + r] * inv_diag;
+
+            inv_diag_aad += b0a[base + r];
+
+            b1a[base + r] = -inv_diag_aad * inv_diag * inv_diag;
+            b0a[base + r] = T{0};
         }
     }
 }
@@ -524,8 +1714,13 @@ void solve_decomposed_vectorised(std::vector<T>& x,
     }
 
     auto* __restrict itr_x      = x.data();
-    auto const* __restrict itr1 = decomposed.data() + 1 * stride;
-    auto const* __restrict itr2 = decomposed.data() + 2 * stride;
+    auto const* __restrict itr1 = decomposed.data() + stride;
+    auto const* __restrict itr2 = itr1 + stride;
+
+#if LINALG_HAS_VECTORIZATION
+    using P                = packet<T>;
+    constexpr size_t width = static_cast<size_t>(P::size);
+#endif
 
     for (size_t l = 0; l < outer_dim; ++l)
     {
@@ -533,14 +1728,31 @@ void solve_decomposed_vectorised(std::vector<T>& x,
         auto const* __restrict tmp_itr1 = itr1 + offset;
         auto const* __restrict tmp_itr2 = itr2 + offset;
 
-        auto* __restrict tmp = itr_x + offset * rows;
+        auto* __restrict tmp = itr_x + offset * columns;
 
         for (size_t i = inner_dim; i < n; ++i)
         {
             const auto  a       = tmp_itr1[i];
             auto*       tmp_i   = tmp + i * columns;
             const auto* tmp_i_1 = tmp + (i - inner_dim) * columns;
-            for (size_t j = 0; j < columns; ++j)
+
+            // The right-hand-side columns are independent of each other (only the row index i
+            // carries the recurrence), so this axis vectorizes unconditionally regardless of
+            // inner_dim.
+            size_t j = 0;
+#if LINALG_HAS_VECTORIZATION
+            typename P::packet_t va;
+            P::set(a, va);
+            for (; j + width <= columns; j += width)
+            {
+                typename P::packet_t vprev, vcur, vout;
+                P::loadu(tmp_i_1 + j, vprev);
+                P::loadu(tmp_i + j, vcur);
+                P::fma(va, vprev, vcur, vout);
+                P::storeu(vout, tmp_i + j);
+            }
+#endif
+            for (; j < columns; ++j)
             {
                 tmp_i[j] += a * tmp_i_1[j];
             }
@@ -552,7 +1764,20 @@ void solve_decomposed_vectorised(std::vector<T>& x,
             auto*       tmp_i   = tmp + static_cast<size_t>(i) * columns;
             const auto* tmp_i_1 = tmp + (static_cast<size_t>(i) + inner_dim) * columns;
 
-            for (size_t j = 0; j < columns; ++j)
+            size_t j = 0;
+#if LINALG_HAS_VECTORIZATION
+            typename P::packet_t va;
+            P::set(a, va);
+            for (; j + width <= columns; j += width)
+            {
+                typename P::packet_t vnext, vcur, vout;
+                P::loadu(tmp_i_1 + j, vnext);
+                P::loadu(tmp_i + j, vcur);
+                P::fma(va, vnext, vcur, vout);
+                P::storeu(vout, tmp_i + j);
+            }
+#endif
+            for (; j < columns; ++j)
             {
                 tmp_i[j] += a * tmp_i_1[j];
             }
@@ -574,51 +1799,163 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
     const int  end    = static_cast<int>(n) - static_cast<int>(inner_dim) - 1;
     const auto stride = outer_dim * n;
 
-    auto* __restrict itr_x      = x.data();
-    auto const* __restrict itr1 = decomposed.data() + 1 * stride;
-    auto const* __restrict itr2 = decomposed.data() + 2 * stride;
+    auto* __restrict band1      = decomposed.data() + stride;
+    auto const* __restrict band2 = band1 + stride;
 
-    auto* __restrict itr_x_aad = x_aad.data();
-    auto* __restrict itr1_aad  = decomposed_aad.data() + 1 * stride;
-    auto* __restrict itr2_aad  = decomposed_aad.data() + 2 * stride;
+    auto* __restrict band1_aad = decomposed_aad.data() + stride;
+    auto* __restrict band2_aad = band1_aad + stride;
 
-    for (size_t l = outer_dim; l > 0; --l)
+    // Vectorized across outer_dim (see decomposition_aad above for the full rationale): each
+    // l group is independent, so for a fixed i we can gather/scatter `width` groups at once
+    // while keeping the loop over i -- which carries real cross-row accumulation via
+    // tmp_aad[i +/- inner_dim] -- exactly as serial as the scalar version. i becomes the
+    // outer loop and l the (vectorized) inner one; this is a pure loop-nest transpose of two
+    // independent axes, so it changes nothing about per-l correctness.
+#if LINALG_HAS_VECTORIZATION
+    using P                = packet<T>;
+    constexpr size_t width = static_cast<size_t>(P::size);
+    const bool       can_vectorize_outer = width <= outer_dim;
+    const linalg_int gstride             = static_cast<linalg_int>(n);
+    typename P::packet_t vzero, vnegone;
+    P::set(T{0}, vzero);
+    P::set(T{-1}, vnegone);
+#endif
+
+    for (int i = 0; i <= end; ++i)
     {
-        const auto offset               = (l - 1) * n;
-        auto* __restrict tmp            = itr_x + offset;
-        auto const* __restrict tmp_itr1 = itr1 + offset;
-        auto const* __restrict tmp_itr2 = itr2 + offset;
-
-        auto* __restrict tmp_aad      = itr_x_aad + offset;
-        auto* __restrict tmp_itr1_aad = itr1_aad + offset;
-        auto* __restrict tmp_itr2_aad = itr2_aad + offset;
-
-        for (int i = 0; i <= end; ++i)
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            tmp_itr2_aad[i] += tmp_aad[i] * tmp[i + inner_dim];
-            tmp_aad[i + inner_dim] += tmp_aad[i] * tmp_itr2[i];
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n + static_cast<size_t>(i);
 
-            tmp[i] -= tmp_itr2[i] * tmp[i + inner_dim];
+                typename P::packet_t v_tmp_aad_i, v_tmp_itr2_i, v_tmp_ip, v_tmp_aad_ip,
+                    v_tmp_itr2_aad_i, v_tmp_i;
+                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
+                P::gather(band2 + base, gstride, v_tmp_itr2_i);
+                P::gather(x.data() + base + inner_dim, gstride, v_tmp_ip);
+                P::gather(x_aad.data() + base + inner_dim, gstride, v_tmp_aad_ip);
+                P::gather(band2_aad + base, gstride, v_tmp_itr2_aad_i);
+                P::gather(x.data() + base, gstride, v_tmp_i);
+
+                typename P::packet_t v_contrib1, v_contrib2, v_prod;
+                P::fma(v_tmp_aad_i, v_tmp_ip, vzero, v_contrib1);
+                P::add(v_tmp_itr2_aad_i, v_contrib1, v_tmp_itr2_aad_i);
+                P::scatter(v_tmp_itr2_aad_i, gstride, band2_aad + base);
+
+                P::fma(v_tmp_aad_i, v_tmp_itr2_i, vzero, v_contrib2);
+                P::add(v_tmp_aad_ip, v_contrib2, v_tmp_aad_ip);
+                P::scatter(v_tmp_aad_ip, gstride, x_aad.data() + base + inner_dim);
+
+                P::fma(v_tmp_itr2_i, v_tmp_ip, vzero, v_prod);
+                P::fma(v_prod, vnegone, v_tmp_i, v_tmp_i);
+                P::scatter(v_tmp_i, gstride, x.data() + base);
+            }
         }
-
-        for (size_t i = n - 1; i >= inner_dim; --i)
+#endif
+        for (; l < outer_dim; ++l)
         {
-            tmp_itr1_aad[i] += tmp_aad[i] * tmp[i - inner_dim];
-            tmp_aad[i - inner_dim] += tmp_aad[i] * tmp_itr1[i];
+            const size_t base = l * n + static_cast<size_t>(i);
 
-            tmp[i] -= tmp_itr1[i] * tmp[i - inner_dim];
+            band2_aad[base] += x_aad[base] * x[base + inner_dim];
+            x_aad[base + inner_dim] += x_aad[base] * band2[base];
+
+            x[base] -= band2[base] * x[base + inner_dim];
         }
     }
 
-    for (size_t i = 0; i < stride; ++i)
+    for (size_t i = n - 1; i >= inner_dim; --i)
+    {
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
+        {
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n + i;
+
+                typename P::packet_t v_tmp_aad_i, v_tmp_itr1_i, v_tmp_im, v_tmp_aad_im,
+                    v_tmp_itr1_aad_i, v_tmp_i;
+                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
+                P::gather(band1 + base, gstride, v_tmp_itr1_i);
+                P::gather(x.data() + base - inner_dim, gstride, v_tmp_im);
+                P::gather(x_aad.data() + base - inner_dim, gstride, v_tmp_aad_im);
+                P::gather(band1_aad + base, gstride, v_tmp_itr1_aad_i);
+                P::gather(x.data() + base, gstride, v_tmp_i);
+
+                typename P::packet_t v_contrib1, v_contrib2, v_prod;
+                P::fma(v_tmp_aad_i, v_tmp_im, vzero, v_contrib1);
+                P::add(v_tmp_itr1_aad_i, v_contrib1, v_tmp_itr1_aad_i);
+                P::scatter(v_tmp_itr1_aad_i, gstride, band1_aad + base);
+
+                P::fma(v_tmp_aad_i, v_tmp_itr1_i, vzero, v_contrib2);
+                P::add(v_tmp_aad_im, v_contrib2, v_tmp_aad_im);
+                P::scatter(v_tmp_aad_im, gstride, x_aad.data() + base - inner_dim);
+
+                P::fma(v_tmp_itr1_i, v_tmp_im, vzero, v_prod);
+                P::fma(v_prod, vnegone, v_tmp_i, v_tmp_i);
+                P::scatter(v_tmp_i, gstride, x.data() + base);
+            }
+        }
+#endif
+        for (; l < outer_dim; ++l)
+        {
+            const size_t base = l * n + i;
+
+            band1_aad[base] += x_aad[base] * x[base - inner_dim];
+            x_aad[base - inner_dim] += x_aad[base] * band1[base];
+
+            x[base] -= band1[base] * x[base - inner_dim];
+        }
+    }
+
+    size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+    for (; i + width <= stride; i += width)
+    {
+        typename P::packet_t vx, vd, vout;
+        P::loadu(x.data() + i, vx);
+        P::loadu(decomposed.data() + i, vd);
+        P::div(vx, vd, vout);
+        P::storeu(vout, x.data() + i);
+    }
+#endif
+    for (; i < stride; ++i)
     {
         x[i] /= decomposed[0 * stride + i];
     }
-    for (size_t i = 0; i < stride; ++i)
+
+    i = 0;
+#if LINALG_HAS_VECTORIZATION
+    for (; i + width <= stride; i += width)
+    {
+        typename P::packet_t vxa, vx, vda, vout;
+        P::loadu(x_aad.data() + i, vxa);
+        P::loadu(x.data() + i, vx);
+        P::loadu(decomposed_aad.data() + i, vda);
+        P::fma(vxa, vx, vda, vout);
+        P::storeu(vout, decomposed_aad.data() + i);
+    }
+#endif
+    for (; i < stride; ++i)
     {
         decomposed_aad[0 * stride + i] += x_aad[i] * x[i];
     }
-    for (size_t i = 0; i < stride; ++i)
+
+    i = 0;
+#if LINALG_HAS_VECTORIZATION
+    for (; i + width <= stride; i += width)
+    {
+        typename P::packet_t vxa, vd, vout;
+        P::loadu(x_aad.data() + i, vxa);
+        P::loadu(decomposed.data() + i, vd);
+        P::fma(vxa, vd, vzero, vout);
+        P::storeu(vout, x_aad.data() + i);
+    }
+#endif
+    for (; i < stride; ++i)
     {
         x_aad[i] *= decomposed[0 * stride + i];
     }
@@ -636,31 +1973,86 @@ void solve_decomposed_aad(std::vector<T>& x_aad,
     const int  end    = static_cast<int>(n) - static_cast<int>(inner_dim) - 1;
     const auto stride = outer_dim * n;
 
-    auto const* __restrict itr1 = decomposed.data() + 1 * stride;
-    auto const* __restrict itr2 = decomposed.data() + 2 * stride;
+    auto const* __restrict band1 = decomposed.data() + stride;
+    auto const* __restrict band2 = band1 + stride;
 
-    auto* __restrict itr_x_aad = x_aad.data();
+#if LINALG_HAS_VECTORIZATION
+    using P                = packet<T>;
+    constexpr size_t width = static_cast<size_t>(P::size);
+    const bool       can_vectorize_outer = width <= outer_dim;
+    const linalg_int gstride             = static_cast<linalg_int>(n);
+    typename P::packet_t vzero;
+    P::set(T{0}, vzero);
+#endif
 
-    for (int l = static_cast<int>(outer_dim); l > 0; --l)
+    for (int i = 0; i <= end; ++i)
     {
-        const auto offset               = static_cast<size_t>(l - 1) * n;
-        auto const* __restrict tmp_itr1 = itr1 + offset;
-        auto const* __restrict tmp_itr2 = itr2 + offset;
-
-        auto* __restrict tmp_aad = itr_x_aad + offset;
-
-        for (int i = 0; i <= end; ++i)
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            tmp_aad[i + inner_dim] += tmp_aad[i] * tmp_itr2[i];
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n + static_cast<size_t>(i);
+
+                typename P::packet_t v_tmp_aad_i, v_tmp_itr2_i, v_tmp_aad_ip, v_contrib;
+                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
+                P::gather(band2 + base, gstride, v_tmp_itr2_i);
+                P::gather(x_aad.data() + base + inner_dim, gstride, v_tmp_aad_ip);
+
+                P::fma(v_tmp_aad_i, v_tmp_itr2_i, vzero, v_contrib);
+                P::add(v_tmp_aad_ip, v_contrib, v_tmp_aad_ip);
+                P::scatter(v_tmp_aad_ip, gstride, x_aad.data() + base + inner_dim);
+            }
         }
-
-        for (size_t i = n - 1; i >= inner_dim; --i)
+#endif
+        for (; l < outer_dim; ++l)
         {
-            tmp_aad[i - inner_dim] += tmp_aad[i] * tmp_itr1[i];
+            const size_t base = l * n + static_cast<size_t>(i);
+            x_aad[base + inner_dim] += x_aad[base] * band2[base];
         }
     }
 
-    for (size_t i = 0; i < stride; ++i)
+    for (size_t i = n - 1; i >= inner_dim; --i)
+    {
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
+        {
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n + i;
+
+                typename P::packet_t v_tmp_aad_i, v_tmp_itr1_i, v_tmp_aad_im, v_contrib;
+                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
+                P::gather(band1 + base, gstride, v_tmp_itr1_i);
+                P::gather(x_aad.data() + base - inner_dim, gstride, v_tmp_aad_im);
+
+                P::fma(v_tmp_aad_i, v_tmp_itr1_i, vzero, v_contrib);
+                P::add(v_tmp_aad_im, v_contrib, v_tmp_aad_im);
+                P::scatter(v_tmp_aad_im, gstride, x_aad.data() + base - inner_dim);
+            }
+        }
+#endif
+        for (; l < outer_dim; ++l)
+        {
+            const size_t base = l * n + i;
+            x_aad[base - inner_dim] += x_aad[base] * band1[base];
+        }
+    }
+
+    size_t i = 0;
+#if LINALG_HAS_VECTORIZATION
+    for (; i + width <= stride; i += width)
+    {
+        typename P::packet_t vxa, vd, vout;
+        P::loadu(x_aad.data() + i, vxa);
+        P::loadu(decomposed.data() + i, vd);
+        P::fma(vxa, vd, vzero, vout);
+        P::storeu(vout, x_aad.data() + i);
+    }
+#endif
+    for (; i < stride; ++i)
     {
         x_aad[i] *= decomposed[0 * stride + i];
     }
@@ -681,67 +2073,182 @@ void multiply_aad(std::vector<T>& mat_aad,
     const auto n      = inner_dim * dim;
     const auto stride = outer_dim * n;
 
-    for (size_t l = outer_dim; l > 0; --l)
+    // Vectorized across outer_dim, same as the other _aad functions above: nothing this
+    // function writes is ever read back by a later row (mat_aad[r] is written exactly once
+    // per (l, r); in_aad accumulates from multiple rows but is never itself read), so the
+    // original per-l, per-row loop has no ordering requirement at all -- but different rows
+    // *within the same l* can still target the same in_aad slot (r +/- inner_dim), which is
+    // exactly the scatter-add hazard that kept this function scalar before. Vectorizing
+    // across l instead of across rows sidesteps it entirely: each lane is a different,
+    // disjoint l group, so lanes can never collide, and every write becomes an ordinary
+    // read-modify-write (gather, add this row's contribution, scatter) against that lane's
+    // own memory.
+    auto const* __restrict res_aad = result_aad.data();
+    auto const* __restrict in_ro   = in.data();
+
+    auto const* __restrict band0 = mat.data();
+    auto const* __restrict band1 = band0 + stride;
+    auto const* __restrict band2 = band1 + stride;
+
+    auto* __restrict band0_aad = mat_aad.data();
+    auto* __restrict band1_aad = band0_aad + stride;
+    auto* __restrict band2_aad = band1_aad + stride;
+    auto* __restrict in_aad_p  = in_aad.data();
+
+#if LINALG_HAS_VECTORIZATION
+    using P                = packet<T>;
+    constexpr size_t width = static_cast<size_t>(P::size);
+    const bool       can_vectorize_outer = width <= outer_dim;
+    const linalg_int gstride             = static_cast<linalg_int>(n);
+    typename P::packet_t vzero, vtm;
+    P::set(T{0}, vzero);
+    P::set(time_multiplier, vtm);
+#endif
+
+    for (size_t r = 0; r < n; ++r)
     {
-        const auto offset = (l - 1) * n + n - 1;
+        const bool has_below = r >= inner_dim;
+        const bool has_above = r + inner_dim < n;
 
-        auto const* __restrict itr_aad = result_aad.data() + offset;
-        auto const* __restrict itr_tmp = in.data() + offset;
-
-        auto const* __restrict itr0 = mat.data() + 0 * stride + offset;
-        auto const* __restrict itr1 = mat.data() + 1 * stride + offset;
-        auto const* __restrict itr2 = mat.data() + 2 * stride + offset;
-
-        auto* __restrict itr0_aad    = mat_aad.data() + 0 * stride + offset;
-        auto* __restrict itr1_aad    = mat_aad.data() + 1 * stride + offset;
-        auto* __restrict itr2_aad    = mat_aad.data() + 2 * stride + offset;
-        auto* __restrict itr_tmp_aad = in_aad.data() + offset;
-
-        size_t i = n;
-
-        for (; i > n - inner_dim; --i,
-            --itr_aad, --itr_tmp, --itr0, --itr1, --itr2,
-            --itr_tmp_aad, --itr0_aad, --itr1_aad, --itr2_aad)
+        size_t l = 0;
+#if LINALG_HAS_VECTORIZATION
+        if (can_vectorize_outer)
         {
-            const auto a = *itr0;
-            const auto b = *itr1;
+            for (; l + width <= outer_dim; l += width)
+            {
+                const size_t base = l * n + r;
 
-            auto tmp_aad = *itr_aad * time_multiplier;
-            *itr0_aad += tmp_aad * *(itr_tmp - inner_dim);
-            *itr1_aad += tmp_aad * *itr_tmp;
-            *itr_tmp_aad += tmp_aad * b;
-            *(itr_tmp_aad - inner_dim) += tmp_aad * a;
+                typename P::packet_t v_res, v_tmp_aad;
+                P::gather(res_aad + base, gstride, v_res);
+                P::fma(v_res, vtm, vzero, v_tmp_aad);
+
+                if (has_below && has_above)
+                {
+                    typename P::packet_t v_a, v_b, v_c, v_in_m, v_in_0, v_in_p;
+                    P::gather(band0 + base, gstride, v_a);
+                    P::gather(band1 + base, gstride, v_b);
+                    P::gather(band2 + base, gstride, v_c);
+                    P::gather(in_ro + base - inner_dim, gstride, v_in_m);
+                    P::gather(in_ro + base, gstride, v_in_0);
+                    P::gather(in_ro + base + inner_dim, gstride, v_in_p);
+
+                    typename P::packet_t v_acc;
+                    P::gather(band0_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_m, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band0_aad + base);
+
+                    P::gather(band1_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_0, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band1_aad + base);
+
+                    P::gather(band2_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_p, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band2_aad + base);
+
+                    P::gather(in_aad_p + base - inner_dim, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_a, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base - inner_dim);
+
+                    P::gather(in_aad_p + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_b, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base);
+
+                    P::gather(in_aad_p + base + inner_dim, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_c, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base + inner_dim);
+                }
+                else if (has_below)  // top block: no band2/c term
+                {
+                    typename P::packet_t v_a, v_b, v_in_m, v_in_0;
+                    P::gather(band0 + base, gstride, v_a);
+                    P::gather(band1 + base, gstride, v_b);
+                    P::gather(in_ro + base - inner_dim, gstride, v_in_m);
+                    P::gather(in_ro + base, gstride, v_in_0);
+
+                    typename P::packet_t v_acc;
+                    P::gather(band0_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_m, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band0_aad + base);
+
+                    P::gather(band1_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_0, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band1_aad + base);
+
+                    P::gather(in_aad_p + base - inner_dim, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_a, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base - inner_dim);
+
+                    P::gather(in_aad_p + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_b, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base);
+                }
+                else  // bottom block: no band0/a term
+                {
+                    typename P::packet_t v_b, v_c, v_in_0, v_in_p;
+                    P::gather(band1 + base, gstride, v_b);
+                    P::gather(band2 + base, gstride, v_c);
+                    P::gather(in_ro + base, gstride, v_in_0);
+                    P::gather(in_ro + base + inner_dim, gstride, v_in_p);
+
+                    typename P::packet_t v_acc;
+                    P::gather(band1_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_0, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band1_aad + base);
+
+                    P::gather(band2_aad + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_in_p, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, band2_aad + base);
+
+                    P::gather(in_aad_p + base, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_b, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base);
+
+                    P::gather(in_aad_p + base + inner_dim, gstride, v_acc);
+                    P::fma(v_tmp_aad, v_c, v_acc, v_acc);
+                    P::scatter(v_acc, gstride, in_aad_p + base + inner_dim);
+                }
+            }
         }
-
-        for (; i > inner_dim; --i,
-            --itr_aad, --itr_tmp, --itr0, --itr1, --itr2,
-            --itr_tmp_aad, --itr0_aad, --itr1_aad, --itr2_aad)
+#endif
+        for (; l < outer_dim; ++l)
         {
-            const auto a = *itr0;
-            const auto b = *itr1;
-            const auto c = *itr2;
+            const size_t base = l * n + r;
 
-            auto tmp_aad = *itr_aad * time_multiplier;
-            *itr0_aad += tmp_aad * *(itr_tmp - inner_dim);
-            *itr1_aad += tmp_aad * *itr_tmp;
-            *itr2_aad += tmp_aad * *(itr_tmp + inner_dim);
-            *(itr_tmp_aad - inner_dim) += tmp_aad * a;
-            *itr_tmp_aad += tmp_aad * b;
-            *(itr_tmp_aad + inner_dim) += tmp_aad * c;
-        }
+            const auto tmp_aad = res_aad[base] * time_multiplier;
 
-        for (; i > 0; --i,
-            --itr_aad, --itr_tmp, --itr0, --itr1, --itr2,
-            --itr_tmp_aad, --itr0_aad, --itr1_aad, --itr2_aad)
-        {
-            const auto b = *itr1;
-            const auto c = *itr2;
+            if (has_below && has_above)
+            {
+                const auto a = band0[base];
+                const auto b = band1[base];
+                const auto c = band2[base];
 
-            auto tmp_aad = *itr_aad * time_multiplier;
-            *itr1_aad += tmp_aad * *itr_tmp;
-            *itr2_aad += tmp_aad * *(itr_tmp + inner_dim);
-            *itr_tmp_aad += tmp_aad * b;
-            *(itr_tmp_aad + inner_dim) += tmp_aad * c;
+                band0_aad[base] += tmp_aad * in_ro[base - inner_dim];
+                band1_aad[base] += tmp_aad * in_ro[base];
+                band2_aad[base] += tmp_aad * in_ro[base + inner_dim];
+                in_aad_p[base - inner_dim] += tmp_aad * a;
+                in_aad_p[base] += tmp_aad * b;
+                in_aad_p[base + inner_dim] += tmp_aad * c;
+            }
+            else if (has_below)
+            {
+                const auto a = band0[base];
+                const auto b = band1[base];
+
+                band0_aad[base] += tmp_aad * in_ro[base - inner_dim];
+                band1_aad[base] += tmp_aad * in_ro[base];
+                in_aad_p[base - inner_dim] += tmp_aad * a;
+                in_aad_p[base] += tmp_aad * b;
+            }
+            else
+            {
+                const auto b = band1[base];
+                const auto c = band2[base];
+
+                band1_aad[base] += tmp_aad * in_ro[base];
+                band2_aad[base] += tmp_aad * in_ro[base + inner_dim];
+                in_aad_p[base] += tmp_aad * b;
+                in_aad_p[base + inner_dim] += tmp_aad * c;
+            }
         }
     }
 }

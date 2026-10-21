@@ -141,6 +141,7 @@ struct packet
     static void set(T scalar, packet_t& out) { out = scalar; }
     static void fma(packet_t a, packet_t b, packet_t c, packet_t& out) { out = a * b + c; }
     static void add(packet_t a, packet_t b, packet_t& out) { out = a + b; }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = a / b; }
     static void prefetch(const T* /*ptr*/) {}
 
     static void broadcast(const T* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -191,6 +192,7 @@ struct packet<float>
     static void set(float scalar, packet_t& out) { out = vdupq_n_f32(scalar); }
     static void fma(packet_t a, packet_t b, packet_t c, packet_t& out) { out = vfmaq_f32(c, a, b); }
     static void add(packet_t a, packet_t b, packet_t& out) { out = vaddq_f32(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = vdivq_f32(a, b); }
     static void prefetch(const float* /*ptr*/) {}
 
     static void broadcast(const float* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -257,6 +259,7 @@ struct packet<double>
     static void set(double scalar, packet_t& out) { out = vdupq_n_f64(scalar); }
     static void fma(packet_t a, packet_t b, packet_t c, packet_t& out) { out = vfmaq_f64(c, a, b); }
     static void add(packet_t a, packet_t b, packet_t& out) { out = vaddq_f64(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = vdivq_f64(a, b); }
     static void prefetch(const double* /*ptr*/) {}
 
     static void broadcast(const double* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -330,6 +333,7 @@ struct packet<float>
         out = _mm_add_ps(_mm_mul_ps(a, b), c);
     }
     static void add(packet_t a, packet_t b, packet_t& out) { out = _mm_add_ps(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = _mm_div_ps(a, b); }
     static void prefetch(const float* /*ptr*/) {}
 
     static void broadcast(const float* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -393,6 +397,7 @@ struct packet<double>
         out = _mm_add_pd(_mm_mul_pd(a, b), c);
     }
     static void add(packet_t a, packet_t b, packet_t& out) { out = _mm_add_pd(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = _mm_div_pd(a, b); }
     static void prefetch(const double* /*ptr*/) {}
 
     static void broadcast(const double* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -499,6 +504,7 @@ struct packet<float>
 
     static void add(packet_t a, packet_t b, packet_t& out) { out = _mm256_add_ps(a, b); }
     static void add(packet_half_t a, packet_half_t b, packet_half_t& out) { out = _mm_add_ps(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = _mm256_div_ps(a, b); }
     static void prefetch(const float* /*ptr*/) {}
 
     static void broadcast(const float* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -594,6 +600,7 @@ struct packet<double>
 #endif
     }
     static void add(packet_t a, packet_t b, packet_t& out) { out = _mm256_add_pd(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = _mm256_div_pd(a, b); }
     static void prefetch(const double* /*ptr*/) {}
 
     static void broadcast(const double* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -675,6 +682,7 @@ struct packet<float>
     static void fma(packet_half_t a, packet_half_t b, packet_half_t& c) { c = _mm_fmadd_ps(a, b, c); }
     static void add(packet_t a, packet_t b, packet_t& out) { out = _mm512_add_ps(a, b); }
     static void add(packet_half_t a, packet_half_t b, packet_half_t& out) { out = _mm_add_ps(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = _mm512_div_ps(a, b); }
     static void prefetch(const float* /*ptr*/) {}
 
     static void broadcast(const float* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
@@ -774,6 +782,7 @@ struct packet<double>
     static void fma(packet_half_t a, packet_half_t b, packet_half_t& c) { c = _mm256_fmadd_pd(a, b, c); }
     static void add(packet_t a, packet_t b, packet_t& out) { out = _mm512_add_pd(a, b); }
     static void add(packet_half_t a, packet_half_t b, packet_half_t& out) { out = _mm256_add_pd(a, b); }
+    static void div(packet_t a, packet_t b, packet_t& out) { out = _mm512_div_pd(a, b); }
     static void prefetch(const double* /*ptr*/) {}
 
     static void broadcast(const double* ptr, packet_t& b0, packet_t& b1, packet_t& b2, packet_t& b3)
