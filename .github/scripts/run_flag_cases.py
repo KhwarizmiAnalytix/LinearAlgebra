@@ -134,7 +134,7 @@ def verify(build, flags):
     if flags["LINALG_ENABLE_COVERAGE"] == "ON":
         assert any(
             marker in state["COMPILE_OPTIONS"]
-            for marker in ("--coverage", "-fprofile-instr-generate", "/Zi")
+            for marker in ("--coverage", "-fprofile-instr-generate", "/Zi", "/Z7")
         ), state
     if flags["LINALG_ENABLE_VECTORIZATION"] == "ON":
         assert (

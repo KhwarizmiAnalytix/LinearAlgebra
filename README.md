@@ -180,6 +180,10 @@ LTO modes and linker names are validated at configure time. CUDA builds require
 LTO off. Explicit per-target linkers require a GNU compiler driver; MSVC and
 clang-cl use the linker selected by their toolchain file. Sanitizer and coverage runtimes propagate to static-library consumers;
 instrumentation applies to LinearAlgebra, while dependencies use their own options.
+Windows Clang ASan builds disable STL string/vector container annotations to
+match uninstrumented dependencies; ordinary ASan memory checks remain enabled.
+MSVC debug information is embedded in object files (`/Z7`) so parallel compiler
+cache invocations do not share a compiler PDB.
 Valgrind checks run through `ctest -T memcheck` when `LINALG_ENABLE_VALGRIND=ON`.
 
 Icecream can be combined with `ccache` or `sccache`, for example with

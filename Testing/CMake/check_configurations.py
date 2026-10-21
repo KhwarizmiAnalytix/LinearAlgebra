@@ -283,8 +283,27 @@ class ConfigurationChecks(unittest.TestCase):
     )
     def test_sanitizer_regenerates_assets_and_exports_runtime(self):
         body = (
-            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int x;")\n'
-            'add_library(probe STATIC "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n'
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/plain.cpp" '
+            '"#include <string>\\n#include <vector>\\n'
+            "int plain() { return static_cast<int>(std::string(8, 'x').size() + "
+            'std::vector<int>(4, 1).size()); }")\n'
+            'add_library(plain STATIC "${CMAKE_CURRENT_BINARY_DIR}/plain.cpp")\n'
+            "set_target_properties(plain PROPERTIES POSITION_INDEPENDENT_CODE ON)\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" '
+            '"#include <string>\\n#include <vector>\\n'
+            "int plain(); int answer() { return plain() + "
+            "static_cast<int>(std::string(8, 'x').size() + "
+            'std::vector<int>(4, 1).size()); }")\n'
+            'add_library(probe ${PROBE_LIBRARY_TYPE} "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n'
+            "set_target_properties(probe PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)\n"
+            "target_link_libraries(probe PRIVATE plain)\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/main.cpp" '
+            '"#include <string>\\n#include <vector>\\n'
+            "int answer(); int main() { return answer() != "
+            "static_cast<int>(std::string(16, 'x').size() + "
+            'std::vector<int>(8, 1).size()); }")\n'
+            'add_executable(consumer "${CMAKE_CURRENT_BINARY_DIR}/main.cpp")\n'
+            "target_link_libraries(consumer PRIVATE probe)\n"
             'include("${LINALG_SOURCE_DIR}/Cmake/sanitize.cmake")\n'
             "set(LINALG_SANITIZER_TYPE address)\n"
             "linalg_configure_sanitizer(probe LINALG)\n"
@@ -320,6 +339,57 @@ class ConfigurationChecks(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_msvc_debug_information_does_not_require_a_shared_pdb(self):
+        # Exercise MSVC flag selection even when this suite runs on another host.
+        # Keep compiler overrides inside a function so CMake still generates with
+        # the real compiler after recording the selected options.
+        build = self.configure(
+            "msvc-debug-information",
+            "function(record_msvc_flags)\n"
+            "set(MSVC TRUE)\n"
+            "set(CMAKE_CXX_COMPILER_ID MSVC)\n"
+            "set(CMAKE_CXX_COMPILER_FRONTEND_VARIANT MSVC)\n"
+            "set(CMAKE_CONFIGURATION_TYPES Debug Release RelWithDebInfo MinSizeRel Custom)\n"
+            "foreach(language C CXX)\n"
+            "foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL CUSTOM)\n"
+            'set(CMAKE_${language}_FLAGS_${config} "/Zi /DKEEP_${config}")\n'
+            "endforeach()\n"
+            "endforeach()\n"
+            'include("${LINALG_SOURCE_DIR}/Cmake/platform.cmake")\n'
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/debug-format.txt" '
+            '"${CMAKE_MSVC_DEBUG_INFORMATION_FORMAT}")\n'
+            "foreach(language C CXX)\n"
+            "foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL CUSTOM)\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${language}-${config}.txt" '
+            '"${CMAKE_${language}_FLAGS} ${CMAKE_${language}_FLAGS_${config}}")\n'
+            "endforeach()\n"
+            "endforeach()\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int value;")\n'
+            'add_library(probe STATIC "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n'
+            'include("${LINALG_SOURCE_DIR}/Cmake/coverage.cmake")\n'
+            "linalg_configure_coverage(probe)\n"
+            "get_target_property(options probe COMPILE_OPTIONS)\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/coverage-options.txt" "${options}")\n'
+            "endfunction()\n"
+            "record_msvc_flags()\n",
+        )
+        self.assertEqual((build / "debug-format.txt").read_text(), "Embedded")
+        for language in ("C", "CXX"):
+            for config in (
+                "DEBUG",
+                "RELEASE",
+                "RELWITHDEBINFO",
+                "MINSIZEREL",
+                "CUSTOM",
+            ):
+                flags = (build / f"{language}-{config}.txt").read_text()
+                self.assertIn("/Z7", flags)
+                self.assertNotRegex(flags, r"[-/]Z[iI]\b")
+                self.assertIn(f"/DKEEP_{config}", flags)
+        coverage = (build / "coverage-options.txt").read_text()
+        self.assertIn("/Z7", coverage)
+        self.assertNotIn("/Zi", coverage)
 
     def test_benchmark_fetchcontent_and_vendored_paths(self):
         body = (

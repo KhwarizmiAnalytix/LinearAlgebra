@@ -37,6 +37,13 @@ function(linalg_configure_sanitizer target prefix)
     endif()
     target_link_options(${target} PUBLIC "-fsanitize=${_types}")
     if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND "address" IN_LIST _type_list)
+        # MSVC STL annotations must agree with uninstrumented dependencies
+        # (including installed Logging, GoogleTest, and Google Benchmark).
+        # Keep ordinary ASan checks while disabling optional container annotations
+        # in this target and every consumer of its STL types.
+        target_compile_definitions(
+            ${target} PUBLIC _DISABLE_VECTOR_ANNOTATION _DISABLE_STRING_ANNOTATION
+        )
         # CMake expresses the dynamic CRT with -D_DLL/--dependent-lib for the
         # GNU driver. Clang's ASan linker selection only recognizes /MD, so
         # explicitly use the DLL runtime for the library and its consumers.
