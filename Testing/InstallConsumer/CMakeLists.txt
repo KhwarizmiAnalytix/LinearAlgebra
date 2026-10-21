@@ -4,7 +4,6 @@ project(LinearAlgebraInstallConsumer LANGUAGES CXX)
 find_package(LinearAlgebra CONFIG REQUIRED)
 
 add_executable(install_consumer main.cpp)
-target_compile_features(install_consumer PRIVATE cxx_std_17)
 target_link_libraries(install_consumer PRIVATE LinearAlgebra::LinearAlgebra)
 
 enable_testing()

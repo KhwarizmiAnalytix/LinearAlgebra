@@ -122,14 +122,13 @@ backend's design and known restrictions.
 
 ## CMake options
 
-C++17 is the default language standard. The compiler version checks require
+CMake 3.24 or newer is required. C++17 is the default language standard. The compiler version checks require
 GCC 9.1+, LLVM Clang 9.0+, AppleClang 11.0+ (Xcode 11), or MSVC 19.14+
 (Visual Studio 2017 15.7). The floor is set by `<filesystem>` (used unconditionally
 by Logging's `string_util.h`), not just language support: older compilers either lack
 the `<filesystem>` header entirely or need an extra `-lstdc++fs`/`-lc++fs` link flag
-this build does not add. Configuration also probes C++17 language and standard
-library features. Dependencies and C++20/C++23 builds can require newer
-toolchains.
+this build does not add. The exported target publishes its selected C++ standard. Dependencies and
+C++20/C++23 builds can require newer toolchains.
 
 CI builds and tests GCC 9.1.0 and Clang 9.0.0 in a pinned Linux container.
 The minimum-compiler jobs select C++17 for both LinearAlgebra and Logging,
@@ -156,19 +155,38 @@ to `main`. Install CMake 3.24+ and Ninja, then configure:
 | `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
-| `LINALG_ENABLE_TESTING` | ON | Build the test suite |
-| `LINALG_ENABLE_GTEST` | ON | GoogleTest integration for tests |
+| `LINALG_ENABLE_TESTING` | Standalone: ON; embedded: host setting or OFF | Build the test suite; `BUILD_TESTING=OFF` disables it |
+| `LINALG_ENABLE_GTEST` | ON | Build GoogleTest cases; OFF retains the GPU source check without GoogleTest |
 | `LINALG_CXX_STANDARD` | 17 | `17`, `20`, or `23` |
 | Other `LINALG_ENABLE_*` | see `CMakeLists.txt` | LTO, coverage, sanitizers, cache, clang-tidy, IWYU, valgrind, … |
 
-When `LINALG_ENABLE_MKL` is `ON`, `find_package(MKL)` must resolve (via
-`MKLROOT` / `CMAKE_PREFIX_PATH`) or configuration fails with `FATAL_ERROR`.
+When `LINALG_ENABLE_MKL` is `ON`, `find_package(MKL CONFIG)` must provide
+`MKL::MKL` with its ILP64 interface (via `MKLROOT` / `CMAKE_PREFIX_PATH`).
+Variable-only classic FindMKL modules are unsupported.
 When only `LINALG_ENABLE_BLAS` is `ON`, `find_package(BLAS)`/`find_package(LAPACK)`
 must resolve, or configuration fails with `FATAL_ERROR`; `cblas.h` is
-required, but `lapacke.h` is optional — without it, the backend covers only
+required. Compile-and-link probes validate the LP64 CBLAS interface and enable
+LAPACKE only when matching declarations and symbols are available. Accelerate
+always uses its own headers and leaves LAPACKE disabled. Without LAPACKE, the backend covers only
 `multiplication`/`transpose` and every other op falls back to
 scalar (a `STATUS` message reports which case applies). When
 `LINALG_ENABLE_CUBLAS` is `ON`, `find_package(CUDAToolkit)` must resolve.
+
+SIMD defaults to SSE2 on x86_64, NEON on arm64, and scalar elsewhere. Higher
+x86 ISAs require an explicit `LINALG_VECTORIZATION_ISA` setting and a CPU that
+supports it; there is no runtime ISA dispatch. Universal macOS builds require
+`LINALG_VECTORIZATION_ISA=scalar`. ISA flags stay private to the implementation.
+LTO modes and linker names are validated at configure time. CUDA builds require
+LTO off. Explicit per-target linkers require a GNU compiler driver; MSVC and
+clang-cl use the linker selected by their toolchain file. Sanitizer and coverage runtimes propagate to static-library consumers;
+instrumentation applies to LinearAlgebra, while dependencies use their own options.
+Valgrind checks run through `ctest -T memcheck` when `LINALG_ENABLE_VALGRIND=ON`.
+
+Icecream can be combined with `ccache` or `sccache`, for example with
+`python3 setup.py config.build.test.ICECC.SCCACHE` from `Scripts/`.
+Cache hits reuse existing objects; cache misses compile through Icecream.
+The generated compiler wrappers fingerprint the real compiler and Icecream
+executables so tool updates invalidate cached objects.
 
 With both CPU vendor backends enabled, `blas_lapacke` calls its own shared
 provider and `mkl` calls MKL's ILP64 interface. The BLAS provider is loaded
@@ -257,6 +275,22 @@ discoverable by `find_package(MKL)`), the vendor-neutral BLAS backend with
 (requires the CUDA toolkit; set `CMAKE_CUDA_ARCHITECTURES` for your GPU, or
 leave it to `native` detection).
 
+C++-only hosts can use `add_subdirectory`; bundled Logging's C language needs
+are enabled automatically. An existing `Logging::Logging` target is reused.
+Set `LINALG_USE_SYSTEM_LOGGING=ON` to require an installed Logging config package.
+
+Installation uses `CMAKE_INSTALL_LIBDIR`, `CMAKE_INSTALL_BINDIR`, and
+`CMAKE_INSTALL_INCLUDEDIR`. Logging is a separate package: install it first,
+then install LinearAlgebra and put both prefixes on the consumer's
+`CMAKE_PREFIX_PATH`. Custom library directories may require an explicit
+`LinearAlgebra_DIR=<prefix>/<libdir>/cmake/LinearAlgebra` when consuming the package.
+
+Run the configuration regressions with:
+
+```bash
+python3 Testing/CMake/check_configurations.py
+```
+
 ## Bazel
 
 ```bash
@@ -268,9 +302,48 @@ wires `ThirdParty/googletest` in via `local_repository`.
 
 ## CI & Coverage
 
+[`.github/workflows/flag-combinations.yml`](.github/workflows/flag-combinations.yml)
+adds constrained pairwise flag coverage on pushes and pull requests to `main`:
+Linux GCC/Clang, macOS ARM64 Clang, and Windows MSVC/Clang. The deterministic
+plan currently builds 176 configurations in 24 jobs, covering every feasible
+pair of values across 24 build dimensions on each toolchain. Dedicated cases
+activate Icecream together with each of ccache and sccache. Each case configures,
+checks effective target properties, builds, and runs enabled CPU tests; requested
+flags, effective settings, results, and full logs are uploaded as artifacts.
+Shared/static builds, four build types, C++17/20/23, Ninja single/multi-config,
+testing switches, OpenBLAS/BLIS, SIMD, caches, LTO, linkers, instrumentation,
+benchmarks, and bundled/installed Logging are included.
+
+Use **Actions → Flag combinations → Run workflow** for manual exhaustive windows:
+choose `mode=exhaustive`, a toolchain (or `all`), a Cartesian `offset`, and a
+`window` of 1–2048 assignments per toolchain. The uploaded `flag-plan.json`
+records the total space, excluded assignments, and `next_offset`; dispatch the
+next window to continue. One dispatch covers only its selected window. The
+exhaustive space uses the same build dimensions as the pairwise plan; optional
+vendor backends and developer tools retain the dedicated checks below.
+For a local preview, run:
+
+```sh
+python3 .github/scripts/flag_matrix.py --output build/flag-plan.json
+python3 -m unittest discover -s Testing/CMake -p test_flag_matrix.py -v
+```
+
+Platform domains exclude unavailable options: Icecream and BLIS on hosted
+Windows, GCC ThinLTO, native MSVC sanitizers, and unsupported sanitizer/ISA
+values. Effective LTO with sccache, Icecream with buildcache, and GCC LTO with
+LLVM's linker are excluded. Instrumentation disables LTO as the project
+requires. Unsafe ISA execution and MemorySanitizer/ThreadSanitizer runtime
+checks are recorded as compile-only; these builds still run the source check
+when testing is enabled. Analyzer checks exercise all 16 combinations of
+clang-tidy/fix/IWYU/spelling switches with recording tools. Profiling checks
+verify dependency/target contracts; neither suite claims real analyzer or
+Profiler execution. Configuration regressions run on all five toolchains,
+and the option inventory fails when a new project switch lacks a coverage owner.
+
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
 PR to `main`: native CMake builds with GCC and Clang, OpenBLAS/LAPACKE and
-MKL builds, LU pivoting, sanitizers, and `bazel test //Testing/...`.
+MKL builds, LU pivoting, sanitizers, and `bazel test //Testing/...`. MKL runs on
+Linux and Windows with shared/static libraries and with/without OpenBLAS.
 The SIMD matrix covers vectorization disabled and each explicit ISA; an ISA
 is compiled but not executed when the runner lacks the required instructions.
 Shared and static install-consumer jobs build a separate application against
@@ -278,7 +351,9 @@ the installed packages. Coverage runs on Linux/macOS/Windows for the native
 backend and on Linux for OpenBLAS/LAPACKE and MKL, with separate report artifacts
 and Codecov flags per backend.
 
-CUDA is always compiled in a GPU-less container. GPU runtime tests run on pushes
+CUDA is compiled without a GPU on Linux and Windows. Linux additionally
+compiles CUDA with OpenBLAS, MKL, and the example requiring all three backends.
+GPU runtime tests run on pushes
 to `main` when the repository variable `LINALG_GPU_CI_ENABLED` is `true` and a
 self-hosted runner with labels `linux`, `x64`, and `gpu` is registered. That runner
 needs Docker, a compatible NVIDIA driver, and the NVIDIA Container Toolkit;

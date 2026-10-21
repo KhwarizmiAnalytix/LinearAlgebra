@@ -49,8 +49,11 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure --no-tests=error
 
+      - name: Configuration regression checks
+        run: python3 Testing/CMake/check_configurations.py
+
   cmake-minimum-linux:
-    name: CMake minimum (${{ matrix.compiler }} ${{ matrix.version }}, C++17)
+    name: CMake 3.24.4 (${{ matrix.compiler }} ${{ matrix.version }}, C++17)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -78,7 +81,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/minimum-tools/cmake"
           curl -fsSL --retry 3 \
-            https://github.com/Kitware/CMake/releases/download/v3.27.9/cmake-3.27.9-linux-x86_64.tar.gz \
+            https://github.com/Kitware/CMake/releases/download/v3.24.4/cmake-3.24.4-linux-x86_64.tar.gz \
             -o "$RUNNER_TEMP/cmake.tar.gz"
           tar -xzf "$RUNNER_TEMP/cmake.tar.gz" --strip-components=1 \
             -C "$RUNNER_TEMP/minimum-tools/cmake"
@@ -129,6 +132,7 @@ jobs:
 
   cmake-minimum-appleclang:
     name: CMake minimum (AppleClang 11.0, C++17)
+    if: github.event_name == 'push' && vars.LINALG_APPLECLANG_11_CI_ENABLED == 'true'
     runs-on: [self-hosted, macOS, X64, appleclang-11]
     timeout-minutes: 30
     steps:
@@ -154,6 +158,7 @@ jobs:
 
   cmake-minimum-msvc:
     name: CMake minimum (MSVC 19.14, C++17)
+    if: github.event_name == 'push' && vars.LINALG_MSVC_1914_CI_ENABLED == 'true'
     runs-on: [self-hosted, Windows, X64, msvc-19.14]
     timeout-minutes: 30
     steps:
@@ -179,15 +184,23 @@ jobs:
           if errorlevel 1 exit /b 1
 
   cmake-mkl:
-    name: CMake (Linux, Intel MKL backend)
+    name: CMake (Linux, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        blas: ['OFF', 'ON']
+        shared: ['OFF', 'ON']
+    env:
+      MKL_BLAS: ${{ matrix.blas }}
+      MKL_SHARED: ${{ matrix.shared }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Ninja + Clang
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang gpg wget
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang gpg wget libopenblas-dev liblapacke-dev
 
       - name: Install Intel oneMKL
         run: |
@@ -202,13 +215,66 @@ jobs:
         run: |
           cmake -S . -B build-mkl -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DLINALG_ENABLE_MKL=ON \
+            -DLINALG_ENABLE_BLAS="$MKL_BLAS" -DBLA_VENDOR=OpenBLAS \
+            -DBUILD_SHARED_LIBS="$MKL_SHARED" \
             -DCMAKE_PREFIX_PATH=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
 
       - name: Build
         run: cmake --build build-mkl -j
 
       - name: Test
-        run: ctest --test-dir build-mkl --output-on-failure
+        run: ctest --test-dir build-mkl --output-on-failure --no-tests=error
+
+  cmake-mkl-windows:
+    name: CMake (Windows, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
+    runs-on: windows-2022
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        blas: ['OFF', 'ON']
+        shared: ['OFF', 'ON']
+    env:
+      CC: cl
+      CXX: cl
+      MKL_BLAS: ${{ matrix.blas }}
+      MKL_SHARED: ${{ matrix.shared }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install build tools, MKL, and OpenBLAS
+        shell: pwsh
+        run: |
+          python -m pip install cmake==4.1.2 ninja mkl-devel
+          if ($LASTEXITCODE -ne 0) { throw 'MKL installation failed' }
+          $pythonPrefix = python -c 'import sys; print(sys.prefix)'
+          $config = Get-ChildItem $pythonPrefix -Recurse -Filter MKLConfig.cmake | Select-Object -First 1
+          if (-not $config) { throw 'MKL package did not install MKLConfig.cmake' }
+          "MKL_DIR=$($config.DirectoryName)" >> $env:GITHUB_ENV
+          Get-ChildItem $pythonPrefix -Recurse -Filter mkl_core*.dll |
+            ForEach-Object { $_.DirectoryName } | Select-Object -Unique | Out-File -Append $env:GITHUB_PATH
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install openblas:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw 'OpenBLAS installation failed' }
+          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows"
+          "CMAKE_PREFIX_PATH=$prefix" >> $env:GITHUB_ENV
+          "$prefix/bin" >> $env:GITHUB_PATH
+      - name: Configure, build, and test both vendor interfaces
+        shell: pwsh
+        run: |
+          cmake -S . -B build-mkl -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DLINALG_ENABLE_MKL=ON "-DMKL_DIR=$env:MKL_DIR" `
+            "-DLINALG_ENABLE_BLAS=$env:MKL_BLAS" -DBLA_VENDOR=OpenBLAS `
+            "-DBUILD_SHARED_LIBS=$env:MKL_SHARED"
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+          cmake --build build-mkl --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          ctest --test-dir build-mkl --output-on-failure --no-tests=error
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
 
   cmake-blas:
     name: CMake (${{ matrix.os }}, OpenBLAS/LAPACKE backend)
@@ -246,6 +312,26 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build-blas --output-on-failure
+
+      - name: Explicit Accelerate with OpenBLAS installed (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S . -B build-accelerate -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DLINALG_ENABLE_BLAS=ON -DBLA_VENDOR=Apple
+          cmake --build build-accelerate --parallel 4
+          ctest --test-dir build-accelerate --output-on-failure --no-tests=error
+
+  cmake-valgrind:
+    name: CTest Valgrind dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
+      - run: cmake -S . -B build-memcheck -G Ninja -DLINALG_ENABLE_VALGRIND=ON
+      - run: cmake --build build-memcheck --parallel 4
+      - run: ctest --test-dir build-memcheck -T memcheck --output-on-failure --no-tests=error
 
   cmake-lu-pivoting:
     name: CMake (${{ matrix.os }}, LU pivoting)
@@ -309,21 +395,52 @@ jobs:
         run: ctest --test-dir build-san --output-on-failure
 
   cuda-compile:
-    name: CUDA (compile-only, no GPU runner)
+    name: CUDA (Linux, BLAS=${{ matrix.blas }}, MKL=${{ matrix.mkl }}, examples=${{ matrix.examples }})
     runs-on: ubuntu-latest
     container: nvidia/cuda:12.6.2-devel-ubuntu22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - blas: 'OFF'
+            mkl: 'OFF'
+            examples: 'OFF'
+          - blas: 'ON'
+            mkl: 'OFF'
+            examples: 'OFF'
+          - blas: 'OFF'
+            mkl: 'ON'
+            examples: 'OFF'
+          - blas: 'ON'
+            mkl: 'ON'
+            examples: 'ON'
+    env:
+      CUDA_BLAS: ${{ matrix.blas }}
+      CUDA_MKL: ${{ matrix.mkl }}
+      CUDA_EXAMPLES: ${{ matrix.examples }}
     steps:
       - name: Install build tools
         # Ubuntu 22.04 ships CMake 3.22; the dependency helper's
         # find_package(... GLOBAL) requires CMake 3.24 or newer.
         run: |
-          apt-get update && apt-get install -y ninja-build git python3-pip
+          apt-get update && apt-get install -y ninja-build git python3-pip gpg wget libopenblas-dev liblapacke-dev
           python3 -m pip install "cmake>=3.24,<4"
           cmake --version
 
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Install Intel oneMKL for combined backend cases
+        if: matrix.mkl == 'ON'
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor > /usr/share/keyrings/oneapi-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            > /etc/apt/sources.list.d/oneAPI.list
+          apt-get update
+          apt-get install -y intel-oneapi-mkl-devel
 
       - name: Configure
         # CMAKE_CUDA_ARCHITECTURES defaults to "native", which queries an
@@ -336,10 +453,45 @@ jobs:
         run: >
           cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DLINALG_ENABLE_CUBLAS=ON
+          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+          -DLINALG_ENABLE_BLAS="$CUDA_BLAS" -DBLA_VENDOR=OpenBLAS
+          -DLINALG_ENABLE_MKL="$CUDA_MKL"
+          -DLINALG_BUILD_EXAMPLES="$CUDA_EXAMPLES"
+          -DCMAKE_PREFIX_PATH=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
           -DCMAKE_CUDA_ARCHITECTURES=75
 
       - name: Build
-        run: cmake --build build-cuda -j
+        run: cmake --build build-cuda --parallel 4
+
+  cuda-windows:
+    name: CUDA (Windows compile-only)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      CC: cl
+      CXX: cl
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - run: python -m pip install cmake==4.1.2 ninja
+      - uses: Jimver/cuda-toolkit@v0.2.36
+        with:
+          cuda: '13.2.0'
+          sub-packages: '["nvcc", "cudart", "crt", "nvvm", "thrust", "cublas", "cublas_dev", "cusolver", "cusolver_dev", "cusparse", "cusparse_dev", "nvjitlink"]'
+      - name: Configure and compile GPU targets without executing GPU workloads
+        shell: pwsh
+        run: |
+          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DLINALG_ENABLE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=75 `
+            -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+          if ($LASTEXITCODE -ne 0) { throw 'CUDA configure failed' }
+          cmake --build build-cuda --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw 'CUDA build failed' }
 
   simd:
     name: SIMD (${{ matrix.isa }})
@@ -448,13 +600,24 @@ jobs:
         run: ctest --test-dir build-gpu --output-on-failure --no-tests=error
 
   install-consumer:
-    name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }})
+    name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }}, ${{ matrix.instrumentation }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         shared: ['ON', 'OFF']
+        instrumentation: ['none']
+        include:
+          - os: ubuntu-latest
+            shared: 'OFF'
+            instrumentation: address
+          - os: macos-latest
+            shared: 'OFF'
+            instrumentation: address
+          - os: ubuntu-latest
+            shared: 'OFF'
+            instrumentation: coverage
     steps:
       - uses: actions/checkout@v4
         with:
@@ -471,25 +634,44 @@ jobs:
       - name: Build and install packages, then run external consumer
         env:
           BUILD_SHARED: ${{ matrix.shared }}
+          INSTRUMENTATION: ${{ matrix.instrumentation }}
         shell: bash
         run: |
           package_prefix="$RUNNER_TEMP/linalg-package"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            runtime_origin='@loader_path'
+          else
+            # shellcheck disable=SC2016 # Keep the loader's literal origin token.
+            runtime_origin='$ORIGIN'
+          fi
+          instrumentation_flags=()
+          if [[ "$INSTRUMENTATION" == address ]]; then
+            instrumentation_flags=(-DLINALG_ENABLE_SANITIZER=ON)
+          elif [[ "$INSTRUMENTATION" == coverage ]]; then
+            instrumentation_flags=(-DLINALG_ENABLE_COVERAGE=ON)
+          fi
           cmake -S ThirdParty/Logging -B build-logging-install -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS="$BUILD_SHARED" \
             -DLOGGING_ENABLE_TESTING=OFF -DLOGGING_ENABLE_BENCHMARK=OFF \
             -DLOGGING_ENABLE_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$package_prefix" \
-            -DCMAKE_INSTALL_RPATH="$package_prefix/lib"
+            -DCMAKE_INSTALL_RPATH="$runtime_origin"
           cmake --build build-logging-install --parallel 4
           cmake --install build-logging-install
           cmake -S . -B build-install -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS="$BUILD_SHARED" -DLINALG_ENABLE_TESTING=OFF \
-            -DCMAKE_INSTALL_PREFIX="$package_prefix" -DCMAKE_INSTALL_RPATH="$package_prefix/lib"
+            -DLINALG_USE_SYSTEM_LOGGING=ON -DCMAKE_PREFIX_PATH="$package_prefix" \
+            -DCMAKE_INSTALL_LIBDIR=customlib -DCMAKE_INSTALL_INCLUDEDIR=custominclude \
+            -DCMAKE_INSTALL_PREFIX="$package_prefix" -DCMAKE_INSTALL_RPATH="$runtime_origin/../lib" \
+            "${instrumentation_flags[@]}"
           cmake --build build-install --parallel 4
           cmake --install build-install
+          mv "$package_prefix" "$RUNNER_TEMP/linalg-package-moved"
+          package_prefix="$RUNNER_TEMP/linalg-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
           cp -R Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
           cmake -S "$RUNNER_TEMP/linalg-consumer" -B "$RUNNER_TEMP/linalg-consumer-build" \
-            -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$package_prefix"
+            -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$package_prefix" \
+            -DLinearAlgebra_DIR="$package_prefix/customlib/cmake/LinearAlgebra"
           cmake --build "$RUNNER_TEMP/linalg-consumer-build" --parallel 4
           ctest --test-dir "$RUNNER_TEMP/linalg-consumer-build" --output-on-failure --no-tests=error
 

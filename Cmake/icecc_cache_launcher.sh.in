@@ -1,0 +1,4 @@
+#!/bin/sh
+# CMake supplies the real compiler first; the cache uses our Icecream wrapper.
+shift
+exec '@_cache_shell@' '@_wrapper_shell@' "$@"

@@ -10,34 +10,34 @@
 # option(XXX_ENABLE_SPELL "Enable spell checking for XXX" OFF)
 # mark_as_advanced(XXX_ENABLE_SPELL)
 # if(XXX_ENABLE_SPELL)
-#   include(spell)
+#   include("${LINALG_SOURCE_DIR}/Cmake/spell.cmake")
 # endif()
 
 # Skip spell checking for third-party libraries
-get_filename_component(_spell_dir_name "${CMAKE_CURRENT_SOURCE_DIR}" NAME)
+get_filename_component(_spell_dir_name "${LINALG_SOURCE_DIR}" NAME)
 if(_spell_dir_name STREQUAL "ThirdParty"
    OR CMAKE_CURRENT_SOURCE_DIR MATCHES ".*/ThirdParty/.*"
    OR CMAKE_CURRENT_SOURCE_DIR MATCHES ".*/third_party/.*"
    OR CMAKE_CURRENT_SOURCE_DIR MATCHES ".*/3rdparty/.*"
 )
-  unset(_spell_dir_name)
-  return()
+    unset(_spell_dir_name)
+    return()
 endif()
 
 # Find codespell executable (cached — find_program is a no-op on repeat calls)
 find_program(
-  CODESPELL_EXECUTABLE
-  NAMES codespell
-  PATHS "$ENV{HOME}/.local/bin" "/usr/local/bin" "/usr/bin"
-        "$ENV{USERPROFILE}/AppData/Local/Programs/Python/Python*/Scripts"
-        "$ENV{PROGRAMFILES}/Python*/Scripts"
-  DOC "Path to codespell executable"
+    CODESPELL_EXECUTABLE
+    NAMES codespell
+    PATHS "$ENV{HOME}/.local/bin" "/usr/local/bin" "/usr/bin"
+          "$ENV{USERPROFILE}/AppData/Local/Programs/Python/Python*/Scripts"
+          "$ENV{PROGRAMFILES}/Python*/Scripts"
+    DOC "Path to codespell executable"
 )
 
 if(NOT CODESPELL_EXECUTABLE)
-  message(
-    FATAL_ERROR
-      "Codespell requested but not found!
+    message(
+        FATAL_ERROR
+            "Codespell requested but not found!
 
 Please install codespell:
 
@@ -48,60 +48,60 @@ Please install codespell:
   - Windows: pip install codespell
 
 Or set ${_spell_dir_name}_ENABLE_SPELL=OFF to disable spell checking"
-  )
+    )
 else()
-  message(STATUS "Found codespell: ${CODESPELL_EXECUTABLE}")
+    message(STATUS "Found codespell: ${CODESPELL_EXECUTABLE}")
 
-  set(_spell_args)
-  set(_spell_ignore_file "${CMAKE_SOURCE_DIR}/Scripts/suppressions/spell_suppressions.txt")
-  if(NOT EXISTS "${_spell_ignore_file}")
-    message(FATAL_ERROR "Spell suppression file not found: ${_spell_ignore_file}")
-  endif()
-  list(APPEND _spell_args "--ignore-words=${_spell_ignore_file}")
-  message(STATUS "Using spell suppression file: ${_spell_ignore_file}")
+    set(_spell_args)
+    set(_spell_ignore_file "${LINALG_SOURCE_DIR}/Scripts/suppressions/spell_suppressions.txt")
+    if(NOT EXISTS "${_spell_ignore_file}")
+        message(FATAL_ERROR "Spell suppression file not found: ${_spell_ignore_file}")
+    endif()
+    list(APPEND _spell_args "--ignore-words=${_spell_ignore_file}")
+    message(STATUS "Using spell suppression file: ${_spell_ignore_file}")
 
-  # Always skip vendored trees. `ThirdParty` alone only matches a directory
-  # *entry* during os.walk; `*ThirdParty*` also matches full paths if codespell
-  # is pointed at a ThirdParty file or the walk starts inside that tree.
-  #
-  # Also skip generated Python tool caches (.mypy_cache, __pycache__,
-  # .pytest_cache, .ruff_cache): any local run of mypy/pytest/ruff against
-  # Scripts/ repopulates these at the repo root, and their JSON/pickle data
-  # routinely trips codespell on tokens that are not misspellings in any
-  # source file (e.g. "asend", "NotIn") — a build-breaking false positive
-  # unrelated to anything this repository's own code or docs contain.
-  set(_spell_skip
-      ".git,.augment,.github,.vscode,build,Build,Cmake,ThirdParty,third_party,3rdparty,*ThirdParty*,*third_party*,*3rdparty*,.mypy_cache,__pycache__,.pytest_cache,.ruff_cache,*.mypy_cache*,*__pycache__*,*.pytest_cache*,*.ruff_cache*"
-  )
-  list(APPEND _spell_args "--skip=${_spell_skip}")
+    # Always skip vendored trees. `ThirdParty` alone only matches a directory
+    # *entry* during os.walk; `*ThirdParty*` also matches full paths if codespell
+    # is pointed at a ThirdParty file or the walk starts inside that tree.
+    #
+    # Also skip generated Python tool caches (.mypy_cache, __pycache__,
+    # .pytest_cache, .ruff_cache): any local run of mypy/pytest/ruff against
+    # Scripts/ repopulates these at the repo root, and their JSON/pickle data
+    # routinely trips codespell on tokens that are not misspellings in any
+    # source file (e.g. "asend", "NotIn") — a build-breaking false positive
+    # unrelated to anything this repository's own code or docs contain.
+    set(_spell_skip
+        ".git,.augment,.github,.vscode,build,Build,build_*,build-*,.venv*,venv*,bazel-*,Cmake,ThirdParty,third_party,3rdparty,*ThirdParty*,*third_party*,*3rdparty*,.mypy_cache,__pycache__,.pytest_cache,.ruff_cache,*.mypy_cache*,*__pycache__*,*.pytest_cache*,*.ruff_cache*"
+    )
+    list(APPEND _spell_args "--skip=${_spell_skip}")
 
-  set(CODESPELL_CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.codespellrc")
-  if(EXISTS ${CODESPELL_CONFIG_FILE})
-    message(STATUS "Using codespell configuration: ${CODESPELL_CONFIG_FILE}")
-  endif()
+    set(CODESPELL_CONFIG_FILE "${LINALG_SOURCE_DIR}/.codespellrc")
+    if(EXISTS ${CODESPELL_CONFIG_FILE})
+        message(STATUS "Using codespell configuration: ${CODESPELL_CONFIG_FILE}")
+    endif()
 
-  # Target names are unique per module directory to avoid conflicts
-  string(TOLOWER "${_spell_dir_name}" _spell_dir_lower)
+    # Target names are unique per module directory to avoid conflicts
+    string(TOLOWER "${_spell_dir_name}" _spell_dir_lower)
 
-  add_custom_target(
-    spell_check_${_spell_dir_lower}
-    COMMAND ${CODESPELL_EXECUTABLE} ${_spell_args} ${CMAKE_CURRENT_SOURCE_DIR}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Running spell check for ${_spell_dir_name}..."
-    VERBATIM
-  )
+    add_custom_target(
+        spell_check_${_spell_dir_lower}
+        COMMAND ${CODESPELL_EXECUTABLE} ${_spell_args} ${LINALG_SOURCE_DIR}
+        WORKING_DIRECTORY ${LINALG_SOURCE_DIR}
+        COMMENT "Running spell check for ${_spell_dir_name}..."
+        VERBATIM
+    )
 
-  add_custom_target(
-    spell_check_build_${_spell_dir_lower} ALL
-    COMMAND ${CODESPELL_EXECUTABLE} ${_spell_args} ${CMAKE_CURRENT_SOURCE_DIR}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Running spell check for ${_spell_dir_name} during build..."
-    VERBATIM
-  )
+    add_custom_target(
+        spell_check_build_${_spell_dir_lower} ALL
+        COMMAND ${CODESPELL_EXECUTABLE} ${_spell_args} ${LINALG_SOURCE_DIR}
+        WORKING_DIRECTORY ${LINALG_SOURCE_DIR}
+        COMMENT "Running spell check for ${_spell_dir_name} during build..."
+        VERBATIM
+    )
 
-  message(
-    STATUS "${_spell_dir_name}_ENABLE_SPELL is ON: codespell is check-only (no --write-changes)"
-  )
+    message(
+        STATUS "${_spell_dir_name}_ENABLE_SPELL is ON: codespell is check-only (no --write-changes)"
+    )
 endif()
 
 unset(_spell_dir_name)

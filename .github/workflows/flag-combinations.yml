@@ -1,0 +1,196 @@
+name: Flag combinations
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Pairwise coverage or a bounded exhaustive Cartesian window
+        type: choice
+        options: [pairwise, exhaustive]
+        default: pairwise
+      platform:
+        description: Toolchain to exercise
+        type: choice
+        options: [all, linux-gcc, linux-clang, macos-clang, windows-msvc, windows-clang]
+        default: all
+      offset:
+        description: First Cartesian assignment in an exhaustive window
+        type: string
+        default: '0'
+      window:
+        description: Cartesian assignments per platform (exhaustive only; 1..2048)
+        type: string
+        default: '256'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flags-${{ github.ref }}-${{ inputs.mode || 'pairwise' }}-${{ inputs.platform || 'all' }}-${{ inputs.offset || '0' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check matrix generator and coverage inventory
+        run: python -m unittest discover -s Testing/CMake -p test_flag_matrix.py -v
+      - name: Generate constrained combinations
+        id: generate
+        env:
+          FLAG_MODE: ${{ inputs.mode || 'pairwise' }}
+          FLAG_PLATFORM: ${{ inputs.platform || 'all' }}
+          FLAG_OFFSET: ${{ inputs.offset || '0' }}
+          FLAG_WINDOW: ${{ inputs.window || '256' }}
+        run: >
+          python .github/scripts/flag_matrix.py
+          --mode "$FLAG_MODE" --platform "$FLAG_PLATFORM"
+          --offset "$FLAG_OFFSET" --limit "$FLAG_WINDOW"
+          --output flag-plan.json --github-output "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flag-plan
+          path: flag-plan.json
+          retention-days: 7
+
+  combinations:
+    name: Flags / ${{ matrix.shard }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      # Exercise actual cache/Icecream composition without requiring a cluster.
+      ICECC: 'no'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+      - name: Install CMake and Ninja
+        run: python -m pip install cmake==4.1.2 ninja
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: v0.12.0
+          disable_annotations: 'true'
+      - name: Install Linux compilers, launchers, and BLAS providers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm llvm-dev lld mold binutils ccache icecc libblis-dev libopenblas-dev liblapacke-dev
+      - name: Install macOS launchers and BLAS providers
+        if: runner.os == 'macOS'
+        run: |
+          brew install openblas blis icecream ccache
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix openblas);$(brew --prefix blis)" >> "$GITHUB_ENV"
+      - name: Install Windows launchers and OpenBLAS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install -y ccache
+          if ($LASTEXITCODE -ne 0) { throw 'Cache installation failed' }
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install openblas:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw 'OpenBLAS installation failed' }
+          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows"
+          "CMAKE_PREFIX_PATH=$prefix" >> $env:GITHUB_ENV
+          "$prefix/bin" >> $env:GITHUB_PATH
+          Get-ChildItem 'C:/Program Files/LLVM/lib/clang' -Recurse -Filter 'clang_rt.asan_dynamic-x86_64.dll' |
+            ForEach-Object { $_.DirectoryName } | Select-Object -Unique | Out-File -Append $env:GITHUB_PATH
+      - name: Build pinned buildcache for the selected platform
+        shell: bash
+        run: python .github/scripts/install_buildcache.py --prefix "$RUNNER_TEMP/buildcache-tool"
+      - uses: actions/download-artifact@v4
+        with:
+          name: flag-plan
+      - name: Configure, verify, build, and test every case in the shard
+        env:
+          FLAG_SHARD: ${{ matrix.shard }}
+        shell: bash
+        run: >
+          python .github/scripts/run_flag_cases.py
+          --manifest flag-plan.json --shard "$FLAG_SHARD"
+          --work "$RUNNER_TEMP/flag-work"
+      - name: Stop the job-local cache server
+        if: always()
+        run: python -c "import shutil, subprocess; shutil.which('sccache') and subprocess.run(['sccache', '--stop-server'], check=False)"
+      - name: Upload requested flags, effective flags, and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flags-${{ matrix.shard }}
+          path: |
+            flag-plan.json
+            ${{ runner.temp }}/flag-work/results.json
+            ${{ runner.temp }}/flag-work/logs/**
+            ${{ runner.temp }}/flag-work/*/ci-effective-flags.txt
+            ${{ runner.temp }}/flag-work/*/CMakeCache.txt
+          retention-days: 7
+
+  contracts:
+    name: Flag contracts / ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-gcc
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-24.04
+            platform: linux-clang
+            cc: clang
+            cxx: clang++
+          - os: macos-15
+            platform: macos-clang
+            cc: clang
+            cxx: clang++
+          - os: windows-2022
+            platform: windows-msvc
+            cc: cl
+            cxx: cl
+          - os: windows-2022
+            platform: windows-clang
+            cc: clang
+            cxx: clang++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+      - run: python -m pip install cmake==4.1.2 ninja
+      - name: Compiler and embedding regressions
+        run: python Testing/CMake/check_configurations.py
+      - name: Analyzer switch combinations and dependency contracts (recording tools)
+        run: python Testing/CMake/check_tool_flags.py

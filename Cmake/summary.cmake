@@ -6,7 +6,7 @@ if(LINALG_STANDALONE)
     message("  Cache                : ${LINALG_ENABLE_CACHE}")
     message("  Cache backend        : ${LINALG_CACHE_BACKEND}")
     message("  Icecc                : ${LINALG_ENABLE_ICECC}")
-    xsigma_print_lto_linker_summary(LINALG)
+    linalg_print_lto_linker_summary(LINALG)
     message("  Coverage             : ${LINALG_ENABLE_COVERAGE}")
     message("  Testing              : ${LINALG_ENABLE_TESTING}")
     message("  CTest dashboards     : ${BUILD_TESTING}")
@@ -33,7 +33,7 @@ if(LINALG_STANDALONE)
     message("  Sanitizer type       : ${LINALG_SANITIZER_TYPE}")
     message("  Spell                : ${LINALG_ENABLE_SPELL}")
     message("  Valgrind             : ${LINALG_ENABLE_VALGRIND}")
-    message("  External dependencies: ${XSIGMA_ENABLE_EXTERNAL}")
+    message("  External dependencies: ${LINALG_ENABLE_EXTERNAL}")
     message("  Third-party sources  : ${LINALG_THIRD_PARTY_DIR}")
     message("")
     message("Build:")
@@ -55,44 +55,83 @@ if(LINALG_STANDALONE)
     list(REMOVE_DUPLICATES _summary_configs)
     foreach(_summary_config IN LISTS _summary_configs)
         string(TOUPPER "${_summary_config}" _summary_config_upper)
-        foreach(_summary_flag IN ITEMS CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_CUDA_FLAGS
-                                       CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS
-                                       CMAKE_STATIC_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS)
+        foreach(
+            _summary_flag IN
+            ITEMS CMAKE_C_FLAGS
+                  CMAKE_CXX_FLAGS
+                  CMAKE_CUDA_FLAGS
+                  CMAKE_EXE_LINKER_FLAGS
+                  CMAKE_SHARED_LINKER_FLAGS
+                  CMAKE_STATIC_LINKER_FLAGS
+                  CMAKE_MODULE_LINKER_FLAGS
+        )
             set(_summary_var "${_summary_flag}_${_summary_config_upper}")
             if(DEFINED ${_summary_var})
                 message("  ${_summary_var} : ${${_summary_var}}")
             endif()
         endforeach()
     endforeach()
-    get_directory_property(
-        _summary_compile_defs DIRECTORY ${PROJECT_SOURCE_DIR} COMPILE_DEFINITIONS
-    )
+    get_directory_property(_summary_compile_defs DIRECTORY ${LINALG_SOURCE_DIR} COMPILE_DEFINITIONS)
     message("  Top-level compile defs : ${_summary_compile_defs}")
     message("")
 
     # Optional overrides and tool paths from the Cmake/ helpers. Keep unset
     # platform/backend-specific settings out of the summary.
     message("Additional CMake settings (when defined):")
-    foreach(_summary_var IN ITEMS
-            CMAKE_CONFIGURATION_TYPES CMAKE_GENERATOR_PLATFORM CMAKE_GENERATOR_TOOLSET
-            CMAKE_TOOLCHAIN_FILE CMAKE_MAKE_PROGRAM CMAKE_LINKER
-            CMAKE_PREFIX_PATH CMAKE_FIND_ROOT_PATH
-            CMAKE_INTERPROCEDURAL_OPTIMIZATION CMAKE_MSVC_RUNTIME_LIBRARY
-            CMAKE_CXX_MP_FLAG CMAKE_CXX_MP_NUM_PROCESSORS PROJECT_LLVM_INSTALL_PREFIX
-            CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_OSX_SYSROOT
-            CMAKE_CUDA_COMPILER CMAKE_CUDA_HOST_COMPILER CMAKE_CUDA_STANDARD
-            CMAKE_CUDA_ARCHITECTURES CMAKE_CUDA_FLAGS CMAKE_CUDA_RUNTIME_LIBRARY
-            CUDAToolkit_ROOT
-            LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR LINALG_LAPACKE_LIBRARY
-            LINALG_BLAS_RUNTIME_LIBRARY LINALG_LAPACKE_RUNTIME_LIBRARY
-            BLA_VENDOR BLA_STATIC BLA_SIZEOF_INTEGER BLA_THREAD BLA_PREFER_PKGCONFIG
-            MKL_ROOT MKL_INTERFACE MKL_LINK MKL_THREADING
-            XSIGMA_CCACHE_PROGRAM XSIGMA_SCCACHE_PROGRAM XSIGMA_BUILDCACHE_PROGRAM
-            XSIGMA_ICECC_EXECUTABLE CLANG_TIDY_PATH IWYU_EXECUTABLE CODESPELL_EXECUTABLE
-            PROJECT_VALGRIND_TIMEOUT_MULTIPLIER CTEST_TEST_TIMEOUT
-            CMAKE_MEMORYCHECK_COMMAND CMAKE_MEMORYCHECK_COMMAND_OPTIONS
-            CTEST_MEMORYCHECK_COMMAND CTEST_MEMORYCHECK_COMMAND_OPTIONS
-            CTEST_MEMORYCHECK_SUPPRESSIONS_FILE CMAKE_PDB_OUTPUT_DIRECTORY)
+    foreach(
+        _summary_var IN
+        ITEMS CMAKE_CONFIGURATION_TYPES
+              CMAKE_GENERATOR_PLATFORM
+              CMAKE_GENERATOR_TOOLSET
+              CMAKE_TOOLCHAIN_FILE
+              CMAKE_MAKE_PROGRAM
+              CMAKE_LINKER
+              CMAKE_PREFIX_PATH
+              CMAKE_FIND_ROOT_PATH
+              CMAKE_INTERPROCEDURAL_OPTIMIZATION
+              CMAKE_MSVC_RUNTIME_LIBRARY
+              CMAKE_CXX_MP_FLAG
+              CMAKE_CXX_MP_NUM_PROCESSORS
+              PROJECT_LLVM_INSTALL_PREFIX
+              CMAKE_OSX_ARCHITECTURES
+              CMAKE_OSX_DEPLOYMENT_TARGET
+              CMAKE_OSX_SYSROOT
+              CMAKE_CUDA_COMPILER
+              CMAKE_CUDA_HOST_COMPILER
+              CMAKE_CUDA_STANDARD
+              CMAKE_CUDA_ARCHITECTURES
+              CMAKE_CUDA_FLAGS
+              CMAKE_CUDA_RUNTIME_LIBRARY
+              CUDAToolkit_ROOT
+              LINALG_CBLAS_INCLUDE_DIR
+              LINALG_LAPACKE_INCLUDE_DIR
+              LINALG_LAPACKE_LIBRARY
+              LINALG_BLIS_LAPACK_LIBRARY
+              LINALG_BLAS_RUNTIME_LIBRARY
+              LINALG_LAPACKE_RUNTIME_LIBRARY
+              BLA_VENDOR
+              BLA_STATIC
+              BLA_SIZEOF_INTEGER
+              BLA_THREAD
+              BLA_PREFER_PKGCONFIG
+              MKL_ROOT
+              MKL_INTERFACE
+              MKL_LINK
+              MKL_THREADING
+              LINALG_CCACHE_PROGRAM
+              LINALG_SCCACHE_PROGRAM
+              LINALG_BUILDCACHE_PROGRAM
+              LINALG_ICECC_EXECUTABLE
+              CLANG_TIDY_PATH
+              IWYU_EXECUTABLE
+              CODESPELL_EXECUTABLE
+              PROJECT_VALGRIND_TIMEOUT_MULTIPLIER
+              DART_TESTING_TIMEOUT
+              MEMORYCHECK_COMMAND
+              MEMORYCHECK_COMMAND_OPTIONS
+              MEMORYCHECK_SUPPRESSIONS_FILE
+              CMAKE_PDB_OUTPUT_DIRECTORY
+    )
         if(DEFINED ${_summary_var})
             message("  ${_summary_var} : ${${_summary_var}}")
         endif()

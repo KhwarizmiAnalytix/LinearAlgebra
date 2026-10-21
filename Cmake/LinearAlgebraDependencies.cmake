@@ -9,7 +9,25 @@
 
 include_guard(GLOBAL)
 
-include(third_party_helpers)
+include("${LINALG_SOURCE_DIR}/Cmake/third_party_helpers.cmake")
+
+# Keep every bundled target on the compiler's default macOS C++ runtime. The
+# bundled Logging helper injects Homebrew LLVM search paths even for AppleClang.
+# Remove only that helper's directory options at this integration boundary.
+function(linalg_remove_dependency_runtime_options directory)
+    get_property(_targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_target IN LISTS _targets)
+        get_target_property(_options "${_target}" LINK_OPTIONS)
+        if(_options)
+            list(REMOVE_ITEM _options ${ARGN})
+            set_property(TARGET "${_target}" PROPERTY LINK_OPTIONS "${_options}")
+        endif()
+    endforeach()
+    get_property(_children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
+    foreach(_child IN LISTS _children)
+        linalg_remove_dependency_runtime_options("${_child}" ${ARGN})
+    endforeach()
+endfunction()
 
 # MSVC also identifies clang++ targeting the MSVC ABI. These bundled projects
 # use it to select cl.exe arguments, which the GNU Clang driver cannot parse.
@@ -21,7 +39,31 @@ function(linalg_add_dependency_subdirectory source_dir binary_dir)
     )
         set(MSVC FALSE)
     endif()
+    get_property(
+        _had_testing
+        CACHE BUILD_TESTING
+        PROPERTY TYPE
+        SET
+    )
+    if(_had_testing)
+        get_property(_testing_value CACHE BUILD_TESTING PROPERTY VALUE)
+        get_property(_testing_help CACHE BUILD_TESTING PROPERTY HELPSTRING)
+        get_property(_testing_type CACHE BUILD_TESTING PROPERTY TYPE)
+    endif()
     add_subdirectory("${source_dir}" "${binary_dir}" ${ARGN})
+    if(APPLE)
+        get_directory_property(
+            _dependency_runtime_options DIRECTORY "${source_dir}" DEFINITION LLVM_LINK_FLAGS
+        )
+        if(_dependency_runtime_options)
+            linalg_remove_dependency_runtime_options("${source_dir}" ${_dependency_runtime_options})
+        endif()
+    endif()
+    if(_had_testing)
+        set(BUILD_TESTING "${_testing_value}" CACHE ${_testing_type} "${_testing_help}" FORCE)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
 endfunction()
 
 # CMAKE_CURRENT_LIST_DIR = this file's directory (<repo>/Cmake) regardless of
@@ -41,21 +83,21 @@ function(linalg_setup_gtest)
         # Embedded in XSigma: reuse the host's googletest wiring.
         xsigma_add_googletest()
     elseif(EXISTS "${LINALG_THIRD_PARTY_DIR}/googletest/CMakeLists.txt")
-        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-        set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        set(INSTALL_GTEST OFF)
+        set(BUILD_GMOCK OFF)
+        set(gtest_force_shared_crt ON)
         linalg_add_dependency_subdirectory(
             "${LINALG_THIRD_PARTY_DIR}/googletest"
-            "${CMAKE_BINARY_DIR}/ThirdParty/googletest_build" EXCLUDE_FROM_ALL
+            "${LINALG_BINARY_DIR}/ThirdParty/googletest_build" EXCLUDE_FROM_ALL
         )
     else()
         include(FetchContent)
         FetchContent_Declare(
             googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.18.0
         )
-        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-        set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        set(INSTALL_GTEST OFF)
+        set(BUILD_GMOCK OFF)
+        set(gtest_force_shared_crt ON)
         FetchContent_MakeAvailable(googletest)
     endif()
     if(TARGET gtest AND NOT TARGET GTest::gtest)
@@ -65,7 +107,7 @@ function(linalg_setup_gtest)
         add_library(GTest::gtest_main ALIAS gtest_main)
     endif()
     # XSigma-style namespaced aliases used by this repo's test targets.
-    _create_third_party_interface_targets(
+    linalg_create_third_party_interface_targets(
         "Gtest::gtest=GTest::gtest|gtest" "Gtest::gtest_main=GTest::gtest_main|gtest_main"
     )
 endfunction()
@@ -81,11 +123,13 @@ function(linalg_setup_benchmark)
     # benchmark packages (e.g. static Homebrew archives) mislink/crash when
     # consumed via an IMPORTED target with a different toolchain.
     set(_bench_src "")
-    if(EXISTS "${LINALG_THIRD_PARTY_DIR}/benchmark/CMakeLists.txt")
+    if(FETCHCONTENT_SOURCE_DIR_BENCHMARK)
+        # An explicit FetchContent source override takes precedence over bundled copies.
+    elseif(EXISTS "${LINALG_THIRD_PARTY_DIR}/benchmark/CMakeLists.txt")
         set(_bench_src "${LINALG_THIRD_PARTY_DIR}/benchmark")
     elseif(EXISTS "${_linalg_repo_root}/ThirdParty/Logging/ThirdParty/benchmark/CMakeLists.txt")
         set(_bench_src "${_linalg_repo_root}/ThirdParty/Logging/ThirdParty/benchmark")
-    elseif(XSIGMA_ENABLE_EXTERNAL)
+    elseif(LINALG_ENABLE_EXTERNAL)
         find_package(benchmark QUIET)
         if(benchmark_FOUND)
             message(STATUS "Found external Google Benchmark")
@@ -112,7 +156,7 @@ function(linalg_setup_benchmark)
     set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "Don't download dependencies" FORCE)
     if(_bench_src)
         linalg_add_dependency_subdirectory(
-            "${_bench_src}" "${CMAKE_BINARY_DIR}/ThirdParty/benchmark_build" EXCLUDE_FROM_ALL
+            "${_bench_src}" "${LINALG_BINARY_DIR}/ThirdParty/benchmark_build" EXCLUDE_FROM_ALL
         )
         if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
                                                                 STREQUAL "GNU"
@@ -130,5 +174,8 @@ function(linalg_setup_benchmark)
         )
         FetchContent_MakeAvailable(benchmark)
     endif()
-    _set_third_party_folder_properties("benchmark" "${CMAKE_BINARY_DIR}/ThirdParty/benchmark_build")
+    if(TARGET benchmark)
+        get_target_property(_benchmark_binary_dir benchmark BINARY_DIR)
+        linalg_set_third_party_folder_properties("benchmark" "${_benchmark_binary_dir}")
+    endif()
 endfunction()

@@ -19,7 +19,7 @@
 # tri-/pentadiagonal operations (scalar only), and every GPU op except
 # general (non-symmetric) eigenvalue decomposition.
 # =============================================================================
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.24)
 
 # Standalone CMake package — any C++ project can consume it via add_subdirectory;
 # XSigma is one consumer, not a required host.
@@ -33,8 +33,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         LANGUAGES CXX C
     )
     set(LINALG_STANDALONE ON)
-    include(CTest)
-    enable_testing()
     option(BUILD_SHARED_LIBS "Build shared libraries" ON)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -43,15 +41,16 @@ else()
     set(LINALG_STANDALONE OFF)
 endif()
 
-# Own CMake modules: toolchain helpers (lto/cache/sanitize/...), the
-# add_third_party_library machinery (third_party_helpers.cmake), and test
-# dependency resolvers (LinearAlgebraDependencies.cmake) all live in Cmake/.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Cmake")
+set(LINALG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(LINALG_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+include(GNUInstallDirs)
 
-# add_third_party_library + alias/folder helpers. When embedded in XSigma these
-# are already defined by XSigma's ThirdParty/CMakeLists.txt; including the
-# repo's own copy is a harmless identical redefinition.
-include(third_party_helpers)
+# Own CMake modules: toolchain helpers (lto/cache/sanitize/...), the
+# linalg_add_third_party_library machinery (third_party_helpers.cmake), and test
+# dependency resolvers (LinearAlgebraDependencies.cmake) all live in Cmake/.
+
+# Project-owned dependency alias and folder helpers.
+include("${LINALG_SOURCE_DIR}/Cmake/third_party_helpers.cmake")
 
 # --- Section 1: Feature flags (LINALG_ENABLE_*) ---
 
@@ -90,7 +89,7 @@ option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
 # Enables the scalar (non-MKL/BLAS) multiplication backend's blocked,
-# SIMD-vectorized GEMM (include/common/packet.h and the
+# SIMD-vectorized GEMM (src/common/packet.h and the
 # LINALG_HAS_VECTORIZATION block in native/multiplication_native.cpp) in
 # place of its plain triple-loop fallback.
 option(LINALG_ENABLE_VECTORIZATION
@@ -104,8 +103,8 @@ option(LINALG_DISPLAY_WIN32_WARNINGS "Do not suppress MSVC narrowing-conversion 
 
 # Link-Time Optimization — disabled when LINALG_ENABLE_COVERAGE or LINALG_ENABLE_SANITIZER is ON
 # (LTO conflicts with instrumentation / sanitizers).
-include(lto)
-xsigma_lto_compute_default(_lto_default PROFILE SUPPORT)
+include("${LINALG_SOURCE_DIR}/Cmake/lto.cmake")
+linalg_lto_compute_default(_lto_default PROFILE SUPPORT)
 set(LINALG_LTO_MODE "${_lto_default}"
     CACHE STRING "LTO mode for LinearAlgebra: off | thin | full | ipo | auto"
 )
@@ -116,15 +115,22 @@ set_property(CACHE LINALG_LTO_MODE PROPERTY STRINGS off thin full ipo auto)
 option(LINALG_ENABLE_COVERAGE "Enable coverage instrumentation for LinearAlgebra" OFF)
 
 # Testing — gates add_subdirectory(Testing/Cxx).
-option(LINALG_ENABLE_TESTING "Build LinearAlgebra test suite" ON)
+set(_linalg_testing_default ${LINALG_STANDALONE})
+if(DEFINED BUILD_TESTING)
+    set(_linalg_testing_default ${BUILD_TESTING})
+endif()
+option(LINALG_ENABLE_TESTING "Build LinearAlgebra test suite" ${_linalg_testing_default})
+# BUILD_TESTING=OFF is the host's global veto, including on reconfigure.
+if(DEFINED BUILD_TESTING AND NOT BUILD_TESTING)
+    set(LINALG_ENABLE_TESTING OFF)
+endif()
 
 # Google Test integration for LinearAlgebra tests.
 option(LINALG_ENABLE_GTEST "Enable GoogleTest for LinearAlgebra" ON)
 
 # Google Benchmark integration for LinearAlgebra micro-benchmarks (vendored
 # submodule under ThirdParty/benchmark; see linalg_setup_benchmark() in
-# Cmake/LinearAlgebraDependencies.cmake). Off by default: no benchmark
-# targets exist yet.
+# Cmake/LinearAlgebraDependencies.cmake). Off by default.
 option(LINALG_ENABLE_BENCHMARK "Enable Google Benchmark for LinearAlgebra micro-benchmarks" OFF)
 
 # Profiler-instrumented profiling program for all matrix operations (CPU and GPU).
@@ -183,38 +189,35 @@ endif()
 
 # a) Standard CMake introspection
 include(CheckCXXSourceRuns)
-include(CheckSymbolExists)
+include(CheckCXXSymbolExists)
 
 # b) Shared toolchain helpers
-include(checks) # Compiler minimum versions and system feature checks
-include(build_type) # Validates / normalises CMAKE_BUILD_TYPE
-include(platform) # Platform flags (macOS rpath, Windows /utf-8, …)
+# Compiler minimum versions and system feature checks.
+include("${LINALG_SOURCE_DIR}/Cmake/checks.cmake")
+include("${LINALG_SOURCE_DIR}/Cmake/build_type.cmake") # Validates / normalises CMAKE_BUILD_TYPE
+# Platform compilation flags.
+include("${LINALG_SOURCE_DIR}/Cmake/platform.cmake")
 
-include(cache) # Configures per-target compiler cache launcher
+include("${LINALG_SOURCE_DIR}/Cmake/cache.cmake") # Configures per-target compiler cache launcher
 include(CMakeDependentOption)
-include(helper_macros)
+include("${LINALG_SOURCE_DIR}/Cmake/helper_macros.cmake")
 if(LINALG_ENABLE_SANITIZER)
-    include(sanitize)
+    include("${LINALG_SOURCE_DIR}/Cmake/sanitize.cmake")
 endif()
 if(LINALG_ENABLE_SPELL)
-    include(spell)
+    include("${LINALG_SOURCE_DIR}/Cmake/spell.cmake")
 endif()
 if(LINALG_ENABLE_VALGRIND)
-    include(valgrind)
+    include("${LINALG_SOURCE_DIR}/Cmake/valgrind.cmake")
 endif()
-# c) Coverage gate — appends -fprofile-instr-generate / --coverage; LTO already cleared above.
+if(LINALG_STANDALONE)
+    include(CTest)
+endif()
+if(LINALG_ENABLE_TESTING)
+    enable_testing()
+endif()
 if(LINALG_ENABLE_COVERAGE)
-    include(coverage)
-elseif(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
-                                                                STREQUAL "GNU")
-)
-    string(APPEND CMAKE_EXE_LINKER_FLAGS " /DEBUG:FULL")
-    string(APPEND CMAKE_SHARED_LINKER_FLAGS " /DEBUG:FULL")
-elseif(MSVC)
-    # clang++ GNU driver targeting the MSVC ABI. lld-link accepts /DEBUG:FULL,
-    # but a bare /DEBUG:FULL argument is a file path to that driver.
-    string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,/DEBUG:FULL")
-    string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,/DEBUG:FULL")
+    include("${LINALG_SOURCE_DIR}/Cmake/coverage.cmake")
 endif()
 
 # --- Optional Intel MKL backend ---
@@ -226,18 +229,9 @@ if(LINALG_ENABLE_MKL)
     # Must be set before find_package(MKL CONFIG) — it selects which
     # MKL::MKL interface target that package defines.
     set(MKL_INTERFACE "ilp64")
-    find_package(MKL CONFIG QUIET)
-    if(NOT MKL_FOUND)
-        # Fall back to the classic (non-CONFIG) FindMKL-style search some
-        # environments still ship instead of the oneMKL CMake config package.
-        find_package(MKL QUIET)
-    endif()
-    if(NOT MKL_FOUND)
-        message(
-            FATAL_ERROR
-                "LINALG_ENABLE_MKL is ON but MKL could not be found by find_package(MKL). "
-                "Install Intel oneMKL or set MKLROOT / CMAKE_PREFIX_PATH, or configure with -DLINALG_ENABLE_MKL=OFF."
-        )
+    find_package(MKL CONFIG REQUIRED)
+    if(NOT TARGET MKL::MKL)
+        message(FATAL_ERROR "Intel oneMKL must provide MKL::MKL with the ILP64 interface.")
     endif()
     if(TARGET MKL::MKL)
         # GNU ld's default --as-needed can drop libmkl_core.so (and the
@@ -282,31 +276,27 @@ if(LINALG_ENABLE_BLAS)
     # entry always wins ties, since list order is find preference and these
     # are appended, not prepended.
     set(LINALG_BLAS_INCLUDE_DIRS "")
-    if(NOT DEFINED ENV{LINALG_NO_AUTO_BLAS_PREFIX})
+    set(_linalg_blis_found_via_config OFF)
+    if(LINALG_ENABLE_BLIS)
+        set(BLA_VENDOR FLAME)
+        find_package(BLIS CONFIG QUIET)
+        if(BLIS_FOUND AND (TARGET BLIS::BLIS OR BLIS_LIBRARIES))
+            if(TARGET BLIS::BLIS)
+                set(_linalg_blas_libraries BLIS::BLIS)
+            else()
+                set(_linalg_blas_libraries ${BLIS_LIBRARIES})
+            endif()
+            list(APPEND LINALG_BLAS_INCLUDE_DIRS ${BLIS_INCLUDE_DIRS})
+            set(_linalg_blis_found_via_config ON)
+        endif()
+    endif()
+    if(NOT CMAKE_CROSSCOMPILING AND NOT DEFINED ENV{LINALG_NO_AUTO_BLAS_PREFIX})
         set(LINALG_BLAS_PREFIX_CANDIDATES "")
         find_program(LINALG_BREW_EXECUTABLE brew)
         mark_as_advanced(LINALG_BREW_EXECUTABLE)
 
         if(LINALG_ENABLE_BLIS)
-            # BLIS ships a CMake config package (find_package(BLIS)); try it
-            # first so an already-installed BLIS is picked up before any prefix
-            # probing — the same strategy PyTorch uses for its optional BLAS
-            # vendors in cmake/Modules/FindBLIS.cmake.
-            find_package(BLIS QUIET)
-            if(BLIS_FOUND)
-                message(STATUS "LinearAlgebra: found BLIS via its CMake config package")
-                # Wire BLIS's imported target / variables into the BLAS slot so
-                # the generic find_package(BLAS) below is not needed.
-                if(TARGET BLIS::BLIS)
-                    list(APPEND LINALG_DEPENDENCY_LIBS BLIS::BLIS)
-                elseif(BLIS_LIBRARIES)
-                    list(APPEND LINALG_DEPENDENCY_LIBS ${BLIS_LIBRARIES})
-                endif()
-                if(BLIS_INCLUDE_DIRS)
-                    list(APPEND LINALG_BLAS_INCLUDE_DIRS ${BLIS_INCLUDE_DIRS})
-                endif()
-                set(_linalg_blis_found_via_config ON)
-            else()
+            if(NOT _linalg_blis_found_via_config)
                 # Homebrew / Linuxbrew blis keg (keg-only on macOS).
                 if(LINALG_BREW_EXECUTABLE)
                     execute_process(
@@ -383,112 +373,39 @@ if(LINALG_ENABLE_BLAS)
         unset(LINALG_BLAS_PREFIX_CANDIDATE)
     endif()
 
-    # When BLIS was resolved via its own CMake config package above its
-    # imported target / libraries are already appended; skip the generic
-    # FindBLAS/FindLAPACK probes to avoid picking up a second, unrelated
-    # provider and confusing the linker.
-    if(NOT LINALG_ENABLE_MKL AND NOT _linalg_blis_found_via_config)
+    # The generic backend uses 32-bit CBLAS integers. MKL has a separate ILP64 interface.
+    if(DEFINED BLA_SIZEOF_INTEGER AND NOT BLA_SIZEOF_INTEGER STREQUAL "4"
+       AND NOT BLA_SIZEOF_INTEGER STREQUAL "ANY"
+    )
+        message(FATAL_ERROR "The vendor-neutral BLAS backend requires BLA_SIZEOF_INTEGER=4")
+    endif()
+    set(BLA_SIZEOF_INTEGER 4)
+    if(LINALG_ENABLE_MKL AND (NOT DEFINED BLA_VENDOR OR BLA_VENDOR STREQUAL "All"))
+        set(BLA_VENDOR OpenBLAS)
+    endif()
+    if(NOT _linalg_blis_found_via_config)
         find_package(BLAS REQUIRED)
-        find_package(LAPACK REQUIRED)
-        # Imported BLAS::BLAS/LAPACK::LAPACK targets require CMake >= 3.18; fall
-        # back to the raw *_LIBRARIES lists on older CMake (project minimum: 3.16).
-        if(TARGET BLAS::BLAS)
-            list(APPEND LINALG_DEPENDENCY_LIBS BLAS::BLAS)
-        else()
-            list(APPEND LINALG_DEPENDENCY_LIBS ${BLAS_LIBRARIES})
-        endif()
-        if(TARGET LAPACK::LAPACK)
-            list(APPEND LINALG_DEPENDENCY_LIBS LAPACK::LAPACK)
-        else()
-            list(APPEND LINALG_DEPENDENCY_LIBS ${LAPACK_LIBRARIES})
-        endif()
+        set(_linalg_blas_libraries BLAS::BLAS)
     endif()
-    unset(_linalg_blis_found_via_config)
-
-    # BLAS::BLAS/LAPACK::LAPACK link the libraries but do not guarantee a
-    # cblas.h/lapacke.h C declaration header is on the include path — Homebrew's
-    # OpenBLAS, for instance, is keg-only and needs its prefix's include/ added
-    # explicitly, which find_path() does via CMAKE_PREFIX_PATH/CMAKE_FIND_ROOT_PATH
-    # (unlike CheckIncludeFileCXX, which only sees the compiler's default search
-    # path). CMAKE_FIND_FRAMEWORK is forced to LAST for this lookup so a plain
-    # header from the vendor find_package(BLAS) actually linked against (e.g.
-    # OpenBLAS) is found ahead of an unrelated macOS framework's cblas.h —
-    # mixing one vendor's declarations with a different vendor's linked
-    # implementation is not guaranteed ABI-safe (e.g. differing CBLAS_INDEX /
-    # ILP64 widths) and has produced silently wrong GEMM results in testing.
-    set(_linalg_find_framework_save ${CMAKE_FIND_FRAMEWORK})
-    set(CMAKE_FIND_FRAMEWORK LAST)
-    # BLIS installs cblas.h under <prefix>/include/blis/ on some distros
-    # (e.g. Debian's libblis-dev); add that suffix so the header is found
-    # regardless of installation layout.
     if(LINALG_ENABLE_BLIS)
-        find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h PATH_SUFFIXES include include/blis blis)
-    else()
-        find_path(LINALG_CBLAS_INCLUDE_DIR NAMES cblas.h)
-    endif()
-    find_path(LINALG_LAPACKE_INCLUDE_DIR NAMES lapacke.h)
-    set(CMAKE_FIND_FRAMEWORK ${_linalg_find_framework_save})
-    unset(_linalg_find_framework_save)
-    mark_as_advanced(LINALG_CBLAS_INCLUDE_DIR LINALG_LAPACKE_INCLUDE_DIR)
-
-    if(LINALG_CBLAS_INCLUDE_DIR MATCHES "\\.framework")
-        # On macOS, the generic cblas.h search above commonly lands on
-        # Accelerate's own vecLib.framework/Accelerate.framework header (Xcode's
-        # SDK always exposes it) rather than a separate vendor's cblas.h. Route
-        # through <Accelerate/Accelerate.h> in that case — found via the
-        # compiler's default framework search path, no extra include dir needed
-        # — so the ACCELERATE-specific code path (and LINALG_HAS_ACCELERATE) is
-        # actually taken instead of silently falling through to the generic
-        # <cblas.h> branch.
-        set(LINALG_BLAS_USE_ACCELERATE ON)
-    elseif(LINALG_CBLAS_INCLUDE_DIR)
-        list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_CBLAS_INCLUDE_DIR}")
-    elseif(APPLE)
-        include(CheckIncludeFileCXX)
-        check_include_file_cxx("Accelerate/Accelerate.h" LINALG_HAVE_ACCELERATE_H)
-        if(LINALG_HAVE_ACCELERATE_H)
-            set(LINALG_BLAS_USE_ACCELERATE ON)
+        # BLIS supplies CBLAS; its optional LAPACK companion can be libFLAME or
+        # netlib. Avoid FindLAPACK rediscovering a second BLAS implementation.
+        find_library(LINALG_BLIS_LAPACK_LIBRARY NAMES flame lapack)
+        if(LINALG_BLIS_LAPACK_LIBRARY)
+            list(APPEND _linalg_blas_libraries "${LINALG_BLIS_LAPACK_LIBRARY}")
         endif()
-    endif()
-    if(NOT LINALG_CBLAS_INCLUDE_DIR AND NOT LINALG_BLAS_USE_ACCELERATE)
-        message(
-            FATAL_ERROR
-                "LINALG_ENABLE_BLAS/BLIS is ON but cblas.h (or, on Apple, Accelerate/Accelerate.h) "
-                "was not found. Install a CBLAS-providing package (OpenBLAS, BLIS, netlib, ...) "
-                "and/or extend CMAKE_PREFIX_PATH, or disable the BLAS/BLIS option."
-        )
-    endif()
-
-    # Apple's Accelerate framework ships CBLAS (used for multiplication /
-    # transpose) but deliberately does not ship the LAPACKE row-major C
-    # wrapper — only the classic Fortran-mangled LAPACK entry points. The
-    # LAPACKE-dependent blas_lapack backends (cholesky/lu/svd/inversion/
-    # linear_solver) are therefore only compiled when real lapacke.h is found;
-    # otherwise each op's dispatcher .cpp falls through to the scalar backend
-    # at compile time via #if LINALG_HAS_LAPACKE.
-    if(LINALG_LAPACKE_INCLUDE_DIR)
-        # Debian/Ubuntu package the C interface separately from LAPACK.
-        # Other vendors (including Homebrew OpenBLAS) bundle it in LAPACK.
-        if(NOT LINALG_ENABLE_MKL)
-            find_library(LINALG_LAPACKE_LIBRARY NAMES lapacke)
-            mark_as_advanced(LINALG_LAPACKE_LIBRARY)
-            if(LINALG_LAPACKE_LIBRARY)
-                list(APPEND LINALG_DEPENDENCY_LIBS "${LINALG_LAPACKE_LIBRARY}")
-            endif()
-        endif()
-        list(APPEND LINALG_BLAS_INCLUDE_DIRS "${LINALG_LAPACKE_INCLUDE_DIR}")
-        set(LINALG_BLAS_HAS_LAPACKE ON)
     else()
-        message(STATUS "LinearAlgebra: lapacke.h not found — blas_lapack backend covers "
-                       "multiplication/transpose only; cholesky/lu/svd/inversion/"
-                       "linear_solver fall back to scalar under LINALG_ENABLE_BLAS."
-        )
+        find_package(LAPACK REQUIRED)
+        list(APPEND _linalg_blas_libraries LAPACK::LAPACK)
     endif()
-    list(REMOVE_DUPLICATES LINALG_BLAS_INCLUDE_DIRS)
+    include("${LINALG_SOURCE_DIR}/Cmake/blas.cmake")
+    linalg_check_blas_provider()
     if(LINALG_ENABLE_MKL)
-        include(isolated_blas)
+        include("${LINALG_SOURCE_DIR}/Cmake/isolated_blas.cmake")
         linalg_configure_isolated_blas()
         list(APPEND LINALG_DEPENDENCY_LIBS ${CMAKE_DL_LIBS})
+    else()
+        list(APPEND LINALG_DEPENDENCY_LIBS ${_linalg_blas_libraries})
     endif()
 endif()
 
@@ -502,7 +419,6 @@ endif()
 # plain CPU builds remain free of any CUDA toolchain requirement.
 if(LINALG_ENABLE_CUBLAS)
     find_package(CUDAToolkit REQUIRED)
-    enable_language(CUDA)
     if(NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD ${LINALG_CXX_STANDARD})
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
@@ -510,6 +426,7 @@ if(LINALG_ENABLE_CUBLAS)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES native)
     endif()
+    enable_language(CUDA)
     if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
                                                             STREQUAL "GNU"
     )
@@ -568,23 +485,41 @@ endif()
 # add_subdirectory-embeddable shape as this repo itself); disable its own
 # test/benchmark subtrees when embedded here — LinearAlgebra has its own
 # GoogleTest wiring and no use for Logging's benchmark_logging_logger target.
-set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
-set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
-set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-include(LinearAlgebraDependencies)
-linalg_add_dependency_subdirectory(
-    "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Logging"
-    "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
+option(LINALG_USE_SYSTEM_LOGGING "Resolve Logging from an installed config package" OFF)
+include("${LINALG_SOURCE_DIR}/Cmake/LinearAlgebraDependencies.cmake")
+set(_linalg_owns_logging OFF)
+if(NOT TARGET Logging::Logging)
+    if(LINALG_USE_SYSTEM_LOGGING)
+        find_package(Logging CONFIG REQUIRED)
+    else()
+        # Scope these choices to our bundled dependency configuration.
+        function(linalg_add_logging)
+            # Bundled Logging performs C probes and builds C dependencies. Enable
+            # that language here so an otherwise C++-only host works unchanged.
+            if(NOT CMAKE_C_COMPILER_LOADED)
+                enable_language(C)
+            endif()
+            set(LOGGING_ENABLE_TESTING OFF)
+            set(LOGGING_ENABLE_BENCHMARK OFF)
+            set(LOGGING_ENABLE_EXAMPLES OFF)
+            set(XSIGMA_ENABLE_EXTERNAL "${LINALG_ENABLE_EXTERNAL}")
+            linalg_add_dependency_subdirectory(
+                "${LINALG_SOURCE_DIR}/ThirdParty/Logging"
+                "${LINALG_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
+            )
+        endfunction()
+        linalg_add_logging()
+        set(_linalg_owns_logging ON)
+    endif()
+endif()
+if(_linalg_owns_logging
+   AND WIN32
+   AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+   AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"
 )
-if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
-                                                        STREQUAL "GNU"
-)
-    # Logging names this Windows SDK library without a path. Use the GNU
-    # driver's library search syntax rather than a bare dbghelp.lib input.
     get_target_property(_linalg_logging_libraries Logging LINK_LIBRARIES)
     list(TRANSFORM _linalg_logging_libraries REPLACE "^dbghelp$" "-ldbghelp")
     set_property(TARGET Logging PROPERTY LINK_LIBRARIES "${_linalg_logging_libraries}")
-    unset(_linalg_logging_libraries)
 endif()
 # Keep the in-tree target out of this export set, and link the separately
 # installed Logging package for consumers (including static library users).
@@ -602,8 +537,12 @@ configure_file(
 set(linalg_headers "")
 set(linalg_sources "")
 
-file(GLOB_RECURSE linalg_headers LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
-file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE linalg_headers CONFIGURE_DEPENDS LIST_DIRECTORIES false
+     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+)
+file(GLOB_RECURSE linalg_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+)
 
 # Native CPU implementation files under matrix_operation/cpu/native/ are included
 # by the recursive glob above.
@@ -613,13 +552,13 @@ file(GLOB_RECURSE linalg_sources LIST_DIRECTORIES false "${CMAKE_CURRENT_SOURCE_
 # LINALG_ENABLE_BLAS turned on the matching backend above.
 list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/cublas)/")
 if(LINALG_ENABLE_MKL)
-    file(GLOB linalg_mkl_sources LIST_DIRECTORIES false
+    file(GLOB linalg_mkl_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/mkl/*.cpp"
     )
     list(APPEND linalg_sources ${linalg_mkl_sources})
 endif()
 if(LINALG_ENABLE_BLAS)
-    file(GLOB linalg_blas_sources LIST_DIRECTORIES false
+    file(GLOB linalg_blas_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/blas/*.cpp"
     )
     list(APPEND linalg_sources ${linalg_blas_sources})
@@ -630,11 +569,11 @@ endif()
 # globbed in — and only compilable — when LINALG_ENABLE_CUBLAS turned on
 # CUDA above.
 if(LINALG_ENABLE_CUBLAS)
-    file(GLOB linalg_cublas_sources LIST_DIRECTORIES false
+    file(GLOB linalg_cublas_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/cublas/*.cpp"
     )
     list(APPEND linalg_sources ${linalg_cublas_sources})
-    file(GLOB_RECURSE linalg_cuda_sources LIST_DIRECTORIES false
+    file(GLOB_RECURSE linalg_cuda_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
     )
     list(APPEND linalg_sources ${linalg_cuda_sources})
@@ -644,27 +583,31 @@ endif()
 set(CMAKE_CXX_STANDARD ${LINALG_CXX_STANDARD})
 
 add_library(LinearAlgebra ${linalg_sources} ${linalg_headers})
-xsigma_target_apply_lto(LinearAlgebra LINALG)
+target_compile_features(LinearAlgebra PUBLIC cxx_std_${LINALG_CXX_STANDARD})
+linalg_target_apply_cache(LinearAlgebra LINALG_ENABLE_CACHE LINALG_CACHE_BACKEND)
+linalg_target_optional_icecc(LinearAlgebra LINALG_ENABLE_ICECC)
 if(LINALG_ENABLE_SANITIZER)
-    xsigma_configure_sanitizer(LINALG)
+    linalg_configure_sanitizer(LinearAlgebra LINALG)
 endif()
-xsigma_find_linker(${LINALG_LINKER_CHOICE} LinearAlgebra LINALG_LTO_MODE)
-xsigma_target_apply_cache(LinearAlgebra LINALG_ENABLE_CACHE LINALG_CACHE_BACKEND)
-xsigma_target_optional_icecc(LinearAlgebra LINALG_ENABLE_ICECC)
+if(LINALG_ENABLE_COVERAGE)
+    linalg_configure_coverage(LinearAlgebra)
+endif()
+linalg_target_apply_lto(LinearAlgebra LINALG)
+linalg_find_linker(${LINALG_LINKER_CHOICE} LinearAlgebra)
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(
         LinearAlgebra PUBLIC LINALG_SHARED_DEFINE PRIVATE LINALG_BUILDING_DLL
     )
-    if(COMMAND xsigma_set_target_output_directories)
-        xsigma_set_target_output_directories(LinearAlgebra)
+    if(COMMAND linalg_set_target_output_directories)
+        linalg_set_target_output_directories(LinearAlgebra)
     endif()
 else()
     target_compile_definitions(LinearAlgebra PUBLIC LINALG_STATIC_DEFINE)
 endif()
 
 add_library(LinearAlgebra::LinearAlgebra ALIAS LinearAlgebra)
-if(COMMAND xsigma_module_create_filters)
-    xsigma_module_create_filters("${CMAKE_CURRENT_SOURCE_DIR}")
+if(linalg_sources)
+    source_group(TREE "${LINALG_SOURCE_DIR}" FILES ${linalg_headers} ${linalg_sources})
 endif()
 
 set_target_properties(
@@ -678,7 +621,8 @@ linalg_apply_platform_compile_flags(LinearAlgebra)
 target_include_directories(
     LinearAlgebra
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-           $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> $<INSTALL_INTERFACE:include/LinearAlgebra>
+           $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/LinearAlgebra>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 )
 if(LINALG_BLAS_INCLUDE_DIRS)
@@ -716,12 +660,12 @@ target_compile_definitions(
 )
 linalg_apply_vectorization_flags(LinearAlgebra)
 if(LINALG_ENABLE_CLANGTIDY)
-    include(clang_tidy)
-    xsigma_target_clang_tidy(LinearAlgebra ${LINALG_ENABLE_FIX})
+    include("${LINALG_SOURCE_DIR}/Cmake/clang_tidy.cmake")
+    linalg_target_clang_tidy(LinearAlgebra ${LINALG_ENABLE_FIX})
 endif()
 if(LINALG_ENABLE_IWYU)
-    include(iwyu)
-    xsigma_apply_iwyu(LinearAlgebra)
+    include("${LINALG_SOURCE_DIR}/Cmake/iwyu.cmake")
+    linalg_apply_iwyu(LinearAlgebra)
 endif()
 if(LINALG_DEPENDENCY_LIBS)
     target_link_libraries(LinearAlgebra PUBLIC ${LINALG_DEPENDENCY_LIBS})
@@ -731,15 +675,15 @@ endif()
 install(
     TARGETS LinearAlgebra
     EXPORT LinearAlgebraTargets
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     INCLUDES
-    DESTINATION include
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 install(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    DESTINATION include/LinearAlgebra
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/LinearAlgebra
     FILES_MATCHING
     PATTERN "*.h"
 )
@@ -750,7 +694,7 @@ include(CMakePackageConfigHelpers)
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/Cmake/LinearAlgebraConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
-    INSTALL_DESTINATION lib/cmake/LinearAlgebra
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/LinearAlgebra
 )
 
 write_basic_package_version_file(
@@ -766,14 +710,14 @@ write_basic_package_version_file(
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfig.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/LinearAlgebraConfigVersion.cmake"
-        DESTINATION lib/cmake/LinearAlgebra
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/LinearAlgebra
 )
 
 install(
     EXPORT LinearAlgebraTargets
     NAMESPACE LinearAlgebra::
     FILE LinearAlgebraTargets.cmake
-    DESTINATION lib/cmake/LinearAlgebra
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/LinearAlgebra
 )
 
 # --- Testing ---
@@ -798,8 +742,8 @@ if(LINALG_ENABLE_PROFILING)
     endif()
 endif()
 if(LINALG_ENABLE_VALGRIND AND LINALG_ENABLE_TESTING)
-    xsigma_apply_valgrind_timeouts()
+    linalg_apply_valgrind_timeouts()
 endif()
 
 # --- Configuration summary ---
-include(summary)
+include("${LINALG_SOURCE_DIR}/Cmake/summary.cmake")

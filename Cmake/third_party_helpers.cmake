@@ -1,29 +1,28 @@
 # =============================================================================
-# Logging — third-party library helpers
+# LinearAlgebra — third-party library helpers
 # =============================================================================
 # Copy of XSigma's ThirdParty/CMakeLists.txt helper machinery
-# (_filter_flags_internal, _save/_restore_third_party_flags,
-# _set_third_party_folder_properties, _create_third_party_aliases,
-# _create_third_party_interface_targets, add_third_party_library) so this repo
+# (linalg_filter_flags_internal, linalg_save_third_party_flags,
+# linalg_set_third_party_folder_properties, linalg_create_third_party_aliases,
+# linalg_create_third_party_interface_targets, linalg_add_third_party_library) so this repo
 # builds standalone without an XSigma tree.
 #
-# When embedded in XSigma (add_subdirectory), XSigma has already defined these
-# — the NOT COMMAND guards keep XSigma's definitions authoritative.
+# Helpers use a project prefix to avoid changing host implementations.
 # =============================================================================
 
 include_guard(GLOBAL)
 
 # External Library Usage Flag — when ON, prefer find_package() over the
-# vendored ThirdParty/ copies (same semantics as XSIGMA_ENABLE_EXTERNAL).
-option(XSIGMA_ENABLE_EXTERNAL "Use external copies of third party libraries by default" ON)
-mark_as_advanced(XSIGMA_ENABLE_EXTERNAL)
-
-# When embedded in XSigma, XSigma's ThirdParty/CMakeLists.txt has already defined
-# this machinery — keep the host's definitions authoritative.
-if(NOT COMMAND add_third_party_library)
+# vendored ThirdParty/ copies (same semantics as LINALG_ENABLE_EXTERNAL).
+set(_linalg_external_default ON)
+if(DEFINED XSIGMA_ENABLE_EXTERNAL)
+    set(_linalg_external_default "${XSIGMA_ENABLE_EXTERNAL}")
+endif()
+option(LINALG_ENABLE_EXTERNAL "Prefer external third-party packages" ${_linalg_external_default})
+mark_as_advanced(LINALG_ENABLE_EXTERNAL)
 
 # -----------------------------------------------------------------------------
-# _filter_flags_internal: Remove specified flags from a flag string
+# linalg_filter_flags_internal: Remove specified flags from a flag string
 # -----------------------------------------------------------------------------
 # Internal helper to filter out specific flags from a string of compiler/linker flags
 #
@@ -32,23 +31,33 @@ if(NOT COMMAND add_third_party_library)
 #   flags_to_remove - List of flags to remove (can be regex patterns)
 #   output_var - Variable name to store the filtered result
 #
-function(_filter_flags_internal input_flags flags_to_remove output_var)
-    set(result "${input_flags}")
-
-    foreach(flag_pattern ${flags_to_remove})
-        # Remove the flag pattern from the string
-        string(REGEX REPLACE "${flag_pattern}( |$)" "" result "${result}")
+function(linalg_filter_flags_internal input_flags flags_to_remove output_var)
+    separate_arguments(_tokens NATIVE_COMMAND "${input_flags}")
+    set(result "")
+    foreach(_token IN LISTS _tokens)
+        set(_keep TRUE)
+        foreach(_pattern IN LISTS flags_to_remove)
+            if(_token MATCHES "^(${_pattern})$")
+                set(_keep FALSE)
+            endif()
+        endforeach()
+        if(_keep)
+            # Preserve a quoted path or define containing whitespace.
+            if(_token MATCHES "[ \t]")
+                string(REPLACE "\"" "\\\"" _token "${_token}")
+                string(APPEND result " \"${_token}\"")
+            else()
+                string(APPEND result " ${_token}")
+            endif()
+        endif()
     endforeach()
-
-    # Clean up multiple spaces
-    string(REGEX REPLACE "  +" " " result "${result}")
     string(STRIP "${result}" result)
 
     set(${output_var} "${result}" PARENT_SCOPE)
 endfunction()
 
 # -----------------------------------------------------------------------------
-# _save_third_party_flags: Save and optionally filter compiler/linker flags
+# linalg_save_third_party_flags: Save and optionally filter compiler/linker flags
 # -----------------------------------------------------------------------------
 # Saves current CMAKE_CXX_FLAGS, CMAKE_C_FLAGS, and linker flags, then optionally
 # filters out problematic flags that shouldn't be applied to third-party libraries
@@ -57,7 +66,7 @@ endfunction()
 #   name - Library name (for namespacing saved variables)
 #   filter_flags - List of flag patterns to remove (optional)
 #
-function(_save_third_party_flags name filter_flags)
+function(linalg_save_third_party_flags name filter_flags)
     # Save original flags to parent scope
     set(_SAVED_CMAKE_CXX_FLAGS_${name} "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
     set(_SAVED_CMAKE_C_FLAGS_${name} "${CMAKE_C_FLAGS}" PARENT_SCOPE)
@@ -68,12 +77,20 @@ function(_save_third_party_flags name filter_flags)
 
     # If filter flags are provided, filter them out
     if(filter_flags)
-        _filter_flags_internal("${CMAKE_CXX_FLAGS}" "${filter_flags}" filtered_cxx_flags)
-        _filter_flags_internal("${CMAKE_C_FLAGS}" "${filter_flags}" filtered_c_flags)
-        _filter_flags_internal("${CMAKE_EXE_LINKER_FLAGS}" "${filter_flags}" filtered_exe_linker_flags)
-        _filter_flags_internal("${CMAKE_SHARED_LINKER_FLAGS}" "${filter_flags}" filtered_shared_linker_flags)
-        _filter_flags_internal("${CMAKE_MODULE_LINKER_FLAGS}" "${filter_flags}" filtered_module_linker_flags)
-        _filter_flags_internal("${CMAKE_STATIC_LINKER_FLAGS}" "${filter_flags}" filtered_static_linker_flags)
+        linalg_filter_flags_internal("${CMAKE_CXX_FLAGS}" "${filter_flags}" filtered_cxx_flags)
+        linalg_filter_flags_internal("${CMAKE_C_FLAGS}" "${filter_flags}" filtered_c_flags)
+        linalg_filter_flags_internal(
+            "${CMAKE_EXE_LINKER_FLAGS}" "${filter_flags}" filtered_exe_linker_flags
+        )
+        linalg_filter_flags_internal(
+            "${CMAKE_SHARED_LINKER_FLAGS}" "${filter_flags}" filtered_shared_linker_flags
+        )
+        linalg_filter_flags_internal(
+            "${CMAKE_MODULE_LINKER_FLAGS}" "${filter_flags}" filtered_module_linker_flags
+        )
+        linalg_filter_flags_internal(
+            "${CMAKE_STATIC_LINKER_FLAGS}" "${filter_flags}" filtered_static_linker_flags
+        )
 
         # Apply filtered flags to parent scope
         set(CMAKE_CXX_FLAGS "${filtered_cxx_flags}" PARENT_SCOPE)
@@ -88,7 +105,7 @@ function(_save_third_party_flags name filter_flags)
 endfunction()
 
 # -----------------------------------------------------------------------------
-# _restore_third_party_flags: Restore original compiler/linker flags
+# linalg_restore_third_party_flags: Restore original compiler/linker flags
 # -----------------------------------------------------------------------------
 # Restores the compiler and linker flags that were saved before building
 # a third-party library
@@ -96,7 +113,7 @@ endfunction()
 # Parameters:
 #   name - Library name (for namespacing saved variables)
 #
-function(_restore_third_party_flags name)
+function(linalg_restore_third_party_flags name)
     # Restore original flags to parent scope
     set(CMAKE_CXX_FLAGS "${_SAVED_CMAKE_CXX_FLAGS_${name}}" PARENT_SCOPE)
     set(CMAKE_C_FLAGS "${_SAVED_CMAKE_C_FLAGS_${name}}" PARENT_SCOPE)
@@ -107,7 +124,7 @@ function(_restore_third_party_flags name)
 endfunction()
 
 # -----------------------------------------------------------------------------
-# _set_third_party_folder_properties: Set FOLDER property for all targets
+# linalg_set_third_party_folder_properties: Set FOLDER property for all targets
 # -----------------------------------------------------------------------------
 # Automatically discovers all targets created by a third-party library and
 # sets their FOLDER property for IDE organization. This function recursively
@@ -121,11 +138,11 @@ endfunction()
 #   name - Library name
 #   binary_dir - Binary directory where the library was built
 #
-function(_set_third_party_folder_properties name binary_dir)
+function(linalg_set_third_party_folder_properties name binary_dir)
     # Helper function to recursively collect targets from a directory tree
     # This is necessary because BUILDSYSTEM_TARGETS only returns targets
     # defined directly in the specified directory, not in subdirectories
-    function(_collect_targets_recursive dir collected_targets_var)
+    function(linalg_collect_targets_recursive dir collected_targets_var)
         # Get targets defined directly in this directory
         get_property(dir_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
 
@@ -138,7 +155,7 @@ function(_set_third_party_folder_properties name binary_dir)
 
         # Recursively process each subdirectory
         foreach(subdir ${subdirs})
-            _collect_targets_recursive("${subdir}" local_targets)
+            linalg_collect_targets_recursive("${subdir}" local_targets)
         endforeach()
 
         # Return the collected targets to parent scope
@@ -146,7 +163,7 @@ function(_set_third_party_folder_properties name binary_dir)
     endfunction()
 
     # Collect all targets recursively starting from the binary directory
-    _collect_targets_recursive("${binary_dir}" all_targets)
+    linalg_collect_targets_recursive("${binary_dir}" all_targets)
 
     if(all_targets)
         message(STATUS "Setting FOLDER property for ${name} targets: ${all_targets}")
@@ -156,12 +173,15 @@ function(_set_third_party_folder_properties name binary_dir)
             endif()
         endforeach()
     else()
-        message(STATUS "No targets found for ${name} in ${binary_dir} (this may be normal for header-only libraries)")
+        message(
+            STATUS
+                "No targets found for ${name} in ${binary_dir} (this may be normal for header-only libraries)"
+        )
     endif()
 endfunction()
 
 # -----------------------------------------------------------------------------
-# _create_third_party_aliases: Create library aliases
+# linalg_create_third_party_aliases: Create library aliases
 # -----------------------------------------------------------------------------
 # Creates alias targets for a third-party library to provide consistent
 # naming conventions (e.g., fmt::fmt as an alias for fmt)
@@ -170,7 +190,7 @@ endfunction()
 #   name - Library name
 #   aliases - List of alias names to create
 #
-function(_create_third_party_aliases name aliases)
+function(linalg_create_third_party_aliases name aliases)
     if(NOT aliases)
         message(WARNING "No aliases provided for ${name}")
         return()
@@ -193,7 +213,7 @@ function(_create_third_party_aliases name aliases)
 endfunction()
 
 # -----------------------------------------------------------------------------
-# _create_third_party_interface_targets: Create namespaced aliases
+# linalg_create_third_party_interface_targets: Create namespaced aliases
 # -----------------------------------------------------------------------------
 # Creates namespaced aliases for third-party library targets.
 # This provides a consistent interface for linking against third-party libraries
@@ -205,24 +225,24 @@ endfunction()
 # 3. Multiple possible target names - tries each in order
 #
 # Parameters:
-#   xsigma_targets - List of namespaced target specifications in format:
+#   linalg_targets - List of namespaced target specifications in format:
 #                    "Xxx::name=target1|target2|..."
 #                    where target1, target2, etc. are tried in order
 #
 # Example:
-#   _create_third_party_interface_targets(
+#   linalg_create_third_party_interface_targets(
 #       "Fmt::fmt=fmt::fmt|fmt"
 #       "Gtest::gtest=GTest::gtest|gtest;Gtest::gtest_main=GTest::gtest_main|gtest_main"
 #   )
 #
-function(_create_third_party_interface_targets)
-    set(xsigma_targets ${ARGN})
+function(linalg_create_third_party_interface_targets)
+    set(linalg_targets ${ARGN})
 
-    if(NOT xsigma_targets)
+    if(NOT linalg_targets)
         return()
     endif()
 
-    foreach(target_spec ${xsigma_targets})
+    foreach(target_spec ${linalg_targets})
         # Parse the specification: "Xxx::name=target1|target2|..."
         string(REPLACE "=" ";" spec_parts "${target_spec}")
         list(LENGTH spec_parts spec_parts_len)
@@ -232,12 +252,12 @@ function(_create_third_party_interface_targets)
             continue()
         endif()
 
-        list(GET spec_parts 0 xsigma_name)
+        list(GET spec_parts 0 linalg_name)
         list(GET spec_parts 1 source_targets)
 
         # Check if namespaced target already exists
-        if(TARGET ${xsigma_name})
-            message(STATUS "Target ${xsigma_name} already exists, skipping")
+        if(TARGET ${linalg_name})
+            message(STATUS "Target ${linalg_name} already exists, skipping")
             continue()
         endif()
 
@@ -253,21 +273,27 @@ function(_create_third_party_interface_targets)
                 if(is_imported)
                     # For IMPORTED targets, create an INTERFACE library that links to it
                     # (ALIAS targets cannot alias IMPORTED targets)
-                    add_library(${xsigma_name} INTERFACE IMPORTED GLOBAL)
-                    target_link_libraries(${xsigma_name} INTERFACE ${source_target})
-                    message(STATUS "Created ${xsigma_name} -> ${source_target} (INTERFACE wrapper for IMPORTED target)")
+                    add_library(${linalg_name} INTERFACE IMPORTED GLOBAL)
+                    target_link_libraries(${linalg_name} INTERFACE ${source_target})
+                    message(
+                        STATUS
+                            "Created ${linalg_name} -> ${source_target} (INTERFACE wrapper for IMPORTED target)"
+                    )
                 else()
                     # Check if source target is an alias and resolve it
                     get_target_property(aliased_target ${source_target} ALIASED_TARGET)
 
                     if(aliased_target)
                         # Source is an alias, create alias to the actual target
-                        add_library(${xsigma_name} ALIAS ${aliased_target})
-                        message(STATUS "Created ${xsigma_name} -> ${source_target} (resolved to ${aliased_target})")
+                        add_library(${linalg_name} ALIAS ${aliased_target})
+                        message(
+                            STATUS
+                                "Created ${linalg_name} -> ${source_target} (resolved to ${aliased_target})"
+                        )
                     else()
                         # Source is a real target, create alias directly
-                        add_library(${xsigma_name} ALIAS ${source_target})
-                        message(STATUS "Created ${xsigma_name} -> ${source_target}")
+                        add_library(${linalg_name} ALIAS ${source_target})
+                        message(STATUS "Created ${linalg_name} -> ${source_target}")
                     endif()
                 endif()
 
@@ -277,13 +303,16 @@ function(_create_third_party_interface_targets)
         endforeach()
 
         if(NOT target_created)
-            message(WARNING "Could not create alias ${xsigma_name}: none of the source targets exist (${source_targets})")
+            message(
+                WARNING
+                    "Could not create alias ${linalg_name}: none of the source targets exist (${source_targets})"
+            )
         endif()
     endforeach()
 endfunction()
 
 # =============================================================================
-# Main Function: add_third_party_library
+# Main Function: linalg_add_third_party_library
 # =============================================================================
 # Enhanced function to add third-party libraries with comprehensive configuration
 # options including flag filtering, automatic target organization, and alias creation
@@ -299,7 +328,7 @@ endfunction()
 #   CONDITION <variable>        - CMake variable that must be true to add the library
 #   LIBRARY_TYPE <type>         - Type of library: STATIC, SHARED, DEFAULT, or HEADER_ONLY
 #                                 HEADER_ONLY: Creates INTERFACE library target with include dirs
-#                                 Supports ALIASES and XSIGMA_TARGETS for header-only libraries
+#                                 Supports ALIASES and LINALG_TARGETS for header-only libraries
 #   LIBRARY_TYPE_VAR <var>      - CMake variable name for library-specific control
 #                                 Example: MI_BUILD_STATIC for mimalloc
 #                                 Note: Not applicable for HEADER_ONLY libraries
@@ -315,28 +344,28 @@ endfunction()
 #   ALIASES <aliases...>        - List of alias names to create for the library
 #                                 Example: "fmt::fmt-header-only" for fmt library
 #                                 Supported for all library types including HEADER_ONLY
-#   XSIGMA_TARGETS <specs...>   - List of namespaced target specifications
+#   LINALG_TARGETS <specs...>   - List of namespaced target specifications
 #                                 Format: "Xxx::name=target1|target2|..."
 #                                 Example: "Fmt::fmt=fmt::fmt-header-only|fmt"
 #                                 Supported for all library types including HEADER_ONLY
-#   INCLUDE_DIR <path>          - Include directory path to add to XSIGMA_DEPENDENCY_INCLUDE_DIRS
+#   INCLUDE_DIR <path>          - Include directory path to add to LINALG_DEPENDENCY_INCLUDE_DIRS
 #                                 Path is relative to CMAKE_CURRENT_SOURCE_DIR (ThirdParty/)
 #                                 Example: "fmt/include" for fmt library
-#   AUTO_ADD_TO_DEPENDENCIES    - Boolean flag to automatically add to XSIGMA_DEPENDENCY_LIBS
+#   AUTO_ADD_TO_DEPENDENCIES <ON|OFF> - Boolean value to automatically add to LINALG_DEPENDENCY_LIBS
 #                                 Default: ON (automatically adds Xxx::name target)
 #   EXCLUDE_FROM_ALL            - If set, add_subdirectory(... EXCLUDE_FROM_ALL) for the bundled lib
 #   BINARY_DIR <path>           - Out-of-tree build dir for add_subdirectory (absolute, or relative to
 #                                 CMAKE_BINARY_DIR). Default: ${CMAKE_CURRENT_BINARY_DIR}/${name}_build
 #
 # Example Usage:
-#   add_third_party_library(fmt
+#   linalg_add_third_party_library(fmt
 #       LIBRARY_TYPE STATIC
 #       FILTER_FLAGS "-fno-exceptions" "-Werror"
 #       ALIASES "fmt::fmt"
-#       XSIGMA_TARGETS "Fmt::fmt=fmt::fmt|fmt"
+#       LINALG_TARGETS "Fmt::fmt=fmt::fmt|fmt"
 #   )
 #
-#   add_third_party_library(kineto
+#   linalg_add_third_party_library(kineto
 #       CONDITION PROFILER_ENABLE_KINETO
 #       LIBRARY_TYPE STATIC
 #       SOURCE_DIR kineto/libkineto
@@ -344,14 +373,14 @@ endfunction()
 #       EXTRA_FLAGS "-flto=thin"
 #   )
 #
-function(add_third_party_library name)
+function(linalg_add_third_party_library name)
     # Parse function arguments
     cmake_parse_arguments(
-        TPL                                                           # Prefix
-        "DISABLE_WARNINGS;AUTO_ADD_TO_DEPENDENCIES;EXCLUDE_FROM_ALL" # Options (boolean flags)
-        "SOURCE_DIR;EXTERNAL_NAME;CONDITION;LIBRARY_TYPE;LIBRARY_TYPE_VAR;INCLUDE_DIR;BINARY_DIR" # One-value keywords
-        "FILTER_FLAGS;EXTRA_FLAGS;ALIASES;XSIGMA_TARGETS"             # Multi-value keywords
-        ${ARGN}                                                       # Arguments to parse
+        TPL # Prefix
+        "DISABLE_WARNINGS;EXCLUDE_FROM_ALL" # Options (boolean flags)
+        "SOURCE_DIR;EXTERNAL_NAME;CONDITION;LIBRARY_TYPE;LIBRARY_TYPE_VAR;INCLUDE_DIR;BINARY_DIR;AUTO_ADD_TO_DEPENDENCIES" # One-value keywords
+        "FILTER_FLAGS;EXTRA_FLAGS;ALIASES;LINALG_TARGETS" # Multi-value keywords
+        ${ARGN} # Arguments to parse
     )
 
     # Set default values for optional parameters
@@ -359,14 +388,19 @@ function(add_third_party_library name)
         set(TPL_EXTERNAL_NAME ${name})
     endif()
 
-    # Default AUTO_ADD_TO_DEPENDENCIES to ON if not explicitly set to OFF
-    # Note: cmake_parse_arguments sets boolean options to FALSE when not specified,
-    # so we check if it's in the ARGN list to determine if it was explicitly set
-    if("AUTO_ADD_TO_DEPENDENCIES" IN_LIST ARGN)
-        # Explicitly specified, use the parsed value
-    else()
-        # Not specified, default to ON
+    if(TPL_UNPARSED_ARGUMENTS OR TPL_KEYWORDS_MISSING_VALUES)
+        message(
+            FATAL_ERROR
+                "${name}: invalid dependency arguments: ${TPL_UNPARSED_ARGUMENTS};${TPL_KEYWORDS_MISSING_VALUES}"
+        )
+    endif()
+    if(NOT DEFINED TPL_AUTO_ADD_TO_DEPENDENCIES)
         set(TPL_AUTO_ADD_TO_DEPENDENCIES ON)
+    endif()
+    if(DEFINED TPL_CONDITION)
+        if(NOT ${TPL_CONDITION})
+            return()
+        endif()
     endif()
 
     # SOURCE_DIR defaults to the library name if not specified
@@ -396,8 +430,8 @@ function(add_third_party_library name)
     # -------------------------------------------------------------------------
     # Step 1: Check if already processed to avoid duplicates
     # -------------------------------------------------------------------------
-    get_property(XSIGMA_${name}_PROCESSED GLOBAL PROPERTY XSIGMA_${name}_PROCESSED)
-    if(XSIGMA_${name}_PROCESSED)
+    get_property(LINALG_${name}_PROCESSED GLOBAL PROPERTY LINALG_${name}_PROCESSED)
+    if(LINALG_${name}_PROCESSED)
         message(STATUS "Third-party library ${name} already processed, skipping")
         return()
     endif()
@@ -421,7 +455,10 @@ function(add_third_party_library name)
 
         # Verify that INCLUDE_DIR is specified for header-only libraries
         if(NOT DEFINED TPL_INCLUDE_DIR)
-            message(WARNING "Header-only library ${name} specified but no INCLUDE_DIR provided - skipping")
+            message(
+                WARNING
+                    "Header-only library ${name} specified but no INCLUDE_DIR provided - skipping"
+            )
             return()
         endif()
 
@@ -443,41 +480,49 @@ function(add_third_party_library name)
             message(STATUS "Created alias: ${name}::${name} -> ${name}")
         endif()
 
-        # Add to XSIGMA_DEPENDENCY_LIBS so it can be linked against
-        get_property(_temp_libs GLOBAL PROPERTY _XSIGMA_DEPENDENCY_LIBS)
-        list(APPEND _temp_libs ${name}::${name})
-        set_property(GLOBAL PROPERTY _XSIGMA_DEPENDENCY_LIBS "${_temp_libs}")
-        message(STATUS "Dependency: ${name}::${name} added to XSIGMA_DEPENDENCY_LIBS (header-only)")
+        if(TPL_AUTO_ADD_TO_DEPENDENCIES)
+            # Add to LINALG_DEPENDENCY_LIBS so it can be linked against
+            get_property(_temp_libs GLOBAL PROPERTY _LINALG_DEPENDENCY_LIBS)
+            list(APPEND _temp_libs ${name}::${name})
+            set_property(GLOBAL PROPERTY _LINALG_DEPENDENCY_LIBS "${_temp_libs}")
+            message(
+                STATUS "Dependency: ${name}::${name} added to LINALG_DEPENDENCY_LIBS (header-only)"
+            )
 
-        # Add include directory to global include paths for project-wide access
-        get_property(_temp_includes GLOBAL PROPERTY _XSIGMA_DEPENDENCY_INCLUDE_DIRS)
-        list(APPEND _temp_includes "${_tpl_abs_include_dir}")
-        set_property(GLOBAL PROPERTY _XSIGMA_DEPENDENCY_INCLUDE_DIRS "${_temp_includes}")
-        message(STATUS "Dependency: ${TPL_INCLUDE_DIR} added to XSIGMA_DEPENDENCY_INCLUDE_DIRS (header-only)")
+            # Add include directory to global include paths for project-wide access
+            get_property(_temp_includes GLOBAL PROPERTY _LINALG_DEPENDENCY_INCLUDE_DIRS)
+            list(APPEND _temp_includes "${_tpl_abs_include_dir}")
+            set_property(GLOBAL PROPERTY _LINALG_DEPENDENCY_INCLUDE_DIRS "${_temp_includes}")
+            message(
+                STATUS
+                    "Dependency: ${TPL_INCLUDE_DIR} added to LINALG_DEPENDENCY_INCLUDE_DIRS (header-only)"
+            )
+
+        endif()
 
         # =====================================================================
         # Create library aliases if requested (supported for HEADER_ONLY)
         # =====================================================================
         if(TPL_ALIASES)
-            _create_third_party_aliases(${name} "${TPL_ALIASES}")
+            linalg_create_third_party_aliases(${name} "${TPL_ALIASES}")
         endif()
 
         # =====================================================================
         # Create XSigma:: namespace interface targets if requested (supported for HEADER_ONLY)
         # =====================================================================
-        if(TPL_XSIGMA_TARGETS)
-            _create_third_party_interface_targets("${TPL_XSIGMA_TARGETS}")
+        if(TPL_LINALG_TARGETS)
+            linalg_create_third_party_interface_targets("${TPL_LINALG_TARGETS}")
         endif()
 
         # Early return - no further processing needed for header-only libraries
-        set_property(GLOBAL PROPERTY XSIGMA_${name}_PROCESSED TRUE)
+        set_property(GLOBAL PROPERTY LINALG_${name}_PROCESSED TRUE)
         return()
     endif()
 
     # -------------------------------------------------------------------------
     # Step 4: Try to find external library first if requested
     # -------------------------------------------------------------------------
-    if(XSIGMA_ENABLE_EXTERNAL)
+    if(LINALG_ENABLE_EXTERNAL)
         find_package(${TPL_EXTERNAL_NAME} QUIET GLOBAL)
         if(${TPL_EXTERNAL_NAME}_FOUND OR ${name}_FOUND)
             message(STATUS "================================================================")
@@ -499,55 +544,53 @@ function(add_third_party_library name)
             # Print all variables set by find_package
             get_cmake_property(_variableNames VARIABLES)
             foreach(_variableName ${_variableNames})
-                if(_variableName MATCHES "^${name}" OR _variableName MATCHES "^${TPL_EXTERNAL_NAME}")
+                if(_variableName MATCHES "^${name}" OR _variableName MATCHES
+                                                       "^${TPL_EXTERNAL_NAME}"
+                )
                     message(STATUS "  ${_variableName}=${${_variableName}}")
                 endif()
             endforeach()
 
             message(STATUS "================================================================")
 
-            # Create namespaced target using XSIGMA_TARGETS if provided, otherwise use default pattern
-            if(TPL_XSIGMA_TARGETS)
-                _create_third_party_interface_targets("${TPL_XSIGMA_TARGETS}")
+            # Create namespaced target using LINALG_TARGETS if provided, otherwise use default pattern
+            if(TPL_LINALG_TARGETS)
+                linalg_create_third_party_interface_targets("${TPL_LINALG_TARGETS}")
             else()
-                _create_third_party_interface_targets(
+                linalg_create_third_party_interface_targets(
                     "${name}::${name}=${name}::${name}-header-only||${name}::${name}|${name}|${name}-static"
                 )
             endif()
 
             # Automatically populate dependency lists if requested (default: ON)
-            if(TARGET ${name}::${name})
-                # Add to XSIGMA_DEPENDENCY_LIBS using global property
-                get_property(_temp_libs GLOBAL PROPERTY _XSIGMA_DEPENDENCY_LIBS)
+            if(TPL_AUTO_ADD_TO_DEPENDENCIES AND TARGET ${name}::${name})
+                # Add to LINALG_DEPENDENCY_LIBS using global property
+                get_property(_temp_libs GLOBAL PROPERTY _LINALG_DEPENDENCY_LIBS)
                 list(APPEND _temp_libs ${name}::${name})
-                set_property(GLOBAL PROPERTY _XSIGMA_DEPENDENCY_LIBS "${_temp_libs}")
-                message(STATUS "Dependency: ${name}::${name} added to XSIGMA_DEPENDENCY_LIBS (external)")
+                set_property(GLOBAL PROPERTY _LINALG_DEPENDENCY_LIBS "${_temp_libs}")
+                message(
+                    STATUS "Dependency: ${name}::${name} added to LINALG_DEPENDENCY_LIBS (external)"
+                )
             endif()
 
             # Add include directory if specified (external path from find_package)
-            if(DEFINED ${name}_INCLUDE_DIR)
+            if(TPL_AUTO_ADD_TO_DEPENDENCIES AND DEFINED ${name}_INCLUDE_DIR)
                 # Fall back to the include directory set by find_package
-                get_property(_temp_includes GLOBAL PROPERTY _XSIGMA_DEPENDENCY_INCLUDE_DIRS)
+                get_property(_temp_includes GLOBAL PROPERTY _LINALG_DEPENDENCY_INCLUDE_DIRS)
                 list(APPEND _temp_includes ${${name}_INCLUDE_DIR})
-                set_property(GLOBAL PROPERTY _XSIGMA_DEPENDENCY_INCLUDE_DIRS "${_temp_includes}")
-                message(STATUS "Dependency: ${${name}_INCLUDE_DIR} added to XSIGMA_DEPENDENCY_INCLUDE_DIRS (external)")
+                set_property(GLOBAL PROPERTY _LINALG_DEPENDENCY_INCLUDE_DIRS "${_temp_includes}")
+                message(
+                    STATUS
+                        "Dependency: ${${name}_INCLUDE_DIR} added to LINALG_DEPENDENCY_INCLUDE_DIRS (external)"
+                )
             endif()
 
-            set_property(GLOBAL PROPERTY XSIGMA_${name}_PROCESSED TRUE)
+            set_property(GLOBAL PROPERTY LINALG_${name}_PROCESSED TRUE)
             return()
         endif()
     endif()
 
     # -------------------------------------------------------------------------
-    # Step 5: Check condition (early return pattern)
-    # -------------------------------------------------------------------------
-    if(DEFINED TPL_CONDITION)
-        if(NOT ${TPL_CONDITION})
-            message(STATUS "Skipping ${name}: condition ${TPL_CONDITION} is not met")
-            return()
-        endif()
-    endif()
-
     message("================================================================")
     message("Build from source ${TPL_EXTERNAL_NAME}")
     message("================================================================")
@@ -564,7 +607,7 @@ function(add_third_party_library name)
         set(_tpl_filter_flags "${TPL_FILTER_FLAGS}")
     endif()
     if(TPL_FILTER_FLAGS OR TPL_DISABLE_WARNINGS OR TPL_EXTRA_FLAGS)
-        _save_third_party_flags(${name} "${_tpl_filter_flags}")
+        linalg_save_third_party_flags(${name} "${_tpl_filter_flags}")
         set(_TPL_SAVED_FLAGS TRUE)
     endif()
 
@@ -576,8 +619,12 @@ function(add_third_party_library name)
         # Patterns: -W*, -Wno-*, /wd* (but keep /W* for MSVC warning level)
         if(MSVC)
             # For MSVC: remove only /wd* (specific warning disables) and -W* flags
-            _filter_flags_internal("${CMAKE_CXX_FLAGS}" "-W.*;/wd.*" filtered_cxx_flags_no_warnings)
-            _filter_flags_internal("${CMAKE_C_FLAGS}" "-W.*;/wd.*" filtered_c_flags_no_warnings)
+            linalg_filter_flags_internal(
+                "${CMAKE_CXX_FLAGS}" "-W.*;/wd.*" filtered_cxx_flags_no_warnings
+            )
+            linalg_filter_flags_internal(
+                "${CMAKE_C_FLAGS}" "-W.*;/wd.*" filtered_c_flags_no_warnings
+            )
 
             set(CMAKE_CXX_FLAGS "${filtered_cxx_flags_no_warnings}")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
@@ -591,8 +638,12 @@ function(add_third_party_library name)
             set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
         else()
             # For Clang/GCC: remove all -W* and -Wno-* flags
-            _filter_flags_internal("${CMAKE_CXX_FLAGS}" "-W.*;-Wno-.*" filtered_cxx_flags_no_warnings)
-            _filter_flags_internal("${CMAKE_C_FLAGS}" "-W.*;-Wno-.*" filtered_c_flags_no_warnings)
+            linalg_filter_flags_internal(
+                "${CMAKE_CXX_FLAGS}" "-W.*;-Wno-.*" filtered_cxx_flags_no_warnings
+            )
+            linalg_filter_flags_internal(
+                "${CMAKE_C_FLAGS}" "-W.*;-Wno-.*" filtered_c_flags_no_warnings
+            )
 
             set(CMAKE_CXX_FLAGS "${filtered_cxx_flags_no_warnings}")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
@@ -605,7 +656,10 @@ function(add_third_party_library name)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
             set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
         endif()
-        message(STATUS "Disabled all warnings for ${name} (removed existing warning flags and added suppression)")
+        message(
+            STATUS
+                "Disabled all warnings for ${name} (removed existing warning flags and added suppression)"
+        )
     endif()
 
     # Add extra compiler flags if provided
@@ -646,102 +700,105 @@ function(add_third_party_library name)
     # -------------------------------------------------------------------------
     # Step 8: Add the third-party library subdirectory
     # -------------------------------------------------------------------------
-        # Support both standard (SOURCE_DIR/CMakeLists.txt) and nested (SOURCE_DIR/subdir/CMakeLists.txt) structures
-        set(lib_source_dir "${_tpl_abs_source_dir}")
-        set(lib_cmakelists_path "${lib_source_dir}/CMakeLists.txt")
+    # Support both standard (SOURCE_DIR/CMakeLists.txt) and nested (SOURCE_DIR/subdir/CMakeLists.txt) structures
+    set(lib_source_dir "${_tpl_abs_source_dir}")
+    set(lib_cmakelists_path "${lib_source_dir}/CMakeLists.txt")
 
-        # If CMakeLists.txt doesn't exist at the top level, check if it's in a subdirectory
-        # This handles cases like kineto/libkineto where the actual CMakeLists.txt is nested
-        if(NOT EXISTS "${lib_cmakelists_path}")
-            # Try to find CMakeLists.txt in immediate subdirectories
-            file(GLOB subdirs LIST_DIRECTORIES true "${lib_source_dir}/*")
-            foreach(subdir ${subdirs})
-                if(IS_DIRECTORY "${subdir}")
-                    get_filename_component(subdir_name "${subdir}" NAME)
-                    set(potential_cmakelists "${subdir}/CMakeLists.txt")
-                    if(EXISTS "${potential_cmakelists}")
-                        set(lib_source_dir "${subdir}")
-                        set(lib_cmakelists_path "${potential_cmakelists}")
-                        message(STATUS "Found CMakeLists.txt in nested directory: ${subdir_name}")
-                        break()
-                    endif()
+    # If CMakeLists.txt doesn't exist at the top level, check if it's in a subdirectory
+    # This handles cases like kineto/libkineto where the actual CMakeLists.txt is nested
+    if(NOT EXISTS "${lib_cmakelists_path}")
+        # Try to find CMakeLists.txt in immediate subdirectories
+        file(GLOB subdirs LIST_DIRECTORIES true "${lib_source_dir}/*")
+        foreach(subdir ${subdirs})
+            if(IS_DIRECTORY "${subdir}")
+                get_filename_component(subdir_name "${subdir}" NAME)
+                set(potential_cmakelists "${subdir}/CMakeLists.txt")
+                if(EXISTS "${potential_cmakelists}")
+                    set(lib_source_dir "${subdir}")
+                    set(lib_cmakelists_path "${potential_cmakelists}")
+                    message(STATUS "Found CMakeLists.txt in nested directory: ${subdir_name}")
+                    break()
                 endif()
-            endforeach()
-        endif()
+            endif()
+        endforeach()
+    endif()
 
-        if(EXISTS "${lib_cmakelists_path}")
-            message(STATUS "Using bundled ${name}")
+    if(EXISTS "${lib_cmakelists_path}")
+        message(STATUS "Using bundled ${name}")
 
-            # Store the binary directory for later use (caller may pin a global path when SOURCE_DIR
-            # is absolute and lives outside CMAKE_CURRENT_BINARY_DIR, e.g. tests calling from Library/*).
-            if(DEFINED TPL_BINARY_DIR)
-                if(IS_ABSOLUTE "${TPL_BINARY_DIR}")
-                    set(lib_binary_dir "${TPL_BINARY_DIR}")
-                else()
-                    set(lib_binary_dir "${CMAKE_BINARY_DIR}/${TPL_BINARY_DIR}")
-                endif()
+        # Store the binary directory for later use (caller may pin a global path when SOURCE_DIR
+        # is absolute and lives outside CMAKE_CURRENT_BINARY_DIR, e.g. tests calling from Library/*).
+        if(DEFINED TPL_BINARY_DIR)
+            if(IS_ABSOLUTE "${TPL_BINARY_DIR}")
+                set(lib_binary_dir "${TPL_BINARY_DIR}")
             else()
-                set(lib_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/${name}_build")
+                set(lib_binary_dir "${CMAKE_BINARY_DIR}/${TPL_BINARY_DIR}")
             endif()
-
-            # Add the library
-            if(TPL_EXCLUDE_FROM_ALL)
-                add_subdirectory(${lib_source_dir} ${lib_binary_dir} EXCLUDE_FROM_ALL)
-            else()
-                add_subdirectory(${lib_source_dir} ${lib_binary_dir})
-            endif()
-
-            # -------------------------------------------------------------------------
-            # Step 9: Automatically set FOLDER properties for IDE organization
-            # -------------------------------------------------------------------------
-            _set_third_party_folder_properties(${name} "${lib_binary_dir}")
-
-            # -------------------------------------------------------------------------
-            # Step 10: Create library aliases if requested
-            # -------------------------------------------------------------------------
-            if(TPL_ALIASES)
-                _create_third_party_aliases(${name} "${TPL_ALIASES}")
-            endif()
-
-            # -------------------------------------------------------------------------
-            # Step 11: Create namespaced interface targets if requested
-            # -------------------------------------------------------------------------
-            if(TPL_XSIGMA_TARGETS)
-                _create_third_party_interface_targets("${TPL_XSIGMA_TARGETS}")
-            endif()
-
-            # -------------------------------------------------------------------------
-            # Step 12: Automatically populate dependency lists
-            # -------------------------------------------------------------------------
-            # This step automatically adds the library to XSIGMA_DEPENDENCY_LIBS and
-            # XSIGMA_DEPENDENCY_INCLUDE_DIRS if requested (default: ON)
-
-            if(TPL_AUTO_ADD_TO_DEPENDENCIES)
-                # Check if the namespaced target was created
-                if(TARGET ${name}::${name})
-                    # Add to XSIGMA_DEPENDENCY_LIBS using global property
-                    # We use global properties because PARENT_SCOPE doesn't update the variable
-                    # in the current scope, so subsequent function calls wouldn't see the changes
-                    get_property(_temp_libs GLOBAL PROPERTY _XSIGMA_DEPENDENCY_LIBS)
-                    list(APPEND _temp_libs ${name}::${name})
-                    set_property(GLOBAL PROPERTY _XSIGMA_DEPENDENCY_LIBS "${_temp_libs}")
-                    message(STATUS "Dependency: ${name}::${name} added to XSIGMA_DEPENDENCY_LIBS")
-                endif()
-
-                # Add include directory if specified
-                if(DEFINED TPL_INCLUDE_DIR)
-                    # Add to XSIGMA_DEPENDENCY_INCLUDE_DIRS using global property
-                    get_property(_temp_includes GLOBAL PROPERTY _XSIGMA_DEPENDENCY_INCLUDE_DIRS)
-                    list(APPEND _temp_includes "${_tpl_abs_include_dir}")
-                    set_property(GLOBAL PROPERTY _XSIGMA_DEPENDENCY_INCLUDE_DIRS "${_temp_includes}")
-                    message(STATUS "Dependency: ${_tpl_abs_include_dir} added to XSIGMA_DEPENDENCY_INCLUDE_DIRS")
-                endif()
-            endif()
-
-            set_property(GLOBAL PROPERTY XSIGMA_${name}_PROCESSED TRUE)
         else()
-            message(WARNING "Third-party library ${name} not found (expected ${lib_cmakelists_path})")
+            set(lib_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/${name}_build")
         endif()
+
+        # Add the library
+        if(TPL_EXCLUDE_FROM_ALL)
+            add_subdirectory(${lib_source_dir} ${lib_binary_dir} EXCLUDE_FROM_ALL)
+        else()
+            add_subdirectory(${lib_source_dir} ${lib_binary_dir})
+        endif()
+
+        # -------------------------------------------------------------------------
+        # Step 9: Automatically set FOLDER properties for IDE organization
+        # -------------------------------------------------------------------------
+        linalg_set_third_party_folder_properties(${name} "${lib_binary_dir}")
+
+        # -------------------------------------------------------------------------
+        # Step 10: Create library aliases if requested
+        # -------------------------------------------------------------------------
+        if(TPL_ALIASES)
+            linalg_create_third_party_aliases(${name} "${TPL_ALIASES}")
+        endif()
+
+        # -------------------------------------------------------------------------
+        # Step 11: Create namespaced interface targets if requested
+        # -------------------------------------------------------------------------
+        if(TPL_LINALG_TARGETS)
+            linalg_create_third_party_interface_targets("${TPL_LINALG_TARGETS}")
+        endif()
+
+        # -------------------------------------------------------------------------
+        # Step 12: Automatically populate dependency lists
+        # -------------------------------------------------------------------------
+        # This step automatically adds the library to LINALG_DEPENDENCY_LIBS and
+        # LINALG_DEPENDENCY_INCLUDE_DIRS if requested (default: ON)
+
+        if(TPL_AUTO_ADD_TO_DEPENDENCIES)
+            # Check if the namespaced target was created
+            if(TARGET ${name}::${name})
+                # Add to LINALG_DEPENDENCY_LIBS using global property
+                # We use global properties because PARENT_SCOPE doesn't update the variable
+                # in the current scope, so subsequent function calls wouldn't see the changes
+                get_property(_temp_libs GLOBAL PROPERTY _LINALG_DEPENDENCY_LIBS)
+                list(APPEND _temp_libs ${name}::${name})
+                set_property(GLOBAL PROPERTY _LINALG_DEPENDENCY_LIBS "${_temp_libs}")
+                message(STATUS "Dependency: ${name}::${name} added to LINALG_DEPENDENCY_LIBS")
+            endif()
+
+            # Add include directory if specified
+            if(DEFINED TPL_INCLUDE_DIR)
+                # Add to LINALG_DEPENDENCY_INCLUDE_DIRS using global property
+                get_property(_temp_includes GLOBAL PROPERTY _LINALG_DEPENDENCY_INCLUDE_DIRS)
+                list(APPEND _temp_includes "${_tpl_abs_include_dir}")
+                set_property(GLOBAL PROPERTY _LINALG_DEPENDENCY_INCLUDE_DIRS "${_temp_includes}")
+                message(
+                    STATUS
+                        "Dependency: ${_tpl_abs_include_dir} added to LINALG_DEPENDENCY_INCLUDE_DIRS"
+                )
+            endif()
+        endif()
+
+        set_property(GLOBAL PROPERTY LINALG_${name}_PROCESSED TRUE)
+    else()
+        message(WARNING "Third-party library ${name} not found (expected ${lib_cmakelists_path})")
+    endif()
 
     # -------------------------------------------------------------------------
     # Step 13: Restore original state
@@ -750,11 +807,11 @@ function(add_third_party_library name)
     set(BUILD_SHARED_LIBS ${_saved_build_shared_libs})
 
     # Restore compiler/linker flags if they were filtered.
-    # _restore_third_party_flags sets PARENT_SCOPE = this function's scope.
+    # linalg_restore_third_party_flags sets PARENT_SCOPE = this function's scope.
     # We must then propagate back up to the caller's (directory) scope,
     # because DISABLE_WARNINGS leaked the modified flags there via PARENT_SCOPE.
     if(_TPL_SAVED_FLAGS)
-        _restore_third_party_flags(${name})
+        linalg_restore_third_party_flags(${name})
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}" PARENT_SCOPE)
@@ -763,5 +820,3 @@ function(add_third_party_library name)
         set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS}" PARENT_SCOPE)
     endif()
 endfunction()
-
-endif()  # NOT COMMAND add_third_party_library

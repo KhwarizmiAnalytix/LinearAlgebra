@@ -21,21 +21,13 @@ find_dependency(Logging)
 # was itself configured with LINALG_ENABLE_MKL=ON.
 set(LinearAlgebra_HAS_MKL @LINALG_ENABLE_MKL@)
 if(LinearAlgebra_HAS_MKL)
-  set(MKL_INTERFACE "ilp64")
-  find_package(MKL CONFIG QUIET)
-  if(NOT MKL_FOUND)
-    # Mirror the classic (non-CONFIG) FindMKL-style fallback used by
-    # LinearAlgebra's own CMakeLists.txt.
-    find_package(MKL QUIET)
-  endif()
-  if(NOT MKL_FOUND)
-    set(${CMAKE_FIND_PACKAGE_NAME}_NOT_FOUND_MESSAGE
-        "LinearAlgebra was built with LINALG_ENABLE_MKL=ON but MKL could not be found. "
-        "Install Intel oneMKL or set MKLROOT / CMAKE_PREFIX_PATH."
-    )
-    set(${CMAKE_FIND_PACKAGE_NAME}_FOUND FALSE)
-    return()
-  endif()
+    set(MKL_INTERFACE "ilp64")
+    find_dependency(MKL CONFIG)
+    if(NOT TARGET MKL::MKL)
+        set(LinearAlgebra_NOT_FOUND_MESSAGE "Intel oneMKL must provide MKL::MKL (ILP64)")
+        set(LinearAlgebra_FOUND FALSE)
+        return()
+    endif()
 endif()
 
 # --- Optional vendor-neutral BLAS/LAPACK backend (LINALG_ENABLE_BLAS) ---
@@ -43,14 +35,23 @@ set(LinearAlgebra_HAS_BLAS @LINALG_ENABLE_BLAS@)
 # Combined builds load the independent BLAS provider privately at runtime.
 # Rediscovering BLAS here could add MKL's LP64 interface to a consumer's link.
 if(LinearAlgebra_HAS_BLAS AND NOT LinearAlgebra_HAS_MKL)
-  find_dependency(BLAS)
-  find_dependency(LAPACK)
+    set(BLA_VENDOR "@LINALG_BLAS_VENDOR@")
+    set(BLA_SIZEOF_INTEGER 4)
+    set(_linalg_blis_config "@_linalg_blis_found_via_config@")
+    if(_linalg_blis_config)
+        find_dependency(BLIS CONFIG)
+    else()
+        find_dependency(BLAS)
+    endif()
+    if(NOT "@LINALG_ENABLE_BLIS@")
+        find_dependency(LAPACK)
+    endif()
 endif()
 
 # --- Optional cuBLAS/cuSOLVER GPU backend (LINALG_ENABLE_CUBLAS) ---
 set(LinearAlgebra_HAS_CUBLAS @LINALG_ENABLE_CUBLAS@)
 if(LinearAlgebra_HAS_CUBLAS)
-  find_dependency(CUDAToolkit)
+    find_dependency(CUDAToolkit)
 endif()
 
 # --- Optional cpuinfo backend, auto-detected (LINALG_HAS_CPUINFO) ---
@@ -58,7 +59,7 @@ endif()
 # succeeded for the installed LinearAlgebra's own build.
 set(LinearAlgebra_HAS_CPUINFO @LINALG_HAS_CPUINFO@)
 if(LinearAlgebra_HAS_CPUINFO)
-  find_dependency(cpuinfo)
+    find_dependency(cpuinfo)
 endif()
 
 # --- Optional Profiler backend, auto-detected (LINALG_HAS_PROFILER) ---
@@ -66,11 +67,11 @@ endif()
 # succeeded for the installed LinearAlgebra's own build.
 set(LinearAlgebra_HAS_PROFILER @LINALG_HAS_PROFILER@)
 if(LinearAlgebra_HAS_PROFILER)
-  find_dependency(Profiler)
+    find_dependency(Profiler)
 endif()
 
 if(NOT TARGET LinearAlgebra::LinearAlgebra)
-  include("${CMAKE_CURRENT_LIST_DIR}/LinearAlgebraTargets.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/LinearAlgebraTargets.cmake")
 endif()
 
 check_required_components(LinearAlgebra)

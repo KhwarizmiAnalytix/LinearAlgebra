@@ -1,0 +1,4 @@
+#!/bin/sh
+# Compiler SHA256: @_compiler_hash@
+# Icecream SHA256: @_icecc_hash@
+exec '@_icecc_shell@' '@_compiler_shell@' "$@"
