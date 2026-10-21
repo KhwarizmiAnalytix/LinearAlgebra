@@ -112,7 +112,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Cache installation failed' }
           # vcpkg's MSVC OpenBLAS build omits LAPACK. The conda-forge package
           # provides both BLAS and LAPACK for the FindBLAS/FindLAPACK probes.
-          & "$env:CONDA/Scripts/conda.exe" install -y -c conda-forge openblas
+          # Avoid the win-64 0.3.34 double-precision crash on AMD Zen 4/5 runners:
+          # https://github.com/conda-forge/openblas-feedstock/issues/196
+          & "$env:CONDA/Scripts/conda.exe" install -y -c conda-forge "openblas=0.3.33" "libopenblas=0.3.33"
           if ($LASTEXITCODE -ne 0) { throw 'OpenBLAS installation failed' }
           $prefix = "$env:CONDA/Library"
           "CMAKE_PREFIX_PATH=$prefix" >> $env:GITHUB_ENV
