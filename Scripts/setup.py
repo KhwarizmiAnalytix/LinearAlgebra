@@ -7,13 +7,14 @@ to the CMake options this standalone repo actually defines
 (LINALG_ENABLE_*/LINALG_* in CMakeLists.txt) — there is no multi-module
 Library/* tree or --project.* scoping here, just one flat set of flags plus
 LinearAlgebra's own optional MKL / vendor-neutral BLAS-LAPACK / cuBLAS-cuSOLVER /
-hipBLAS-hipSOLVER backends.
+hipBLAS-hipSOLVER / Metal Performance Shaders backends.
 
 Usage:
     python Scripts/setup.py config.build.test
     python Scripts/setup.py config.build.test.coverage
     python Scripts/setup.py config.build.test.mkl
     python Scripts/setup.py config.build.test.hipblas
+    python Scripts/setup.py config.build.test.metalblas
     python Scripts/setup.py config.build.test.gcc.release
 """
 
@@ -427,7 +428,8 @@ class LinearAlgebraFlags:
     XSigma's XSigmaFlags there is no multi-module fan-out (LinearAlgebra is a
     single flat CMake target) and no --project.* scoping. LinearAlgebra does
     own optional MKL and vendor-neutral BLAS/LAPACK backends, plus
-    cuBLAS/cuSOLVER and hipBLAS/hipSOLVER GPU backends — all wired through here,
+    cuBLAS/cuSOLVER, hipBLAS/hipSOLVER, and Metal Performance Shaders GPU
+    backends — all wired through here,
     unlike Logging's single LOGGING_BACKEND selector.
     """
 
@@ -451,6 +453,7 @@ class LinearAlgebraFlags:
             "blis",
             "cublas",
             "hipblas",
+            "metalblas",
             "lupivoting",
             "win32warnings",
             "icecc",
@@ -481,9 +484,12 @@ class LinearAlgebraFlags:
             "(OpenBLAS, Accelerate, netlib, ...)",
             "enable BLIS as the explicit CBLAS/LAPACKE provider "
             "(pair with AOCL libflame or netlib LAPACKE for factorization ops)",
-            "enable the cuBLAS/cuSOLVER GPU backend (requires the CUDA toolkit)",
+            "enable the cuBLAS/cuSOLVER GPU backend "
+            "(requires CUDA toolkit; mutually exclusive with hipblas and metalblas)",
             "enable the hipBLAS/hipSOLVER GPU backend "
-            "(requires ROCm/HIP; mutually exclusive with cublas)",
+            "(requires ROCm/HIP; mutually exclusive with cublas and metalblas)",
+            "enable the Metal Performance Shaders GPU backend "
+            "(macOS, float only; mutually exclusive with cublas and hipblas)",
             "enable partial pivoting in the scalar (non-MKL) LU fallback paths",
             "re-enable MSVC narrowing-conversion warnings (C4244) "
             "around the scalar fallback",
@@ -521,6 +527,7 @@ class LinearAlgebraFlags:
             "blis": "LINALG_ENABLE_BLIS",
             "cublas": "LINALG_ENABLE_CUBLAS",
             "hipblas": "LINALG_ENABLE_ROCBLAS",
+            "metalblas": "LINALG_ENABLE_METAL",
             "lupivoting": "LINALG_LU_PIVOTING",
             "win32warnings": "LINALG_DISPLAY_WIN32_WARNINGS",
             "icecc": "LINALG_ENABLE_ICECC",
@@ -661,13 +668,18 @@ class LinearAlgebraFlags:
                     self.builder_suffix += f"_{arg}"
 
     def __validate_flags(self):
-        if (
-            self.__value.get("cublas") == self.ON
-            and self.__value.get("hipblas") == self.ON
-        ):
+        gpu_backends = ("cublas", "hipblas", "metalblas")
+        if sum(self.__value.get(backend) == self.ON for backend in gpu_backends) > 1:
             print_status(
-                "cublas and hipblas are mutually exclusive - enable only one GPU backend.",
+                "cublas, hipblas, and metalblas are mutually exclusive - "
+                "enable only one GPU backend.",
                 "ERROR",
+            )
+            sys.exit(1)
+
+        if self.__value.get("metalblas") == self.ON and platform.system() != "Darwin":
+            print_status(
+                "metalblas requires macOS (Metal Performance Shaders).", "ERROR"
             )
             sys.exit(1)
 
@@ -1134,7 +1146,7 @@ def main():
         print("  Compiler:     Clang (clang/clang++)")
         print(
             "  Backend:      Scalar fallback "
-            "(MKL/BLAS/BLIS/cuBLAS/hipBLAS all OFF by default)"
+            "(MKL/BLAS/BLIS/cuBLAS/hipBLAS/MetalBLAS all OFF by default)"
         )
         print("=" * 80)
         print("\nUsage examples:")
@@ -1152,6 +1164,7 @@ def main():
         print("     setup.py config.build.test.blis")
         print("     setup.py config.build.test.cublas")
         print("     setup.py config.build.test.hipblas")
+        print("     setup.py config.build.test.metalblas  (macOS, float only)")
         print("\nBuild commands:")
         print("  config    - Configure the build system")
         print("  build     - Build the project")

@@ -167,8 +167,9 @@ Install CMake 3.24+ and Ninja, then configure:
 | `LINALG_ENABLE_BLIS` | OFF | Select BLIS as the CBLAS provider for `BLAS_LAPACKE`; activates BLAS support and requires a paired LAPACKE library for decompositions |
 | `LINALG_BLAS_RUNTIME_LIBRARY` | auto-detected OpenBLAS | Shared CBLAS provider (`.dll`, `.so`, `.dylib`) for combined MKL/BLAS builds |
 | `LINALG_LAPACKE_RUNTIME_LIBRARY` | empty | Optional separate shared LAPACKE provider; empty means LAPACKE is bundled in the CBLAS provider |
-| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::CUDA_BLAS` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON; mutually exclusive with `LINALG_ENABLE_ROCBLAS` |
-| `LINALG_ENABLE_ROCBLAS` | OFF | hipBLAS/hipSOLVER GPU backend (`linalg_backend::ROCM_BLAS` specializations, `src/matrix_operation/gpu/hipblas/`); requires a ROCm/HIP toolchain, enables the HIP language only when ON; mutually exclusive with `LINALG_ENABLE_CUBLAS` |
+| `LINALG_ENABLE_CUBLAS` | OFF | cuBLAS/cuSOLVER GPU backend (`linalg_backend::CUDA_BLAS` specializations, `src/matrix_operation/gpu/cublas/`); requires the CUDA toolkit, enables the CUDA language only when ON; mutually exclusive with ROCm and Metal |
+| `LINALG_ENABLE_ROCBLAS` | OFF | hipBLAS/hipSOLVER GPU backend (`linalg_backend::ROCM_BLAS` specializations, `src/matrix_operation/gpu/hipblas/`); requires a ROCm/HIP toolchain, enables the HIP language only when ON; mutually exclusive with CUDA and Metal |
+| `LINALG_ENABLE_METAL` | OFF | Metal Performance Shaders GPU backend (`linalg_backend::METAL_BLAS`); Apple platforms, float only; enables Objective-C++ and links Metal, MetalPerformanceShaders, and Foundation; mutually exclusive with CUDA and ROCm |
 | `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS or hipBLAS |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
@@ -190,8 +191,8 @@ scalar (a `STATUS` message reports which case applies). When
 `LINALG_ENABLE_CUBLAS` is `ON`, `find_package(CUDAToolkit)` must resolve.
 When `LINALG_ENABLE_ROCBLAS` is `ON`, `find_package(hip)`,
 `find_package(hipblas)` and `find_package(hipsolver)` must all resolve.
-Configuration fails with `FATAL_ERROR` if both `LINALG_ENABLE_CUBLAS` and
-`LINALG_ENABLE_ROCBLAS` are `ON` at once.
+Configuration fails with `FATAL_ERROR` if more than one of `LINALG_ENABLE_CUBLAS`,
+`LINALG_ENABLE_ROCBLAS`, and `LINALG_ENABLE_METAL` is `ON` at once.
 
 SIMD defaults to SSE2 on x86_64, NEON on arm64, and scalar elsewhere. Higher
 x86 ISAs require an explicit `LINALG_VECTORIZATION_ISA` setting and a CPU that
@@ -209,8 +210,14 @@ Valgrind checks run through `ctest -T memcheck` when `LINALG_ENABLE_VALGRIND=ON`
 
 From `Scripts/`, use `python3 setup.py config.build.test.hipblas` to enable
 the hipBLAS/hipSOLVER backend (`LINALG_ENABLE_ROCBLAS=ON`). This requires a
-ROCm/HIP toolchain with hipBLAS and hipSOLVER installed. The `hipblas` and
-`cublas` tokens are mutually exclusive.
+ROCm/HIP toolchain with hipBLAS and hipSOLVER installed.
+
+On macOS, use `python3 setup.py config.build.test.metalblas` from `Scripts/`
+to enable Metal Performance Shaders (`LINALG_ENABLE_METAL=ON`). MetalBLAS
+supports float multiplication, batched multiplication, transpose, norm, and
+trace. The configuration summary reports `MetalBLAS: ON` when enabled.
+The `cublas`, `hipblas`, and `metalblas` tokens are mutually exclusive;
+running the Metal GPU tests requires a Metal-capable host.
 
 Icecream can be combined with `ccache` or `sccache`, for example with
 `python3 setup.py config.build.test.ICECC.SCCACHE` from `Scripts/`.
