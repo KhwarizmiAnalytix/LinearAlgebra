@@ -6,7 +6,6 @@ Handles the build step (ninja / xcodebuild / msvc) for Scripts/setup.py.
 
 import os
 import subprocess
-from typing import Optional
 
 try:
     import resource
@@ -33,19 +32,26 @@ def _raise_stack_limit() -> None:
         pass
 
 
-def get_logical_processor_count() -> Optional[int]:
-    """Get the number of logical processors available."""
+def get_logical_processor_count() -> int:
+    """Get the logical processor count, falling back to one if unavailable."""
     try:
         import psutil  # type: ignore[import-untyped]
 
-        return psutil.cpu_count(logical=True)  # type: ignore[no-untyped-call,no-any-return]
+        count = psutil.cpu_count(logical=True)
+        if count is not None:
+            return count  # type: ignore[no-any-return]
     except ImportError:
-        try:
-            return os.cpu_count()
-        except AttributeError:
-            import multiprocessing
+        pass
 
+    try:
+        return os.cpu_count() or 1
+    except AttributeError:
+        import multiprocessing
+
+        try:
             return multiprocessing.cpu_count()
+        except NotImplementedError:
+            return 1
 
 
 def build_project(builder: str, build_enum: str, system: str, shell_flag: bool) -> int:

@@ -597,6 +597,13 @@ if(NOT TARGET Logging::Logging)
             set(LOGGING_ENABLE_BENCHMARK OFF)
             set(LOGGING_ENABLE_EXAMPLES OFF)
             set(XSIGMA_ENABLE_EXTERNAL "${LINALG_ENABLE_EXTERNAL}")
+            # Loguru treats an empty CMAKE_DL_LIBS as missing stack-trace
+            # support. macOS supplies dladdr in libSystem and a libdl stub;
+            # use that stub within this dependency's scope to keep stack
+            # traces enabled without changing the bundled sources.
+            if(APPLE AND NOT CMAKE_DL_LIBS)
+                set(CMAKE_DL_LIBS dl)
+            endif()
             linalg_add_dependency_subdirectory(
                 "${LINALG_SOURCE_DIR}/ThirdParty/Logging"
                 "${LINALG_BINARY_DIR}/ThirdParty/Logging_build" EXCLUDE_FROM_ALL
@@ -709,7 +716,14 @@ if(LINALG_ENABLE_METAL)
     file(GLOB linalg_metal_mm_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/metal/*.mm"
     )
-    set_source_files_properties(${linalg_metal_mm_sources} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    # Linking a framework adds -F, which makes SDK headers look like project
+    # headers. Classify the Metal SDK search path as a system framework path
+    # so Apple's own deprecated declarations do not produce build warnings.
+    get_filename_component(_linalg_metal_framework_dir "${LINALG_METAL_FRAMEWORK}" DIRECTORY)
+    set_source_files_properties(
+        ${linalg_metal_mm_sources}
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-iframework;${_linalg_metal_framework_dir}"
+    )
     list(APPEND linalg_sources ${linalg_metal_mm_sources})
     file(GLOB linalg_metal_cpp_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/metal/*.cpp"
