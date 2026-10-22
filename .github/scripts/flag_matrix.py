@@ -53,6 +53,7 @@ FOCUSED = {
     "LINALG_ENABLE_MKL": "ci.yml: cmake-mkl and cmake-mkl-windows (native and combined BLAS)",
     "LINALG_ENABLE_CUBLAS": "ci.yml: cuda-compile and cuda-windows; GPU runtime remains gated",
     "LINALG_ENABLE_ROCBLAS": "ci.yml: hip-compile; GPU runtime remains gated",
+    "LINALG_ENABLE_METAL": "ci.yml: metal-compile; GPU runtime requires a Metal-capable host",
     "LINALG_BUILD_EXAMPLES": "ci.yml: CUDA/HIP + MKL + OpenBLAS example compilation",
     "LINALG_ENABLE_PROFILING": "check_tool_flags.py: available/missing Profiler target contracts",
     "LINALG_ENABLE_CLANGTIDY": "check_tool_flags.py: all developer-tool switch combinations",

@@ -601,6 +601,34 @@ jobs:
       - name: Build
         run: cmake --build build-hip --parallel 4
 
+  metal-compile:
+    name: Metal (macOS compile-only)
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      CC: clang
+      CXX: clang++
+      OBJCXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install CMake and Ninja
+        run: python -m pip install cmake==4.1.2 ninja
+      - name: Configure
+        # Compile the Metal bridge and GPU tests without requiring a GPU on
+        # the hosted runner. Runtime validation needs a Metal-capable host.
+        run: >
+          cmake -S . -B build-metal -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DLINALG_ENABLE_METAL=ON
+          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+          -DBUILD_TESTING=ON -DLINALG_ENABLE_TESTING=ON -DLINALG_ENABLE_GTEST=ON
+      - name: Build
+        run: cmake --build build-metal --parallel 4
+
   simd:
     name: SIMD (${{ matrix.isa }})
     runs-on: ${{ matrix.os }}
