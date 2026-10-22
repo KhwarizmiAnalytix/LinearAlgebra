@@ -14,6 +14,7 @@ cc_test(
         "dense_matrix_test_helper.h",
         "test_reporting.h",
         "test_backend.h",
+        "matrix_functions_test_cases.h",
     ],
     copts = linear_algebra_copts(),
     defines = linear_algebra_defines() + [

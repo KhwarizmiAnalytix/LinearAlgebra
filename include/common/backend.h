@@ -11,7 +11,8 @@
 // CMakeLists.txt) only gate which specializations exist to be named.
 // METAL_BLAS is float-only (Apple GPUs have no native double type) and only
 // covers the subset of ops Metal Performance Shaders genuinely accelerates
-// (multiplication, batched multiplication, transpose, norm, trace) — see
+// (multiplication, batched multiplication, transpose, norm, trace), plus
+// portable device Schur kernels for logarithm and square_root — see
 // src/matrix_operation/gpu/metal/ and docs/backend_roadmap.md §3.
 namespace linalg
 {

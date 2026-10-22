@@ -64,6 +64,9 @@ inline hipError_t cudaPointerGetAttributes(cudaPointerAttributes* attributes, co
 #include "include/matrix_operation/eigen.h"
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/least_squares.h"
+#include "include/matrix_operation/logarithm.h"
+#include "include/matrix_operation/square_root.h"
+#include "matrix_functions_test_cases.h"
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/multiplication.h"
@@ -1515,6 +1518,99 @@ TEST(MathGpu, DeviceFactorizationFailureStatus)
     const bool lu_ok = linalg::lu_decomposition<double, CB>::apply(
         A.get(), 2, pivot.get(), lu_workspace.get(), lu_bytes);
     EXPECT_FALSE(lu_ok);
+}
+
+namespace
+{
+template <typename T> void matrix_functions_gpu_test()
+{
+    cudaStream_t stream{};
+    ASSERT_EQ(cudaStreamCreate(&stream), cudaSuccess);
+    linalg_test::for_each_matrix_function_case(
+        [&](int n, const double* input, const double* expected, bool is_log)
+        {
+            SCOPED_TRACE(is_log ? "logarithm" : "square_root");
+            const int                    stride = n + 2;
+            const auto                   bytes  = linalg::logarithm<T, CB>::workspace_size(n);
+            device_buffer<unsigned char> workspace(bytes);
+            device_buffer<T>             a(n * stride), result(n * stride);
+            std::vector<T>               host(n * stride, T(-123)), output(n * stride);
+            for (int i = 0; i < n; ++i)
+            {
+                for (int j = 0; j < n; ++j)
+                {
+                    host[i * stride + j] = static_cast<T>(input[i * n + j]);
+                }
+            }
+            for (bool in_place : {false, true})
+            {
+                ASSERT_EQ(a.upload(host.data()), cudaSuccess);
+                ASSERT_EQ(result.upload(host.data()), cudaSuccess);
+                T* destination = in_place ? a.get() : result.get();
+                if (is_log)
+                {
+                    linalg::logarithm<T, CB>::apply(
+                        a.get(), n, stride, destination, stride, workspace.get(), bytes, stream);
+                }
+                else
+                {
+                    linalg::square_root<T, CB>::apply(
+                        a.get(), n, stride, destination, stride, workspace.get(), bytes, stream);
+                }
+                ASSERT_EQ(cudaStreamSynchronize(stream), cudaSuccess);
+                ASSERT_EQ((in_place ? a : result).download(output.data()), cudaSuccess);
+                const double tolerance = sizeof(T) == sizeof(float) ? 8.e-4 : 2.e-10;
+                for (int i = 0; i < n; ++i)
+                {
+                    for (int j = 0; j < n; ++j)
+                    {
+                        EXPECT_NEAR(output[i * stride + j],
+                            expected[i * n + j],
+                            tolerance * std::max(1., std::fabs(expected[i * n + j])));
+                    }
+                    EXPECT_EQ(output[i * stride + n], T(-123));
+                    EXPECT_EQ(output[i * stride + n + 1], T(-123));
+                }
+                if (!in_place)
+                {
+                    ASSERT_EQ(a.download(output.data()), cudaSuccess);
+                    EXPECT_EQ(output, host);
+                }
+            }
+        });
+    const auto                   bytes = linalg::logarithm<T, CB>::workspace_size(2);
+    device_buffer<unsigned char> workspace(bytes);
+    device_buffer<T>             a(4), result(4);
+    const T                      invalid[] = {T(-1), T(0), T(0), T(1)};
+    ASSERT_EQ(a.upload(invalid), cudaSuccess);
+    for (bool is_log : {false, true})
+    {
+        if (is_log)
+        {
+            linalg::logarithm<T, CB>::apply(
+                a.get(), 2, 2, result.get(), 2, workspace.get(), bytes, stream);
+        }
+        else
+        {
+            linalg::square_root<T, CB>::apply(
+                a.get(), 2, 2, result.get(), 2, workspace.get(), bytes, stream);
+        }
+        ASSERT_EQ(cudaStreamSynchronize(stream), cudaSuccess);
+        T output[4]{};
+        ASSERT_EQ(result.download(output), cudaSuccess);
+        for (T value : output)
+        {
+            EXPECT_TRUE(std::isnan(value));
+        }
+    }
+    ASSERT_EQ(cudaStreamDestroy(stream), cudaSuccess);
+}
+}  // namespace
+
+TEST(MathGpu, MatrixFunctions)
+{
+    matrix_functions_gpu_test<float>();
+    matrix_functions_gpu_test<double>();
 }
 
 #endif  // LINALG_HAS_CUBLAS || LINALG_HAS_ROCBLAS

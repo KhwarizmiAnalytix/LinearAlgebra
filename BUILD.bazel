@@ -40,6 +40,7 @@ filegroup(
             "include/memory/*.h",
             "include/util/*.h",
             "include/matrix_operation/*.h",
+            "src/common/*.h",
             "src/matrix_operation/cpu/blas/*.h",
         ],
         allow_empty = True,
@@ -132,11 +133,22 @@ pkg_files(
     prefix = "lib",
 )
 
+pkg_files(
+    name = "linear_algebra_notices",
+    srcs = [
+        "LICENSES/MPL-2.0.txt",
+        "LICENSES/matrix_functions.NOTICE",
+    ],
+    prefix = "share/LinearAlgebra/licenses",
+    strip_prefix = strip_prefix.from_pkg("LICENSES"),
+)
+
 pkg_tar(
     name = "linear_algebra_pkg_tar",
     srcs = [
         ":linear_algebra_installed_hdrs",
         ":linear_algebra_installed_libs",
+        ":linear_algebra_notices",
     ],
 )
 
@@ -145,5 +157,6 @@ pkg_install(
     srcs = [
         ":linear_algebra_installed_hdrs",
         ":linear_algebra_installed_libs",
+        ":linear_algebra_notices",
     ],
 )

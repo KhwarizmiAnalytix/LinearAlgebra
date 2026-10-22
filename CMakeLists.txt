@@ -838,6 +838,10 @@ install(
     FILES_MATCHING
     PATTERN "*.h"
 )
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/MPL-2.0.txt"
+              "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/matrix_functions.NOTICE"
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/LinearAlgebra/licenses
+)
 
 # --- CMake Package Configuration Files (find_package(LinearAlgebra) support) ---
 include(CMakePackageConfigHelpers)

@@ -81,11 +81,20 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 | `matrix_operation/trace.h` | `trace` |
 | `matrix_operation/eigen.h` | Symmetric (Jacobi) and general (real Schur QR) eigenvalue/eigenvector decomposition |
 | `matrix_operation/exponential.h` | `exponential` via scaling and squaring with a Padé approximant, composed on `multiplication`/`matrix_invert`/`norm` (inherits their backend transitively) |
+| `matrix_operation/logarithm.h` | `logarithm` — principal real matrix logarithm using Schur reduction and inverse scaling; all six backends (Metal: float only) |
+| `matrix_operation/square_root.h` | `square_root` — principal real matrix square root using Schur reduction; all six backends (Metal: float only) |
 | `matrix_operation/tridiagonal_operations.h` | Tridiagonal solve/multiply/decompose — scalar only, `std::vector`-based API outside the backend model |
 | `matrix_operation/pentadiagonal_operations.h` | Pentadiagonal solve/multiply — scalar only, `std::vector`-based API outside the backend model |
 
 All entry points are plain row-major raw-pointer C++ (`T* data, lda`) — no
 matrix class is part of the public API; callers own their own storage.
+
+`logarithm<T, Backend>` and `square_root<T, Backend>` follow the same
+`apply(A, n, lda, result, ldc, workspace, bytes, stream)` and
+`workspace_size(n)` interface as `exponential`. These are matrix functions;
+for example, `square_root(A) * square_root(A) = A`. See
+[matrix function algorithms and backend behavior](docs/matrix_functions.md)
+for domain restrictions, source attribution, and performance limits.
 
 ### GPU backend (`linalg_backend::CUDA_BLAS`/`ROCM_BLAS`, `LINALG_ENABLE_CUBLAS=ON`/`LINALG_ENABLE_ROCBLAS=ON`)
 

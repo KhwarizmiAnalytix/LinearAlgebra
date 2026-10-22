@@ -64,7 +64,8 @@ if(LINALG_ENABLE_GTEST)
     # LINALG_ENABLE_METAL is mutually exclusive with LINALG_ENABLE_CUBLAS/
     # LINALG_ENABLE_ROCBLAS (CMakeLists.txt). TestGpuMatrixOperationsMetal.cxx
     # reuses the same MathGpu.* suite name (narrower coverage: float only,
-    # multiplication/batched multiplication/transpose/norm/trace), so this
+    # multiplication/batched multiplication/transpose/norm/trace and matrix
+    # logarithm/square root), so this
     # mirrors LinearAlgebraCudaTests/LinearAlgebraRocmTests exactly.
     if(LINALG_ENABLE_METAL)
         add_test(NAME LinearAlgebraMetalTests COMMAND LinearAlgebraCxxTests --gtest_filter=MathGpu.*

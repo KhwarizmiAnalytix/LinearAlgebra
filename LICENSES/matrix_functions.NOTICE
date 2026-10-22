@@ -1,0 +1,14 @@
+The matrix logarithm and square root numerical core includes adaptations of
+Eigen's MatrixLogarithm.h and MatrixSquareRoot.h, licensed under MPL 2.0.
+
+Copyright (C) 2011, 2013 Jitse Niesen <jitse@maths.leeds.ac.uk>
+Copyright (C) 2011 Chen-Pang He <jdh8@ms63.hinet.net>
+
+The adapted source is provided in src/common/matrix_functions_core.h in the
+LinearAlgebra source distribution and repository:
+https://github.com/KhwarizmiAnalytix/LinearAlgebra
+
+Upstream source:
+https://github.com/eigenteam/eigen-git-mirror/tree/master/unsupported/Eigen/src/MatrixFunctions
+
+The MPL 2.0 license text is included in MPL-2.0.txt alongside this notice.

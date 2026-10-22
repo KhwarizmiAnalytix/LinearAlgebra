@@ -2,7 +2,8 @@
 // linalg_backend::METAL_BLAS. Companion to TestGpuMatrixOperations.cxx
 // (CUDA_BLAS/ROCM_BLAS), but intentionally narrower: METAL_BLAS is float
 // only (Apple GPUs have no native double type) and only covers
-// multiplication, batched multiplication, transpose, norm, and trace (see
+// multiplication, batched multiplication, transpose, norm, and trace, plus
+// portable matrix logarithm and square root (see
 // linalg_backend::METAL_BLAS's doc comment in include/common/backend.h) --
 // cholesky/LU/QR/SVD/eigen/linear_solver/inversion/determinant/rank/
 // pseudo_inverse/least_squares have no METAL_BLAS specialization, so they
@@ -24,6 +25,9 @@
 #include <unistd.h>
 
 #include "dense_matrix_test_helper.h"
+#include "include/matrix_operation/logarithm.h"
+#include "include/matrix_operation/square_root.h"
+#include "matrix_functions_test_cases.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/multiplication_batched.h"
 #include "include/matrix_operation/norm.h"
@@ -330,6 +334,73 @@ TEST(MathGpu, InputValidation)
         n, 2, static_cast<const float*>(nullptr), dA.get(), dA.get())));
     EXPECT_ANY_THROW(
         (linalg::batched_matrix_multiplication(0, 2, dA.get(), dA.get(), dA.get())));
+}
+
+TEST(MathGpu, MatrixFunctions)
+{
+    linalg_test::for_each_matrix_function_case(
+        [](int n, const double* input, const double* expected, bool is_log)
+        {
+            SCOPED_TRACE(is_log ? "logarithm" : "square_root");
+            const int  stride = n + 2;
+            const auto bytes  = linalg::logarithm<float, MB>::workspace_size(n);
+            page_aligned_buffer<unsigned char> workspace(bytes);
+            page_aligned_buffer<float>         a(n * stride), result(n * stride);
+            std::vector<float>                 host(n * stride, -123.F);
+            for (int i = 0; i < n; ++i)
+            {
+                for (int j = 0; j < n; ++j)
+                {
+                    host[i * stride + j] = static_cast<float>(input[i * n + j]);
+                }
+            }
+            for (bool in_place : {false, true})
+            {
+                std::copy(host.begin(), host.end(), a.get());
+                std::copy(host.begin(), host.end(), result.get());
+                float* destination = in_place ? a.get() : result.get();
+                if (is_log)
+                {
+                    linalg::logarithm<float, MB>::apply(
+                        a.get(), n, stride, destination, stride, workspace.get(), bytes);
+                }
+                else
+                {
+                    linalg::square_root<float, MB>::apply(
+                        a.get(), n, stride, destination, stride, workspace.get(), bytes);
+                }
+                for (int i = 0; i < n; ++i)
+                {
+                    for (int j = 0; j < n; ++j)
+                    {
+                        EXPECT_NEAR(destination[i * stride + j],
+                            expected[i * n + j],
+                            8.e-4 * std::max(1., std::fabs(expected[i * n + j])));
+                    }
+                    EXPECT_EQ(destination[i * stride + n], -123.F);
+                    EXPECT_EQ(destination[i * stride + n + 1], -123.F);
+                }
+                if (!in_place)
+                {
+                    EXPECT_TRUE(std::equal(host.begin(), host.end(), a.get()));
+                }
+            }
+        });
+    const auto                         bytes = linalg::logarithm<float, MB>::workspace_size(2);
+    page_aligned_buffer<unsigned char> workspace(bytes);
+    page_aligned_buffer<float>         a(4), result(4);
+    a.get()[0] = -1.F;
+    a.get()[3] = 1.F;
+    linalg::logarithm<float, MB>::apply(a.get(), 2, 2, result.get(), 2, workspace.get(), bytes);
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_TRUE(std::isnan(result.get()[i]));
+    }
+    linalg::square_root<float, MB>::apply(a.get(), 2, 2, result.get(), 2, workspace.get(), bytes);
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_TRUE(std::isnan(result.get()[i]));
+    }
 }
 
 #endif  // LINALG_HAS_METAL
