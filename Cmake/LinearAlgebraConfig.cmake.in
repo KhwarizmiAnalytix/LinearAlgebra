@@ -70,9 +70,9 @@ if(LinearAlgebra_HAS_CPUINFO)
     find_dependency(cpuinfo)
 endif()
 
-# --- Optional Profiler backend, auto-detected (LINALG_HAS_PROFILER) ---
-# Only part of this package's link interface when find_package(Profiler)
-# succeeded for the installed LinearAlgebra's own build.
+# --- Optional Profiler backend (LINALG_HAS_PROFILER) ---
+# Only part of this package's link interface when LINALG_ENABLE_PROFILING
+# was enabled for the installed LinearAlgebra's own build.
 set(LinearAlgebra_HAS_PROFILER @LINALG_HAS_PROFILER@)
 if(LinearAlgebra_HAS_PROFILER)
     find_dependency(Profiler)

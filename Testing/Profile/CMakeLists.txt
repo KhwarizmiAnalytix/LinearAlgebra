@@ -2,9 +2,8 @@
 # LinearAlgebra — Testing/Profile
 # Profile every matrix operation (CPU native / blas_lapacke / mkl and GPU)
 # using KhwarizmiAnalytix/Profiler instrumentation.
-# Requires Profiler::Profiler (auto-detected in the top-level CMakeLists.txt
-# via find_package(Profiler CONFIG QUIET); the directory is only added when
-# LINALG_ENABLE_PROFILING is ON and LINALG_HAS_PROFILER is set to ON).
+# Requires Profiler::Profiler (resolved in the top-level CMakeLists.txt
+# when LINALG_ENABLE_PROFILING is ON).
 # =============================================================================
 
 if(NOT TARGET Profiler::Profiler)

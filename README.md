@@ -144,7 +144,7 @@ C++20/C++23 builds can require newer toolchains.
 CI builds and tests GCC 9.1.0 and Clang 9.0.0 in a pinned Linux container.
 The minimum-compiler jobs select C++17 for both LinearAlgebra and Logging,
 use bundled dependencies and scalar SIMD, and disable optional enum reflection
-(which requires GCC 9+) and auto-detected cpuinfo/Profiler packages. Each job
+(which requires GCC 9+) and optional cpuinfo/Profiler packages. Each job
 checks CMake's detected compiler ID and version to catch toolchain fallback.
 
 The MSVC 19.14 job runs on GitHub-hosted `windows-2022` runners for pushes and
@@ -171,6 +171,7 @@ Install CMake 3.24+ and Ninja, then configure:
 | `LINALG_ENABLE_ROCBLAS` | OFF | hipBLAS/hipSOLVER GPU backend (`linalg_backend::ROCM_BLAS` specializations, `src/matrix_operation/gpu/hipblas/`); requires a ROCm/HIP toolchain, enables the HIP language only when ON; mutually exclusive with CUDA and Metal |
 | `LINALG_ENABLE_METAL` | OFF | Metal Performance Shaders GPU backend (`linalg_backend::METAL_BLAS`); Apple platforms, float only; enables Objective-C++ and links Metal, MetalPerformanceShaders, and Foundation; mutually exclusive with CUDA and ROCm |
 | `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS or hipBLAS |
+| `LINALG_ENABLE_PROFILING` | OFF | Enable Profiler instrumentation and build profiling programs; requires `Profiler::Profiler`. When OFF, Profiler is neither discovered nor linked |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | Standalone: ON; embedded: host setting or OFF | Build the test suite; `BUILD_TESTING=OFF` disables it |

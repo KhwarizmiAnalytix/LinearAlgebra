@@ -185,9 +185,9 @@ option(LINALG_ENABLE_GTEST "Enable GoogleTest for LinearAlgebra" ON)
 # Cmake/LinearAlgebraDependencies.cmake). Off by default.
 option(LINALG_ENABLE_BENCHMARK "Enable Google Benchmark for LinearAlgebra micro-benchmarks" OFF)
 
-# Profiler-instrumented profiling program for all matrix operations (CPU and GPU).
-# Requires Profiler::Profiler (auto-detected above via find_package(Profiler CONFIG QUIET)).
-option(LINALG_ENABLE_PROFILING "Build the Profiler-instrumented matrix operation profiling program"
+# Profiler instrumentation and profiling programs for all matrix operations (CPU and GPU).
+# Requires Profiler::Profiler when enabled.
+option(LINALG_ENABLE_PROFILING "Enable Profiler instrumentation and build profiling programs"
        OFF
 )
 
@@ -555,16 +555,13 @@ elseif(TARGET cpuinfo)
     set(LINALG_HAS_CPUINFO ON)
 endif()
 
-# --- Optional Profiler backend (KhwarizmiAnalytix/Profiler), auto-detected ---
-# CPU/GPU profiling instrumentation via find_package(Profiler) — no vendored
-# copy, no enable option: silently absent when not installed. Not yet wired
-# into any call site; LINALG_HAS_PROFILER makes Profiler::Profiler available
-# for a future instrumentation follow-up when the package happens to be
-# present (e.g. built and installed from
-# https://github.com/KhwarizmiAnalytix/Profiler).
-find_package(Profiler CONFIG QUIET)
+# --- Optional Profiler backend (KhwarizmiAnalytix/Profiler) ---
+# LINALG_ENABLE_PROFILING controls discovery, linkage, and scope instrumentation.
 set(LINALG_HAS_PROFILER OFF)
-if(TARGET Profiler::Profiler)
+if(LINALG_ENABLE_PROFILING)
+    if(NOT TARGET Profiler::Profiler)
+        find_package(Profiler CONFIG REQUIRED)
+    endif()
     list(APPEND LINALG_DEPENDENCY_LIBS Profiler::Profiler)
     set(LINALG_HAS_PROFILER ON)
 endif()
@@ -886,14 +883,7 @@ if(LINALG_ENABLE_BENCHMARK)
     add_subdirectory(Testing/Benchmark)
 endif()
 if(LINALG_ENABLE_PROFILING)
-    if(LINALG_HAS_PROFILER)
-        add_subdirectory(Testing/Profile)
-    else()
-        message(WARNING "LINALG_ENABLE_PROFILING is ON but Profiler::Profiler was not found. "
-                        "Build and install KhwarizmiAnalytix/Profiler and set CMAKE_PREFIX_PATH "
-                        "to its install prefix, then re-configure."
-        )
-    endif()
+    add_subdirectory(Testing/Profile)
 endif()
 if(LINALG_ENABLE_VALGRIND AND LINALG_ENABLE_TESTING)
     linalg_apply_valgrind_timeouts()

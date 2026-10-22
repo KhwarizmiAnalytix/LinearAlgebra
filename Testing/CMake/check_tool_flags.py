@@ -156,14 +156,71 @@ class ToolFlagChecks(unittest.TestCase):
                 )
 
     def test_profiling_dependency_contract(self):
-        for available in (False, True):
-            with self.subTest(available=available):
+        for enabled, available in itertools.product((False, True), repeat=2):
+            with self.subTest(enabled=enabled, available=available):
+                option = "ON" if enabled else "OFF"
                 body = self.root(
-                    "set(LINALG_ENABLE_PROFILING ON)\n", profiler=available
+                    f"set(LINALG_ENABLE_PROFILING {option})\n", profiler=available
                 )
-                condition = "NOT " if available else ""
-                body += f'if({condition}TARGET profile_linalg_matrix_operations)\nmessage(FATAL_ERROR "Profiler option ignored")\nendif()\n'
-                self.configure(f"profiler-{available}", body)
+                if enabled and not available:
+                    self.configure(
+                        f"profiler-{enabled}-{available}",
+                        body,
+                        error="CMAKE_DISABLE_FIND_PACKAGE_Profiler",
+                    )
+                else:
+                    self.configure(
+                        f"profiler-{enabled}-{available}",
+                        body + self.profiling_contract(enabled),
+                    )
+
+    def profiling_contract(self, enabled):
+        option = "ON" if enabled else "OFF"
+        condition = "NOT " if enabled else ""
+        return (
+            "foreach(profile IN ITEMS profile_linalg_matrix_operations profile_linalg_eigen)\n"
+            f"if({condition}TARGET ${{profile}})\n"
+            'message(FATAL_ERROR "Profiling target does not match option")\n'
+            "endif()\nendforeach()\n"
+            "get_target_property(definitions LinearAlgebra INTERFACE_COMPILE_DEFINITIONS)\n"
+            f'if(NOT "LINALG_HAS_PROFILER=$<BOOL:{option}>" IN_LIST definitions)\n'
+            'message(FATAL_ERROR "Profiler instrumentation does not match option")\n'
+            "endif()\n"
+            "get_target_property(libraries LinearAlgebra INTERFACE_LINK_LIBRARIES)\n"
+            f'if({condition}"Profiler::Profiler" IN_LIST libraries)\n'
+            'message(FATAL_ERROR "Profiler linkage does not match option")\n'
+            "endif()\n"
+            'file(READ "${LINALG_BINARY_DIR}/LinearAlgebraConfig.cmake" config)\n'
+            f'string(FIND "${{config}}" "set(LinearAlgebra_HAS_PROFILER {option})" capability)\n'
+            "if(capability EQUAL -1)\n"
+            'message(FATAL_ERROR "Exported Profiler capability does not match option")\n'
+            "endif()\n"
+        )
+
+    def test_profiling_discovery_and_reconfigure(self):
+        package = self.work / "profiler-package"
+        package.mkdir()
+        (package / "ProfilerConfig.cmake").write_text(
+            "add_library(Profiler::Profiler INTERFACE IMPORTED)\n", encoding="utf-8"
+        )
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                option = "ON" if enabled else "OFF"
+                body = self.root(
+                    f"set(LINALG_ENABLE_PROFILING {option})\n"
+                    "set(CMAKE_DISABLE_FIND_PACKAGE_Profiler OFF)\n"
+                    f'set(Profiler_DIR "{package.as_posix()}")\n'
+                )
+                body += self.profiling_contract(enabled)
+                if not enabled:
+                    # A package remains available, but disabling profiling must
+                    # skip discovery even after an enabled configure.
+                    body += (
+                        "if(TARGET Profiler::Profiler)\n"
+                        'message(FATAL_ERROR "Profiler discovered while disabled")\n'
+                        "endif()\n"
+                    )
+                self.configure("profiler-reconfigure", body)
 
     def test_examples_require_all_vendor_backends(self):
         self.configure(
