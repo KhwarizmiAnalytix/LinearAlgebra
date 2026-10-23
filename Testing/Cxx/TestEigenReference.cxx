@@ -26,9 +26,13 @@
 
 namespace
 {
+// Specify every parameter: MSVC mis-instantiates Eigen's dependent defaults
+// in typed tests and can crash while compiling their generic backend lambdas.
 template <typename T>
-using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-// MSVC 19.14 mis-instantiates templated vector aliases; use direct Eigen types below.
+using Matrix = Eigen::
+    Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor, Eigen::Dynamic, Eigen::Dynamic>;
+template <typename T>
+using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
 
 template <typename T> T tolerance()
 {
@@ -145,15 +149,15 @@ TYPED_TEST(EigenReference, LUFactorsAndReusedSolve)
                 lower.template triangularView<Eigen::StrictlyLower>() = factors;
                 Matrix<T> upper = factors.template triangularView<Eigen::Upper>();
                 expect_close(Matrix<T>(lower * upper), a);
-                Eigen::Matrix<T, Eigen::Dynamic, 1>       rhs      = random_matrix<T>(n, 1, 43);
-                const Eigen::Matrix<T, Eigen::Dynamic, 1> expected = a.partialPivLu().solve(rhs);
-                const Eigen::Matrix<T, Eigen::Dynamic, 1> original_rhs = rhs;
-                constexpr auto mode = linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER;
+                Vector<T>       rhs          = random_matrix<T>(n, 1, 43);
+                const Vector<T> expected     = a.partialPivLu().solve(rhs);
+                const Vector<T> original_rhs = rhs;
+                constexpr auto  mode         = linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER;
                 ws.resize(linalg::linear_solver<T, B>::workspace_size(n, mode));
                 linalg::linear_solver<T, B>::apply(
                     factors.data(), pivot.data(), n, rhs.data(), mode, ws.data(), ws.size());
                 expect_close(rhs, expected);
-                expect_close(Eigen::Matrix<T, Eigen::Dynamic, 1>(a * rhs), original_rhs);
+                expect_close(Vector<T>(a * rhs), original_rhs);
             }
         });
 }
@@ -215,10 +219,10 @@ TYPED_TEST(EigenReference, QRReconstructionAndOrthogonality)
             {
                 constexpr int cols = 7;
                 SCOPED_TRACE(rows);
-                const Matrix<T>                     a = random_matrix<T>(rows, cols);
-                Matrix<T>                           q = a;
-                Eigen::Matrix<T, Eigen::Dynamic, 1> tau(cols);
-                std::vector<unsigned char>          ws(
+                const Matrix<T>            a = random_matrix<T>(rows, cols);
+                Matrix<T>                  q = a;
+                Vector<T>                  tau(cols);
+                std::vector<unsigned char> ws(
                     linalg::qr_decomposition<T, B>::workspace_size(rows, cols));
                 linalg::qr_decomposition<T, B>::apply_r(
                     rows, cols, q.data(), cols, tau.data(), ws.data(), ws.size());
@@ -229,9 +233,8 @@ TYPED_TEST(EigenReference, QRReconstructionAndOrthogonality)
                 expect_close(Matrix<T>(q.transpose() * q), Matrix<T>::Identity(cols, cols));
                 const Eigen::HouseholderQR<Matrix<T>> reference(a);
                 // QR column signs may differ, but absolute R diagonals agree.
-                expect_close(Eigen::Matrix<T, Eigen::Dynamic, 1>(r.diagonal().cwiseAbs()),
-                    Eigen::Matrix<T, Eigen::Dynamic, 1>(
-                        reference.matrixQR().topRows(cols).diagonal().cwiseAbs()));
+                expect_close(Vector<T>(r.diagonal().cwiseAbs()),
+                    Vector<T>(reference.matrixQR().topRows(cols).diagonal().cwiseAbs()));
             }
         });
 }
@@ -246,11 +249,11 @@ TYPED_TEST(EigenReference, SingularValuesAndSVDReconstruction)
             SCOPED_TRACE(static_cast<int>(B));
             for (const int rows : {5, 9})
             {
-                constexpr int                       cols  = 5;
-                const Matrix<T>                     a     = random_matrix<T>(rows, cols);
-                Matrix<T>                           input = a, u(rows, cols), vt(cols, cols);
-                Eigen::Matrix<T, Eigen::Dynamic, 1> values(cols);
-                std::vector<unsigned char>          ws(
+                constexpr int              cols  = 5;
+                const Matrix<T>            a     = random_matrix<T>(rows, cols);
+                Matrix<T>                  input = a, u(rows, cols), vt(cols, cols);
+                Vector<T>                  values(cols);
+                std::vector<unsigned char> ws(
                     linalg::svd_decomposition<T, B>::workspace_size(rows, cols));
                 linalg::svd_decomposition<T, B>::apply(rows,
                     cols,
@@ -287,7 +290,7 @@ TYPED_TEST(EigenReference, SymmetricSpectrumAndEigenvectorResidual)
                 const Matrix<T>                                r       = random_matrix<T>(n, n);
                 const Matrix<T>                                a       = r + r.transpose();
                 Matrix<T>                                      vectors = a;
-                Eigen::Matrix<T, Eigen::Dynamic, 1>            values(n);
+                Vector<T>                                      values(n);
                 const Eigen::SelfAdjointEigenSolver<Matrix<T>> reference(a);
                 ASSERT_EQ(reference.info(), Eigen::Success);
                 std::vector<unsigned char> ws(
@@ -338,11 +341,10 @@ TYPED_TEST(EigenReference, GeneralRealAndComplexSpectra)
                 }
                 const Eigen::EigenSolver<Matrix<T>> reference(a, false);
                 ASSERT_EQ(reference.info(), Eigen::Success);
-                Matrix<T>                           vectors = a;
-                Eigen::Matrix<T, Eigen::Dynamic, 1> real(n);
-                Eigen::Matrix<T, Eigen::Dynamic, 1> imag(n);
-                const bool                          compute_vectors = !complex_spectrum;
-                std::vector<unsigned char>          ws(
+                Matrix<T>                  vectors = a;
+                Vector<T>                  real(n), imag(n);
+                const bool                 compute_vectors = !complex_spectrum;
+                std::vector<unsigned char> ws(
                     linalg::general_eigen_backend<T, B>::workspace_size(n, compute_vectors));
                 ASSERT_TRUE((linalg::general_eigen_backend<T, B>::apply(vectors.data(),
                     n,
@@ -380,8 +382,9 @@ TYPED_TEST(EigenReference, GeneralRealAndComplexSpectra)
             }
         });
 }
-template <typename T> void test_native_symmetric_scaled_spectrum()
+TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
 {
+    using T                = TypeParam;
     constexpr auto backend = linalg::linalg_backend::NATIVE;
     for (const int n : {1, 2, 33, 65})
     {
@@ -391,7 +394,7 @@ template <typename T> void test_native_symmetric_scaled_spectrum()
             const Matrix<T>                       random = random_matrix<T>(n, n);
             const Eigen::HouseholderQR<Matrix<T>> qr(random);
             const Matrix<T>                       q = qr.householderQ();
-            Eigen::Matrix<T, Eigen::Dynamic, 1>   spectrum(n);
+            Vector<T>                             spectrum(n);
             for (int i = 0; i < n; ++i)
             {
                 const int group = i / 3;  // Repeated eigenvalues and a null space.
@@ -407,8 +410,8 @@ template <typename T> void test_native_symmetric_scaled_spectrum()
                     storage[i * lda + j] = a(i, j) * scale;
                 }
             }
-            Eigen::Matrix<T, Eigen::Dynamic, 1> values(n);
-            std::vector<unsigned char>          workspace(
+            Vector<T>                  values(n);
+            std::vector<unsigned char> workspace(
                 linalg::symmetric_eigen_backend<T, backend>::workspace_size(n));
             ASSERT_TRUE((linalg::symmetric_eigen_backend<T, backend>::apply(
                 storage.data(), n, lda, values.data(), ldv, workspace.data(), workspace.size())));
@@ -422,8 +425,9 @@ template <typename T> void test_native_symmetric_scaled_spectrum()
     }
 }
 
-template <typename T> void test_native_general_dense_spectra()
+TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
 {
+    using T                = TypeParam;
     constexpr auto backend = linalg::linalg_backend::NATIVE;
     for (const int n : {1, 2, 17, 65})
     {
@@ -451,9 +455,8 @@ template <typename T> void test_native_general_dense_spectra()
             {
                 std::copy_n(a.data() + i * n, n, storage.data() + i * lda);
             }
-            Eigen::Matrix<T, Eigen::Dynamic, 1> real(n);
-            Eigen::Matrix<T, Eigen::Dynamic, 1> imag(n);
-            std::vector<unsigned char>          workspace(
+            Vector<T>                  real(n), imag(n);
+            std::vector<unsigned char> workspace(
                 linalg::general_eigen_backend<T, backend>::workspace_size(n, compute_vectors));
             ASSERT_TRUE((linalg::general_eigen_backend<T, backend>::apply(storage.data(),
                 n,
@@ -495,16 +498,6 @@ template <typename T> void test_native_general_dense_spectra()
             }
         }
     }
-}
-
-TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
-{
-    test_native_symmetric_scaled_spectrum<TypeParam>();
-}
-
-TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
-{
-    test_native_general_dense_spectra<TypeParam>();
 }
 
 TYPED_TEST(EigenReference, NormReductionsWithPaddedStrides)
