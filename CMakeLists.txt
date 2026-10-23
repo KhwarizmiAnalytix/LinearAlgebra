@@ -884,6 +884,8 @@ install(
 )
 
 # --- Testing ---
+include("${LINALG_SOURCE_DIR}/Cmake/LinearAlgebraDependencies.cmake")
+linalg_setup_eigen()
 if(LINALG_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()

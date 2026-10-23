@@ -20,6 +20,9 @@
 #include "include/common/types.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 
+#include <Eigen/Cholesky>
+#include <type_traits>
+
 namespace
 {
 
@@ -102,6 +105,35 @@ void BM_CholeskyDecomposition(benchmark::State& state)
         benchmark::Counter::OneK::kIs1000);
 }
 
+template <typename T> void BM_EigenCholeskyDecomposition(benchmark::State& state)
+{
+    const auto n = state.range(0);
+    using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    const auto                                   input = make_spd_matrix<T>(n, 42);
+    const Eigen::Map<const Matrix>               original(input.data(), n, n);
+    Matrix                                       work = original;
+    Eigen::LLT<Eigen::Ref<Matrix>, Eigen::Lower> llt(work);
+    for (auto _ : state)
+    {
+        state.PauseTiming();
+        work = original;
+        state.ResumeTiming();
+        llt.compute(work);
+        if (llt.info() != Eigen::Success)
+        {
+            state.SkipWithError("Eigen LLT failed");
+            break;
+        }
+        benchmark::DoNotOptimize(work.data());
+        benchmark::ClobberMemory();
+    }
+    state.SetLabel("eigen");
+    state.SetComplexityN(n);
+    state.counters["FLOPS"] = benchmark::Counter(1.0 * n * n * n / 3.0,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
+}
+
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, float, linalg::linalg_backend::NATIVE)
@@ -179,3 +211,26 @@ BENCHMARK_TEMPLATE(BM_CholeskyDecomposition, double, linalg::linalg_backend::MKL
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 #endif
+
+BENCHMARK_TEMPLATE(BM_EigenCholeskyDecomposition, float)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenCholeskyDecomposition, double)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);

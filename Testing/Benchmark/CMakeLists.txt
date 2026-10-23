@@ -34,6 +34,8 @@ foreach(_bench_source IN ITEMS ${bench_sources})
         ${target_name} PRIVATE Benchmark::benchmark Benchmark::benchmark_main
                                LinearAlgebra::LinearAlgebra
     )
+    target_link_libraries(${target_name} PRIVATE Eigen3::Eigen)
+    target_compile_definitions(${target_name} PRIVATE EIGEN_DONT_PARALLELIZE)
     if(COMMAND linalg_set_target_output_directories)
         linalg_set_target_output_directories(${target_name})
     endif()

@@ -22,6 +22,9 @@
 #include "include/common/types.h"
 #include "include/matrix_operation/qr_decomposition.h"
 
+#include <Eigen/QR>
+#include <type_traits>
+
 namespace
 {
 
@@ -88,6 +91,32 @@ void BM_QRDecomposition(benchmark::State& state)
     const double flops_per_iter =
         2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n);
     state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
+}
+
+template <typename T> void BM_EigenQRDecomposition(benchmark::State& state)
+{
+    const auto n = state.range(0);
+    using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    const auto                               input = make_random_matrix<T>(n, n, 42);
+    const Eigen::Map<const Matrix>           original(input.data(), n, n);
+    Matrix                                   work = original;
+    Matrix                                   q(n, n);
+    Eigen::HouseholderQR<Eigen::Ref<Matrix>> qr(work);
+    for (auto _ : state)
+    {
+        state.PauseTiming();
+        work = original;
+        state.ResumeTiming();
+        qr.compute(work);
+        q = qr.householderQ();
+        benchmark::DoNotOptimize(q.data());
+        benchmark::ClobberMemory();
+    }
+    state.SetLabel("eigen");
+    state.SetComplexityN(n);
+    state.counters["FLOPS"] = benchmark::Counter(2.0 * n * n * n,
         benchmark::Counter::kIsIterationInvariantRate,
         benchmark::Counter::OneK::kIs1000);
 }
@@ -169,3 +198,26 @@ BENCHMARK_TEMPLATE(BM_QRDecomposition, double, linalg::linalg_backend::MKL)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 #endif
+
+BENCHMARK_TEMPLATE(BM_EigenQRDecomposition, float)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenQRDecomposition, double)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);

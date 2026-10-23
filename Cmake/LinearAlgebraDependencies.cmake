@@ -179,3 +179,20 @@ function(linalg_setup_benchmark)
         linalg_set_third_party_folder_properties("benchmark" "${_benchmark_binary_dir}")
     endif()
 endfunction()
+
+# Always provide the bundled reference implementation. It remains private to
+# validation targets, so installed library consumers do not need Eigen headers.
+function(linalg_setup_eigen)
+    if(TARGET Eigen3::Eigen)
+        return()
+    endif()
+    set(_eigen_source "${LINALG_THIRD_PARTY_DIR}/eigen")
+    if(NOT EXISTS "${_eigen_source}/Eigen/Core")
+        message(
+            FATAL_ERROR
+                "Bundled Eigen headers are missing. Run git submodule update --init --recursive."
+        )
+    endif()
+    add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
+    set_target_properties(Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_eigen_source}")
+endfunction()

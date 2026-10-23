@@ -52,6 +52,34 @@ jobs:
       - name: Configuration regression checks
         run: python3 Testing/CMake/check_configurations.py
 
+  eigen-reference:
+    name: Eigen reference tests and benchmark smoke checks
+    runs-on: ubuntu-latest
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      BLIS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libopenblas-dev liblapacke-dev
+      - name: Configure
+        run: >-
+          cmake -S . -B build-eigen -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DLINALG_ENABLE_BENCHMARK=ON
+          -DLINALG_ENABLE_BLAS=ON -DLINALG_LTO_MODE=off
+      - name: Build
+        run: cmake --build build-eigen --parallel 2
+      - name: Test
+        run: ctest --test-dir build-eigen -L Unit --output-on-failure --no-tests=error
+      - name: Benchmark smoke checks
+        run: |
+          for operation in multiplication ludecomposition qrdecomposition choleskydecomposition svddecomposition eigen; do
+            ./build-eigen/bin/benchmark_linalg_${operation} --benchmark_filter='/(8|16|32/32/32)/'
+          done
+
   cmake-minimum-linux:
     name: CMake 3.24.4 (${{ matrix.compiler }} ${{ matrix.version }}, C++17)
     runs-on: ubuntu-latest

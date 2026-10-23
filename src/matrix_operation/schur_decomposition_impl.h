@@ -18,18 +18,21 @@ namespace linalg_schur
 {
 // Complex Schur form avoids the real 2x2 block cases and also handles
 // nonsymmetric matrices, conjugate eigenvalues, and defective Jordan blocks.
-template <typename T>
+template <typename T, bool ComputeVectors = true>
 LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
     LINALG_ADDRESS complex_value<T>* q,
     LINALG_ADDRESS complex_value<T>* v,
     int                              n,
     T                                epsilon)
 {
-    for (int i = 0; i < n; ++i)
+    if (ComputeVectors)
     {
-        for (int j = 0; j < n; ++j)
+        for (int i = 0; i < n; ++i)
         {
-            q[i * n + j] = value(i == j ? T(1) : T(0));
+            for (int j = 0; j < n; ++j)
+            {
+                q[i * n + j] = value(i == j ? T(1) : T(0));
+            }
         }
     }
     // Householder reduction to Hessenberg form; accumulate the unitary factor.
@@ -65,9 +68,12 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         for (int i = 0; i < n; ++i)
         {
             const auto hd = complex_dot(h + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
-            const auto qd = complex_dot(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
             complex_axpy(h + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, hd * T(-2), true);
-            complex_axpy(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, qd * T(-2), true);
+            if (ComputeVectors)
+            {
+                const auto qd = complex_dot(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
+                complex_axpy(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, qd * T(-2), true);
+            }
         }
         for (int i = k + 2; i < n; ++i)
         {
@@ -133,7 +139,10 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
                 s,
                 v);
             complex_rotate(h + k, n, h + k + 1, n, n, c, conjugate(s), v);
-            complex_rotate(q + k, n, q + k + 1, n, n, c, conjugate(s), v);
+            if (ComputeVectors)
+            {
+                complex_rotate(q + k, n, q + k + 1, n, n, c, conjugate(s), v);
+            }
             if (k > begin)
             {
                 h[(k + 1) * n + k - 1] = value(T(0));

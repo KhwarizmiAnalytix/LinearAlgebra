@@ -21,6 +21,9 @@
 #include "include/common/types.h"
 #include "include/matrix_operation/lu_decomposition.h"
 
+#include <Eigen/LU>
+#include <type_traits>
+
 namespace
 {
 
@@ -92,6 +95,30 @@ void BM_LUDecomposition(benchmark::State& state)
     const double flops_per_iter =
         2.0 * static_cast<double>(n) * static_cast<double>(n) * static_cast<double>(n) / 3.0;
     state.counters["FLOPS"] = benchmark::Counter(flops_per_iter,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
+}
+
+template <typename T> void BM_EigenLUDecomposition(benchmark::State& state)
+{
+    const auto n = state.range(0);
+    using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    const auto                              input = make_well_conditioned_matrix<T>(n, 42);
+    const Eigen::Map<const Matrix>          original(input.data(), n, n);
+    Matrix                                  work = original;
+    Eigen::PartialPivLU<Eigen::Ref<Matrix>> lu(work);
+    for (auto _ : state)
+    {
+        state.PauseTiming();
+        work = original;
+        state.ResumeTiming();
+        lu.compute(work);
+        benchmark::DoNotOptimize(work.data());
+        benchmark::ClobberMemory();
+    }
+    state.SetLabel("eigen partial pivoting");
+    state.SetComplexityN(n);
+    state.counters["FLOPS"] = benchmark::Counter(2.0 * n * n * n / 3.0,
         benchmark::Counter::kIsIterationInvariantRate,
         benchmark::Counter::OneK::kIs1000);
 }
@@ -173,3 +200,26 @@ BENCHMARK_TEMPLATE(BM_LUDecomposition, double, linalg::linalg_backend::MKL)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 #endif
+
+BENCHMARK_TEMPLATE(BM_EigenLUDecomposition, float)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenLUDecomposition, double)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);

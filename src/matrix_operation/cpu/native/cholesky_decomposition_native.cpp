@@ -163,6 +163,84 @@ linalg_int cholesky_decomposition_scalar_impl(linalg_int n, T* A, linalg_int lda
 // access reason the old UPPER branch here did.
 inline constexpr linalg_int kCholeskyBlockSize = 64;
 
+// Pack a short transposed panel so SIMD lanes update adjacent output columns.
+// Unlike a dot product per entry, this keeps reductions in registers and reuses
+// each panel coefficient across several columns without horizontal reductions.
+template <typename T>
+void cholesky_trailing_update(
+    linalg_int n, linalg_int depth, const T* panel, linalg_int lda, T* trailing)
+{
+#if LINALG_HAS_VECTORIZATION
+    using P                    = packet<T>;
+    constexpr linalg_int width = P::size;
+    alignas(64) T        packed[kCholeskyBlockSize * kCholeskyBlockSize];
+    for (linalg_int first = 0; first < n; first += kCholeskyBlockSize)
+    {
+        const auto columns = std::min(kCholeskyBlockSize, n - first);
+        for (linalg_int k = 0; k < depth; ++k)
+        {
+            for (linalg_int j = 0; j < columns; ++j)
+            {
+                packed[k * kCholeskyBlockSize + j] = panel[(first + j) * lda + k];
+            }
+        }
+        for (linalg_int i = first; i < n; ++i)
+        {
+            const auto count = std::min(columns, i - first + 1);
+            linalg_int j     = 0;
+            for (; j + 4 * width <= count; j += 4 * width)
+            {
+                typename P::packet_t s0, s1, s2, s3;
+                P::set(T(0), s0);
+                s1 = s2 = s3 = s0;
+                for (linalg_int k = 0; k < depth; ++k)
+                {
+                    typename P::packet_t x, y0, y1, y2, y3;
+                    P::set(panel[i * lda + k], x);
+                    const T* row = packed + k * kCholeskyBlockSize + j;
+                    P::loadu(row, y0);
+                    P::loadu(row + width, y1);
+                    P::loadu(row + 2 * width, y2);
+                    P::loadu(row + 3 * width, y3);
+                    P::fma(x, y0, s0, s0);
+                    P::fma(x, y1, s1, s1);
+                    P::fma(x, y2, s2, s2);
+                    P::fma(x, y3, s3, s3);
+                }
+                typename P::packet_t a0, a1, a2, a3, minus_one;
+                P::set(T(-1), minus_one);
+                T* row = trailing + i * lda + first + j;
+                P::loadu(row, a0);
+                P::loadu(row + width, a1);
+                P::loadu(row + 2 * width, a2);
+                P::loadu(row + 3 * width, a3);
+                P::fma(minus_one, s0, a0, a0);
+                P::fma(minus_one, s1, a1, a1);
+                P::fma(minus_one, s2, a2, a2);
+                P::fma(minus_one, s3, a3, a3);
+                P::storeu(a0, row);
+                P::storeu(a1, row + width);
+                P::storeu(a2, row + 2 * width);
+                P::storeu(a3, row + 3 * width);
+            }
+            for (; j < count; ++j)
+            {
+                trailing[i * lda + first + j] -=
+                    cholesky_dot(panel + i * lda, panel + (first + j) * lda, depth);
+            }
+        }
+    }
+#else
+    for (linalg_int i = 0; i < n; ++i)
+    {
+        for (linalg_int j = 0; j <= i; ++j)
+        {
+            trailing[i * lda + j] -= cholesky_dot(panel + i * lda, panel + j * lda, depth);
+        }
+    }
+#endif
+}
+
 template <typename T>
 linalg_int cholesky_decomposition_blocked_lower(linalg_int n, T* A, linalg_int lda)
 {
@@ -208,18 +286,7 @@ linalg_int cholesky_decomposition_blocked_lower(linalg_int n, T* A, linalg_int l
             }
         }
 
-        // Trailing update: A22 -= L21 * L21^T, lower triangle only -- the upper
-        // triangle of A22 is never read by this algorithm.
-        for (linalg_int i = 0; i < rows_below; ++i)
-        {
-            const T* const row_i = &a21[i * lda];
-            T* const       a22_i = &a22[i * lda];
-            for (linalg_int j = 0; j <= i; ++j)
-            {
-                const T* const row_j = &a21[j * lda];
-                a22_i[j] -= cholesky_dot(row_i, row_j, bs);
-            }
-        }
+        cholesky_trailing_update(rows_below, bs, a21, lda, a22);
     }
 
     return 0;  // Success
@@ -261,8 +328,8 @@ linalg_int cholesky_decomposition_apply_impl(T* C, linalg_int n, cholesky_decomp
 
 template <>
 bool cholesky_decomposition<float, linalg_backend::NATIVE>::apply(float* C,
-    linalg_int                                                         lda,
-    cholesky_decomposition_enum                                        type,
+    linalg_int                                                           lda,
+    cholesky_decomposition_enum                                          type,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,
@@ -280,8 +347,8 @@ bool cholesky_decomposition<float, linalg_backend::NATIVE>::apply(float* C,
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::NATIVE>::apply(double* C,
-    linalg_int                                                          lda,
-    cholesky_decomposition_enum                                         type,
+    linalg_int                                                             lda,
+    cholesky_decomposition_enum                                            type,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,

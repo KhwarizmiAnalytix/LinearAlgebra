@@ -9,11 +9,12 @@ package(default_visibility = ["//visibility:public"])
         name = "benchmark_" + _src[len("Benchmark"):-len(".cxx")].lower(),
         srcs = [_src],
         copts = linear_algebra_copts(),
-        defines = linear_algebra_defines() + ["LINALG_BENCHMARK_BLIS=0"],
+        defines = linear_algebra_defines() + ["LINALG_BENCHMARK_BLIS=0", "EIGEN_DONT_PARALLELIZE"],
         includes = ["."],
         linkopts = linear_algebra_linkopts(),
         deps = [
             "//:LinearAlgebra",
+            "@eigen//:eigen",
             "@google_benchmark//:benchmark",
             "@google_benchmark//:benchmark_main",
         ],

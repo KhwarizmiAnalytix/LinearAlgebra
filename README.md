@@ -51,7 +51,7 @@ one consumer, not a required host.
   CUDA path, and `src/matrix_operation/gpu/hipblas/lu_decomposition_hip.cpp`
   on the ROCm path).
 - `Testing/Cxx/` — GoogleTest unit tests.
-- `ThirdParty/` — vendored `googletest` submodule, plus `Logging`
+- `ThirdParty/` — vendored `eigen` and `googletest` submodules, plus `Logging`
   ([KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)),
   a required dependency (always built, not gated by an option).
 - `docs/` — design docs (GPU backend design and status).
@@ -81,7 +81,7 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 | `matrix_operation/condition_number.h` | `condition_number`, via SVD |
 | `matrix_operation/norm.h` | Frobenius / 1 / infinity / 2 (spectral) matrix norms |
 | `matrix_operation/trace.h` | `trace` |
-| `matrix_operation/eigen.h` | Symmetric (Jacobi) and general (real Schur QR) eigenvalue/eigenvector decomposition |
+| `matrix_operation/eigen.h` | Symmetric (Householder/QL) and general (Schur QR) eigenvalue/eigenvector decomposition |
 | `matrix_operation/exponential.h` | `exponential` via scaling and squaring with a Padé approximant, composed on `multiplication`/`matrix_invert`/`norm` (inherits their backend transitively) |
 | `matrix_operation/logarithm.h` | `logarithm` — principal real matrix logarithm using Schur reduction and inverse scaling; all six backends (Metal: float only) |
 | `matrix_operation/square_root.h` | `square_root` — principal real matrix square root using Schur reduction; all six backends (Metal: float only) |
@@ -187,6 +187,7 @@ Install CMake 3.24+ and Ninja, then configure:
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | Standalone: ON; embedded: host setting or OFF | Build the test suite; `BUILD_TESTING=OFF` disables it |
+| `LINALG_ENABLE_BENCHMARK` | OFF | Build Google Benchmark micro-benchmarks |
 | `LINALG_ENABLE_GTEST` | ON | Build GoogleTest cases; OFF retains the GPU source check without GoogleTest |
 | `LINALG_CXX_STANDARD` | 17 | `17`, `20`, or `23` |
 | Other `LINALG_ENABLE_*` | see `CMakeLists.txt` | LTO, coverage, sanitizers, cache, clang-tidy, IWYU, valgrind, … |
@@ -254,6 +255,89 @@ Each benchmark executable reports both backends separately. Match vendor thread
 counts (for example `OPENBLAS_NUM_THREADS=1` and `MKL_NUM_THREADS=1`) when comparing
 them. Function addresses are cached on first use; combined builds add an indirect
 call to BLAS operations. Standalone BLAS builds retain direct calls.
+
+Eigen reference tests are always included in the test suite. To build the
+benchmark comparisons as well:
+
+```sh
+cmake -S . -B build_eigen -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DLINALG_ENABLE_TESTING=ON \
+  -DLINALG_ENABLE_BENCHMARK=ON
+cmake --build build_eigen --parallel 4
+OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1 \
+  ctest --test-dir build_eigen -R '^LinearAlgebraCxxTests$' --output-on-failure
+./build_eigen/bin/LinearAlgebraCxxTests --gtest_filter='EigenReference*'
+OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1 \
+  ./build_eigen/bin/benchmark_linalg_multiplication \
+  --benchmark_filter='double.*64/64/64/' --benchmark_out=eigen-matmul.json \
+  --benchmark_out_format=json
+```
+
+Eigen 3.4.0 is pinned as the `ThirdParty/eigen` Git submodule. Initialize
+third-party dependencies with `git submodule update --init --recursive` before
+building with CMake or Bazel. Eigen comparisons are always active in every
+built test and benchmark target; no Eigen feature flag is required. Eigen stays
+private to these targets, so the installed library has no Eigen dependency.
+Enable BLAS or MKL as above to include those CPU backends in the comparisons.
+
+The float/double reference tests check multiplication with transposes and padded
+strides, LU factors and reused solves, both Cholesky triangles, QR and SVD
+reconstruction and orthogonality, symmetric eigenpairs, and real/complex general
+spectra against every enabled CPU backend. Comparisons allow factor signs and
+spectrum ordering to differ.
+
+All seven benchmark programs add `BM_Eigen*` rows using the same
+seed, row-major inputs, dimensions, and requested outputs as their library rows.
+Eigen runs single-threaded. LU uses Eigen partial pivoting even when native LU
+pivoting is disabled. QR includes explicit Q formation; SVD uses Eigen JacobiSVD
+with thin U and explicitly transposed VT. Input refresh is excluded from timing
+except for SVD, matching the existing benchmarks. Decomposition objects and output buffers are reused;
+internal Eigen work and copies remain timed. Run Release builds and compare the
+matching operation, scalar type, size, and output mode.
+
+The additional `benchmark_linalg_kernels` executable compares in-place transpose,
+Frobenius/one/infinity norms, LU factorization and solve, solves with existing LU
+factors, inversion, and lower/upper triangular solves with and without transpose.
+Triangular cases include one and sixteen right-hand sides. All CPU backends
+compiled into the build are compared with Eigen on the same inputs. The norm
+implementations are shared by the CPU backends. Upfront LU is excluded from
+factorized solves; other solves and inversion include factorization.
+
+Native multiplication writes directly into row-major output using the transposed
+product identity, avoiding an output transpose and rectangular output scratch.
+Native symmetric eigenpairs use Householder tridiagonalization and implicit QL;
+general eigenvalues use the portable Hessenberg/shifted Schur iteration, skipping
+Schur-vector accumulation when only values are requested. Real eigenvectors use
+triangular back substitution and the Schur vectors. Native complex eigenvectors
+remain unsupported. Square transpose uses cache tiles with zero workspace, while
+rectangular transpose uses the existing permutation cycles. Cholesky packs short
+transposed panels for its SIMD trailing update. CPU Frobenius and infinity norms
+use independent partial sums; the one norm traverses short contiguous column
+blocks to improve cache use. These norm changes apply to all CPU backends.
+
+The [recorded Eigen comparison](Testing/Benchmark/results/2026-10-23/REPORT.md)
+includes test results, timings for every registered case, CSV data, scaling charts,
+and hardware/build metadata. The [optimized comparison](Testing/Benchmark/results/2026-10-23-optimized/REPORT.md)
+adds native before/after measurements and the additional kernel workloads.
+Published results retain final CSVs, charts, and metadata; raw runs, logs, and
+intermediate measurements are generated locally and ignored by Git.
+To produce a fresh comparison from a Release build:
+
+```sh
+python3 Testing/Benchmark/run_eigen_comparison.py --build-dir build_eigen \
+  --output-dir /tmp/eigen-comparison
+python3 Testing/Benchmark/summarize_eigen_comparison.py /tmp/eigen-comparison
+```
+
+Use `--operations kernels eigen` to select executables or `--filter 'NATIVE.*>/128/'`
+to select case names. Choose a fresh output directory for each run. To compare
+native speedups against a previous run, pass `--baseline /path/to/previous-results`
+to the summarizer; `--no-charts` omits the Matplotlib dependency. MKL and
+BLAS/LAPACKE results retain separate columns.
+
+The runner executes the unit tests first, then benchmarks each case sequentially
+with one thread per backend. It preserves timeouts and failures alongside raw
+Google Benchmark JSON and logs. The report script requires Matplotlib.
 
 The [CPU/GPU benchmark example](examples/backend_benchmark/README.md) compares
 all four backends in one executable. Its [Markdown analysis](examples/backend_benchmark/analysis.md)

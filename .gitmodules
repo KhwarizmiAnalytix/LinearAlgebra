@@ -7,3 +7,6 @@
 [submodule "ThirdParty/benchmark"]
 	path = ThirdParty/benchmark
 	url = https://github.com/google/benchmark.git
+[submodule "ThirdParty/eigen"]
+	path = ThirdParty/eigen
+	url = https://gitlab.com/libeigen/eigen.git

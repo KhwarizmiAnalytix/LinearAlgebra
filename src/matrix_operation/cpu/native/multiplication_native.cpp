@@ -241,13 +241,13 @@ template <typename value_t,
 // view into the caller's a or b) are always distinct allocations, so both
 // are __restrict.
 void pack_lhs(  // NOLINT
-    value_t* __restrict       block_A,
+    value_t* __restrict block_A,
     const value_t* __restrict data,
-    linalg_int     lda,
-    linalg_int     depth,
-    linalg_int     rows,
-    linalg_int     stride = 0,
-    linalg_int     offset = 0)
+    linalg_int lda,
+    linalg_int depth,
+    linalg_int rows,
+    linalg_int stride = 0,
+    linalg_int offset = 0)
 {
     using packet_t                         = typename packet<value_t>::packet_t;
     static constexpr linalg_int PacketSize = packet<value_t>::size;
@@ -487,13 +487,13 @@ void pack_lhs(  // NOLINT
 template <typename value_t, linalg_int nr, linalg_int PacketSize, bool ColMajor, bool PanelMode>
 // blockB and data never alias, same reasoning as pack_lhs above.
 void pack_rhs(  // NOLINT
-    value_t* __restrict       blockB,
+    value_t* __restrict blockB,
     const value_t* __restrict data,
-    linalg_int     ldb,
-    linalg_int     depth,
-    linalg_int     cols,
-    linalg_int     stride = 0,
-    linalg_int     offset = 0)
+    linalg_int ldb,
+    linalg_int depth,
+    linalg_int cols,
+    linalg_int stride = 0,
+    linalg_int offset = 0)
 {
     using packet_t = typename packet<value_t>::packet_t;
 
@@ -562,10 +562,13 @@ void pack_rhs(  // NOLINT
                             for (linalg_int g = 0; g < n_groups; ++g, count += 4 * nr)
                             {
                                 const linalg_int base = g * nr;
-                                std::memcpy(blockB + count,          buf[0] + base, nr * sizeof(value_t));
-                                std::memcpy(blockB + count + nr,     buf[1] + base, nr * sizeof(value_t));
-                                std::memcpy(blockB + count + 2 * nr, buf[2] + base, nr * sizeof(value_t));
-                                std::memcpy(blockB + count + 3 * nr, buf[3] + base, nr * sizeof(value_t));
+                                std::memcpy(blockB + count, buf[0] + base, nr * sizeof(value_t));
+                                std::memcpy(
+                                    blockB + count + nr, buf[1] + base, nr * sizeof(value_t));
+                                std::memcpy(
+                                    blockB + count + 2 * nr, buf[2] + base, nr * sizeof(value_t));
+                                std::memcpy(
+                                    blockB + count + 3 * nr, buf[3] + base, nr * sizeof(value_t));
                             }
                         }
                     }
@@ -671,7 +674,7 @@ template <typename value_t, linalg_int mr, linalg_int nr>
 // relationship outside this function entirely -- blockA/blockB are always
 // arena scratch, never res).
 void gemm(  // NOLINT
-    value_t* __restrict       res,
+    value_t* __restrict res,
     const value_t* __restrict blockA,
     const value_t* __restrict blockB,
     linalg_int       ldc,
@@ -1508,41 +1511,32 @@ size_t matmul_scalar_workspace_size(linalg_int rows, linalg_int columns, linalg_
         return 0;
     }
     auto kc = depth;
-    auto mc = rows;
-    auto nc = columns;
+    auto mc = columns;
+    auto nc = rows;
     blocking_sizes<value_t>(kc, mc, nc, 1);
-    mc = std::min<linalg_int>(rows, mc);
-    nc = std::min<linalg_int>(columns, nc);
+    mc = std::min<linalg_int>(columns, mc);
+    nc = std::min<linalg_int>(rows, nc);
     detail::workspace_arena arena;
     arena.next<value_t>(static_cast<size_t>(mc) * static_cast<size_t>(kc));
     arena.next<value_t>(static_cast<size_t>(kc) * static_cast<size_t>(nc));
-    if (rows != columns)
-    {
-        arena.next<value_t>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
-    }
     return arena.total_size();
 #endif
 }
 
-// a and b are __restrict: read-only operands, never aliased by anything
-// else this function touches. c is deliberately NOT __restrict: below,
-// `result` is set equal to `c` itself when rows == columns (to transpose
-// into in place instead of allocating a second rows x columns buffer), so
-// c's memory is legitimately reached through another name within this
-// function.
+// Inputs and output occupy distinct caller-owned buffers.
 template <typename value_t, bool transpose_a, bool transpose_b>
 void matrix_multiplication_seq(  // NOLINT
-    linalg_int                rows,
-    linalg_int                columns,
-    linalg_int                depth,
+    linalg_int rows,
+    linalg_int columns,
+    linalg_int depth,
     value_t const* __restrict a,
-    linalg_int                lda,
+    linalg_int lda,
     value_t const* __restrict b,
-    linalg_int                ldb,
-    value_t*                  c,
-    linalg_int                ldc,
-    void*                     workspace,
-    size_t                    workspace_size)
+    linalg_int ldb,
+    value_t*   c,
+    linalg_int ldc,
+    void*      workspace,
+    size_t     workspace_size)
 {
 #if !LINALG_HAS_VECTORIZATION
     (void)workspace;
@@ -1551,7 +1545,15 @@ void matrix_multiplication_seq(  // NOLINT
 #if LINALG_HAS_VECTORIZATION
     if (rows + columns + depth > 20)
     {
-        ldc = rows;
+        // Compute C^T = op(B)^T * op(A)^T directly in row-major C's
+        // storage. The packed kernel writes column-major, so swapping the
+        // operands avoids a full output transpose and rectangular scratch.
+        std::swap(rows, columns);
+        const auto* lhs       = b;
+        const auto* rhs       = a;
+        const auto  lhs_ld    = ldb;
+        const auto  rhs_ld    = lda;
+        const auto  result_ld = ldc;
 
         auto       kc       = depth;
         auto       mc       = rows;
@@ -1564,17 +1566,16 @@ void matrix_multiplication_seq(  // NOLINT
         const size_t count_a = static_cast<size_t>(mc) * static_cast<size_t>(kc);
         const size_t count_b = static_cast<size_t>(kc) * static_cast<size_t>(nc);
 
-        LINALG_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(rows, columns, depth),
+        LINALG_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(columns, rows, depth),
             "multiplication: workspace_size too small");
         detail::workspace_arena arena(workspace, workspace_size);
         value_t*                block_A = arena.next<value_t>(count_a);
         value_t*                block_B = arena.next<value_t>(count_b);
-        value_t*                result =
-            rows == columns
-                               ? c
-                               : arena.next<value_t>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
-
-        std::fill_n(result, rows * columns, 0.);
+        value_t*                result  = c;
+        for (linalg_int j = 0; j < columns; ++j)
+        {
+            std::fill_n(result + j * result_ld, rows, value_t(0));
+        }
 
         const bool pack_rhs_once = mc != rows && kc == depth && nc == columns;
 
@@ -1595,9 +1596,9 @@ void matrix_multiplication_seq(  // NOLINT
                 pack_lhs<value_t,
                     gemm_traits<value_t>::mr,
                     gemm_traits<value_t>::LhsProgress,
-                    transpose_a>(block_A,
-                    &element<value_t, transpose_a>(a, i, k, lda),
-                    lda,
+                    !transpose_b>(block_A,
+                    &element<value_t, !transpose_b>(lhs, i, k, lhs_ld),
+                    lhs_ld,
                     actual_kc,
                     actual_mc);
 
@@ -1615,47 +1616,24 @@ void matrix_multiplication_seq(  // NOLINT
                         pack_rhs<value_t,
                             gemm_traits<value_t>::nr,
                             packet<value_t>::size,
-                            transpose_b,
+                            !transpose_a,
                             false>(block_B,
-                            &element<value_t, transpose_b>(b, k, j, ldb),
-                            ldb,
+                            &element<value_t, !transpose_a>(rhs, k, j, rhs_ld),
+                            rhs_ld,
                             actual_kc,
                             actual_nc);
                     }
 
                     // Everything is packed, we can now call the panel * block kernel:
                     gemm<value_t, gemm_traits<value_t>::mr, gemm_traits<value_t>::nr>(
-                        &element<value_t>(result, i, j, ldc),
+                        &element<value_t>(result, i, j, result_ld),
                         block_A,
                         block_B,
-                        ldc,
+                        result_ld,
                         actual_mc,
                         actual_kc,
                         actual_nc,
                         l1_cache);
-                }
-            }
-        }
-        if (columns != rows)
-        {
-            for (linalg_int i = 0; i < rows; i++)
-            {
-                for (linalg_int j = 0; j < columns; j++)
-                {
-                    element<value_t, false>(c, i, j, columns) = element<value_t>(result, i, j, ldc);
-                }
-            }
-        }
-        else
-        {
-            auto n = rows;
-            for (linalg_int i = 0; i < n; i++)
-            {
-                for (linalg_int j = i; j < n; j++)
-                {
-                    auto& alpha = element<value_t>(c, i, j, n);
-                    auto& beta  = element<value_t>(c, j, i, n);
-                    std::swap(alpha, beta);
                 }
             }
         }
@@ -1678,8 +1656,8 @@ void matrix_multiplication_seq(  // NOLINT
 
                 for (size_type k = 0; k < depth; ++k)
                 {
-                    auto* __restrict b_k      = b + k * ldb;
-                    const auto       alpha_ik = a_i[k];
+                    auto* __restrict b_k = b + k * ldb;
+                    const auto alpha_ik  = a_i[k];
                     for (size_type j = 0; j < columns; ++j)
                     {
                         c_i[j] += alpha_ik * b_k[j];
@@ -1690,15 +1668,18 @@ void matrix_multiplication_seq(  // NOLINT
         }
         else if constexpr (transpose_a && !transpose_b)
         {
-            std::fill_n(c, columns * rows, static_cast<value_t>(0.));
+            for (size_type i = 0; i < rows; ++i)
+            {
+                std::fill_n(c + i * ldc, columns, value_t(0));
+            }
             for (size_type k = 0; k < depth; ++k)
             {
                 auto* __restrict b_k = b + k * ldb;
                 auto* __restrict a_k = a + k * lda;
                 for (size_type i = 0; i < rows; ++i)
                 {
-                    const auto       alpha_ki = a_k[i];
-                    auto* __restrict c_i      = c + i * ldc;
+                    const auto alpha_ki  = a_k[i];
+                    auto* __restrict c_i = c + i * ldc;
                     for (size_type j = 0; j < columns; ++j)
                     {
                         c_i[j] += alpha_ki * b_k[j];
@@ -1714,12 +1695,12 @@ void matrix_multiplication_seq(  // NOLINT
             // i * lda on every j.
             for (size_type i = 0; i < rows; ++i)
             {
-                auto* const __restrict       c_i   = c + i * ldc;
+                auto* const __restrict c_i         = c + i * ldc;
                 const auto* const __restrict alpha = a + i * lda;
                 for (size_type j = 0; j < columns; ++j)
                 {
                     const auto* const __restrict beta = b + j * ldb;
-                    value_t                       c0   = 0;
+                    value_t c0                        = 0;
                     for (size_type k = 0; k < depth; ++k)
                     {
                         c0 += alpha[k] * beta[k];
@@ -1744,7 +1725,7 @@ void matrix_multiplication_seq(  // NOLINT
                 for (size_type j = 0; j < columns; ++j)
                 {
                     const auto* const __restrict beta = b + j * ldb;
-                    value_t                       c0   = 0;
+                    value_t c0                        = 0;
                     for (size_type k = 0; k < depth; ++k)
                     {
                         c0 += a[k * lda + i] * beta[k];
@@ -1764,14 +1745,14 @@ void multiplication<float, linalg_backend::NATIVE>::apply(bool transpose_a,
     linalg_int                                                 rows,
     linalg_int                                                 columns,
     linalg_int                                                 depth,
-    float const* __restrict                                    a,
-    linalg_int                                                 lda,
-    float const* __restrict                                    b,
-    linalg_int                                                 ldb,
-    float*                                                     c,
-    linalg_int                                                 ldc,
-    void*                                                      workspace,
-    size_t                                                     workspace_size,
+    float const* __restrict a,
+    linalg_int lda,
+    float const* __restrict b,
+    linalg_int ldb,
+    float*     c,
+    linalg_int ldc,
+    void*      workspace,
+    size_t     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("multiplication/native<float>");
@@ -1900,14 +1881,14 @@ void multiplication<double, linalg_backend::NATIVE>::apply(bool transpose_a,
     linalg_int                                                  rows,
     linalg_int                                                  columns,
     linalg_int                                                  depth,
-    double const* __restrict                                    a,
-    linalg_int                                                  lda,
-    double const* __restrict                                    b,
-    linalg_int                                                  ldb,
-    double*                                                     c,
-    linalg_int                                                  ldc,
-    void*                                                       workspace,
-    size_t                                                      workspace_size,
+    double const* __restrict a,
+    linalg_int lda,
+    double const* __restrict b,
+    linalg_int ldb,
+    double*    c,
+    linalg_int ldc,
+    void*      workspace,
+    size_t     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("multiplication/native<double>");

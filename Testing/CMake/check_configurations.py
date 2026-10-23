@@ -102,6 +102,42 @@ class ConfigurationChecks(unittest.TestCase):
                         check=True,
                     )
 
+    def test_eigen_dependency_boundaries(self):
+        self.configure(
+            "eigen-always-available",
+            self.host(
+                after="if(NOT TARGET Eigen3::Eigen)\n"
+                'message(FATAL_ERROR "Bundled Eigen is unavailable")\nendif()\n'
+                "get_target_property(_includes Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)\n"
+                f'if(NOT "{SOURCE.as_posix()}/ThirdParty/eigen" IN_LIST _includes)\n'
+                'message(FATAL_ERROR "Eigen did not use bundled headers")\nendif()\n'
+            ),
+            ["-DBUILD_TESTING=OFF"],
+        )
+        self.configure(
+            "eigen-reference-targets",
+            self.host(
+                after="get_target_property(_links LinearAlgebra LINK_LIBRARIES)\n"
+                'if("Eigen3::Eigen" IN_LIST _links)\n'
+                'message(FATAL_ERROR "Eigen leaked into the library")\nendif()\n'
+                "foreach(_target LinearAlgebraCxxTests benchmark_linalg_multiplication)\n"
+                "get_target_property(_links ${_target} LINK_LIBRARIES)\n"
+                'if(NOT "Eigen3::Eigen" IN_LIST _links)\n'
+                'message(FATAL_ERROR "Reference target did not link Eigen")\nendif()\n'
+                "endforeach()\n",
+            ),
+            ["-DBUILD_TESTING=ON", "-DLINALG_ENABLE_BENCHMARK=ON"],
+        )
+        missing = self.work / "missing-third-party"
+        missing.mkdir()
+        self.configure(
+            "eigen-missing-submodule",
+            'include("${LINALG_SOURCE_DIR}/Cmake/LinearAlgebraDependencies.cmake")\n'
+            "linalg_setup_eigen()\n",
+            [f"-DLINALG_THIRD_PARTY_DIR={missing}"],
+            error="Bundled Eigen headers are missing",
+        )
+
     def test_bundled_logging_preserves_parent_cache(self):
         build = self.configure(
             "bundled-logging",

@@ -29,6 +29,9 @@ if(LINALG_ENABLE_GTEST)
         LinearAlgebraCxxTests PRIVATE Gtest::gtest Gtest::gtest_main LinearAlgebra::LinearAlgebra
     )
 
+    target_link_libraries(LinearAlgebraCxxTests PRIVATE Eigen3::Eigen)
+    target_compile_definitions(LinearAlgebraCxxTests PRIVATE EIGEN_DONT_PARALLELIZE)
+
     set_target_properties(
         LinearAlgebraCxxTests PROPERTIES FOLDER "Tests" VS_DEBUGGER_WORKING_DIRECTORY
                                                         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"

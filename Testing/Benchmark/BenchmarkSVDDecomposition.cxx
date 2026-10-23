@@ -21,6 +21,9 @@
 #include "include/common/types.h"
 #include "include/matrix_operation/svd_decomposition.h"
 
+#include <Eigen/SVD>
+#include <type_traits>
+
 namespace
 {
 
@@ -122,6 +125,36 @@ void BM_SVDDecomposition(benchmark::State& state)
         benchmark::Counter::OneK::kIs1000);
 }
 
+template <typename T> void BM_EigenSVDDecomposition(benchmark::State& state)
+{
+    const auto n = state.range(0);
+    using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    const auto                     input = make_random_matrix<T>(n, n, 42);
+    const Eigen::Map<const Matrix> original(input.data(), n, n);
+    Matrix                         work = original;
+    Matrix                         vt(n, n);
+    Eigen::JacobiSVD<Matrix>       svd(n, n, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    for (auto _ : state)
+    {
+        // Match the existing SVD benchmark's timed input refresh.
+        work = original;
+        svd.compute(work, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        if (svd.info() != Eigen::Success)
+        {
+            state.SkipWithError("Eigen SVD failed");
+            break;
+        }
+        // The library returns row-major VT, so include V's transposition.
+        vt = svd.matrixV().transpose();
+        benchmark::DoNotOptimize(svd.singularValues().data());
+        benchmark::DoNotOptimize(svd.matrixU().data());
+        benchmark::DoNotOptimize(vt.data());
+        benchmark::ClobberMemory();
+    }
+    state.SetLabel("eigen JacobiSVD");
+    state.SetComplexityN(n);
+}
+
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_SVDDecomposition, float, linalg::linalg_backend::NATIVE)
@@ -193,3 +226,24 @@ BENCHMARK_TEMPLATE(BM_SVDDecomposition, double, linalg::linalg_backend::MKL)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 #endif
+
+BENCHMARK_TEMPLATE(BM_EigenSVDDecomposition, float)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenSVDDecomposition, double)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);

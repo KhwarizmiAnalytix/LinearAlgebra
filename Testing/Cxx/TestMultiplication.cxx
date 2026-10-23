@@ -211,7 +211,7 @@ void matrix_vector_multiplication(int rows, int columns)
 // convention (see src/matrix_operation/multiplication.cpp).
 template <typename value_t, linalg::linalg_backend Backend>
 void matrix_multiplication_test(
-    int rows, int columns, int depth, bool transpose_a, bool transpose_b)
+    int rows, int columns, int depth, bool transpose_a, bool transpose_b, int padding = 0)
 {
     SCOPED_TRACE(::testing::Message()
                  << "backend=" << static_cast<int>(Backend) << ", scalar bytes=" << sizeof(value_t)
@@ -232,9 +232,10 @@ void matrix_multiplication_test(
         std::swap(b_rows, b_columns);
     }
 
-    dense_matrix<value_t> A(a_rows, a_columns);
-    dense_matrix<value_t> B(b_rows, b_columns);
-    dense_matrix<value_t> C(rows, columns);
+    dense_matrix<value_t> A(a_rows, a_columns + padding);
+    dense_matrix<value_t> B(b_rows, b_columns + padding);
+    dense_matrix<value_t> C(rows, columns + padding);
+    C.fill(value_t(123));
 
     auto                                   generator = test_generator();
     std::uniform_real_distribution<double> distribution(-5., 5.);
@@ -264,11 +265,11 @@ void matrix_multiplication_test(
         columns,
         depth,
         A.data(),
-        static_cast<linalg_int>(a_columns),
+        static_cast<linalg_int>(A.cols()),
         B.data(),
-        static_cast<linalg_int>(b_columns),
+        static_cast<linalg_int>(B.cols()),
         C.data(),
-        static_cast<linalg_int>(columns),
+        static_cast<linalg_int>(C.cols()),
         gemm_ws.data(),
         gemm_ws.size());
 
@@ -307,6 +308,10 @@ void matrix_multiplication_test(
                 max_error_ratio, std::fabs(sum - static_cast<long double>(c)) / allowed_error);
         }
     }
+
+    for (int i = 0; i < rows; ++i)
+        for (int j = columns; j < columns + padding; ++j)
+            EXPECT_EQ(C(i, j), value_t(123)) << "Output padding was overwritten";
 
 #ifdef DEBUG_MATRIXMULTIPLICATION
     (void)max_error_ratio;
@@ -373,4 +378,22 @@ TEST(Math, MatrixMultiplicationVectorizedBoundary)
             }
         }
     });
+}
+
+// Row strides must be preserved by both the scalar and blocked GEMM paths.
+TEST(Math, MatrixMultiplicationPaddedStrides)
+{
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr auto Backend = decltype(backend)::value;
+            for (const int rows : {1, 5, 7, 33})
+                for (const int depth : {3, 9})
+                    for (const bool ta : {false, true})
+                        for (const bool tb : {false, true})
+                        {
+                            matrix_multiplication_test<float, Backend>(rows, 7, depth, ta, tb, 2);
+                            matrix_multiplication_test<double, Backend>(rows, 7, depth, ta, tb, 2);
+                        }
+        });
 }

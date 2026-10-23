@@ -27,6 +27,9 @@
 #include "include/common/types.h"
 #include "include/matrix_operation/eigen.h"
 
+#include <Eigen/Eigenvalues>
+#include <type_traits>
+
 namespace
 {
 
@@ -98,7 +101,7 @@ void BM_SymmetricEigen(benchmark::State& state)
     std::vector<unsigned char> workspace(ws_size);
 
     std::vector<T> eigenvalues(n);
-    auto input = a;
+    auto           input = a;
 
     for (auto _ : state)
     {
@@ -151,7 +154,7 @@ void BM_GeneralEigen(benchmark::State& state)
 
     std::vector<T> eigenvalues_real(n);
     std::vector<T> eigenvalues_imag(n);
-    auto input = a;
+    auto           input = a;
 
     for (auto _ : state)
     {
@@ -177,6 +180,51 @@ void BM_GeneralEigen(benchmark::State& state)
 
     state.SetLabel(backend_name(Backend));
     state.SetComplexityN(static_cast<std::int64_t>(n));
+}
+
+template <typename T, bool General = false, bool ComputeEigenvectors = true>
+void BM_EigenEigensolver(benchmark::State& state)
+{
+    const auto n = state.range(0);
+    using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    auto input = General ? make_well_conditioned_matrix<T>(n, 42) : make_symmetric_matrix<T>(n, 42);
+    if constexpr (General && ComputeEigenvectors)
+    {
+        for (std::int64_t i = 0; i < n; ++i)
+            for (std::int64_t j = 0; j < i; ++j)
+            {
+                const T ratio    = (T(1) + T(i) / T(n)) / (T(1) + T(j) / T(n));
+                const T value    = input[i * n + j];
+                input[i * n + j] = value * ratio;
+                input[j * n + i] = value / ratio;
+            }
+    }
+    const Eigen::Map<const Matrix> original(input.data(), n, n);
+    Matrix                         work = original;
+    using Solver                        = std::
+        conditional_t<General, Eigen::EigenSolver<Matrix>, Eigen::SelfAdjointEigenSolver<Matrix>>;
+    Solver solver(n);
+    for (auto _ : state)
+    {
+        state.PauseTiming();
+        work = original;
+        state.ResumeTiming();
+        if constexpr (General)
+            solver.compute(work, ComputeEigenvectors);
+        else
+            solver.compute(work, Eigen::ComputeEigenvectors);
+        if (solver.info() != Eigen::Success)
+        {
+            state.SkipWithError("Eigen eigensolver failed to converge");
+            break;
+        }
+        benchmark::DoNotOptimize(solver.eigenvalues().data());
+        benchmark::ClobberMemory();
+    }
+    state.SetLabel(General
+                       ? (ComputeEigenvectors ? "eigen general vectors" : "eigen general values")
+                       : "eigen symmetric vectors");
+    state.SetComplexityN(n);
 }
 
 }  // namespace
@@ -309,7 +357,6 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::BLAS_LAPACKE
     ->Threads(1);
 #endif
 
-
 #if LINALG_HAS_MKL
 BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::MKL)
     ->Arg(8)
@@ -363,3 +410,72 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::MKL)
     ->ReportAggregatesOnly(true)
     ->Threads(1);
 #endif
+
+BENCHMARK_TEMPLATE(BM_EigenEigensolver, float, false, true)
+    ->Arg(8)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(96)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenEigensolver, float, true, false)
+    ->Arg(8)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(96)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenEigensolver, float, true, true)
+    ->Arg(8)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenEigensolver, double, false, true)
+    ->Arg(8)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(96)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenEigensolver, double, true, false)
+    ->Arg(8)
+    ->Arg(16)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(96)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenEigensolver, double, true, true)
+    ->Arg(8)
+    ->Arg(32)
+    ->Arg(64)
+    ->Arg(128)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);

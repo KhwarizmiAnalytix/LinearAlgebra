@@ -21,6 +21,9 @@
 #include "include/common/types.h"
 #include "include/matrix_operation/multiplication.h"
 
+#include <Eigen/Core>
+#include <type_traits>
+
 namespace
 {
 
@@ -182,6 +185,38 @@ void BM_MultiplicationTranspose(benchmark::State& state)
         ->ReportAggregatesOnly(true)->Threads(1)
 // clang-format on
 
+template <typename T, bool TransposeA = false, bool TransposeB = false>
+void BM_EigenMultiplication(benchmark::State& state)
+{
+    const auto m = state.range(0);
+    const auto n = (TransposeA || TransposeB) ? m : state.range(1);
+    const auto k = (TransposeA || TransposeB) ? m : state.range(2);
+    using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    const auto                     a = make_random<T>(m * k, 42);
+    const auto                     b = make_random<T>(k * n, 43);
+    const Eigen::Map<const Matrix> lhs(a.data(), TransposeA ? k : m, TransposeA ? m : k);
+    const Eigen::Map<const Matrix> rhs(b.data(), TransposeB ? n : k, TransposeB ? k : n);
+    Matrix                         output(m, n);
+    for (auto _ : state)
+    {
+        if constexpr (TransposeA && TransposeB)
+            output.noalias() = lhs.transpose() * rhs.transpose();
+        else if constexpr (TransposeA)
+            output.noalias() = lhs.transpose() * rhs;
+        else if constexpr (TransposeB)
+            output.noalias() = lhs * rhs.transpose();
+        else
+            output.noalias() = lhs * rhs;
+        benchmark::DoNotOptimize(output.data());
+        benchmark::ClobberMemory();
+    }
+    state.SetLabel("eigen");
+    state.SetComplexityN(m * n * k);
+    state.counters["FLOPS"] = benchmark::Counter(2.0 * m * n * k,
+        benchmark::Counter::kIsIterationInvariantRate,
+        benchmark::Counter::OneK::kIs1000);
+}
+
 }  // namespace
 
 LINALG_BENCH_MATMUL(float, NATIVE);
@@ -196,3 +231,92 @@ LINALG_BENCH_MATMUL(double, BLAS_LAPACKE);
 LINALG_BENCH_MATMUL(float, MKL);
 LINALG_BENCH_MATMUL(double, MKL);
 #endif
+
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, float)
+    ->Args({32, 32, 32})
+    ->Args({64, 64, 64})
+    ->Args({128, 128, 128})
+    ->Args({256, 256, 256})
+    ->Args({512, 512, 512})
+    ->Args({1024, 1024, 1024})
+    ->Args({64, 1024, 256})
+    ->Args({1024, 64, 256})
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, float, false, true)
+    ->Arg(64)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, float, true, false)
+    ->Arg(64)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, float, true, true)
+    ->Arg(64)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, double)
+    ->Args({32, 32, 32})
+    ->Args({64, 64, 64})
+    ->Args({128, 128, 128})
+    ->Args({256, 256, 256})
+    ->Args({512, 512, 512})
+    ->Args({1024, 1024, 1024})
+    ->Args({64, 1024, 256})
+    ->Args({1024, 64, 256})
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, double, false, true)
+    ->Arg(64)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, double, true, false)
+    ->Arg(64)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);
+BENCHMARK_TEMPLATE(BM_EigenMultiplication, double, true, true)
+    ->Arg(64)
+    ->Arg(256)
+    ->Arg(512)
+    ->Arg(1024)
+    ->Unit(benchmark::kMicrosecond)
+    ->MinTime(0.1)
+    ->Repetitions(3)
+    ->ReportAggregatesOnly(true)
+    ->Threads(1);

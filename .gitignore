@@ -39,6 +39,16 @@ __pycache__/
 
 .lintbin/
 .dmypy.json
+
+# Keep published benchmark summaries; regenerate raw runs and diagnostics locally.
+Testing/Benchmark/results/**/raw/
+Testing/Benchmark/results/**/first-pass/
+Testing/Benchmark/results/**/before/
+Testing/Benchmark/results/**/checks/
+Testing/Benchmark/results/**/*.log
+Testing/Benchmark/results/**/*.log.gz
+Testing/Benchmark/results/**/runs.json
+Testing/Benchmark/results/**/*.svg
 examples/backend_benchmark/results/2026-10-20/final_results.csv
 examples/backend_benchmark/results/2026-10-20/gpu_retry_results.csv
 examples/backend_benchmark/results/2026-10-20/gpu_retry_selection.txt

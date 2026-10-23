@@ -48,7 +48,7 @@ inline complex_value<T> complex_dot(const complex_value<T>* x,
     {
         const std::ptrdiff_t ox = static_cast<std::ptrdiff_t>(k) * sx;
         const std::ptrdiff_t oy = static_cast<std::ptrdiff_t>(k) * sy;
-        sum = sum + (conjugate_x ? conjugate(x[ox]) : x[ox]) * y[oy];
+        sum                     = sum + (conjugate_x ? conjugate(x[ox]) : x[ox]) * y[oy];
     }
     return sum;
 }
@@ -89,7 +89,7 @@ inline void complex_axpy(complex_value<T>* y,
     {
         const std::ptrdiff_t ox = static_cast<std::ptrdiff_t>(k) * sx;
         const std::ptrdiff_t oy = static_cast<std::ptrdiff_t>(k) * sy;
-        y[oy] = y[oy] + alpha * (conjugate_x ? conjugate(x[ox]) : x[ox]);
+        y[oy]                   = y[oy] + alpha * (conjugate_x ? conjugate(x[ox]) : x[ox]);
     }
 }
 
@@ -114,7 +114,7 @@ template <typename T> inline void complex_scale(complex_value<T>* x, int stride,
     for (; k < count; ++k)
     {
         const std::ptrdiff_t ox = static_cast<std::ptrdiff_t>(k) * stride;
-        x[ox] = x[ox] * scale;
+        x[ox]                   = x[ox] * scale;
     }
 }
 }  // namespace linalg_schur
@@ -182,16 +182,19 @@ LINALG_INLINE void complex_rotate(LINALG_ADDRESS complex_value<T>* x,
     int                              count,
     T                                c,
     complex_value<T>                 s,
-    LINALG_ADDRESS complex_value<T>* temporary)
+    LINALG_ADDRESS complex_value<T>* /*temporary*/)
 {
+    // Read both inputs before either store. Fusing the rotation avoids a
+    // scratch copy and four separate read/modify/write passes over the vectors.
     for (int k = 0; k < count; ++k)
     {
-        temporary[k] = x[static_cast<std::ptrdiff_t>(k) * sx];
+        const std::ptrdiff_t ix = static_cast<std::ptrdiff_t>(k) * sx;
+        const std::ptrdiff_t iy = static_cast<std::ptrdiff_t>(k) * sy;
+        const auto a = x[ix];
+        const auto b = y[iy];
+        x[ix] = a * c + s * b;
+        y[iy] = b * c - conjugate(s) * a;
     }
-    complex_scale(x, sx, count, c);
-    complex_axpy(x, sx, y, sy, count, s);
-    complex_scale(y, sy, count, c);
-    complex_axpy(y, sy, temporary, 1, count, conjugate(s) * T(-1));
 }
 }  // namespace linalg_schur
 )

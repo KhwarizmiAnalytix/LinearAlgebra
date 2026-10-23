@@ -55,6 +55,10 @@ void transpose_cycles(RandomIterator first, RandomIterator last, int m, unsigned
 
 size_t transpose_scalar_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
+    if (rows == columns)
+    {
+        return 0;
+    }
     detail::workspace_arena arena;
     arena.next<unsigned char>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
     return arena.total_size();
@@ -66,6 +70,26 @@ void transpose_scalar_impl(
 {
     LINALG_CHECK(workspace_size >= transpose_scalar_workspace_size_impl(rows, columns),
         "transpose: workspace_size too small");
+    if (rows == columns)
+    {
+        constexpr linalg_long tile = 32;
+        for (linalg_long first = 0; first < rows; first += tile)
+        {
+            const auto end = std::min(rows, first + tile);
+            for (linalg_long second = first; second < rows; second += tile)
+            {
+                const auto column_end = std::min(rows, second + tile);
+                for (linalg_long i = first; i < end; ++i)
+                {
+                    for (linalg_long j = std::max(second, i + 1); j < column_end; ++j)
+                    {
+                        std::swap(m[i * rows + j], m[j * rows + i]);
+                    }
+                }
+            }
+        }
+        return;
+    }
     detail::workspace_arena arena(workspace, workspace_size);
     auto*                   visited =
         arena.next<unsigned char>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
@@ -75,8 +99,12 @@ void transpose_scalar_impl(
 }  // namespace
 
 template <>
-void transpose<float, linalg_backend::NATIVE>::apply(
-    linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size, void* /*stream*/)
+void transpose<float, linalg_backend::NATIVE>::apply(linalg_long rows,
+    linalg_long                                                  columns,
+    float*                                                       m,
+    void*                                                        workspace,
+    size_t                                                       workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("transpose/native<float>");
     check_transpose_inputs(m, rows, columns);
@@ -84,8 +112,12 @@ void transpose<float, linalg_backend::NATIVE>::apply(
 }
 
 template <>
-void transpose<double, linalg_backend::NATIVE>::apply(
-    linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size, void* /*stream*/)
+void transpose<double, linalg_backend::NATIVE>::apply(linalg_long rows,
+    linalg_long                                                   columns,
+    double*                                                       m,
+    void*                                                         workspace,
+    size_t                                                        workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("transpose/native<double>");
     check_transpose_inputs(m, rows, columns);

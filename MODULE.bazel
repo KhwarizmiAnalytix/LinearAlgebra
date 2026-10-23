@@ -34,6 +34,12 @@ local_path_override(
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
 new_local_repository(
+    name = "eigen",
+    path = "ThirdParty/eigen",
+    build_file = "//bazel:eigen.BUILD",
+)
+
+new_local_repository(
     name = "fmt",
     path = "ThirdParty/Logging/ThirdParty/fmt",
     build_file = "@xsigma_logging//ThirdParty:fmt.BUILD",
