@@ -28,8 +28,7 @@ namespace
 {
 template <typename T>
 using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-// MSVC 19.14 cannot resolve Eigen's default storage option in these typed tests.
-template <typename T> using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor>;
+template <typename T> using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1>;
 
 template <typename T> T tolerance()
 {
@@ -379,9 +378,10 @@ TYPED_TEST(EigenReference, GeneralRealAndComplexSpectra)
             }
         });
 }
-TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
+// MSVC 19.14 mis-instantiates Eigen vector aliases directly in typed-test bodies.
+// Free function templates keep the same checks on all supported compilers.
+template <typename T> void test_native_symmetric_scaled_spectrum()
 {
-    using T                = TypeParam;
     constexpr auto backend = linalg::linalg_backend::NATIVE;
     for (const int n : {1, 2, 33, 65})
     {
@@ -422,9 +422,8 @@ TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
     }
 }
 
-TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
+template <typename T> void test_native_general_dense_spectra()
 {
-    using T                = TypeParam;
     constexpr auto backend = linalg::linalg_backend::NATIVE;
     for (const int n : {1, 2, 17, 65})
     {
@@ -495,6 +494,16 @@ TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
             }
         }
     }
+}
+
+TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
+{
+    test_native_symmetric_scaled_spectrum<TypeParam>();
+}
+
+TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
+{
+    test_native_general_dense_spectra<TypeParam>();
 }
 
 TYPED_TEST(EigenReference, NormReductionsWithPaddedStrides)
