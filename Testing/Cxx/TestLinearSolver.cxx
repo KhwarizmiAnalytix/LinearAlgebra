@@ -3,10 +3,11 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
 #include "include/matrix_operation/linear_solver.h"
-#include "gtest/gtest.h"
+#include "include/matrix_operation/lu_decomposition.h"
+#include "test_backend.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -70,6 +71,26 @@ void test_linear_solver(std::size_t dim, double tolerance)
 
     std::vector<value_t> b = matvec(A, x_ref);
 
+    auto       lu_factors = A;
+    const auto upfront_lu_ws_size =
+        linalg::lu_decomposition<value_t, Backend>::workspace_size(static_cast<linalg_int>(dim));
+    std::vector<unsigned char> upfront_lu_ws(upfront_lu_ws_size);
+    const bool upfront_lu_ok = linalg::lu_decomposition<value_t, Backend>::apply(lu_factors.data(),
+        static_cast<linalg_int>(dim),
+        pivot.data(),
+        upfront_lu_ws.data(),
+        upfront_lu_ws_size);
+    ASSERT_TRUE(upfront_lu_ok);
+    auto lu_solution = b;
+    linalg::linear_solver<value_t, Backend>::apply(lu_factors.data(),
+        pivot.data(),
+        static_cast<linalg_int>(dim),
+        lu_solution.data(),
+        linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER,
+        nullptr,
+        0);
+    EXPECT_LE(hmax_abs_diff(x_ref, lu_solution), tolerance);
+
     std::vector<value_t> x = b;
     linalg::linear_solver<value_t, Backend>::apply(R.begin(),
         pivot.data(),
@@ -116,9 +137,11 @@ void test_linear_solver(std::size_t dim, double tolerance)
 TEST(Math, LinearSolver)
 {
     const std::size_t dim = 128 + 24 + 16 + 12 + 8 + 4 + 3 + 2 + 1;
-    linalg_test::for_each_available_backend([&](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_linear_solver<float, Backend>(dim, 1.e-2);
-        test_linear_solver<double, Backend>(dim, 1.e-10);
-    });
+    linalg_test::for_each_available_backend(
+        [&](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_linear_solver<float, Backend>(dim, 1.e-2);
+            test_linear_solver<double, Backend>(dim, 1.e-10);
+        });
 }
