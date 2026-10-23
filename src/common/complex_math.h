@@ -10,8 +10,26 @@
 // degree-seven quadrature, a common CPU/CUDA/HIP/Metal implementation, and
 // reconstruction through existing backend GEMM operations.
 
-// Only portability definitions: this body is also stringified into Metal source.
 #include "include/common/linalg_macros.h"
+
+// C++ only guarantees the float/double overloads in std. Device toolchains
+// provide their own math overloads; Objective-C++ stringifies the body for Metal.
+#if !defined(__OBJC__) && !defined(__CUDACC__) && !defined(__HIPCC__)
+#include <cmath>
+namespace linalg_schur
+{
+using std::atan2;
+using std::copysign;
+using std::exp;
+using std::fabs;
+using std::fmax;
+using std::fmin;
+using std::isfinite;
+using std::log;
+using std::sin;
+using std::sqrt;
+}  // namespace linalg_schur
+#endif
 
 // clang-format off
 LINALG_SCHUR_CORE(

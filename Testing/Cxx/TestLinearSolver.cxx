@@ -81,14 +81,17 @@ void test_linear_solver(std::size_t dim, double tolerance)
         upfront_lu_ws.data(),
         upfront_lu_ws_size);
     ASSERT_TRUE(upfront_lu_ok);
-    auto lu_solution = b;
+    auto       lu_solution            = b;
+    const auto upfront_solver_ws_size = linalg::linear_solver<value_t, Backend>::workspace_size(
+        static_cast<linalg_int>(dim), linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER);
+    std::vector<unsigned char> upfront_solver_ws(upfront_solver_ws_size);
     linalg::linear_solver<value_t, Backend>::apply(lu_factors.data(),
         pivot.data(),
         static_cast<linalg_int>(dim),
         lu_solution.data(),
         linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER,
-        nullptr,
-        0);
+        upfront_solver_ws.data(),
+        upfront_solver_ws_size);
     EXPECT_LE(hmax_abs_diff(x_ref, lu_solution), tolerance);
 
     std::vector<value_t> x = b;

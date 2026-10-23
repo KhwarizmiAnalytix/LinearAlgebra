@@ -28,7 +28,8 @@ namespace
 {
 template <typename T>
 using Matrix = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-template <typename T> using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1>;
+// MSVC 19.14 cannot resolve Eigen's default storage option in these typed tests.
+template <typename T> using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor>;
 
 template <typename T> T tolerance()
 {
