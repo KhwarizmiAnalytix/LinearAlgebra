@@ -34,8 +34,10 @@ template <typename T, linalg::linalg_backend Backend> void analytic_cases()
         {
             SCOPED_TRACE(is_log ? "logarithm" : "square_root");
             SCOPED_TRACE(static_cast<int>(Backend));
-            const size_t bytes = linalg::logarithm<T, Backend>::workspace_size(n);
-            EXPECT_EQ(bytes, (linalg::square_root<T, Backend>::workspace_size(n)));
+            // logarithm needs more scratch than square_root (its seven
+            // triangular quadrature solves), so each queries its own size.
+            const size_t   bytes    = is_log ? linalg::logarithm<T, Backend>::workspace_size(n)
+                                             : linalg::square_root<T, Backend>::workspace_size(n);
             const T        sentinel = T(-123);
             std::vector<T> workspace(bytes / sizeof(T) + 8, sentinel);
             for (bool in_place : {false, true})
@@ -84,7 +86,7 @@ template <typename T, linalg::linalg_backend Backend> void round_trip()
 {
     // An independently evaluated exponential supplies nonsymmetric inputs of
     // increasing size; principal log(exp(A)) = A in this small-norm domain.
-    for (int n : {1, 4, 7, 12})
+    for (int n : {1, 4, 7, 12, 17, 33})
     {
         std::vector<T> a(n * n), input(n * n), result(n * n);
         for (int i = 0; i < n; ++i)
@@ -126,12 +128,17 @@ template <typename T, linalg::linalg_backend Backend> void round_trip()
 
 template <typename T, linalg::linalg_backend Backend> void invalid_inputs()
 {
-    const auto     bytes = linalg::logarithm<T, Backend>::workspace_size(2);
-    std::vector<T> workspace(bytes / sizeof(T));
+    // logarithm needs more scratch than square_root (its seven triangular
+    // quadrature solves), so each queries its own size; the workspace buffer
+    // is sized for the larger of the two and each call passes its own bytes.
+    const auto     log_bytes  = linalg::logarithm<T, Backend>::workspace_size(2);
+    const auto     sqrt_bytes = linalg::square_root<T, Backend>::workspace_size(2);
+    std::vector<T> workspace(log_bytes / sizeof(T));
     T              a[] = {T(1), T(0), T(0), T(1)};
     T              result[4]{};
     for (bool is_log : {false, true})
     {
+        const auto bytes = is_log ? log_bytes : sqrt_bytes;
         EXPECT_ANY_THROW((
             apply_function<T, Backend>(is_log, nullptr, 2, 2, result, 2, workspace.data(), bytes)));
         EXPECT_ANY_THROW(
@@ -156,12 +163,16 @@ template <typename T, linalg::linalg_backend Backend> void invalid_inputs()
     }
     a[0] = T(0);
     EXPECT_ANY_THROW(
-        (apply_function<T, Backend>(true, a, 2, 2, result, 2, workspace.data(), bytes)));
+        (apply_function<T, Backend>(true, a, 2, 2, result, 2, workspace.data(), log_bytes)));
     a[1] = T(1);
     a[3] = T(0);
     EXPECT_ANY_THROW(
-        (apply_function<T, Backend>(false, a, 2, 2, result, 2, workspace.data(), bytes)));
+        (apply_function<T, Backend>(false, a, 2, 2, result, 2, workspace.data(), sqrt_bytes)));
     EXPECT_ANY_THROW((linalg::logarithm<T, Backend>::workspace_size(-1)));
+    // A real 25000-square matrix fits the existing Schur indexing contract;
+    // its 50000-square packed logarithm system does not. Size queries allocate nothing.
+    EXPECT_GT((linalg::square_root<T, Backend>::workspace_size(25000)), size_t(0));
+    EXPECT_ANY_THROW((linalg::logarithm<T, Backend>::workspace_size(25000)));
     EXPECT_ANY_THROW(
         (linalg::square_root<T, Backend>::workspace_size(std::numeric_limits<int>::max())));
 }

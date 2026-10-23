@@ -112,23 +112,31 @@ option(LINALG_ENABLE_ROCBLAS "Enable a hipBLAS/hipSOLVER GPU backend for LinearA
 # Apple MPS support as "float-only ... high effort" before this backend
 # existed). Mutually exclusive with LINALG_ENABLE_CUBLAS/LINALG_ENABLE_ROCBLAS
 # (see the guard below).
-option(LINALG_ENABLE_METAL "Enable a Metal Performance Shaders GPU backend (float-only; Apple platforms) for LinearAlgebra" OFF)
+option(
+    LINALG_ENABLE_METAL
+    "Enable a Metal Performance Shaders GPU backend (float-only; Apple platforms) for LinearAlgebra"
+    OFF
+)
 
 if(LINALG_ENABLE_METAL AND NOT APPLE)
-    message(FATAL_ERROR "LINALG_ENABLE_METAL requires an Apple platform (Metal is not available elsewhere).")
+    message(
+        FATAL_ERROR
+            "LINALG_ENABLE_METAL requires an Apple platform (Metal is not available elsewhere)."
+    )
 endif()
 
-if((LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS)
-   OR (LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_METAL)
-   OR (LINALG_ENABLE_ROCBLAS AND LINALG_ENABLE_METAL)
+if((LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS) OR (LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_METAL
+                                                       ) OR (LINALG_ENABLE_ROCBLAS
+                                                             AND LINALG_ENABLE_METAL)
 )
-    message(FATAL_ERROR
-        "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL are "
-        "pairwise mutually exclusive: every GPU backend defines the same "
-        "batched_matrix_multiplication symbols "
-        "(include/matrix_operation/multiplication_batched.h is not "
-        "backend-templated), so enabling more than one would be a duplicate-symbol "
-        "link error. Enable only the GPU backend that matches the target hardware."
+    message(
+        FATAL_ERROR
+            "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL are "
+            "pairwise mutually exclusive: every GPU backend defines the same "
+            "batched_matrix_multiplication symbols "
+            "(include/matrix_operation/multiplication_batched.h is not "
+            "backend-templated), so enabling more than one would be a duplicate-symbol "
+            "link error. Enable only the GPU backend that matches the target hardware."
     )
 endif()
 
@@ -187,9 +195,7 @@ option(LINALG_ENABLE_BENCHMARK "Enable Google Benchmark for LinearAlgebra micro-
 
 # Profiler instrumentation and profiling programs for all matrix operations (CPU and GPU).
 # Requires Profiler::Profiler when enabled.
-option(LINALG_ENABLE_PROFILING "Enable Profiler instrumentation and build profiling programs"
-       OFF
-)
+option(LINALG_ENABLE_PROFILING "Enable Profiler instrumentation and build profiling programs" OFF)
 
 # Icecream distributed compilation launcher (rarely needed; hidden by default).
 option(LINALG_ENABLE_ICECC "Use Icecream (icecc) distributed compiler for LinearAlgebra" OFF)
@@ -534,8 +540,8 @@ if(LINALG_ENABLE_METAL)
     find_library(LINALG_METAL_FRAMEWORK Metal REQUIRED)
     find_library(LINALG_MPS_FRAMEWORK MetalPerformanceShaders REQUIRED)
     find_library(LINALG_FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    list(APPEND LINALG_DEPENDENCY_LIBS
-         ${LINALG_METAL_FRAMEWORK} ${LINALG_MPS_FRAMEWORK} ${LINALG_FOUNDATION_FRAMEWORK}
+    list(APPEND LINALG_DEPENDENCY_LIBS ${LINALG_METAL_FRAMEWORK} ${LINALG_MPS_FRAMEWORK}
+         ${LINALG_FOUNDATION_FRAMEWORK}
     )
 endif()
 
@@ -652,7 +658,9 @@ file(GLOB_RECURSE linalg_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
 # mkl.h / cblas.h / lapacke.h, so they are excluded from the recursive glob
 # above and only appended — and only compiled — when LINALG_ENABLE_MKL /
 # LINALG_ENABLE_BLAS turned on the matching backend above.
-list(FILTER linalg_sources EXCLUDE REGEX "/src/matrix_operation/(cpu/(mkl|blas)|gpu/(cublas|hipblas|metal))/")
+list(FILTER linalg_sources EXCLUDE REGEX
+     "/src/matrix_operation/(cpu/(mkl|blas)|gpu/(cublas|hipblas|metal))/"
+)
 if(LINALG_ENABLE_MKL)
     file(GLOB linalg_mkl_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/cpu/mkl/*.cpp"

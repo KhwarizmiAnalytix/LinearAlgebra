@@ -67,12 +67,14 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 | `matrix_operation/cholesky_decomposition.h` | In-place Cholesky factorization (upper/lower), scalar or MKL LAPACKE |
 | `matrix_operation/lu_decomposition.h` | In-place LU factorization with pivot vector |
 | `matrix_operation/linear_solver.h` | `linear_solver_type`-selectable solve (LU / Cholesky, upfront or fused) |
+| `matrix_operation/triangular_solver.h` | Multiple-right-hand-side triangular solve; upper/lower, transpose, and unit-diagonal modes; native SIMD/GEMM, BLAS/MKL/cuBLAS/hipBLAS TRSM, or Metal MPS |
 | `matrix_operation/inversion.h` | `matrix_invert` |
 | `matrix_operation/determinant.h` | `determinant` |
 | `matrix_operation/multiplication.h` | Row-major GEMM with optional operand transpose |
 | `matrix_operation/transpose.h` | In-place / out-of-place transpose |
 | `matrix_operation/svd_decomposition.h` | Singular value decomposition |
 | `matrix_operation/qr_decomposition.h` | Economy Householder QR (`A = Q*R`) |
+| `matrix_operation/schur_decomposition.h` | Complex Schur decomposition (`A = Q*S*Q^*`, S complex upper triangular); all six backends (Metal: float only); used by `logarithm`/`square_root` |
 | `matrix_operation/least_squares.h` | `least_squares_solve` — over/under-determined, via pseudo-inverse |
 | `matrix_operation/pseudo_inverse.h` | Moore-Penrose pseudo-inverse, via SVD |
 | `matrix_operation/rank.h` | `rank`, via SVD |
@@ -95,6 +97,7 @@ matrix class is part of the public API; callers own their own storage.
 for example, `square_root(A) * square_root(A) = A`. See
 [matrix function algorithms and backend behavior](docs/matrix_functions.md)
 for domain restrictions, source attribution, and performance limits.
+See [triangular solver](docs/triangular_solver.md) for multiple-RHS solve modes and backend behavior.
 
 ### GPU backend (`linalg_backend::CUDA_BLAS`/`ROCM_BLAS`, `LINALG_ENABLE_CUBLAS=ON`/`LINALG_ENABLE_ROCBLAS=ON`)
 

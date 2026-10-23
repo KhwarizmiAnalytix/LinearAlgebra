@@ -64,10 +64,8 @@ inline hipError_t cudaPointerGetAttributes(cudaPointerAttributes* attributes, co
 #include "include/matrix_operation/eigen.h"
 #include "include/matrix_operation/inversion.h"
 #include "include/matrix_operation/least_squares.h"
-#include "include/matrix_operation/logarithm.h"
-#include "include/matrix_operation/square_root.h"
-#include "matrix_functions_test_cases.h"
 #include "include/matrix_operation/linear_solver.h"
+#include "include/matrix_operation/logarithm.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/multiplication_batched.h"
@@ -75,11 +73,16 @@ inline hipError_t cudaPointerGetAttributes(cudaPointerAttributes* attributes, co
 #include "include/matrix_operation/pseudo_inverse.h"
 #include "include/matrix_operation/qr_decomposition.h"
 #include "include/matrix_operation/rank.h"
+#include "include/matrix_operation/square_root.h"
 #include "include/matrix_operation/svd_decomposition.h"
 #include "include/matrix_operation/trace.h"
 #include "include/matrix_operation/transpose.h"
-#include "gtest/gtest.h"
+#include "include/matrix_operation/triangular_solver.h"
+#include "matrix_functions_test_cases.h"
 #include "test_reporting.h"
+#include "triangular_solver_test_cases.h"
+#include "gtest/gtest.h"
+#include <cstring>
 
 namespace
 {
@@ -296,12 +299,11 @@ template <typename value_t> void linear_solver_gpu_test(linalg::linear_solver_ty
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
     ASSERT_EQ(dx.upload(b.data()), cudaSuccess);
 
-    const auto ws_size =
-        linalg::linear_solver<value_t, CB>::workspace_size((linalg_int)n, type);
+    const auto ws_size = linalg::linear_solver<value_t, CB>::workspace_size((linalg_int)n, type);
     device_buffer<unsigned char> dws(ws_size);
 
-    linalg::linear_solver<value_t, CB>::apply(dA.get(), nullptr, (linalg_int)n, dx.get(), type,
-        dws.get(), ws_size);
+    linalg::linear_solver<value_t, CB>::apply(
+        dA.get(), nullptr, (linalg_int)n, dx.get(), type, dws.get(), ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
     std::vector<value_t> x_solved((std::size_t)n);
@@ -497,16 +499,15 @@ TEST(MathGpu, LinearSolverLU)
 // Verify packed LU and the caller-owned device pivot sequence.
 TEST(MathGpu, LuDecomposition)
 {
-    constexpr auto                         tol = GpuTolerance<double>::value;
-    const std::size_t                      n   = 17;
-    std::default_random_engine             generator;
-    auto                                   A = random_matrix<double>(n, n, generator);
+    constexpr auto             tol = GpuTolerance<double>::value;
+    const std::size_t          n   = 17;
+    std::default_random_engine generator;
+    auto                       A = random_matrix<double>(n, n, generator);
 
     device_buffer<double> dA(n * n);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-    const auto ws_size =
-        linalg::lu_decomposition<double, CB>::workspace_size((linalg_int)n);
+    const auto ws_size = linalg::lu_decomposition<double, CB>::workspace_size((linalg_int)n);
     device_buffer<unsigned char> dws(ws_size);
 
     device_buffer<linalg_int> dpivot(n);
@@ -570,8 +571,7 @@ TEST(MathGpu, MatrixInversion)
         device_buffer<double> dA(n * n);
         ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-        const auto ws_size =
-            linalg::inversion<double, CB>::workspace_size((linalg_int)n, type);
+        const auto ws_size = linalg::inversion<double, CB>::workspace_size((linalg_int)n, type);
         device_buffer<unsigned char> dws(ws_size);
 
         // nullptr pivot: ignored for cuda_blas.
@@ -595,11 +595,11 @@ TEST(MathGpu, MatrixInversion)
     const auto ws_size_lu = linalg::determinant<double, CB>::workspace_size(
         (linalg_int)n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
     device_buffer<unsigned char> dws_lu(ws_size_lu);
-    const auto ws_size_chol = linalg::determinant<double, CB>::workspace_size(
+    const auto                   ws_size_chol = linalg::determinant<double, CB>::workspace_size(
         (linalg_int)n, linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER);
     device_buffer<unsigned char> dws_chol(ws_size_chol);
 
-    const double det_lu = linalg::determinant<double, CB>::apply(dA_lu.get(),
+    const double det_lu   = linalg::determinant<double, CB>::apply(dA_lu.get(),
         nullptr,
         (linalg_int)n,
         linalg::linear_solver_type::LU_LINEAR_SOLVER,
@@ -633,8 +633,8 @@ template <typename value_t> void svd_decomposition_gpu_test(std::size_t rows, st
     device_buffer<value_t> dVT(k * columns);
     ASSERT_EQ(dA.upload(A.data()), cudaSuccess);
 
-    const auto ws_size =
-        linalg::svd_decomposition<value_t, CB>::workspace_size((linalg_long)rows, (linalg_long)columns);
+    const auto ws_size = linalg::svd_decomposition<value_t, CB>::workspace_size(
+        (linalg_long)rows, (linalg_long)columns);
     device_buffer<unsigned char> dws(ws_size);
 
     linalg::svd_decomposition<value_t, CB>::apply((linalg_long)rows,
@@ -867,8 +867,7 @@ template <typename value_t> void symmetric_eigen_gpu_test(std::size_t n)
                 sum += evecs(p, i) * AV(p, j);
             }
             const value_t expected = (i == j) ? evals[i] : value_t(0);
-            max_error =
-                std::fmax(max_error, std::fabs(static_cast<double>(sum - expected)));
+            max_error = std::fmax(max_error, std::fabs(static_cast<double>(sum - expected)));
         }
     }
     EXPECT_LE(max_error, tol * (value_t)n);
@@ -892,12 +891,18 @@ template <typename value_t> void pseudo_inverse_gpu_test(std::size_t rows, std::
     device_buffer<value_t> dAinv(columns * rows);
     ASSERT_EQ(dA.upload(A.begin()), cudaSuccess);
 
-    const auto ws_size =
-        linalg::pseudo_inverse<value_t, CB>::workspace_size((linalg_long)rows, (linalg_long)columns);
+    const auto ws_size = linalg::pseudo_inverse<value_t, CB>::workspace_size(
+        (linalg_long)rows, (linalg_long)columns);
     device_buffer<unsigned char> dws(ws_size);
 
-    linalg::pseudo_inverse<value_t, CB>::apply((linalg_long)rows, (linalg_long)columns, dA.get(),
-        (linalg_long)columns, dAinv.get(), (linalg_long)rows, static_cast<value_t>(-1), dws.get(),
+    linalg::pseudo_inverse<value_t, CB>::apply((linalg_long)rows,
+        (linalg_long)columns,
+        dA.get(),
+        (linalg_long)columns,
+        dAinv.get(),
+        (linalg_long)rows,
+        static_cast<value_t>(-1),
+        dws.get(),
         ws_size);
     ASSERT_EQ(cudaDeviceSynchronize(), cudaSuccess);
 
@@ -929,7 +934,7 @@ TEST(MathGpu, PseudoInverse)
 
 TEST(MathGpu, MatrixRankAndConditionNumber)
 {
-    const std::size_t n = 6;
+    const std::size_t    n = 6;
     dense_matrix<double> I(n, n);
     for (std::size_t i = 0; i < n; ++i)
     {
@@ -938,8 +943,7 @@ TEST(MathGpu, MatrixRankAndConditionNumber)
     device_buffer<double> dI(n * n);
     ASSERT_EQ(dI.upload(I.begin()), cudaSuccess);
 
-    const auto ws_size =
-        linalg::rank<double, CB>::workspace_size((linalg_long)n, (linalg_long)n);
+    const auto ws_size = linalg::rank<double, CB>::workspace_size((linalg_long)n, (linalg_long)n);
     device_buffer<unsigned char> dws(ws_size);
 
     const auto r = linalg::rank<double, CB>::apply(
@@ -950,7 +954,7 @@ TEST(MathGpu, MatrixRankAndConditionNumber)
     EXPECT_NEAR(cond, 1.0, GpuTolerance<double>::coarse);
 
     // Rank-1 outer product.
-    std::default_random_engine generator;
+    std::default_random_engine             generator;
     std::uniform_real_distribution<double> dist(1., 2.);
     dense_matrix<double>                   A(n, n);
     std::vector<double>                    u(n), v(n);
@@ -977,7 +981,7 @@ TEST(MathGpu, MatrixRankAndConditionNumber)
 
 TEST(MathGpu, MatrixNorm)
 {
-    const std::size_t rows = 6, columns = 5;
+    const std::size_t          rows = 6, columns = 5;
     std::default_random_engine generator;
     auto                       A = random_matrix<double>(rows, columns, generator);
 
@@ -1019,21 +1023,21 @@ TEST(MathGpu, MatrixNorm)
     const auto frob_ws_size = linalg::norm<double, CB>::workspace_size(
         (linalg_long)rows, (linalg_long)columns, linalg::norm_type::FROBENIUS);
     device_buffer<unsigned char> frob_dws(frob_ws_size);
-    const auto one_ws_size = linalg::norm<double, CB>::workspace_size(
+    const auto                   one_ws_size = linalg::norm<double, CB>::workspace_size(
         (linalg_long)rows, (linalg_long)columns, linalg::norm_type::ONE);
     device_buffer<unsigned char> one_dws(one_ws_size);
-    const auto inf_ws_size = linalg::norm<double, CB>::workspace_size(
+    const auto                   inf_ws_size = linalg::norm<double, CB>::workspace_size(
         (linalg_long)rows, (linalg_long)columns, linalg::norm_type::INFINITY_NORM);
     device_buffer<unsigned char> inf_dws(inf_ws_size);
 
-    const auto frob = linalg::norm<double, CB>::apply(dA.get(),
+    const auto frob     = linalg::norm<double, CB>::apply(dA.get(),
         (linalg_long)rows,
         (linalg_long)columns,
         (linalg_long)columns,
         linalg::norm_type::FROBENIUS,
         frob_dws.get(),
         frob_ws_size);
-    const auto one = linalg::norm<double, CB>::apply(dA.get(),
+    const auto one      = linalg::norm<double, CB>::apply(dA.get(),
         (linalg_long)rows,
         (linalg_long)columns,
         (linalg_long)columns,
@@ -1055,7 +1059,7 @@ TEST(MathGpu, MatrixNorm)
 
 TEST(MathGpu, MatrixTrace)
 {
-    const std::size_t n = 5;
+    const std::size_t          n = 5;
     std::default_random_engine generator;
     auto                       A = random_matrix<double>(n, n, generator);
 
@@ -1281,13 +1285,13 @@ TEST(MathGpu, InputValidation)
         dA.get(), 0LL, (linalg_long)n, (linalg_long)n, -1., nullptr, 0)));
 
     // condition_number.
-    EXPECT_ANY_THROW((linalg::condition_number<double, CB>::apply(
-        static_cast<const double*>(nullptr),
-        (linalg_long)n,
-        (linalg_long)n,
-        (linalg_long)n,
-        nullptr,
-        0)));
+    EXPECT_ANY_THROW(
+        (linalg::condition_number<double, CB>::apply(static_cast<const double*>(nullptr),
+            (linalg_long)n,
+            (linalg_long)n,
+            (linalg_long)n,
+            nullptr,
+            0)));
     EXPECT_ANY_THROW((linalg::condition_number<double, CB>::apply(
         dA.get(), 0LL, (linalg_long)n, (linalg_long)n, nullptr, 0)));
 
@@ -1299,17 +1303,11 @@ TEST(MathGpu, InputValidation)
         linalg::norm_type::FROBENIUS,
         nullptr,
         0)));
-    EXPECT_ANY_THROW((linalg::norm<double, CB>::apply(dA.get(),
-        0LL,
-        (linalg_long)n,
-        (linalg_long)n,
-        linalg::norm_type::FROBENIUS,
-        nullptr,
-        0)));
+    EXPECT_ANY_THROW((linalg::norm<double, CB>::apply(
+        dA.get(), 0LL, (linalg_long)n, (linalg_long)n, linalg::norm_type::FROBENIUS, nullptr, 0)));
 
     // trace — no workspace parameter.
-    EXPECT_ANY_THROW(
-        (linalg::trace<double, CB>::apply(static_cast<const double*>(nullptr), n, n)));
+    EXPECT_ANY_THROW((linalg::trace<double, CB>::apply(static_cast<const double*>(nullptr), n, n)));
     EXPECT_ANY_THROW((linalg::trace<double, CB>::apply(dA.get(), 0, n)));
 
     // least_squares.
@@ -1375,11 +1373,21 @@ TEST(MathGpu, StreamParameter)
     device_buffer<unsigned char> dws_a(ws_size);
     device_buffer<unsigned char> dws_b(ws_size);
 
-    linalg::linear_solver<double, CB>::apply(dA_a.get(), nullptr, (linalg_int)n, dx_a.get(),
-        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, dws_a.get(), ws_size,
+    linalg::linear_solver<double, CB>::apply(dA_a.get(),
+        nullptr,
+        (linalg_int)n,
+        dx_a.get(),
+        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
+        dws_a.get(),
+        ws_size,
         static_cast<void*>(stream_a));
-    linalg::linear_solver<double, CB>::apply(dA_b.get(), nullptr, (linalg_int)n, dx_b.get(),
-        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER, dws_b.get(), ws_size,
+    linalg::linear_solver<double, CB>::apply(dA_b.get(),
+        nullptr,
+        (linalg_int)n,
+        dx_b.get(),
+        linalg::linear_solver_type::CHOLESKY_LINEAR_SOLVER,
+        dws_b.get(),
+        ws_size,
         static_cast<void*>(stream_b));
 
     ASSERT_EQ(cudaStreamSynchronize(stream_a), cudaSuccess);
@@ -1416,8 +1424,8 @@ template <typename T> void device_scalar_pipeline_test()
     // norm/trace now synchronize internally and return their result on the
     // host (see rank.h et al.), so re-upload each before feeding it to the
     // next device-resident step of this pipeline.
-    const T norm_value =
-        linalg::norm<T, CB>::apply(A.get(), 2, 2, 2, linalg::norm_type::FROBENIUS, nullptr, 0, stream);
+    const T norm_value = linalg::norm<T, CB>::apply(
+        A.get(), 2, 2, 2, linalg::norm_type::FROBENIUS, nullptr, 0, stream);
     ASSERT_EQ(norm_result.upload(&norm_value), cudaSuccess);
     const T trace_value = linalg::trace<T, CB>::apply(norm_result.get(), 1, 1, stream);
     ASSERT_EQ(trace_result.upload(&trace_value), cudaSuccess);
@@ -1452,13 +1460,13 @@ template <typename T> void device_spectral_outputs_test()
 {
     cudaStream_t stream = nullptr;
     ASSERT_EQ(cudaStreamCreate(&stream), cudaSuccess);
-    const T                    input[] = {T(4), T(0), T(0), T(2)};
-    device_buffer<T>           A(4), pinv(4);
-    const auto                 rank_bytes = linalg::rank<T, CB>::workspace_size(2, 2);
-    const auto norm_bytes = linalg::norm<T, CB>::workspace_size(2, 2, linalg::norm_type::TWO);
-    const auto pinv_bytes = linalg::pseudo_inverse<T, CB>::workspace_size(2, 2);
-    const auto mode       = linalg::linear_solver_type::LU_LINEAR_SOLVER;
-    const auto det_bytes  = linalg::determinant<T, CB>::workspace_size(2, mode);
+    const T          input[] = {T(4), T(0), T(0), T(2)};
+    device_buffer<T> A(4), pinv(4);
+    const auto       rank_bytes = linalg::rank<T, CB>::workspace_size(2, 2);
+    const auto       norm_bytes = linalg::norm<T, CB>::workspace_size(2, 2, linalg::norm_type::TWO);
+    const auto       pinv_bytes = linalg::pseudo_inverse<T, CB>::workspace_size(2, 2);
+    const auto       mode       = linalg::linear_solver_type::LU_LINEAR_SOLVER;
+    const auto       det_bytes  = linalg::determinant<T, CB>::workspace_size(2, mode);
     device_buffer<unsigned char> workspace(
         std::max({rank_bytes, norm_bytes, pinv_bytes, det_bytes}));
     ASSERT_EQ(A.upload(input), cudaSuccess);
@@ -1611,6 +1619,86 @@ TEST(MathGpu, MatrixFunctions)
 {
     matrix_functions_gpu_test<float>();
     matrix_functions_gpu_test<double>();
+}
+
+namespace
+{
+template <typename T> void triangular_solver_gpu_cases()
+{
+    cudaStream_t stream{};
+    ASSERT_EQ(cudaStreamCreate(&stream), cudaSuccess);
+    linalg_test::for_each_triangular_solver_case<T>(
+        [&](bool                  upper,
+            bool                  transpose,
+            bool                  unit,
+            int                   n,
+            int                   nrhs,
+            int                   lda,
+            int                   ldb,
+            int                   ldx,
+            const std::vector<T>& a,
+            const std::vector<T>& b,
+            const std::vector<T>& expected)
+        {
+            SCOPED_TRACE(n);
+            SCOPED_TRACE(upper);
+            SCOPED_TRACE(transpose);
+            SCOPED_TRACE(unit);
+            using Solver = linalg::triangular_solver<T, CB>;
+            device_buffer<T>             da(a.size()), db(b.size()), dx(expected.size());
+            const auto                   bytes = Solver::workspace_size(n, nrhs);
+            device_buffer<unsigned char> scratch(bytes);
+            std::vector<T>               result(expected.size(), -123.F);
+            ASSERT_EQ(da.upload(a.data()), cudaSuccess);
+            ASSERT_EQ(db.upload(b.data()), cudaSuccess);
+            ASSERT_EQ(dx.upload(result.data()), cudaSuccess);
+            Solver::apply(upper,
+                transpose,
+                unit,
+                n,
+                nrhs,
+                da.get(),
+                lda,
+                db.get(),
+                ldb,
+                dx.get(),
+                ldx,
+                scratch.get(),
+                bytes,
+                stream);
+            ASSERT_EQ(cudaStreamSynchronize(stream), cudaSuccess);
+            ASSERT_EQ(dx.download(result.data()), cudaSuccess);
+            std::vector<T> preserved_a(a.size()), preserved_b(b.size());
+            ASSERT_EQ(da.download(preserved_a.data()), cudaSuccess);
+            ASSERT_EQ(db.download(preserved_b.data()), cudaSuccess);
+            EXPECT_EQ(std::memcmp(a.data(), preserved_a.data(), a.size() * sizeof(T)), 0);
+            EXPECT_EQ(b, preserved_b);
+            double error  = 0.;
+            bool   finite = true, padding = true;
+            for (int i = 0; i < n; ++i)
+            {
+                for (int j = 0; j < nrhs; ++j)
+                {
+                    finite = finite && std::isfinite(result[i * ldx + j]);
+                    error  = std::max(
+                        error, std::fabs(double(result[i * ldx + j] - expected[i * ldx + j])));
+                }
+                for (int j = nrhs; j < ldx; ++j)
+                    padding = padding && result[i * ldx + j] == -123.F;
+            }
+            EXPECT_TRUE(finite);
+            EXPECT_TRUE(padding);
+            EXPECT_LE(error, sizeof(T) == sizeof(float) ? 1.e-5 : 1.e-12);
+        });
+    ASSERT_EQ(cudaStreamDestroy(stream), cudaSuccess);
+}
+
+}  // namespace
+
+TEST(MathGpu, TriangularSolver)
+{
+    triangular_solver_gpu_cases<float>();
+    triangular_solver_gpu_cases<double>();
 }
 
 #endif  // LINALG_HAS_CUBLAS || LINALG_HAS_ROCBLAS

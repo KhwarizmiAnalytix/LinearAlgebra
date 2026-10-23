@@ -41,6 +41,7 @@ filegroup(
             "include/util/*.h",
             "include/matrix_operation/*.h",
             "src/common/*.h",
+            "src/matrix_operation/*.h",
             "src/matrix_operation/cpu/blas/*.h",
         ],
         allow_empty = True,

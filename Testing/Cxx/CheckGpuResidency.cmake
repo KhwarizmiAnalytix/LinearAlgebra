@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.24)
 
 # Runs even on CPU-only CI: prevent implicit host transfers from returning.
 file(GLOB_RECURSE gpu_sources "${SOURCE_ROOT}/src/matrix_operation/gpu/*.cpp"
-                              "${SOURCE_ROOT}/src/matrix_operation/gpu/*.cu"
-                              "${SOURCE_ROOT}/src/matrix_operation/gpu/*.hip")
+     "${SOURCE_ROOT}/src/matrix_operation/gpu/*.cu" "${SOURCE_ROOT}/src/matrix_operation/gpu/*.hip"
+     "${SOURCE_ROOT}/src/matrix_operation/gpu/*.h"
+)
 if(NOT gpu_sources)
     message(FATAL_ERROR "No GPU sources found")
 endif()
@@ -21,12 +22,19 @@ endif()
 # also hosts the still-async `inversion<T, Backend>` specializations
 # alongside `determinant<T, Backend>`.
 set(residency_exempt_sources
-    "rank_cublas.cu" "rank_hip.hip"
-    "inversion_cublas.cu" "inversion_hip.hip"
-    "norm_cublas.cu" "norm_hip.hip"
-    "trace_cublas.cu" "trace_hip.hip"
-    "eigen_cublas.cpp" "eigen_hip.cpp"
-    "lu_decomposition_cublas.cpp" "lu_decomposition_hip.cpp")
+    "rank_cublas.cu"
+    "rank_hip.hip"
+    "inversion_cublas.cu"
+    "inversion_hip.hip"
+    "norm_cublas.cu"
+    "norm_hip.hip"
+    "trace_cublas.cu"
+    "trace_hip.hip"
+    "eigen_cublas.cpp"
+    "eigen_hip.cpp"
+    "lu_decomposition_cublas.cpp"
+    "lu_decomposition_hip.cpp"
+)
 foreach(source IN LISTS gpu_sources)
     get_filename_component(source_name "${source}" NAME)
     if(source_name IN_LIST residency_exempt_sources)
@@ -39,8 +47,11 @@ foreach(source IN LISTS gpu_sources)
     # API names 1:1).
     # Split runtime and BLAS patterns to stay below CMake 3.24's limit of
     # nine capturing groups per regular expression.
-    if(contents MATCHES "(cuda|hip)(Memcpy(HostToDevice|DeviceToHost|Default)|(Device|Stream)Synchronize|MallocManaged|HostMalloc|MemPrefetchAsync)"
-       OR contents MATCHES "(cublas|hipblas)(Get|Set)(Vector|Matrix)")
+    if(contents
+       MATCHES
+       "(cuda|hip)(Memcpy(HostToDevice|DeviceToHost|Default)|(Device|Stream)Synchronize|MallocManaged|HostMalloc|MemPrefetchAsync)"
+       OR contents MATCHES "(cublas|hipblas)(Get|Set)(Vector|Matrix)"
+    )
         message(FATAL_ERROR "GPU residency violation in ${source}")
     endif()
     string(REGEX MATCHALL "(cuda|hip)Memcpy[A-Za-z0-9_]*[ \t\r\n]*\\([^;]*" copies "${contents}")
@@ -52,11 +63,14 @@ foreach(source IN LISTS gpu_sources)
 endforeach()
 # CUDA/HIP kernels and library bridges must stay in the GPU implementation tree.
 file(GLOB_RECURSE cpu_sources "${SOURCE_ROOT}/src/matrix_operation/cpu/*.cpp"
-                              "${SOURCE_ROOT}/src/matrix_operation/cpu/*.cu"
-                              "${SOURCE_ROOT}/src/matrix_operation/cpu/*.hip")
+     "${SOURCE_ROOT}/src/matrix_operation/cpu/*.cu" "${SOURCE_ROOT}/src/matrix_operation/cpu/*.hip"
+)
 foreach(source IN LISTS cpu_sources)
     file(READ "${source}" contents)
-    if(contents MATCHES "__global__|cudaMemcpy|cublas_v2.h|cusolverDn.h|cuda_runtime|hipMemcpy|hipblas.h|hipsolver.h|hip_runtime")
+    if(contents
+       MATCHES
+       "__global__|cudaMemcpy|cublas_v2.h|cusolverDn.h|cuda_runtime|hipMemcpy|hipblas.h|hipsolver.h|hip_runtime"
+    )
         message(FATAL_ERROR "GPU implementation outside GPU directory: ${source}")
     endif()
 endforeach()

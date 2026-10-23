@@ -4,7 +4,9 @@ Eigen's MatrixLogarithm.h and MatrixSquareRoot.h, licensed under MPL 2.0.
 Copyright (C) 2011, 2013 Jitse Niesen <jitse@maths.leeds.ac.uk>
 Copyright (C) 2011 Chen-Pang He <jdh8@ms63.hinet.net>
 
-The adapted source is provided in src/common/matrix_functions_core.h in the
+The adapted sources are provided in src/matrix_operation/schur_decomposition_impl.h,
+src/common/complex_math.h, src/common/complex_vector.h, src/common/real_result.h,
+src/common/square_root_core.h, and src/common/logarithm_core.h in the
 LinearAlgebra source distribution and repository:
 https://github.com/KhwarizmiAnalytix/LinearAlgebra
 

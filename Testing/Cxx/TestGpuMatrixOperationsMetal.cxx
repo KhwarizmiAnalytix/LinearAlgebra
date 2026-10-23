@@ -2,7 +2,7 @@
 // linalg_backend::METAL_BLAS. Companion to TestGpuMatrixOperations.cxx
 // (CUDA_BLAS/ROCM_BLAS), but intentionally narrower: METAL_BLAS is float
 // only (Apple GPUs have no native double type) and only covers
-// multiplication, batched multiplication, transpose, norm, and trace, plus
+// multiplication, batched multiplication, triangular solves, transpose, norm, and trace, plus
 // portable matrix logarithm and square root (see
 // linalg_backend::METAL_BLAS's doc comment in include/common/backend.h) --
 // cholesky/LU/QR/SVD/eigen/linear_solver/inversion/determinant/rank/
@@ -26,15 +26,18 @@
 
 #include "dense_matrix_test_helper.h"
 #include "include/matrix_operation/logarithm.h"
-#include "include/matrix_operation/square_root.h"
-#include "matrix_functions_test_cases.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/multiplication_batched.h"
 #include "include/matrix_operation/norm.h"
+#include "include/matrix_operation/square_root.h"
 #include "include/matrix_operation/trace.h"
 #include "include/matrix_operation/transpose.h"
-#include "gtest/gtest.h"
+#include "include/matrix_operation/triangular_solver.h"
+#include "matrix_functions_test_cases.h"
 #include "test_reporting.h"
+#include "triangular_solver_test_cases.h"
+#include "gtest/gtest.h"
+#include <cstring>
 
 namespace
 {
@@ -231,7 +234,7 @@ TEST(MathGpu, BatchedMatrixMultiplication)
 
 TEST(MathGpu, MatrixNorm)
 {
-    const std::size_t rows = 6, columns = 5;
+    const std::size_t          rows = 6, columns = 5;
     std::default_random_engine generator;
     auto                       A = random_matrix(rows, columns, generator);
 
@@ -265,22 +268,34 @@ TEST(MathGpu, MatrixNorm)
     const auto frob_ws_size = linalg::norm<float, MB>::workspace_size(
         (linalg_long)rows, (linalg_long)columns, linalg::norm_type::FROBENIUS);
     page_aligned_buffer<unsigned char> frob_dws(frob_ws_size);
-    const auto one_ws_size = linalg::norm<float, MB>::workspace_size(
+    const auto                         one_ws_size = linalg::norm<float, MB>::workspace_size(
         (linalg_long)rows, (linalg_long)columns, linalg::norm_type::ONE);
     page_aligned_buffer<unsigned char> one_dws(one_ws_size);
-    const auto inf_ws_size = linalg::norm<float, MB>::workspace_size(
+    const auto                         inf_ws_size = linalg::norm<float, MB>::workspace_size(
         (linalg_long)rows, (linalg_long)columns, linalg::norm_type::INFINITY_NORM);
     page_aligned_buffer<unsigned char> inf_dws(inf_ws_size);
 
-    const auto frob = linalg::norm<float, MB>::apply(dA.get(),
-        (linalg_long)rows, (linalg_long)columns, (linalg_long)columns,
-        linalg::norm_type::FROBENIUS, frob_dws.get(), frob_ws_size);
-    const auto one = linalg::norm<float, MB>::apply(dA.get(),
-        (linalg_long)rows, (linalg_long)columns, (linalg_long)columns,
-        linalg::norm_type::ONE, one_dws.get(), one_ws_size);
+    const auto frob     = linalg::norm<float, MB>::apply(dA.get(),
+        (linalg_long)rows,
+        (linalg_long)columns,
+        (linalg_long)columns,
+        linalg::norm_type::FROBENIUS,
+        frob_dws.get(),
+        frob_ws_size);
+    const auto one      = linalg::norm<float, MB>::apply(dA.get(),
+        (linalg_long)rows,
+        (linalg_long)columns,
+        (linalg_long)columns,
+        linalg::norm_type::ONE,
+        one_dws.get(),
+        one_ws_size);
     const auto inf_norm = linalg::norm<float, MB>::apply(dA.get(),
-        (linalg_long)rows, (linalg_long)columns, (linalg_long)columns,
-        linalg::norm_type::INFINITY_NORM, inf_dws.get(), inf_ws_size);
+        (linalg_long)rows,
+        (linalg_long)columns,
+        (linalg_long)columns,
+        linalg::norm_type::INFINITY_NORM,
+        inf_dws.get(),
+        inf_ws_size);
 
     EXPECT_NEAR(frob, frob_expected, tol);
     EXPECT_NEAR(one, one_expected, tol);
@@ -289,7 +304,7 @@ TEST(MathGpu, MatrixNorm)
 
 TEST(MathGpu, MatrixTrace)
 {
-    const std::size_t n = 5;
+    const std::size_t          n = 5;
     std::default_random_engine generator;
     auto                       A = random_matrix(n, n, generator);
 
@@ -309,11 +324,22 @@ TEST(MathGpu, MatrixTrace)
 // TestGpuMatrixOperations.cxx, scoped to METAL_BLAS's narrower op coverage.
 TEST(MathGpu, InputValidation)
 {
-    const int n = 3;
+    const int                  n = 3;
     page_aligned_buffer<float> dA((std::size_t)(n * n));
 
-    EXPECT_ANY_THROW((linalg::multiplication<float, MB>::apply(false, false, n, n, n,
-        static_cast<const float*>(nullptr), n, dA.get(), n, dA.get(), n, nullptr, 0)));
+    EXPECT_ANY_THROW((linalg::multiplication<float, MB>::apply(false,
+        false,
+        n,
+        n,
+        n,
+        static_cast<const float*>(nullptr),
+        n,
+        dA.get(),
+        n,
+        dA.get(),
+        n,
+        nullptr,
+        0)));
     EXPECT_ANY_THROW((linalg::multiplication<float, MB>::apply(
         false, false, 0, n, n, dA.get(), n, dA.get(), n, dA.get(), n, nullptr, 0)));
 
@@ -326,14 +352,18 @@ TEST(MathGpu, InputValidation)
     EXPECT_ANY_THROW((linalg::trace<float, MB>::apply(dA.get(), 0, n)));
 
     EXPECT_ANY_THROW((linalg::norm<float, MB>::apply(static_cast<const float*>(nullptr),
-        (linalg_long)n, (linalg_long)n, (linalg_long)n, linalg::norm_type::FROBENIUS, nullptr, 0)));
-    EXPECT_ANY_THROW((linalg::norm<float, MB>::apply(dA.get(),
-        0LL, (linalg_long)n, (linalg_long)n, linalg::norm_type::FROBENIUS, nullptr, 0)));
+        (linalg_long)n,
+        (linalg_long)n,
+        (linalg_long)n,
+        linalg::norm_type::FROBENIUS,
+        nullptr,
+        0)));
+    EXPECT_ANY_THROW((linalg::norm<float, MB>::apply(
+        dA.get(), 0LL, (linalg_long)n, (linalg_long)n, linalg::norm_type::FROBENIUS, nullptr, 0)));
 
     EXPECT_ANY_THROW((linalg::batched_matrix_multiplication(
         n, 2, static_cast<const float*>(nullptr), dA.get(), dA.get())));
-    EXPECT_ANY_THROW(
-        (linalg::batched_matrix_multiplication(0, 2, dA.get(), dA.get(), dA.get())));
+    EXPECT_ANY_THROW((linalg::batched_matrix_multiplication(0, 2, dA.get(), dA.get(), dA.get())));
 }
 
 TEST(MathGpu, MatrixFunctions)
@@ -401,6 +431,68 @@ TEST(MathGpu, MatrixFunctions)
     {
         EXPECT_TRUE(std::isnan(result.get()[i]));
     }
+}
+
+TEST(MathGpu, TriangularSolver)
+{
+    linalg_test::for_each_triangular_solver_case<float>(
+        [&](bool                      upper,
+            bool                      transpose,
+            bool                      unit,
+            int                       n,
+            int                       nrhs,
+            int                       lda,
+            int                       ldb,
+            int                       ldx,
+            const std::vector<float>& a,
+            const std::vector<float>& b,
+            const std::vector<float>& expected)
+        {
+            SCOPED_TRACE(n);
+            SCOPED_TRACE(upper);
+            SCOPED_TRACE(transpose);
+            SCOPED_TRACE(unit);
+            using Solver = linalg::triangular_solver<float, MB>;
+            page_aligned_buffer<float>         da(a.size()), db(b.size()), dx(expected.size());
+            const auto                         bytes = Solver::workspace_size(n, nrhs);
+            page_aligned_buffer<unsigned char> scratch(bytes);
+            std::vector<float>                 result(expected.size(), -123.F);
+            std::copy(a.begin(), a.end(), da.get());
+            std::copy(b.begin(), b.end(), db.get());
+            std::copy(result.begin(), result.end(), dx.get());
+            Solver::apply(upper,
+                transpose,
+                unit,
+                n,
+                nrhs,
+                da.get(),
+                lda,
+                db.get(),
+                ldb,
+                dx.get(),
+                ldx,
+                scratch.get(),
+                bytes);
+            std::copy_n(dx.get(), result.size(), result.data());
+            EXPECT_EQ(std::memcmp(da.get(), a.data(), a.size() * sizeof(float)), 0);
+            EXPECT_TRUE(std::equal(b.begin(), b.end(), db.get()));
+            double error  = 0.;
+            bool   finite = true, padding = true;
+            for (int i = 0; i < n; ++i)
+            {
+                for (int j = 0; j < nrhs; ++j)
+                {
+                    finite = finite && std::isfinite(result[i * ldx + j]);
+                    error  = std::max(
+                        error, std::fabs(double(result[i * ldx + j] - expected[i * ldx + j])));
+                }
+                for (int j = nrhs; j < ldx; ++j)
+                    padding = padding && result[i * ldx + j] == -123.F;
+            }
+            EXPECT_TRUE(finite);
+            EXPECT_TRUE(padding);
+            EXPECT_LE(error, 1.e-5);
+        });
 }
 
 #endif  // LINALG_HAS_METAL
