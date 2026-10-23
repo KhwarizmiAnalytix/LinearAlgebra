@@ -451,8 +451,10 @@ template <typename T> void test_native_general_dense_spectra()
             {
                 std::copy_n(a.data() + i * n, n, storage.data() + i * lda);
             }
-            Vector<T>                  real(n), imag(n);
-            std::vector<unsigned char> workspace(
+            // Avoid MSVC 19.14's alias-template deduction with multiple declarators.
+            Eigen::Matrix<T, Eigen::Dynamic, 1> real(n);
+            Eigen::Matrix<T, Eigen::Dynamic, 1> imag(n);
+            std::vector<unsigned char>          workspace(
                 linalg::general_eigen_backend<T, backend>::workspace_size(n, compute_vectors));
             ASSERT_TRUE((linalg::general_eigen_backend<T, backend>::apply(storage.data(),
                 n,
