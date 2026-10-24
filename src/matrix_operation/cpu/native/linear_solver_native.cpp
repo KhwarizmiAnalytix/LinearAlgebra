@@ -151,14 +151,19 @@ void linear_solver_scalar_impl(T* __restrict m,
     linalg_int* __restrict pivot,
     linalg_int lda,
     T* __restrict x,
-    linear_solver_type type)
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size)
 {
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        // Scalar lu_decomposition needs no scratch of its own.
-        if (lu_decomposition<T, linalg_backend::NATIVE>::apply(m, lda, pivot, nullptr, 0))
+        // The whole caller-provided buffer is lu_decomposition's own
+        // trailing-update scratch (its workspace_size(lda) is exactly
+        // this function's), so it's forwarded as-is rather than carved.
+        if (lu_decomposition<T, linalg_backend::NATIVE>::apply(
+                m, lda, pivot, workspace, workspace_size))
         {
             lu_solve(m, pivot, lda, x);
         }
@@ -193,13 +198,13 @@ void linear_solver<float, linalg_backend::NATIVE>::apply(float* __restrict m,
     linalg_int lda,
     float* __restrict x,
     linear_solver_type type,
-    void* /*workspace*/,
-    size_t /*workspace_size*/,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/native<float>");
     check_solver_inputs(m, x, lda);
-    linear_solver_scalar_impl(m, pivot, lda, x, type);
+    linear_solver_scalar_impl(m, pivot, lda, x, type, workspace, workspace_size);
 }
 
 template <>
@@ -208,26 +213,30 @@ void linear_solver<double, linalg_backend::NATIVE>::apply(double* __restrict m,
     linalg_int lda,
     double* __restrict x,
     linear_solver_type type,
-    void* /*workspace*/,
-    size_t /*workspace_size*/,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/native<double>");
     check_solver_inputs(m, x, lda);
-    linear_solver_scalar_impl(m, pivot, lda, x, type);
+    linear_solver_scalar_impl(m, pivot, lda, x, type, workspace, workspace_size);
 }
 
 template <>
 size_t linear_solver<float, linalg_backend::NATIVE>::workspace_size(
-    linalg_int /*lda*/, linear_solver_type /*type*/)
+    linalg_int lda, linear_solver_type type)
 {
-    return 0;
+    return type == linear_solver_type::LU_LINEAR_SOLVER
+               ? lu_decomposition<float, linalg_backend::NATIVE>::workspace_size(lda)
+               : 0;
 }
 
 template <>
 size_t linear_solver<double, linalg_backend::NATIVE>::workspace_size(
-    linalg_int /*lda*/, linear_solver_type /*type*/)
+    linalg_int lda, linear_solver_type type)
 {
-    return 0;
+    return type == linear_solver_type::LU_LINEAR_SOLVER
+               ? lu_decomposition<double, linalg_backend::NATIVE>::workspace_size(lda)
+               : 0;
 }
 }  // namespace linalg

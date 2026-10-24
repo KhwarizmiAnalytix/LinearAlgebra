@@ -74,7 +74,30 @@ constexpr value_t& element(value_t* data, linalg_int i, linalg_int j, linalg_int
 }
 
 #if LINALG_HAS_VECTORIZATION
-std::ptrdiff_t l1 = 0, l2 = 0, l3 = 0, l3_count = 0;
+// cpuinfo_cach can call into pytorch/cpuinfo's cpuinfo_initialize(), not
+// cheap, so its result is cached rather than requeried on every
+// blocking_sizes() call. This used to be plain namespace-scope globals
+// (std::ptrdiff_t l1 = 0, ...) lazily filled in by blocking_sizes() the
+// first time it saw l1 == 0 -- a data race on ordinary, unsynchronized
+// shared mutable state if two threads called a matmul concurrently before
+// the first one finished initializing it. A function-local static gets the
+// same one-time-computation caching for free from C++11's guaranteed
+// thread-safe initialization instead.
+struct cpu_cache_sizes
+{
+    std::ptrdiff_t l1, l2, l3, l3_count;
+};
+
+inline const cpu_cache_sizes& cached_cpu_cache_sizes()
+{
+    static const cpu_cache_sizes sizes = []
+    {
+        cpu_cache_sizes s{};
+        cpu_info::cpuinfo_cach(s.l1, s.l2, s.l3, s.l3_count);
+        return s;
+    }();
+    return sizes;
+}
 
 template <typename value_t, bool vectorizable = true> struct gemm_traits
 {
@@ -107,10 +130,11 @@ linalg_int blocking_sizes(
     // at the register level. This small horizontal panel has to stay within L1 cache.
 
     // get the cache size L1, L2 and L3
-    if (l1 == 0)
-    {
-        cpu_info::cpuinfo_cach(l1, l2, l3, l3_count);
-    }
+    const cpu_cache_sizes& cache    = cached_cpu_cache_sizes();
+    const std::ptrdiff_t   l1       = cache.l1;
+    const std::ptrdiff_t   l2       = cache.l2;
+    const std::ptrdiff_t   l3       = cache.l3;
+    const std::ptrdiff_t   l3_count = cache.l3_count;
 
     {
         // Early return for small problems because the computation below are time consuming for

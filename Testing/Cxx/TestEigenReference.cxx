@@ -26,13 +26,11 @@
 
 namespace
 {
-// Specify every parameter: MSVC mis-instantiates Eigen's dependent defaults
-// in typed tests and can crash while compiling their generic backend lambdas.
+// Keep Eigen instantiations outside generic lambdas and typed-test bodies:
+// MSVC 19.14 mis-instantiates their aliases; newer MSVC can crash on defaults.
 template <typename T>
 using Matrix = Eigen::
     Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor, Eigen::Dynamic, Eigen::Dynamic>;
-template <typename T>
-using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
 
 template <typename T> T tolerance()
 {
@@ -65,326 +63,286 @@ template <typename T> class EigenReference : public ::testing::Test
 using Scalars = ::testing::Types<float, double>;
 TYPED_TEST_SUITE(EigenReference, Scalars);
 
-TYPED_TEST(EigenReference, MultiplicationWithTransposeAndPaddedStrides)
+template <typename T, linalg::linalg_backend B>
+void test_multiplication_with_transpose_and_padded_strides()
 {
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
+    SCOPED_TRACE(static_cast<int>(B));
+    // Nonsquare shapes expose swapped dimensions/strides; 33 crosses native tiles.
+    for (const auto shape : {std::array<int, 3>{1, 7, 3},
+             {5, 7, 3},
+             {33, 7, 3},
+             {7, 7, 9},
+             {33, 33, 17},
+             {1, 65, 33},
+             {65, 1, 33},
+             {5, 97, 67},
+             {97, 5, 67},
+             {65, 65, 129}})
+    {
+        for (const bool ta : {false, true})
         {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            // Nonsquare shapes expose swapped dimensions/strides; 33 crosses native tiles.
-            for (const auto shape : {std::array<int, 3>{1, 7, 3},
-                     {5, 7, 3},
-                     {33, 7, 3},
-                     {7, 7, 9},
-                     {33, 33, 17},
-                     {1, 65, 33},
-                     {65, 1, 33},
-                     {5, 97, 67},
-                     {97, 5, 67},
-                     {65, 65, 129}})
+            for (const bool tb : {false, true})
             {
-                for (const bool ta : {false, true})
-                {
-                    for (const bool tb : {false, true})
-                    {
-                        const auto [m, n, k] = shape;
-                        SCOPED_TRACE(::testing::Message() << m << " ta=" << ta << " tb=" << tb);
-                        const int       ar = ta ? k : m, ac = ta ? m : k;
-                        const int       br = tb ? n : k, bc = tb ? k : n;
-                        const Matrix<T> a              = random_matrix<T>(ar, ac);
-                        const Matrix<T> b              = random_matrix<T>(br, bc, 43);
-                        Matrix<T>       ap             = Matrix<T>::Constant(ar, ac + 2, T(123));
-                        Matrix<T>       bp             = Matrix<T>::Constant(br, bc + 2, T(123));
-                        Matrix<T>       cp             = Matrix<T>::Constant(m, n + 2, T(123));
-                        ap.leftCols(ac)                = a;
-                        bp.leftCols(bc)                = b;
-                        Matrix<T>                  lhs = ta ? Matrix<T>(a.transpose()) : a;
-                        Matrix<T>                  rhs = tb ? Matrix<T>(b.transpose()) : b;
-                        const Matrix<T>            expected = lhs * rhs;
-                        std::vector<unsigned char> ws(
-                            linalg::multiplication<T, B>::workspace_size(m, n, k));
-                        linalg::multiplication<T, B>::apply(ta,
-                            tb,
-                            m,
-                            n,
-                            k,
-                            ap.data(),
-                            ac + 2,
-                            bp.data(),
-                            bc + 2,
-                            cp.data(),
-                            n + 2,
-                            ws.data(),
-                            ws.size());
-                        expect_close(cp.leftCols(n), expected);
-                        EXPECT_TRUE((cp.rightCols(2).array() == T(123)).all());
-                    }
-                }
-            }
-        });
-}
-
-TYPED_TEST(EigenReference, LUFactorsAndReusedSolve)
-{
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
-        {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            for (const int n : {1, 7, 33, 65, 129})
-            {
-                SCOPED_TRACE(n);
-                Matrix<T> a = random_matrix<T>(n, n);
-                a.diagonal().array() += T(2 * n);
-                Matrix<T>                  factors = a;
-                std::vector<linalg_int>    pivot(n);
-                std::vector<unsigned char> ws(linalg::lu_decomposition<T, B>::workspace_size(n));
-                ASSERT_TRUE((linalg::lu_decomposition<T, B>::apply(
-                    factors.data(), n, pivot.data(), ws.data(), ws.size())));
-                // These dominant fixtures require no row swaps on any backend.
-                Matrix<T> lower                                       = Matrix<T>::Identity(n, n);
-                lower.template triangularView<Eigen::StrictlyLower>() = factors;
-                Matrix<T> upper = factors.template triangularView<Eigen::Upper>();
-                expect_close(Matrix<T>(lower * upper), a);
-                Vector<T>       rhs          = random_matrix<T>(n, 1, 43);
-                const Vector<T> expected     = a.partialPivLu().solve(rhs);
-                const Vector<T> original_rhs = rhs;
-                constexpr auto  mode         = linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER;
-                ws.resize(linalg::linear_solver<T, B>::workspace_size(n, mode));
-                linalg::linear_solver<T, B>::apply(
-                    factors.data(), pivot.data(), n, rhs.data(), mode, ws.data(), ws.size());
-                expect_close(rhs, expected);
-                expect_close(Vector<T>(a * rhs), original_rhs);
-            }
-        });
-}
-
-TYPED_TEST(EigenReference, CholeskyBothTriangles)
-{
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
-        {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            for (const int n : {1, 7, 33, 65, 129})
-            {
-                SCOPED_TRACE(n);
-                const Matrix<T> r = random_matrix<T>(n, n);
-                Matrix<T>       a = r * r.transpose();
-                a.diagonal().array() += T(n);
-                const Eigen::LLT<Matrix<T>> reference(a);
-                ASSERT_EQ(reference.info(), Eigen::Success);
-                for (const bool lower : {false, true})
-                {
-                    const auto triangle =
-                        lower ? linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR
-                              : linalg::cholesky_decomposition_enum::UPPER_TRIANGULAR;
-                    Matrix<T>                  factors = a;
-                    int                        info    = -1;
-                    std::vector<unsigned char> ws(
-                        linalg::cholesky_decomposition<T, B>::workspace_size(n, triangle));
-                    ASSERT_TRUE((linalg::cholesky_decomposition<T, B>::apply(
-                        factors.data(), n, triangle, ws.data(), ws.size(), &info)));
-                    EXPECT_EQ(info, 0);
-                    if (lower)
-                    {
-                        const Matrix<T> l = factors.template triangularView<Eigen::Lower>();
-                        expect_close(l, Matrix<T>(reference.matrixL()));
-                        expect_close(Matrix<T>(l * l.transpose()), a);
-                    }
-                    else
-                    {
-                        const Matrix<T> u = factors.template triangularView<Eigen::Upper>();
-                        expect_close(u, Matrix<T>(reference.matrixU()));
-                        expect_close(Matrix<T>(u.transpose() * u), a);
-                    }
-                }
-            }
-        });
-}
-
-TYPED_TEST(EigenReference, QRReconstructionAndOrthogonality)
-{
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
-        {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            for (const int rows : {7, 11})
-            {
-                constexpr int cols = 7;
-                SCOPED_TRACE(rows);
-                const Matrix<T>            a = random_matrix<T>(rows, cols);
-                Matrix<T>                  q = a;
-                Vector<T>                  tau(cols);
+                const auto [m, n, k] = shape;
+                SCOPED_TRACE(::testing::Message() << m << " ta=" << ta << " tb=" << tb);
+                const int       ar = ta ? k : m, ac = ta ? m : k;
+                const int       br = tb ? n : k, bc = tb ? k : n;
+                const Matrix<T> a                   = random_matrix<T>(ar, ac);
+                const Matrix<T> b                   = random_matrix<T>(br, bc, 43);
+                Matrix<T>       ap                  = Matrix<T>::Constant(ar, ac + 2, T(123));
+                Matrix<T>       bp                  = Matrix<T>::Constant(br, bc + 2, T(123));
+                Matrix<T>       cp                  = Matrix<T>::Constant(m, n + 2, T(123));
+                ap.leftCols(ac)                     = a;
+                bp.leftCols(bc)                     = b;
+                Matrix<T>                  lhs      = ta ? Matrix<T>(a.transpose()) : a;
+                Matrix<T>                  rhs      = tb ? Matrix<T>(b.transpose()) : b;
+                const Matrix<T>            expected = lhs * rhs;
                 std::vector<unsigned char> ws(
-                    linalg::qr_decomposition<T, B>::workspace_size(rows, cols));
-                linalg::qr_decomposition<T, B>::apply_r(
-                    rows, cols, q.data(), cols, tau.data(), ws.data(), ws.size());
-                const Matrix<T> r = q.topRows(cols).template triangularView<Eigen::Upper>();
-                linalg::qr_decomposition<T, B>::apply_q(
-                    rows, cols, q.data(), cols, tau.data(), ws.data(), ws.size());
-                expect_close(Matrix<T>(q * r), a);
-                expect_close(Matrix<T>(q.transpose() * q), Matrix<T>::Identity(cols, cols));
-                const Eigen::HouseholderQR<Matrix<T>> reference(a);
-                // QR column signs may differ, but absolute R diagonals agree.
-                expect_close(Vector<T>(r.diagonal().cwiseAbs()),
-                    Vector<T>(reference.matrixQR().topRows(cols).diagonal().cwiseAbs()));
-            }
-        });
-}
-
-TYPED_TEST(EigenReference, SingularValuesAndSVDReconstruction)
-{
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
-        {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            for (const int rows : {5, 9})
-            {
-                constexpr int              cols  = 5;
-                const Matrix<T>            a     = random_matrix<T>(rows, cols);
-                Matrix<T>                  input = a, u(rows, cols), vt(cols, cols);
-                Vector<T>                  values(cols);
-                std::vector<unsigned char> ws(
-                    linalg::svd_decomposition<T, B>::workspace_size(rows, cols));
-                linalg::svd_decomposition<T, B>::apply(rows,
-                    cols,
-                    input.data(),
-                    cols,
-                    values.data(),
-                    u.data(),
-                    cols,
-                    vt.data(),
-                    cols,
+                    linalg::multiplication<T, B>::workspace_size(m, n, k));
+                linalg::multiplication<T, B>::apply(ta,
+                    tb,
+                    m,
+                    n,
+                    k,
+                    ap.data(),
+                    ac + 2,
+                    bp.data(),
+                    bc + 2,
+                    cp.data(),
+                    n + 2,
                     ws.data(),
                     ws.size());
-                const Eigen::JacobiSVD<Matrix<T>> reference(a);
-                ASSERT_EQ(reference.info(), Eigen::Success);
-                expect_close(Matrix<T>(u * values.asDiagonal() * vt), a);
-                expect_close(Matrix<T>(u.transpose() * u), Matrix<T>::Identity(cols, cols));
-                expect_close(Matrix<T>(vt * vt.transpose()), Matrix<T>::Identity(cols, cols));
-                std::sort(values.data(), values.data() + cols, std::greater<T>());
-                expect_close(values, reference.singularValues());
+                expect_close(cp.leftCols(n), expected);
+                EXPECT_TRUE((cp.rightCols(2).array() == T(123)).all());
             }
-        });
+        }
+    }
 }
 
-TYPED_TEST(EigenReference, SymmetricSpectrumAndEigenvectorResidual)
+template <typename T, linalg::linalg_backend B> void test_lu_factors_and_reused_solve()
 {
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
-        {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            for (const int n : {1, 2, 7, 17, 65, 128})
-            {
-                const Matrix<T>                                r       = random_matrix<T>(n, n);
-                const Matrix<T>                                a       = r + r.transpose();
-                Matrix<T>                                      vectors = a;
-                Vector<T>                                      values(n);
-                const Eigen::SelfAdjointEigenSolver<Matrix<T>> reference(a);
-                ASSERT_EQ(reference.info(), Eigen::Success);
-                std::vector<unsigned char> ws(
-                    linalg::symmetric_eigen_backend<T, B>::workspace_size(n));
-                ASSERT_TRUE((linalg::symmetric_eigen_backend<T, B>::apply(
-                    vectors.data(), n, n, values.data(), n, ws.data(), ws.size())));
-                expect_close(values, reference.eigenvalues());
-                expect_close(Matrix<T>(a * vectors), Matrix<T>(vectors * values.asDiagonal()));
-                expect_close(Matrix<T>(vectors.transpose() * vectors), Matrix<T>::Identity(n, n));
-            }
-        });
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
+    SCOPED_TRACE(static_cast<int>(B));
+    for (const int n : {1, 7, 33, 65, 129})
+    {
+        SCOPED_TRACE(n);
+        Matrix<T> a = random_matrix<T>(n, n);
+        a.diagonal().array() += T(2 * n);
+        Matrix<T>                  factors = a;
+        std::vector<linalg_int>    pivot(n);
+        std::vector<unsigned char> ws(linalg::lu_decomposition<T, B>::workspace_size(n));
+        ASSERT_TRUE((linalg::lu_decomposition<T, B>::apply(
+            factors.data(), n, pivot.data(), ws.data(), ws.size())));
+        // These dominant fixtures require no row swaps on any backend.
+        Matrix<T> lower                                       = Matrix<T>::Identity(n, n);
+        lower.template triangularView<Eigen::StrictlyLower>() = factors;
+        Matrix<T> upper = factors.template triangularView<Eigen::Upper>();
+        expect_close(Matrix<T>(lower * upper), a);
+        vector_t       rhs          = random_matrix<T>(n, 1, 43);
+        const vector_t expected     = a.partialPivLu().solve(rhs);
+        const vector_t original_rhs = rhs;
+        constexpr auto mode         = linalg::linear_solver_type::LU_UPFRONT_LINEAR_SOLVER;
+        ws.resize(linalg::linear_solver<T, B>::workspace_size(n, mode));
+        linalg::linear_solver<T, B>::apply(
+            factors.data(), pivot.data(), n, rhs.data(), mode, ws.data(), ws.size());
+        expect_close(rhs, expected);
+        expect_close(vector_t(a * rhs), original_rhs);
+    }
 }
 
-TYPED_TEST(EigenReference, GeneralRealAndComplexSpectra)
+template <typename T, linalg::linalg_backend B> void test_cholesky_both_triangles()
 {
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
+    SCOPED_TRACE(static_cast<int>(B));
+    for (const int n : {1, 7, 33, 65, 129})
+    {
+        SCOPED_TRACE(n);
+        const Matrix<T> r = random_matrix<T>(n, n);
+        Matrix<T>       a = r * r.transpose();
+        a.diagonal().array() += T(n);
+        const Eigen::LLT<Matrix<T>> reference(a);
+        ASSERT_EQ(reference.info(), Eigen::Success);
+        for (const bool lower : {false, true})
         {
-            constexpr auto B = decltype(backend)::value;
-            SCOPED_TRACE(static_cast<int>(B));
-            for (const bool complex_spectrum : {false, true})
+            const auto triangle = lower ? linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR
+                                        : linalg::cholesky_decomposition_enum::UPPER_TRIANGULAR;
+            Matrix<T>  factors  = a;
+            int        info     = -1;
+            std::vector<unsigned char> ws(
+                linalg::cholesky_decomposition<T, B>::workspace_size(n, triangle));
+            ASSERT_TRUE((linalg::cholesky_decomposition<T, B>::apply(
+                factors.data(), n, triangle, ws.data(), ws.size(), &info)));
+            EXPECT_EQ(info, 0);
+            if (lower)
             {
-                constexpr int n = 6;
-                Matrix<T>     a = Matrix<T>::Zero(n, n);
-                if (complex_spectrum)
+                const Matrix<T> l = factors.template triangularView<Eigen::Lower>();
+                expect_close(l, Matrix<T>(reference.matrixL()));
+                expect_close(Matrix<T>(l * l.transpose()), a);
+            }
+            else
+            {
+                const Matrix<T> u = factors.template triangularView<Eigen::Upper>();
+                expect_close(u, Matrix<T>(reference.matrixU()));
+                expect_close(Matrix<T>(u.transpose() * u), a);
+            }
+        }
+    }
+}
+
+template <typename T, linalg::linalg_backend B> void test_qr_reconstruction_and_orthogonality()
+{
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
+    SCOPED_TRACE(static_cast<int>(B));
+    for (const int rows : {7, 11})
+    {
+        constexpr int cols = 7;
+        SCOPED_TRACE(rows);
+        const Matrix<T>            a = random_matrix<T>(rows, cols);
+        Matrix<T>                  q = a;
+        vector_t                   tau(cols);
+        std::vector<unsigned char> ws(linalg::qr_decomposition<T, B>::workspace_size(rows, cols));
+        linalg::qr_decomposition<T, B>::apply_r(
+            rows, cols, q.data(), cols, tau.data(), ws.data(), ws.size());
+        const Matrix<T> r = q.topRows(cols).template triangularView<Eigen::Upper>();
+        linalg::qr_decomposition<T, B>::apply_q(
+            rows, cols, q.data(), cols, tau.data(), ws.data(), ws.size());
+        expect_close(Matrix<T>(q * r), a);
+        expect_close(Matrix<T>(q.transpose() * q), Matrix<T>::Identity(cols, cols));
+        const Eigen::HouseholderQR<Matrix<T>> reference(a);
+        // QR column signs may differ, but absolute R diagonals agree.
+        expect_close(vector_t(r.diagonal().cwiseAbs()),
+            vector_t(reference.matrixQR().topRows(cols).diagonal().cwiseAbs()));
+    }
+}
+
+template <typename T, linalg::linalg_backend B> void test_singular_values_and_svd_reconstruction()
+{
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
+    SCOPED_TRACE(static_cast<int>(B));
+    for (const int rows : {5, 9})
+    {
+        constexpr int              cols  = 5;
+        const Matrix<T>            a     = random_matrix<T>(rows, cols);
+        Matrix<T>                  input = a, u(rows, cols), vt(cols, cols);
+        vector_t                   values(cols);
+        std::vector<unsigned char> ws(linalg::svd_decomposition<T, B>::workspace_size(rows, cols));
+        linalg::svd_decomposition<T, B>::apply(rows,
+            cols,
+            input.data(),
+            cols,
+            values.data(),
+            u.data(),
+            cols,
+            vt.data(),
+            cols,
+            ws.data(),
+            ws.size());
+        const Eigen::JacobiSVD<Matrix<T>> reference(a);
+        ASSERT_EQ(reference.info(), Eigen::Success);
+        expect_close(Matrix<T>(u * values.asDiagonal() * vt), a);
+        expect_close(Matrix<T>(u.transpose() * u), Matrix<T>::Identity(cols, cols));
+        expect_close(Matrix<T>(vt * vt.transpose()), Matrix<T>::Identity(cols, cols));
+        std::sort(values.data(), values.data() + cols, std::greater<T>());
+        expect_close(values, reference.singularValues());
+    }
+}
+
+template <typename T, linalg::linalg_backend B>
+void test_symmetric_spectrum_and_eigenvector_residual()
+{
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
+    SCOPED_TRACE(static_cast<int>(B));
+    for (const int n : {1, 2, 7, 17, 65, 128})
+    {
+        const Matrix<T>                                r       = random_matrix<T>(n, n);
+        const Matrix<T>                                a       = r + r.transpose();
+        Matrix<T>                                      vectors = a;
+        vector_t                                       values(n);
+        const Eigen::SelfAdjointEigenSolver<Matrix<T>> reference(a);
+        ASSERT_EQ(reference.info(), Eigen::Success);
+        std::vector<unsigned char> ws(linalg::symmetric_eigen_backend<T, B>::workspace_size(n));
+        ASSERT_TRUE((linalg::symmetric_eigen_backend<T, B>::apply(
+            vectors.data(), n, n, values.data(), n, ws.data(), ws.size())));
+        expect_close(values, reference.eigenvalues());
+        expect_close(Matrix<T>(a * vectors), Matrix<T>(vectors * values.asDiagonal()));
+        expect_close(Matrix<T>(vectors.transpose() * vectors), Matrix<T>::Identity(n, n));
+    }
+}
+
+template <typename T, linalg::linalg_backend B> void test_general_real_and_complex_spectra()
+{
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
+    SCOPED_TRACE(static_cast<int>(B));
+    for (const bool complex_spectrum : {false, true})
+    {
+        constexpr int n = 6;
+        Matrix<T>     a = Matrix<T>::Zero(n, n);
+        if (complex_spectrum)
+        {
+            // Three distinct complex conjugate pairs.
+            for (int j = 0; j < n; j += 2)
+            {
+                a(j, j) = a(j + 1, j + 1) = T(j + 1);
+                a(j, j + 1)               = T(-2);
+                a(j + 1, j)               = T(2);
+            }
+        }
+        else
+        {
+            // Dense nonsymmetric similarity transform with a real spectrum.
+            const Matrix<T> r = random_matrix<T>(n, n);
+            a                 = r + r.transpose();
+            for (int i = 0; i < n; ++i)
+            {
+                for (int j = 0; j < n; ++j)
                 {
-                    // Three distinct complex conjugate pairs.
-                    for (int j = 0; j < n; j += 2)
-                    {
-                        a(j, j) = a(j + 1, j + 1) = T(j + 1);
-                        a(j, j + 1)               = T(-2);
-                        a(j + 1, j)               = T(2);
-                    }
-                }
-                else
-                {
-                    // Dense nonsymmetric similarity transform with a real spectrum.
-                    const Matrix<T> r = random_matrix<T>(n, n);
-                    a                 = r + r.transpose();
-                    for (int i = 0; i < n; ++i)
-                    {
-                        for (int j = 0; j < n; ++j)
-                        {
-                            a(i, j) *= T(i + 1) / T(j + 1);
-                        }
-                    }
-                }
-                const Eigen::EigenSolver<Matrix<T>> reference(a, false);
-                ASSERT_EQ(reference.info(), Eigen::Success);
-                Matrix<T>                  vectors = a;
-                Vector<T>                  real(n), imag(n);
-                const bool                 compute_vectors = !complex_spectrum;
-                std::vector<unsigned char> ws(
-                    linalg::general_eigen_backend<T, B>::workspace_size(n, compute_vectors));
-                ASSERT_TRUE((linalg::general_eigen_backend<T, B>::apply(vectors.data(),
-                    n,
-                    n,
-                    real.data(),
-                    imag.data(),
-                    compute_vectors,
-                    n,
-                    ws.data(),
-                    ws.size())));
-                // Match unordered eigenvalues one-to-one, including imaginary parts.
-                std::vector<bool> used(n, false);
-                for (int i = 0; i < n; ++i)
-                {
-                    const std::complex<T> value(real(i), imag(i));
-                    int                   best = -1;
-                    for (int j = 0; j < n; ++j)
-                    {
-                        if (!used[j] &&
-                            (best < 0 || std::abs(value - reference.eigenvalues()(j)) <
-                                             std::abs(value - reference.eigenvalues()(best))))
-                        {
-                            best = j;
-                        }
-                    }
-                    ASSERT_GE(best, 0);
-                    used[best] = true;
-                    EXPECT_LE(std::abs(value - reference.eigenvalues()(best)),
-                        tolerance<T>() * std::max(T(1), std::abs(value)));
-                }
-                if (compute_vectors)
-                {
-                    expect_close(Matrix<T>(a * vectors), Matrix<T>(vectors * real.asDiagonal()));
+                    a(i, j) *= T(i + 1) / T(j + 1);
                 }
             }
-        });
+        }
+        const Eigen::EigenSolver<Matrix<T>> reference(a, false);
+        ASSERT_EQ(reference.info(), Eigen::Success);
+        Matrix<T>                  vectors = a;
+        vector_t                   real(n), imag(n);
+        const bool                 compute_vectors = !complex_spectrum;
+        std::vector<unsigned char> ws(
+            linalg::general_eigen_backend<T, B>::workspace_size(n, compute_vectors));
+        ASSERT_TRUE((linalg::general_eigen_backend<T, B>::apply(vectors.data(),
+            n,
+            n,
+            real.data(),
+            imag.data(),
+            compute_vectors,
+            n,
+            ws.data(),
+            ws.size())));
+        // Match unordered eigenvalues one-to-one, including imaginary parts.
+        std::vector<bool> used(n, false);
+        for (int i = 0; i < n; ++i)
+        {
+            const std::complex<T> value(real(i), imag(i));
+            int                   best = -1;
+            for (int j = 0; j < n; ++j)
+            {
+                if (!used[j] && (best < 0 || std::abs(value - reference.eigenvalues()(j)) <
+                                                 std::abs(value - reference.eigenvalues()(best))))
+                {
+                    best = j;
+                }
+            }
+            ASSERT_GE(best, 0);
+            used[best] = true;
+            EXPECT_LE(std::abs(value - reference.eigenvalues()(best)),
+                tolerance<T>() * std::max(T(1), std::abs(value)));
+        }
+        if (compute_vectors)
+        {
+            expect_close(Matrix<T>(a * vectors), Matrix<T>(vectors * real.asDiagonal()));
+        }
+    }
 }
-TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
+template <typename T> void test_native_symmetric_scaled_spectrum()
 {
-    using T                = TypeParam;
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
     constexpr auto backend = linalg::linalg_backend::NATIVE;
     for (const int n : {1, 2, 33, 65})
     {
@@ -394,7 +352,7 @@ TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
             const Matrix<T>                       random = random_matrix<T>(n, n);
             const Eigen::HouseholderQR<Matrix<T>> qr(random);
             const Matrix<T>                       q = qr.householderQ();
-            Vector<T>                             spectrum(n);
+            vector_t                              spectrum(n);
             for (int i = 0; i < n; ++i)
             {
                 const int group = i / 3;  // Repeated eigenvalues and a null space.
@@ -410,7 +368,7 @@ TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
                     storage[i * lda + j] = a(i, j) * scale;
                 }
             }
-            Vector<T>                  values(n);
+            vector_t                   values(n);
             std::vector<unsigned char> workspace(
                 linalg::symmetric_eigen_backend<T, backend>::workspace_size(n));
             ASSERT_TRUE((linalg::symmetric_eigen_backend<T, backend>::apply(
@@ -425,9 +383,9 @@ TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
     }
 }
 
-TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
+template <typename T> void test_native_general_dense_spectra()
 {
-    using T                = TypeParam;
+    using vector_t = Eigen::Matrix<T, Eigen::Dynamic, 1, Eigen::ColMajor, Eigen::Dynamic, 1>;
     constexpr auto backend = linalg::linalg_backend::NATIVE;
     for (const int n : {1, 2, 17, 65})
     {
@@ -455,7 +413,7 @@ TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
             {
                 std::copy_n(a.data() + i * n, n, storage.data() + i * lda);
             }
-            Vector<T>                  real(n), imag(n);
+            vector_t                   real(n), imag(n);
             std::vector<unsigned char> workspace(
                 linalg::general_eigen_backend<T, backend>::workspace_size(n, compute_vectors));
             ASSERT_TRUE((linalg::general_eigen_backend<T, backend>::apply(storage.data(),
@@ -500,75 +458,134 @@ TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
     }
 }
 
-TYPED_TEST(EigenReference, NormReductionsWithPaddedStrides)
+template <typename T, linalg::linalg_backend B> void test_norm_reductions_with_padded_strides()
 {
-    using T = TypeParam;
+    for (const auto shape : {std::array<int, 2>{1, 1}, {7, 33}, {65, 129}, {256, 65}})
+    {
+        const auto [rows, columns] = shape;
+        const Matrix<T> input      = random_matrix<T>(rows, columns);
+        Matrix<T>       padded     = Matrix<T>::Constant(rows, columns + 3, T(123));
+        padded.leftCols(columns)   = input;
+        for (const auto type : {linalg::norm_type::FROBENIUS,
+                 linalg::norm_type::ONE,
+                 linalg::norm_type::INFINITY_NORM})
+        {
+            T expected;
+            if (type == linalg::norm_type::FROBENIUS)
+            {
+                expected = input.norm();
+            }
+            else if (type == linalg::norm_type::ONE)
+            {
+                expected = input.cwiseAbs().colwise().sum().maxCoeff();
+            }
+            else
+            {
+                expected = input.cwiseAbs().rowwise().sum().maxCoeff();
+            }
+            const T actual = linalg::norm<T, B>::apply(
+                padded.data(), rows, columns, columns + 3, type, nullptr, 0);
+            EXPECT_NEAR(actual, expected, tolerance<T>() * std::max(T(1), expected));
+        }
+    }
+}
+
+template <typename T, linalg::linalg_backend B> void test_in_place_transpose_tiles_and_rectangles()
+{
+    for (const auto shape : {std::array<int, 2>{1, 1},
+             {1, 65},
+             {65, 1},
+             {31, 31},
+             {32, 32},
+             {33, 33},
+             {65, 65},
+             {7, 33},
+             {33, 7}})
+    {
+        const auto [rows, columns]        = shape;
+        const Matrix<T>            input  = random_matrix<T>(rows, columns);
+        Matrix<T>                  output = input;
+        std::vector<unsigned char> workspace(
+            linalg::transpose<T, B>::workspace_size(rows, columns));
+        linalg::transpose<T, B>::apply(
+            rows, columns, output.data(), workspace.data(), workspace.size());
+        const Eigen::Map<const Matrix<T>> transposed(output.data(), columns, rows);
+        expect_close(transposed, Matrix<T>(input.transpose()));
+        linalg::transpose<T, B>::apply(
+            columns, rows, output.data(), workspace.data(), workspace.size());
+        expect_close(output, input);
+    }
+}
+
+TYPED_TEST(EigenReference, MultiplicationWithTransposeAndPaddedStrides)
+{
     linalg_test::for_each_available_backend(
         [](auto backend)
         {
-            constexpr auto B = decltype(backend)::value;
-            for (const auto shape : {std::array<int, 2>{1, 1}, {7, 33}, {65, 129}, {256, 65}})
-            {
-                const auto [rows, columns] = shape;
-                const Matrix<T> input      = random_matrix<T>(rows, columns);
-                Matrix<T>       padded     = Matrix<T>::Constant(rows, columns + 3, T(123));
-                padded.leftCols(columns)   = input;
-                for (const auto type : {linalg::norm_type::FROBENIUS,
-                         linalg::norm_type::ONE,
-                         linalg::norm_type::INFINITY_NORM})
-                {
-                    T expected;
-                    if (type == linalg::norm_type::FROBENIUS)
-                    {
-                        expected = input.norm();
-                    }
-                    else if (type == linalg::norm_type::ONE)
-                    {
-                        expected = input.cwiseAbs().colwise().sum().maxCoeff();
-                    }
-                    else
-                    {
-                        expected = input.cwiseAbs().rowwise().sum().maxCoeff();
-                    }
-                    const T actual = linalg::norm<T, B>::apply(
-                        padded.data(), rows, columns, columns + 3, type, nullptr, 0);
-                    EXPECT_NEAR(actual, expected, tolerance<T>() * std::max(T(1), expected));
-                }
-            }
+            test_multiplication_with_transpose_and_padded_strides<TypeParam,
+                decltype(backend)::value>();
         });
+}
+
+TYPED_TEST(EigenReference, LUFactorsAndReusedSolve)
+{
+    linalg_test::for_each_available_backend([](auto backend)
+        { test_lu_factors_and_reused_solve<TypeParam, decltype(backend)::value>(); });
+}
+
+TYPED_TEST(EigenReference, CholeskyBothTriangles)
+{
+    linalg_test::for_each_available_backend(
+        [](auto backend) { test_cholesky_both_triangles<TypeParam, decltype(backend)::value>(); });
+}
+
+TYPED_TEST(EigenReference, QRReconstructionAndOrthogonality)
+{
+    linalg_test::for_each_available_backend([](auto backend)
+        { test_qr_reconstruction_and_orthogonality<TypeParam, decltype(backend)::value>(); });
+}
+
+TYPED_TEST(EigenReference, SingularValuesAndSVDReconstruction)
+{
+    linalg_test::for_each_available_backend([](auto backend)
+        { test_singular_values_and_svd_reconstruction<TypeParam, decltype(backend)::value>(); });
+}
+
+TYPED_TEST(EigenReference, SymmetricSpectrumAndEigenvectorResidual)
+{
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            test_symmetric_spectrum_and_eigenvector_residual<TypeParam, decltype(backend)::value>();
+        });
+}
+
+TYPED_TEST(EigenReference, GeneralRealAndComplexSpectra)
+{
+    linalg_test::for_each_available_backend([](auto backend)
+        { test_general_real_and_complex_spectra<TypeParam, decltype(backend)::value>(); });
+}
+
+TYPED_TEST(EigenReference, NativeSymmetricScaledStridedAndRepeatedSpectrum)
+{
+    test_native_symmetric_scaled_spectrum<TypeParam>();
+}
+
+TYPED_TEST(EigenReference, NativeGeneralDenseSpectraAndStrides)
+{
+    test_native_general_dense_spectra<TypeParam>();
+}
+
+TYPED_TEST(EigenReference, NormReductionsWithPaddedStrides)
+{
+    linalg_test::for_each_available_backend([](auto backend)
+        { test_norm_reductions_with_padded_strides<TypeParam, decltype(backend)::value>(); });
 }
 
 TYPED_TEST(EigenReference, InPlaceTransposeTilesAndRectangles)
 {
-    using T = TypeParam;
-    linalg_test::for_each_available_backend(
-        [](auto backend)
-        {
-            constexpr auto B = decltype(backend)::value;
-            for (const auto shape : {std::array<int, 2>{1, 1},
-                     {1, 65},
-                     {65, 1},
-                     {31, 31},
-                     {32, 32},
-                     {33, 33},
-                     {65, 65},
-                     {7, 33},
-                     {33, 7}})
-            {
-                const auto [rows, columns]        = shape;
-                const Matrix<T>            input  = random_matrix<T>(rows, columns);
-                Matrix<T>                  output = input;
-                std::vector<unsigned char> workspace(
-                    linalg::transpose<T, B>::workspace_size(rows, columns));
-                linalg::transpose<T, B>::apply(
-                    rows, columns, output.data(), workspace.data(), workspace.size());
-                const Eigen::Map<const Matrix<T>> transposed(output.data(), columns, rows);
-                expect_close(transposed, Matrix<T>(input.transpose()));
-                linalg::transpose<T, B>::apply(
-                    columns, rows, output.data(), workspace.data(), workspace.size());
-                expect_close(output, input);
-            }
-        });
+    linalg_test::for_each_available_backend([](auto backend)
+        { test_in_place_transpose_tiles_and_rectangles<TypeParam, decltype(backend)::value>(); });
 }
 
 }  // namespace

@@ -3,6 +3,8 @@
 #include "include/common/linalg_checks.h"
 
 #include "include/common/backend.h"
+#include "include/common/workspace_arena.h"
+#include "include/matrix_operation/multiplication.h"
 
 #include <algorithm>
 #include <cmath>
@@ -64,7 +66,8 @@ namespace
 // y and x are __restrict: every call site below passes two different rows
 // of m (lu_panel_factor's r > i, the triangular solve's p < ii), so they
 // never alias.
-template <typename T> inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long len)
+template <typename T>
+inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
     using P                     = packet<T>;
@@ -118,80 +121,6 @@ template <typename T> inline void lu_axpy_sub(T* __restrict y, const T* __restri
 #endif
 }
 
-// Dot product of two length-`len` contiguous operands, used below for the
-// trailing update's reduction. Vectorized the same way
-// cholesky_decomposition.cpp's blocked kernel vectorizes its own (symmetric)
-// trailing-update dot product, via linalg::packet<T>.
-//
-// Uses 4 independent accumulators (unlike lu_axpy_sub above, this *is* a
-// true reduction, so a single accumulator is a genuine loop-carried FMA
-// dependency chain -- the CPU can't start iteration N+1's FMA until
-// iteration N's completes, stalling on FMA latency rather than throughput).
-// Combined at the end via tree reduction before the horizontal predux.
-// x and y are __restrict: this file's one call site always passes an m-row
-// (l21_row) against the local `packed` stack buffer -- two buffers that
-// never overlap.
-template <typename T> inline T lu_dot(const T* __restrict x, const T* __restrict y, linalg_long len)
-{
-#if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
-    constexpr linalg_long width = P::size;
-
-    typename P::packet_t acc0, acc1, acc2, acc3;
-    P::set(static_cast<T>(0), acc0);
-    P::set(static_cast<T>(0), acc1);
-    P::set(static_cast<T>(0), acc2);
-    P::set(static_cast<T>(0), acc3);
-
-    linalg_long c = 0;
-    for (; c + 4 * width <= len; c += 4 * width)
-    {
-        typename P::packet_t px0, px1, px2, px3;
-        typename P::packet_t py0, py1, py2, py3;
-        P::loadu(x + c, px0);
-        P::loadu(x + c + width, px1);
-        P::loadu(x + c + 2 * width, px2);
-        P::loadu(x + c + 3 * width, px3);
-        P::loadu(y + c, py0);
-        P::loadu(y + c + width, py1);
-        P::loadu(y + c + 2 * width, py2);
-        P::loadu(y + c + 3 * width, py3);
-        P::fma(px0, py0, acc0, acc0);
-        P::fma(px1, py1, acc1, acc1);
-        P::fma(px2, py2, acc2, acc2);
-        P::fma(px3, py3, acc3, acc3);
-    }
-
-    typename P::packet_t acc01, acc23, acc;
-    P::add(acc0, acc1, acc01);
-    P::add(acc2, acc3, acc23);
-    P::add(acc01, acc23, acc);
-
-    for (; c + width <= len; c += width)
-    {
-        typename P::packet_t px;
-        typename P::packet_t py;
-        P::loadu(x + c, px);
-        P::loadu(y + c, py);
-        P::fma(px, py, acc, acc);
-    }
-
-    T sum = P::predux(acc);
-    for (; c < len; ++c)
-    {
-        sum += x[c] * y[c];
-    }
-    return sum;
-#else
-    T sum = static_cast<T>(0);
-    for (linalg_long c = 0; c < len; ++c)
-    {
-        sum += x[c] * y[c];
-    }
-    return sum;
-#endif
-}
-
 // Unblocked Gaussian elimination with (optional) partial pivoting, exactly
 // the algorithm this file used before blocking: single source of truth for
 // both the scalar path used below kLuBlockSize and, blocked into panels of
@@ -215,23 +144,24 @@ template <typename T> inline T lu_dot(const T* __restrict x, const T* __restrict
 // m and pivot are __restrict: they're always two distinct caller-owned
 // buffers (lu_decomposition.h documents pivot as a separate output array).
 template <typename T>
-bool lu_panel_factor(T* __restrict       m,
-    linalg_long                          lda,
-    linalg_long                          start,
-    linalg_long                          width,
+bool lu_panel_factor(T* __restrict m,
+    linalg_long lda,
+    linalg_long start,
+    linalg_long width,
     LINALG_UNUSED linalg_int* __restrict pivot,
-    LINALG_UNUSED T                      tolerance)
+    LINALG_UNUSED T tolerance)
 {
     using size_type = linalg_long;
 
     for (size_type ii = 0; ii < width; ++ii)
     {
-        const size_type i       = start + ii;
-        T* const        row_i_f = m + i * lda;  // row i, full width -- read/written at several columns below
+        const size_type i = start + ii;
+        T* const        row_i_f =
+            m + i * lda;  // row i, full width -- read/written at several columns below
 #if LINALG_HAS_LU_PIVOTING
         T         maxA    = std::abs(row_i_f[i]);
-        size_type imax     = i;
-        const T*  col_ptr  = m + (i + 1) * lda + i;  // walks column i, one row at a time
+        size_type imax    = i;
+        const T*  col_ptr = m + (i + 1) * lda + i;  // walks column i, one row at a time
         for (size_type k = i + 1; k < lda; ++k, col_ptr += lda)
         {
             const auto absA = std::fabs(*col_ptr);
@@ -259,8 +189,8 @@ bool lu_panel_factor(T* __restrict       m,
 #endif
         // row_i_f[i] re-reads live memory (not a cached value), so this
         // correctly sees the post-swap diagonal when a swap happened above.
-        const auto norm            = static_cast<T>(1. / row_i_f[i]);
-        T* const __restrict l_i    = row_i_f + start;
+        const auto norm         = static_cast<T>(1. / row_i_f[i]);
+        T* const __restrict l_i = row_i_f + start;
 
         // l_i (row i) and l_r (row r, r > i always) never alias, so
         // lu_axpy_sub's __restrict contract holds.
@@ -288,8 +218,11 @@ bool lu_panel_factor(T* __restrict       m,
 // [0, start+width).
 // m and pivot are __restrict, same reasoning as lu_panel_factor above.
 template <typename T>
-void lu_apply_pivots_to_trailing(T* __restrict m, linalg_long lda, linalg_long start,
-    linalg_long width, const linalg_int* __restrict pivot)
+void lu_apply_pivots_to_trailing(T* __restrict m,
+    linalg_long lda,
+    linalg_long start,
+    linalg_long width,
+    const linalg_int* __restrict pivot)
 {
     using size_type = linalg_long;
 
@@ -318,22 +251,61 @@ void lu_apply_pivots_to_trailing(T* __restrict m, linalg_long lda, linalg_long s
 // above (which already applies that panel's row swaps to the whole row,
 // so no deferred pivot application step is needed here), solve the panel's
 // trailing row-block U12 = L11^-1 * A12 by forward substitution against
-// L11, then fold L21 * U12 into the trailing submatrix with the packed,
-// dot-product-based rank-kLuBlockSize update below before moving to the
-// next panel. Degenerates to exactly the unblocked kernel above when
-// lda <= kLuBlockSize.
+// L11, then fold L21 * U12 into the trailing submatrix with a real GEMM
+// call (see lu_trailing_update_workspace_size/the trailing-update block
+// below) before moving to the next panel. Degenerates to exactly the
+// unblocked kernel above when lda <= kLuBlockSize.
 inline constexpr linalg_long kLuBlockSize = 64;
 
-// Column-tile width the trailing update below packs U12 into, a fixed-size
-// stack buffer rather than caller-provided workspace (this library never
-// allocates its own scratch -- see include/common/workspace_arena.h -- and
-// kLuBlockSize * kLuPackTile is small and constant regardless of lda).
-inline constexpr linalg_long kLuPackTile = 128;
+// Per-panel workspace the trailing update below needs: a dense rest x rest
+// scratch for L21 * U12's result (delta), plus whatever
+// multiplication<T, NATIVE> itself needs to pack L21/U12 for its blocked
+// GEBP kernel. Mirrors the arena-carve order the trailing update uses,
+// exactly as workspace_arena's contract requires (see
+// include/common/workspace_arena.h) so the two can never drift apart.
+template <typename T>
+size_t lu_trailing_update_workspace_size(linalg_long lda, linalg_long k, linalg_long bs)
+{
+    const linalg_long rest = lda - k - bs;
+    if (rest <= 0)
+    {
+        return 0;
+    }
+    detail::workspace_arena arena;
+    arena.next<T>(static_cast<size_t>(rest) * static_cast<size_t>(rest));
+    const size_t mm_bytes = multiplication<T, linalg_backend::NATIVE>::workspace_size(
+        static_cast<linalg_int>(rest), static_cast<linalg_int>(rest), static_cast<linalg_int>(bs));
+    arena.next<unsigned char>(mm_bytes);
+    return arena.total_size();
+}
+
+// Walks the same k-loop lu_decomposition_blocked_impl below runs, without
+// touching any matrix data, to find the true largest per-panel workspace
+// requirement for this lda. rest shrinks and bs stays at kLuBlockSize (bar
+// a possibly-smaller final panel, where rest is correspondingly small) as
+// k increases, so the first panel is the practical worst case -- but this
+// takes the actual max rather than assuming that, since
+// multiplication<T, NATIVE>::workspace_size's cache-blocking math isn't
+// provably monotonic in its inputs.
+template <typename T> size_t lu_workspace_size(linalg_long lda)
+{
+    size_t max_bytes = 0;
+    for (linalg_long k = 0; k < lda; k += kLuBlockSize)
+    {
+        const linalg_long bs = std::min(kLuBlockSize, lda - k);
+        max_bytes = std::max(max_bytes, lu_trailing_update_workspace_size<T>(lda, k, bs));
+    }
+    return max_bytes;
+}
 
 // m and pivot are __restrict, same reasoning as lu_panel_factor above.
 template <typename T>
-bool lu_decomposition_blocked_impl(
-    T* __restrict m, linalg_long lda, linalg_int* __restrict pivot, T tolerance)
+bool lu_decomposition_blocked_impl(T* __restrict m,
+    linalg_long lda,
+    linalg_int* __restrict pivot,
+    T      tolerance,
+    void*  workspace,
+    size_t workspace_size)
 {
     using size_type = linalg_long;
 
@@ -375,64 +347,56 @@ bool lu_decomposition_blocked_impl(
         // so lu_axpy_sub's __restrict contract holds.
         for (size_type ii = 0; ii < bs; ++ii)
         {
-            T* const            row_full = m + (k + ii) * lda;  // row k+ii, full width
-            T* const __restrict row_i    = row_full + k + bs;
+            T* const row_full         = m + (k + ii) * lda;  // row k+ii, full width
+            T* const __restrict row_i = row_full + k + bs;
             for (size_type p = 0; p < ii; ++p)
             {
-                const T              l_ip  = row_full[k + p];
+                const T l_ip              = row_full[k + p];
                 T* const __restrict row_p = m + (k + p) * lda + k + bs;
                 lu_axpy_sub(row_i, row_p, l_ip, rest);
             }
         }
 
-        // Trailing update: A22 -= L21 * U12. L21 (m + (k+bs)*lda + k, width
-        // bs) is already row-contiguous, but U12's columns are not (U12 is stored
-        // bs rows x rest columns, so a column is strided by lda) -- so a
-        // per-output-element dot product of an L21 row against a U12
-        // column cannot walk either operand contiguously without first
-        // packing one of them. This packs a kLuPackTile-wide slice of U12,
-        // transposed, into `packed` (bs rows become bs-contiguous columns),
-        // then reduces each A22 element with one lu_dot call against that
-        // packed column -- touching every A22 element exactly once,
-        // instead of the `bs` separate read-modify-write passes a
-        // broadcast-and-axpy rank-1 formulation would need. This is the
-        // same role GEBP micro-kernel packing (multiplication.cpp's native
-        // GEMM, Eigen's generic_pack_rhs) plays for a real Level-3 GEMM --
-        // the structural reason LAPACK's dgetrf/Eigen's PartialPivLU defer
-        // this update to a GEMM call in the first place.
-        T packed[kLuBlockSize * kLuPackTile];
-        for (size_type col0 = 0; col0 < rest; col0 += kLuPackTile)
-        {
-            const size_type cw = std::min(kLuPackTile, rest - col0);
-            for (size_type c = 0; c < cw; ++c)
-            {
-                // Walks column (k + bs + col0 + c) of m, one row at a time,
-                // via a +lda pointer step instead of recomputing
-                // p * lda + (k + bs + col0 + c) for every p.
-                const T* col_ptr = m + k * lda + (k + bs + col0 + c);
-                for (size_type p = 0; p < bs; ++p, col_ptr += lda)
-                {
-                    packed[c * bs + p] = *col_ptr;
-                }
-            }
+        // Trailing update: A22 -= L21 * U12. L21 (m + (k+bs)*lda + k, rest
+        // rows x bs columns) and U12 (m + k*lda + (k+bs), bs rows x rest
+        // columns) are both submatrices of m with its full row stride lda,
+        // which multiplication<T, NATIVE>::apply accepts directly via its
+        // own lda/ldb parameters -- no packing of either operand by this
+        // file is needed. This is the real Level-3 GEMM call LAPACK's
+        // dgetrf and Eigen's PartialPivLU defer this update to; delta
+        // receives L21 * U12 (multiplication always replaces its output,
+        // never accumulates), and the actual "-=" is a second pass reusing
+        // lu_axpy_sub above with a scalar multiplier of 1.
+        detail::workspace_arena arena(workspace, workspace_size);
+        T* const     delta = arena.next<T>(static_cast<size_t>(rest) * static_cast<size_t>(rest));
+        const size_t mm_bytes =
+            multiplication<T, linalg_backend::NATIVE>::workspace_size(static_cast<linalg_int>(rest),
+                static_cast<linalg_int>(rest),
+                static_cast<linalg_int>(bs));
+        unsigned char* const mm_workspace = arena.next<unsigned char>(mm_bytes);
 
-            // l21_row (columns [k, k+bs)) and out_row (columns
-            // [k+bs+col0, ...), always >= k+bs) never overlap, even though
-            // both are rows of the same m, so both are safe to mark
-            // __restrict.
-            for (size_type r = 0; r < rest; ++r)
-            {
-                const T* const __restrict l21_row = m + (k + bs + r) * lda + k;
-                // out_row is hoisted once per r and reused for every c
-                // below instead of recomputing (k + bs + r) * lda + ... on
-                // each iteration.
-                T* const __restrict out_row = m + (k + bs + r) * lda + (k + bs + col0);
-                for (size_type c = 0; c < cw; ++c)
-                {
-                    const T* const u12_col = &packed[c * bs];
-                    out_row[c] -= lu_dot(l21_row, u12_col, bs);
-                }
-            }
+        multiplication<T, linalg_backend::NATIVE>::apply(false,
+            false,
+            static_cast<linalg_int>(rest),
+            static_cast<linalg_int>(rest),
+            static_cast<linalg_int>(bs),
+            m + (k + bs) * lda + k,
+            static_cast<linalg_int>(lda),
+            m + k * lda + (k + bs),
+            static_cast<linalg_int>(lda),
+            delta,
+            static_cast<linalg_int>(rest),
+            mm_workspace,
+            mm_bytes);
+
+        // out_row (columns [k+bs, lda)) and delta_row (a row of the
+        // dense, freshly-written rest x rest scratch above) never alias,
+        // so lu_axpy_sub's __restrict contract holds.
+        for (size_type r = 0; r < rest; ++r)
+        {
+            T* const       out_row   = m + (k + bs + r) * lda + (k + bs);
+            const T* const delta_row = delta + r * rest;
+            lu_axpy_sub(out_row, delta_row, static_cast<T>(1), rest);
         }
     }
     return true;
@@ -441,32 +405,40 @@ bool lu_decomposition_blocked_impl(
 }  // namespace
 
 template <>
-bool lu_decomposition<float, linalg_backend::NATIVE>::apply(float* __restrict m, linalg_int lda,
-    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
+bool lu_decomposition<float, linalg_backend::NATIVE>::apply(float* __restrict m,
+    linalg_int lda,
+    linalg_int* __restrict pivot,
+    void*  workspace,
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<float>");
     check_lu_inputs(m, pivot, lda);
-    return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<float>::epsilon());
+    return lu_decomposition_blocked_impl(
+        m, lda, pivot, std::numeric_limits<float>::epsilon(), workspace, workspace_size);
 }
 
 template <>
-bool lu_decomposition<double, linalg_backend::NATIVE>::apply(double* __restrict m, linalg_int lda,
-    linalg_int* __restrict pivot, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
+bool lu_decomposition<double, linalg_backend::NATIVE>::apply(double* __restrict m,
+    linalg_int lda,
+    linalg_int* __restrict pivot,
+    void*  workspace,
+    size_t workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<double>");
     check_lu_inputs(m, pivot, lda);
-    return lu_decomposition_blocked_impl(m, lda, pivot, std::numeric_limits<double>::epsilon());
+    return lu_decomposition_blocked_impl(
+        m, lda, pivot, std::numeric_limits<double>::epsilon(), workspace, workspace_size);
 }
 
-template <>
-size_t lu_decomposition<float, linalg_backend::NATIVE>::workspace_size(linalg_int /*lda*/)
+template <> size_t lu_decomposition<float, linalg_backend::NATIVE>::workspace_size(linalg_int lda)
 {
-    return 0;
+    return lu_workspace_size<float>(lda);
 }
 
-template <>
-size_t lu_decomposition<double, linalg_backend::NATIVE>::workspace_size(linalg_int /*lda*/)
+template <> size_t lu_decomposition<double, linalg_backend::NATIVE>::workspace_size(linalg_int lda)
 {
-    return 0;
+    return lu_workspace_size<double>(lda);
 }
 }  // namespace linalg

@@ -42,8 +42,13 @@ template <typename T> size_t invert_scalar_workspace_size(linalg_int lda, linear
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
-        // One lda x lda scratch of the evolving inverse -- see lu_invert below.
+        // One lda x lda scratch of the evolving inverse -- see lu_invert
+        // below -- plus whatever lu_decomposition<T, NATIVE> itself needs
+        // for its trailing-update GEMM (unused for the UPFRONT variant,
+        // which skips factorization, but carved here too so this sizing
+        // matches matrix_invert_scalar_impl's carve order unconditionally).
         arena.next<T>(n * n);
+        arena.next<unsigned char>(lu_decomposition<T, linalg_backend::NATIVE>::workspace_size(lda));
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
@@ -73,7 +78,8 @@ namespace
 // of the same matrix (forward substitution has k < i, back substitution
 // has k > i), so they never alias -- unlike invert_dot below, which is
 // called with x == y at the diagonal and must not be.
-template <typename T> inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int len)
+template <typename T>
+inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
     using P                    = packet<T>;
@@ -220,7 +226,9 @@ template <typename T> inline T invert_dot(const T* x, const T* y, linalg_int len
 // (inversion.h documents it as a separate caller-owned buffer from m), so
 // the two never overlap. pivot is a distinct, separately-owned array too.
 template <typename T>
-void lu_invert(T* __restrict m, LINALG_UNUSED const linalg_int* __restrict pivot, linalg_int lda,
+void lu_invert(T* __restrict m,
+    LINALG_UNUSED const linalg_int* __restrict pivot,
+    linalg_int lda,
     T* __restrict inv_m)
 {
     using size_type = linalg_int;
@@ -261,7 +269,7 @@ void lu_invert(T* __restrict m, LINALG_UNUSED const linalg_int* __restrict pivot
     // holds.
     for (size_type i = 0; i < lda; ++i)
     {
-        T* const __restrict       row_i   = inv_m + i * lda;
+        T* const __restrict row_i         = inv_m + i * lda;
         const T* const __restrict m_row_i = m + i * lda;
         for (size_type k = 0; k < i; ++k)
         {
@@ -276,7 +284,7 @@ void lu_invert(T* __restrict m, LINALG_UNUSED const linalg_int* __restrict pivot
     // vectorizing it would add complexity without a measurable payoff.
     for (size_type i = lda - 1; i >= 0; --i)
     {
-        T* const __restrict       row_i   = inv_m + i * lda;
+        T* const __restrict row_i         = inv_m + i * lda;
         const T* const __restrict m_row_i = m + i * lda;
         for (size_type k = i + 1; k < lda; ++k)
         {
@@ -338,16 +346,16 @@ void cholesky_invert(T* __restrict m, linalg_int lda, T* __restrict col_scratch,
     for (size_type j = 0; j < lda; ++j)
     {
         T* const __restrict row_j = m + j * lda;
-        const T             diag  = static_cast<T>(1) / row_j[j];
+        const T diag              = static_cast<T>(1) / row_j[j];
         row_j[j]                  = diag;
         col_scratch[j]            = diag;
 
         for (size_type i = j + 1; i < lda; ++i)
         {
             T* const __restrict row_i = m + i * lda;
-            const T val = -invert_dot(row_i + j, col_scratch + j, i - j) / row_i[i];
-            row_i[j]       = val;
-            col_scratch[i] = val;
+            const T val               = -invert_dot(row_i + j, col_scratch + j, i - j) / row_i[i];
+            row_i[j]                  = val;
+            col_scratch[i]            = val;
         }
     }
 
@@ -402,11 +410,11 @@ void cholesky_invert(T* __restrict m, linalg_int lda, T* __restrict col_scratch,
 
 template <typename T>
 void matrix_invert_scalar_impl(T* __restrict m,
-    linalg_int* __restrict        pivot,
-    linalg_int                    lda,
-    linear_solver_type            type,
-    void*                         workspace,
-    size_t                        workspace_size)
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size)
 {
     LINALG_CHECK(workspace_size >= invert_scalar_workspace_size<T>(lda, type),
         "matrix_invert: workspace_size too small");
@@ -417,9 +425,11 @@ void matrix_invert_scalar_impl(T* __restrict m,
     case linear_solver_type::LU_LINEAR_SOLVER:
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
     {
-        auto* inv_m = arena.next<T>(n * n);
+        auto* inv_m      = arena.next<T>(n * n);
+        auto  lu_ws_size = lu_decomposition<T, linalg_backend::NATIVE>::workspace_size(lda);
+        auto* lu_ws      = arena.next<unsigned char>(lu_ws_size);
         if (type == linear_solver_type::LU_UPFRONT_LINEAR_SOLVER ||
-            lu_decomposition<T, linalg_backend::NATIVE>::apply(m, lda, pivot, nullptr, 0))
+            lu_decomposition<T, linalg_backend::NATIVE>::apply(m, lda, pivot, lu_ws, lu_ws_size))
         {
             lu_invert(m, pivot, lda, inv_m);
         }
@@ -429,7 +439,7 @@ void matrix_invert_scalar_impl(T* __restrict m,
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
     {
         auto* col_scratch = arena.next<T>(n);
-        auto* xt           = arena.next<T>(n * n);
+        auto* xt          = arena.next<T>(n * n);
         if (type == linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER ||
             cholesky_decomposition<T, linalg_backend::NATIVE>::apply(
                 m, lda, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr))
@@ -447,11 +457,11 @@ void matrix_invert_scalar_impl(T* __restrict m,
 
 template <>
 void inversion<float, linalg_backend::NATIVE>::apply(float* __restrict m,
-    linalg_int* __restrict                                  pivot,
-    linalg_int                                              lda,
-    linear_solver_type                                      type,
-    void*                                                   workspace,
-    size_t                                                  workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("inversion/native<float>");
@@ -461,11 +471,11 @@ void inversion<float, linalg_backend::NATIVE>::apply(float* __restrict m,
 
 template <>
 void inversion<double, linalg_backend::NATIVE>::apply(double* __restrict m,
-    linalg_int* __restrict                                    pivot,
-    linalg_int                                                lda,
-    linear_solver_type                                        type,
-    void*                                                     workspace,
-    size_t                                                    workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("inversion/native<double>");

@@ -60,10 +60,36 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         {
             v[i] = v[i] / vnorm;
         }
-        for (int j = k; j < n; ++j)
+        constexpr int column_tile_size = 32;
+        complex_value<T> projection[column_tile_size];
+        for (int j = k; j < n; j += column_tile_size)
         {
-            const auto dot = complex_dot(v + k + 1, 1, h + (k + 1) * n + j, n, n - k - 1, true);
-            complex_axpy(h + (k + 1) * n + j, n, v + k + 1, 1, n - k - 1, dot * T(-2));
+            const int tile_width = n - j < column_tile_size ? n - j : column_tile_size;
+            for (int jj = 0; jj < tile_width; ++jj)
+            {
+                projection[jj] = value(T(0));
+            }
+            for (int i = k + 1; i < n; ++i)
+            {
+                const auto conjugated_v = conjugate(v[i]);
+                const auto* h_i = h + i * n + j;
+                for (int jj = 0; jj < tile_width; ++jj)
+                {
+                    projection[jj] = projection[jj] + conjugated_v * h_i[jj];
+                }
+            }
+            for (int jj = 0; jj < tile_width; ++jj)
+            {
+                projection[jj] = projection[jj] * T(-2);
+            }
+            for (int i = k + 1; i < n; ++i)
+            {
+                auto* h_i = h + i * n + j;
+                for (int jj = 0; jj < tile_width; ++jj)
+                {
+                    h_i[jj] = h_i[jj] + v[i] * projection[jj];
+                }
+            }
         }
         for (int i = 0; i < n; ++i)
         {
