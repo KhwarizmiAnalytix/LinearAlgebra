@@ -297,6 +297,14 @@ if(LINALG_ENABLE_MKL)
     # Must be set before find_package(MKL CONFIG) — it selects which
     # MKL::MKL interface target that package defines.
     set(MKL_INTERFACE "ilp64")
+    # MKL 2026.x changed the default threading layer to TBB.  TBB is not
+    # installed in CI or typical Linux distributions, causing a runtime link
+    # error ("undefined symbol: mkl_blas_dgemm").  Force sequential threading
+    # so no additional TBB dependency is required.  Set before find_package so
+    # the oneMKL config package selects the sequential interface target.
+    if(NOT DEFINED MKL_THREADING)
+        set(MKL_THREADING "sequential")
+    endif()
     find_package(MKL CONFIG REQUIRED)
     if(NOT TARGET MKL::MKL)
         message(FATAL_ERROR "Intel oneMKL must provide MKL::MKL with the ILP64 interface.")
@@ -833,6 +841,14 @@ if(LINALG_ENABLE_CUBLAS)
     target_compile_options(
         LinearAlgebra PRIVATE $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>
     )
+    # CUDA 13.x CCCL headers require the conforming MSVC preprocessor.
+    # /Zc:preprocessor is applied to the host-side CXX TUs that include CUDA
+    # headers (e.g. <cuda_runtime.h>), not to NVCC device code.
+    if(MSVC)
+        target_compile_options(
+            LinearAlgebra PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+        )
+    endif()
 endif()
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",

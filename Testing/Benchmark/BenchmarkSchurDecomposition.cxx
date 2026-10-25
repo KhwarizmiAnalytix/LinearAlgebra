@@ -130,7 +130,7 @@ template <typename T> void BM_EigenSchurDecomposition(benchmark::State& state)
     state.SetComplexityN(n);
 }
 
-void sizes(benchmark::Benchmark* registration)
+void sizes(benchmark::internal::Benchmark* registration)
 {
     registration->Arg(8)->Arg(16)->Arg(32)->Arg(64)->Arg(96)->Arg(128)
         ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)

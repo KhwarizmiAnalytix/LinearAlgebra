@@ -451,7 +451,7 @@ jobs:
         # find_package(... GLOBAL) requires CMake 3.24 or newer. hipBLAS/
         # hipSOLVER devel packages are not part of the base ROCm dev image.
         run: |
-          apt-get update && apt-get install -y ninja-build git python3-pip gpg wget libopenblas-dev liblapacke-dev hipblas-dev hipsolver-dev
+          apt-get update && apt-get install -y ninja-build git python3-pip gpg wget libopenblas-dev liblapacke-dev hipblas-dev hipsolver-dev rocthrust-dev
           python3 -m pip install "cmake>=3.24,<4"
           cmake --version
 

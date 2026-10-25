@@ -227,7 +227,7 @@ void BM_EigenEigensolver(benchmark::State& state)
     state.SetComplexityN(n);
 }
 
-void general_vector_sizes(benchmark::Benchmark* registration)
+void general_vector_sizes(benchmark::internal::Benchmark* registration)
 {
     registration->Arg(8)->Arg(32)->Arg(64)->Arg(128)
         ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)
