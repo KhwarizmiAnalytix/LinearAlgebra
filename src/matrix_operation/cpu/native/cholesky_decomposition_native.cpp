@@ -8,7 +8,7 @@
 #include <stdexcept>
 
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -44,8 +44,8 @@ namespace
 // diagonal-block kernel's own forward-substitution and norm reductions, and by
 // the blocked kernel for the panel solve's forward-substitution reduction and
 // the trailing submatrix's rank update -- blocking turns all of these into
-// fixed-shape reductions worth vectorizing explicitly. Uses linalg::packet<T>
-// (src/common/packet.h), the same Eigen-derived SIMD abstraction
+// fixed-shape reductions worth vectorizing explicitly. Uses ::simd<T>
+// (Scalars), the same Scalars SIMD interface
 // multiplication.cpp's native GEMM kernel is built on, instead of hoping the
 // compiler auto-vectorizes a scalar loop. Four independent accumulators,
 // combined via tree reduction before the horizontal predux, hide FMA latency
@@ -54,49 +54,49 @@ namespace
 template <typename T> inline T cholesky_dot(const T* x, const T* y, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
 
-    typename P::packet_t acc0, acc1, acc2, acc3;
-    P::set(static_cast<T>(0), acc0);
-    P::set(static_cast<T>(0), acc1);
-    P::set(static_cast<T>(0), acc2);
-    P::set(static_cast<T>(0), acc3);
+    typename P::simd_t acc0, acc1, acc2, acc3;
+    acc0 = P::set(static_cast<T>(0));
+    acc1 = P::set(static_cast<T>(0));
+    acc2 = P::set(static_cast<T>(0));
+    acc3 = P::set(static_cast<T>(0));
 
     linalg_int c = 0;
     for (; c + 4 * width <= len; c += 4 * width)
     {
-        typename P::packet_t px0, px1, px2, px3;
-        typename P::packet_t py0, py1, py2, py3;
-        P::loadu(x + c, px0);
-        P::loadu(x + c + width, px1);
-        P::loadu(x + c + 2 * width, px2);
-        P::loadu(x + c + 3 * width, px3);
-        P::loadu(y + c, py0);
-        P::loadu(y + c + width, py1);
-        P::loadu(y + c + 2 * width, py2);
-        P::loadu(y + c + 3 * width, py3);
-        P::fma(px0, py0, acc0, acc0);
-        P::fma(px1, py1, acc1, acc1);
-        P::fma(px2, py2, acc2, acc2);
-        P::fma(px3, py3, acc3, acc3);
+        typename P::simd_t px0, px1, px2, px3;
+        typename P::simd_t py0, py1, py2, py3;
+        px0  = P::loadu(x + c);
+        px1  = P::loadu(x + c + width);
+        px2  = P::loadu(x + c + 2 * width);
+        px3  = P::loadu(x + c + 3 * width);
+        py0  = P::loadu(y + c);
+        py1  = P::loadu(y + c + width);
+        py2  = P::loadu(y + c + 2 * width);
+        py3  = P::loadu(y + c + 3 * width);
+        acc0 = P::fma(px0, py0, acc0);
+        acc1 = P::fma(px1, py1, acc1);
+        acc2 = P::fma(px2, py2, acc2);
+        acc3 = P::fma(px3, py3, acc3);
     }
 
-    typename P::packet_t acc01, acc23, acc;
-    P::add(acc0, acc1, acc01);
-    P::add(acc2, acc3, acc23);
-    P::add(acc01, acc23, acc);
+    typename P::simd_t acc01, acc23, acc;
+    acc01 = P::add(acc0, acc1);
+    acc23 = P::add(acc2, acc3);
+    acc   = P::add(acc01, acc23);
 
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t px;
-        typename P::packet_t py;
-        P::loadu(x + c, px);
-        P::loadu(y + c, py);
-        P::fma(px, py, acc, acc);
+        typename P::simd_t px;
+        typename P::simd_t py;
+        px  = P::loadu(x + c);
+        py  = P::loadu(y + c);
+        acc = P::fma(px, py, acc);
     }
 
-    T sum = P::predux(acc);
+    T sum = P::accumulate(acc);
     for (; c < len; ++c)
     {
         sum += x[c] * y[c];
@@ -171,7 +171,7 @@ void cholesky_trailing_update(
     linalg_int n, linalg_int depth, const T* panel, linalg_int lda, T* trailing)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
     alignas(64) T        packed[kCholeskyBlockSize * kCholeskyBlockSize];
     for (linalg_int first = 0; first < n; first += kCholeskyBlockSize)
@@ -190,34 +190,34 @@ void cholesky_trailing_update(
             linalg_int j     = 0;
             for (; j + 4 * width <= count; j += 4 * width)
             {
-                typename P::packet_t s0, s1, s2, s3;
-                P::set(T(0), s0);
+                typename P::simd_t s0, s1, s2, s3;
+                s0 = P::set(T(0));
                 s1 = s2 = s3 = s0;
                 for (linalg_int k = 0; k < depth; ++k)
                 {
-                    typename P::packet_t x, y0, y1, y2, y3;
-                    P::set(panel[i * lda + k], x);
+                    typename P::simd_t x, y0, y1, y2, y3;
+                    x            = P::set(panel[i * lda + k]);
                     const T* row = packed + k * kCholeskyBlockSize + j;
-                    P::loadu(row, y0);
-                    P::loadu(row + width, y1);
-                    P::loadu(row + 2 * width, y2);
-                    P::loadu(row + 3 * width, y3);
-                    P::fma(x, y0, s0, s0);
-                    P::fma(x, y1, s1, s1);
-                    P::fma(x, y2, s2, s2);
-                    P::fma(x, y3, s3, s3);
+                    y0           = P::loadu(row);
+                    y1           = P::loadu(row + width);
+                    y2           = P::loadu(row + 2 * width);
+                    y3           = P::loadu(row + 3 * width);
+                    s0           = P::fma(x, y0, s0);
+                    s1           = P::fma(x, y1, s1);
+                    s2           = P::fma(x, y2, s2);
+                    s3           = P::fma(x, y3, s3);
                 }
-                typename P::packet_t a0, a1, a2, a3, minus_one;
-                P::set(T(-1), minus_one);
-                T* row = trailing + i * lda + first + j;
-                P::loadu(row, a0);
-                P::loadu(row + width, a1);
-                P::loadu(row + 2 * width, a2);
-                P::loadu(row + 3 * width, a3);
-                P::fma(minus_one, s0, a0, a0);
-                P::fma(minus_one, s1, a1, a1);
-                P::fma(minus_one, s2, a2, a2);
-                P::fma(minus_one, s3, a3, a3);
+                typename P::simd_t a0, a1, a2, a3, minus_one;
+                minus_one = P::set(T(-1));
+                T* row    = trailing + i * lda + first + j;
+                a0        = P::loadu(row);
+                a1        = P::loadu(row + width);
+                a2        = P::loadu(row + 2 * width);
+                a3        = P::loadu(row + 3 * width);
+                a0        = P::fma(minus_one, s0, a0);
+                a1        = P::fma(minus_one, s1, a1);
+                a2        = P::fma(minus_one, s2, a2);
+                a3        = P::fma(minus_one, s3, a3);
                 P::storeu(a0, row);
                 P::storeu(a1, row + width);
                 P::storeu(a2, row + 2 * width);

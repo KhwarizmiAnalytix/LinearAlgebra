@@ -51,7 +51,7 @@ one consumer, not a required host.
   CUDA path, and `src/matrix_operation/gpu/hipblas/lu_decomposition_hip.cpp`
   on the ROCm path).
 - `Testing/Cxx/` — GoogleTest unit tests.
-- `ThirdParty/` — vendored `eigen` and `googletest` submodules, plus `Logging`
+- `ThirdParty/` — vendored `Scalars`, `eigen`, and `googletest` submodules, plus `Logging`
   ([KhwarizmiAnalytix/Logging](https://github.com/KhwarizmiAnalytix/Logging)),
   a required dependency (always built, not gated by an option).
 - `docs/` — design docs (GPU backend design and status).
@@ -145,32 +145,17 @@ backend's design and known restrictions.
 
 ## CMake options
 
-CMake 3.24 or newer is required. C++17 is the default language standard. The compiler version checks require
-GCC 9.1+, LLVM Clang 9.0+, AppleClang 11.0+ (Xcode 11), or MSVC 19.14+
-(Visual Studio 2017 15.7). The floor is set by `<filesystem>` (used unconditionally
-by Logging's `string_util.h`), not just language support: older compilers either lack
-the `<filesystem>` header entirely or need an extra `-lstdc++fs`/`-lc++fs` link flag
-this build does not add. The exported target publishes its selected C++ standard. Dependencies and
-C++20/C++23 builds can require newer toolchains.
+CMake 3.24 or newer and C++20 are required by the Scalars dependency.
+C++20 is the default; C++23 is also supported. The exported target publishes
+its required language standard. CI exercises the C++20 baseline on Linux,
+macOS, and Windows with bundled dependencies and the scalar algorithm path.
 
-CI builds and tests GCC 9.1.0 and Clang 9.0.0 in a pinned Linux container.
-The minimum-compiler jobs select C++17 for both LinearAlgebra and Logging,
-use bundled dependencies and scalar SIMD, and disable optional enum reflection
-(which requires GCC 9+) and optional cpuinfo/Profiler packages. Each job
-checks CMake's detected compiler ID and version to catch toolchain fallback.
-
-The MSVC 19.14 job runs on GitHub-hosted `windows-2022` runners for pushes and
-pull requests to `main`. It installs the VS 2017 v14.14 toolset and Windows SDK
-10.0.19041.0, selects them explicitly, and verifies that CMake detects MSVC
-19.14.x. No self-hosted Windows runner or repository variable is required.
-`LINALG_MSVC_1914_CI_ENABLED` is no longer used.
-
-AppleClang 11.0 runs on an opt-in self-hosted runner for pushes to `main`.
-Install CMake 3.24+ and Ninja, then configure:
-
-| Compiler | Runner labels | Repository variable set to `true` | Runner setup |
-|---|---|---|---|
-| AppleClang 11.0 | `self-hosted`, `macOS`, `X64`, `appleclang-11` | `LINALG_APPLECLANG_11_CI_ENABLED` | Select the Xcode 11 toolchain through `xcode-select` or `DEVELOPER_DIR` so `xcrun` finds AppleClang 11.0.x. |
+[Scalars](https://github.com/KhwarizmiAnalytix/Scalars), pinned in
+`ThirdParty/Scalars`, supplies complex arithmetic and the `simd<T>` CPU
+primitives. The native kernels and complex vector operations use that API
+directly. `LINALG_VECTORIZATION_ISA` selects the Scalars backend (`sse2` maps
+to `sse`); `scalar` or `LINALG_ENABLE_VECTORIZATION=OFF` selects scalar loops.
+Runtime-compiled Metal kernels retain an MSL compatibility layer.
 
 | CMake variable | Default | Summary |
 |-----------------|---------|---------|
@@ -189,7 +174,7 @@ Install CMake 3.24+ and Ninja, then configure:
 | `LINALG_ENABLE_TESTING` | Standalone: ON; embedded: host setting or OFF | Build the test suite; `BUILD_TESTING=OFF` disables it |
 | `LINALG_ENABLE_BENCHMARK` | OFF | Build Google Benchmark micro-benchmarks |
 | `LINALG_ENABLE_GTEST` | ON | Build GoogleTest cases; OFF retains the GPU source check without GoogleTest |
-| `LINALG_CXX_STANDARD` | 17 | `17`, `20`, or `23` |
+| `LINALG_CXX_STANDARD` | 20 | `20` or `23` |
 | Other `LINALG_ENABLE_*` | see `CMakeLists.txt` | LTO, coverage, sanitizers, cache, clang-tidy, IWYU, valgrind, … |
 
 When `LINALG_ENABLE_MKL` is `ON`, `find_package(MKL CONFIG)` must provide
@@ -427,12 +412,14 @@ ROCm/HIP toolchain; set `CMAKE_HIP_ARCHITECTURES` for your GPU). The two GPU
 backends are mutually exclusive.
 
 C++-only hosts can use `add_subdirectory`; bundled Logging's C language needs
-are enabled automatically. An existing `Logging::Logging` target is reused.
-Set `LINALG_USE_SYSTEM_LOGGING=ON` to require an installed Logging config package.
+are enabled automatically. Existing `Logging::Logging` and `Scalars::Scalars` targets are reused.
+Set `LINALG_USE_SYSTEM_LOGGING=ON` or `LINALG_USE_SYSTEM_SCALARS=ON` to require
+the respective installed config package.
 
 Installation uses `CMAKE_INSTALL_LIBDIR`, `CMAKE_INSTALL_BINDIR`, and
-`CMAKE_INSTALL_INCLUDEDIR`. Logging is a separate package: install it first,
-then install LinearAlgebra and put both prefixes on the consumer's
+`CMAKE_INSTALL_INCLUDEDIR`. Scalars is installed with LinearAlgebra when bundled.
+Logging is a separate package: install it first, then install LinearAlgebra
+and put both prefixes on the consumer's
 `CMAKE_PREFIX_PATH`. Custom library directories may require an explicit
 `LinearAlgebra_DIR=<prefix>/<libdir>/cmake/LinearAlgebra` when consuming the package.
 
@@ -461,7 +448,7 @@ pair of values across 24 build dimensions on each toolchain. Dedicated cases
 activate Icecream together with each of ccache and sccache. Each case configures,
 checks effective target properties, builds, and runs enabled CPU tests; requested
 flags, effective settings, results, and full logs are uploaded as artifacts.
-Shared/static builds, four build types, C++17/20/23, Ninja single/multi-config,
+Shared/static builds, four build types, C++20/23, Ninja single/multi-config,
 testing switches, OpenBLAS/BLIS, SIMD, caches, LTO, linkers, instrumentation,
 benchmarks, and bundled/installed Logging are included.
 

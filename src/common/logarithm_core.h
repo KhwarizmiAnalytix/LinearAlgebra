@@ -11,8 +11,8 @@ LINALG_LOGARITHM_CORE(
 namespace linalg_schur {
 
 template <typename T>
-LINALG_INLINE complex_value<T> logarithm(complex_value<T> a) {
-    return value(log(magnitude(a)), atan2(a.imag, a.real));
+LINALG_INLINE scalars::complex<T> logarithm(scalars::complex<T> a) {
+    return scalars::complex<T>(log(scalars::abs(a)), atan2(a.imag(), a.real()));
 }
 
 // 18-term Taylor evaluation for |x| < 1/2; no platform-dependent expm1.
@@ -28,11 +28,11 @@ LINALG_INLINE T real_exponential_minus_one(T x) {
 }
 
 template <typename T>
-LINALG_INLINE complex_value<T> exponential_minus_one(complex_value<T> a) {
-    const T e = exp(a.real);
-    const T sh = sin(a.imag * T(0.5));
-    const T re = real_exponential_minus_one(a.real);
-    return value(re - T(2) * e * sh * sh, e * sin(a.imag));
+LINALG_INLINE scalars::complex<T> exponential_minus_one(scalars::complex<T> a) {
+    const T e = exp(a.real());
+    const T sh = sin(a.imag() * T(0.5));
+    const T re = real_exponential_minus_one(a.real());
+    return scalars::complex<T>(re - T(2) * e * sh * sh, e * sin(a.imag()));
 }
 
 // Eigen's degree cutoffs, expressed for the two supported real precisions.
@@ -86,9 +86,9 @@ LINALG_INLINE T logarithm_weight(int degree, int index) {
 
 template <typename T>
 LINALG_INLINE bool prepare_triangular_logarithm(
-    LINALG_ADDRESS complex_value<T>* __restrict h,
-    LINALG_ADDRESS complex_value<T>* __restrict f,
-    LINALG_ADDRESS complex_value<T>* __restrict diagonal,
+    LINALG_ADDRESS scalars::complex<T>* __restrict h,
+    LINALG_ADDRESS scalars::complex<T>* __restrict f,
+    LINALG_ADDRESS scalars::complex<T>* __restrict diagonal,
     int n, T epsilon, LINALG_ADDRESS T* __restrict state) {
     for (int i = 0; i < n; ++i) {
         const auto* row = h + i * n;
@@ -102,14 +102,14 @@ LINALG_INLINE bool prepare_triangular_logarithm(
     for (;;) {
         T norm = T(0);
         for (int j = 0; j < n; ++j) {
-            f[j] = value(T(0));
+            f[j] = scalars::complex<T>(T(0));
         }
         for (int i = 0; i < n; ++i) {
             const auto* row = h + i * n;
             for (int j = i + 1; j < n; ++j) {
-                f[j].real += magnitude(row[j]);
+                f[j] = f[j] + scalars::complex<T>(scalars::abs(row[j]));
             }
-            const T column = f[i].real + magnitude(row[i] - value(T(1)));
+            const T column = f[i].real() + scalars::abs(row[i] - scalars::complex<T>(T(1)));
             norm = fmax(norm, column);
         }
         // Eigen: a second root may be cheaper than a higher Padé degree.
@@ -131,7 +131,7 @@ LINALG_INLINE bool prepare_triangular_logarithm(
     }
     auto* f_end = f + n * n;
     for (auto* entry = f; entry != f_end; ++entry) {
-        *entry = value(T(0));
+        *entry = scalars::complex<T>(T(0));
     }
     state[0] = T(degree); // positive success code also stores Padé degree
     state[1] = multiplier;
@@ -140,16 +140,16 @@ LINALG_INLINE bool prepare_triangular_logarithm(
 
 template <typename T>
 LINALG_INLINE bool logarithm_triangular(
-    LINALG_ADDRESS complex_value<T>* __restrict h,
-    LINALG_ADDRESS complex_value<T>* __restrict f,
-    LINALG_ADDRESS complex_value<T>* __restrict diagonal,
+    LINALG_ADDRESS scalars::complex<T>* __restrict h,
+    LINALG_ADDRESS scalars::complex<T>* __restrict f,
+    LINALG_ADDRESS scalars::complex<T>* __restrict diagonal,
     int n, T epsilon, LINALG_ADDRESS T* __restrict state) {
     for (int i = 0; i < n; ++i) {
         const auto* row = h + i * n;
         const auto lambda = row[i];
-        if (magnitude(lambda) == T(0) ||
-            (lambda.real < T(0) &&
-             fabs(lambda.imag) <= T(64) * epsilon * fabs(lambda.real)))
+        if (scalars::abs(lambda) == T(0) ||
+            (lambda.real() < T(0) &&
+             fabs(lambda.imag()) <= T(64) * epsilon * fabs(lambda.real())))
             return false;
     }
     return prepare_triangular_logarithm(h, f, diagonal, n, epsilon, state);
@@ -164,9 +164,9 @@ LINALG_INLINE void logarithm_schur_prepare(
     LINALG_ADDRESS T* __restrict diagonal_buffer,
     LINALG_ADDRESS T* __restrict state,
     T epsilon) {
-    auto h = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(h_buffer);
-    auto f = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(f_buffer);
-    auto diagonal = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(diagonal_buffer);
+    auto h = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(h_buffer);
+    auto f = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(f_buffer);
+    auto diagonal = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(diagonal_buffer);
     unpack_triangular(sr, si, n, h);
     state[0] = T(-1);
     logarithm_triangular(h, f, diagonal, n, epsilon, state);
@@ -181,7 +181,7 @@ LINALG_INLINE void pack_logarithm_solve(
     LINALG_ADDRESS const T* __restrict state,
     LINALG_ADDRESS T* __restrict a,
     LINALG_ADDRESS T* __restrict b, int n, int node) {
-    auto h = reinterpret_cast<LINALG_ADDRESS const complex_value<T>*>(h_buffer);
+    auto h = reinterpret_cast<LINALG_ADDRESS const scalars::complex<T>*>(h_buffer);
     const int degree = state[0] > T(0) ? int(state[0]) : 7;
     const bool active = state[0] > T(0) && node < degree;
     const T t = active ? logarithm_node<T>(degree, node) : T(0);
@@ -191,7 +191,7 @@ LINALG_INLINE void pack_logarithm_solve(
 
     for (int i = 0; i < n; ++i) {
         const auto* h_row = h + i * n;
-        const auto d = success ? value(T(1)) + h_row[i] * t : value(T(1));
+        const auto d = success ? scalars::complex<T>(T(1)) + h_row[i] * t : scalars::complex<T>(T(1));
         const int row0 = (2*i) * order;
         const int row1 = row0 + order;
         const int rhs0 = (2*i) * n;
@@ -201,19 +201,19 @@ LINALG_INLINE void pack_logarithm_solve(
         auto* b_row0 = b + rhs0;
         auto* b_row1 = b + rhs1;
         for (int j = 0; j < n; ++j) {
-            auto coeff = value(i == j ? T(1) : T(0));
-            auto rhs = value(success ? T(0) : failure);
+            auto coeff = scalars::complex<T>(i == j ? T(1) : T(0));
+            auto rhs = scalars::complex<T>(success ? T(0) : failure);
             if (active && i <= j) {
                 rhs = h_row[j] / d;
                 if (i < j) coeff = rhs * t;
             }
             const int k = 2*j;
-            a_row0[k]     = coeff.real;
-            a_row0[k + 1] = -coeff.imag;
-            a_row1[k]     = coeff.imag;
-            a_row1[k + 1] = coeff.real;
-            b_row0[j] = rhs.real;
-            b_row1[j] = rhs.imag;
+            a_row0[k]     = coeff.real();
+            a_row0[k + 1] = -coeff.imag();
+            a_row1[k]     = coeff.imag();
+            a_row1[k + 1] = coeff.real();
+            b_row0[j] = rhs.real();
+            b_row1[j] = rhs.imag();
         }
     }
 }
@@ -224,7 +224,7 @@ LINALG_INLINE void accumulate_logarithm_solve(
     LINALG_ADDRESS const T* __restrict state,
     LINALG_ADDRESS const T* __restrict solution, int n, int node) {
     if (state[0] < T(3) || node >= int(state[0])) return;
-    auto f = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(f_buffer);
+    auto f = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(f_buffer);
     const T w = logarithm_weight<T>(int(state[0]), node);
     // The solution should be mathematically upper triangular; do not
     // accumulate tiny lower-triangular BLAS roundoff.
@@ -234,7 +234,7 @@ LINALG_INLINE void accumulate_logarithm_solve(
         const auto* solution_real = solution + r;
         const auto* solution_imag = solution_real + n;
         for (int j = i; j < n; ++j) {
-            f_row[j] = f_row[j] + value(solution_real[j], solution_imag[j]) * w;
+            f_row[j] = f_row[j] + scalars::complex<T>(solution_real[j], solution_imag[j]) * w;
         }
     }
 }
@@ -245,8 +245,8 @@ LINALG_INLINE void finish_logarithm(
     LINALG_ADDRESS const T* __restrict state,
     LINALG_ADDRESS const T* __restrict diagonal_buffer, int n) {
     if (state[0] < T(3)) return;
-    auto f = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(f_buffer);
-    auto diagonal = reinterpret_cast<LINALG_ADDRESS const complex_value<T>*>(diagonal_buffer);
+    auto f = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(f_buffer);
+    auto diagonal = reinterpret_cast<LINALG_ADDRESS const scalars::complex<T>*>(diagonal_buffer);
     const T multiplier = state[1];
     for (int i = 0; i < n; ++i) {
         auto* row = f + i * n;
@@ -265,7 +265,7 @@ LINALG_INLINE bool logarithm_schur_finish(
     LINALG_ADDRESS T* __restrict fr, LINALG_ADDRESS T* __restrict fi) {
     finish_logarithm(f_buffer, state, diagonal_buffer, n);
     const bool success = state[0] > T(0);
-    auto f = reinterpret_cast<LINALG_ADDRESS const complex_value<T>*>(f_buffer);
+    auto f = reinterpret_cast<LINALG_ADDRESS const scalars::complex<T>*>(f_buffer);
     pack_result(n, f, fr, fi, success);
     return success;
 }

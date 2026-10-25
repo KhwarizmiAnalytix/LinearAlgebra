@@ -125,6 +125,16 @@ if(LINALG_ENABLE_METAL AND NOT APPLE)
     )
 endif()
 
+if(LINALG_ENABLE_METAL AND NOT CMAKE_OSX_SYSROOT)
+    # Homebrew Clang may default to the Command Line Tools SDK while Metal
+    # frameworks come from the active Xcode SDK. Use one SDK for both.
+    execute_process(
+        COMMAND xcrun --sdk macosx --show-sdk-path OUTPUT_VARIABLE _linalg_metal_sdk
+        OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY
+    )
+    set(CMAKE_OSX_SYSROOT "${_linalg_metal_sdk}" CACHE PATH "Apple SDK used by LinearAlgebra" FORCE)
+endif()
+
 if((LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS) OR (LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_METAL
                                                        ) OR (LINALG_ENABLE_ROCBLAS
                                                              AND LINALG_ENABLE_METAL)
@@ -149,7 +159,7 @@ option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
 # Enables the scalar (non-MKL/BLAS) multiplication backend's blocked,
-# SIMD-vectorized GEMM (src/common/packet.h and the
+# SIMD-vectorized GEMM (Scalars simd<T> and the
 # LINALG_HAS_VECTORIZATION block in native/multiplication_native.cpp) in
 # place of its plain triple-loop fallback.
 option(LINALG_ENABLE_VECTORIZATION
@@ -236,10 +246,10 @@ set_property(CACHE LINALG_CACHE_BACKEND PROPERTY STRINGS none ccache sccache bui
 mark_as_advanced(LINALG_CACHE_BACKEND)
 
 # C++ standard — applied to every TU in this module via CMAKE_CXX_STANDARD.
-set(LINALG_CXX_STANDARD "17" CACHE STRING "C++ standard for LinearAlgebra. Options: 17 20 23")
-set_property(CACHE LINALG_CXX_STANDARD PROPERTY STRINGS 17 20 23)
-if(NOT LINALG_CXX_STANDARD MATCHES "^(17|20|23)$")
-    message(FATAL_ERROR "LINALG_CXX_STANDARD must be one of: 17 20 23")
+set(LINALG_CXX_STANDARD "20" CACHE STRING "C++ standard for LinearAlgebra. Options: 20 23")
+set_property(CACHE LINALG_CXX_STANDARD PROPERTY STRINGS 20 23)
+if(NOT LINALG_CXX_STANDARD MATCHES "^(20|23)$")
+    message(FATAL_ERROR "LINALG_CXX_STANDARD must be one of: 20 23 (Scalars requires C++20)")
 endif()
 
 # --- Section 2: CMake module includes --- Order: introspection → toolchain helpers →
@@ -635,6 +645,48 @@ list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>
      $<INSTALL_INTERFACE:Logging::Logging>
 )
 
+# --- Scalars (required complex arithmetic and CPU SIMD) ---
+option(LINALG_USE_SYSTEM_SCALARS "Resolve Scalars from an installed config package" OFF)
+if(NOT TARGET Scalars::Scalars)
+    if(LINALG_USE_SYSTEM_SCALARS)
+        find_package(Scalars CONFIG REQUIRED)
+    else()
+        function(linalg_add_scalars)
+            set(SCALARS_ENABLE_TESTING OFF)
+            set(SCALARS_ENABLE_BENCHMARK OFF)
+
+            # CPU SIMD backend: aligned with Scalars naming (no, sse, avx, avx2, avx512, neon, sve)
+            if(NOT LINALG_ENABLE_VECTORIZATION OR LINALG_VECTORIZATION_ISA STREQUAL "scalar")
+                set(SCALARS_CPU_BACKEND "no")
+            elseif(LINALG_VECTORIZATION_ISA STREQUAL "sse2")
+                set(SCALARS_CPU_BACKEND "sse")
+            else()
+                set(SCALARS_CPU_BACKEND "${LINALG_VECTORIZATION_ISA}")
+            endif()
+
+            # GPU backend: activate when corresponding LinearAlgebra GPU backend is enabled
+            if(LINALG_ENABLE_CUBLAS)
+                set(SCALARS_GPU_BACKEND "cuda")
+            elseif(LINALG_ENABLE_ROCBLAS)
+                set(SCALARS_GPU_BACKEND "hip")
+            elseif(LINALG_ENABLE_METAL)
+                set(SCALARS_GPU_BACKEND "metal")
+            else()
+                set(SCALARS_GPU_BACKEND "none")
+            endif()
+
+            linalg_add_dependency_subdirectory(
+                "${LINALG_SOURCE_DIR}/ThirdParty/Scalars"
+                "${LINALG_BINARY_DIR}/ThirdParty/Scalars_build"
+            )
+        endfunction()
+        linalg_add_scalars()
+    endif()
+endif()
+list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Scalars::Scalars>
+     $<INSTALL_INTERFACE:Scalars::Scalars>
+)
+
 # --- Configure-time headers ---
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/Testing/LinearAlgebraTest.h.in"
@@ -727,7 +779,10 @@ if(LINALG_ENABLE_METAL)
     get_filename_component(_linalg_metal_framework_dir "${LINALG_METAL_FRAMEWORK}" DIRECTORY)
     set_source_files_properties(
         ${linalg_metal_mm_sources}
-        PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-iframework;${_linalg_metal_framework_dir}"
+        # Metal's C++ bounding-box constructors use INFINITY. Include math
+        # before the framework headers when using a standalone libc++.
+        PROPERTIES COMPILE_OPTIONS
+                   "-fobjc-arc;-iframework;${_linalg_metal_framework_dir};-include;cmath"
     )
     list(APPEND linalg_sources ${linalg_metal_mm_sources})
     file(GLOB linalg_metal_cpp_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
@@ -772,6 +827,13 @@ set_target_properties(
                              CXX_EXTENSIONS OFF
 )
 linalg_apply_platform_compile_flags(LinearAlgebra)
+if(LINALG_ENABLE_CUBLAS)
+    # Scalars' arithmetic operators are constexpr. Allow NVCC device kernels
+    # to call them without exposing the dependency's host/device dispatch here.
+    target_compile_options(
+        LinearAlgebra PRIVATE $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>
+    )
+endif()
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
 #                             "include/util/cpu_info.h", ...
@@ -804,20 +866,21 @@ if(LINALG_ENABLE_BLAS AND MSVC)
 endif()
 target_compile_definitions(
     LinearAlgebra
-    PUBLIC "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
-           "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
-           "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
-           "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
-           "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
-           "LINALG_HAS_ROCBLAS=$<BOOL:${LINALG_ENABLE_ROCBLAS}>"
-           "LINALG_HAS_METAL=$<BOOL:${LINALG_ENABLE_METAL}>"
-           "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
-           "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
-           "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
-           "LINALG_HAS_VECTORIZATION=$<BOOL:${LINALG_ENABLE_VECTORIZATION}>"
-           "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
+    PUBLIC
+        "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
+        "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
+        "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
+        "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
+        "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
+        "LINALG_HAS_ROCBLAS=$<BOOL:${LINALG_ENABLE_ROCBLAS}>"
+        "LINALG_HAS_METAL=$<BOOL:${LINALG_ENABLE_METAL}>"
+        "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
+        "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
+        "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
+        "LINALG_HAS_VECTORIZATION=$<AND:$<BOOL:${LINALG_ENABLE_VECTORIZATION}>,$<NOT:$<STREQUAL:${LINALG_VECTORIZATION_ISA},scalar>>>"
+        "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
 )
-linalg_apply_vectorization_flags(LinearAlgebra)
+
 if(LINALG_ENABLE_CLANGTIDY)
     include("${LINALG_SOURCE_DIR}/Cmake/clang_tidy.cmake")
     linalg_target_clang_tidy(LinearAlgebra ${LINALG_ENABLE_FIX})
@@ -850,6 +913,11 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/MPL-2.0.txt"
               "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/matrix_functions.NOTICE"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/LinearAlgebra/licenses
 )
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Scalars/LICENSE")
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Scalars/LICENSE"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/LinearAlgebra/licenses RENAME Scalars.LICENSE
+    )
+endif()
 
 # --- CMake Package Configuration Files (find_package(LinearAlgebra) support) ---
 include(CMakePackageConfigHelpers)

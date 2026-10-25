@@ -506,7 +506,7 @@ class LinearAlgebraFlags:
             "linker: --linker.default, --linker.mold, --linker.lld, "
             "--linker.gold, --linker.lld-link",
             "enable code coverage instrumentation",
-            "C++ standard: cxx17, cxx20, cxx23",
+            "C++ standard: cxx20, cxx23",
             "LTO mode: off | thin | full | ipo | auto (bare 'lto' = auto)",
             "enable cppcheck static analysis",
             "enable Google Benchmark micro-benchmarks (LINALG_ENABLE_BENCHMARK)",
@@ -568,7 +568,7 @@ class LinearAlgebraFlags:
                 "cache": self.ON,  # LINALG_ENABLE_CACHE default ON
                 "cache_type": "none",
                 "linker": "default",
-                "cxxstd": "",  # empty = let CMake use its own default (17)
+                "cxxstd": "",  # empty = let CMake use its own default (20)
                 "lto": "",  # empty = let CMake compute the smart per-compiler default
                 "sanitizer_enum": "address",
                 "isa": "",  # empty = let CMake pick the platform default
@@ -578,7 +578,7 @@ class LinearAlgebraFlags:
 
     def __process_arg_list(self, arg_list):
         sanitizer_list = ["address", "undefined", "thread", "memory", "leak"]
-        cxx_std_list = ["cxx17", "cxx20", "cxx23"]
+        cxx_std_list = ["cxx20", "cxx23"]
         cache_type_list = ["none", "ccache", "sccache", "buildcache"]
         linker_list = ["default", "mold", "lld", "gold", "lld-link"]
         isa_list = ["scalar", "sse2", "avx", "avx2", "avx512", "neon"]

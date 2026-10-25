@@ -10,7 +10,7 @@
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/norm.h"
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -51,13 +51,13 @@ template <> struct mexp_theta<double>
         1.090863719290036e+00};
 };
 
-// dst[0..count) = src[0..count). Uses linalg::packet<T> (src/common/packet.h), the same
-// Eigen-derived SIMD abstraction multiplication.cpp's native GEMM kernel is built on, instead
+// dst[0..count) = src[0..count). Uses ::simd<T> (Scalars), the same
+// Scalars SIMD interface multiplication.cpp's native GEMM kernel is built on, instead
 // of hoping the compiler auto-vectorizes a scalar loop.
 template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
     linalg_int           i     = 0;
     for (; i + width <= count; i += width)
@@ -77,10 +77,10 @@ template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 template <typename T> void zero_n(T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
-    typename P::packet_t z;
-    P::set(T(0), z);
+    typename P::simd_t   z;
+    z            = P::set(T(0));
     linalg_int i = 0;
     for (; i + width <= count; i += width)
     {
@@ -95,24 +95,24 @@ template <typename T> void zero_n(T* dst, linalg_int count)
 #endif
 }
 
-// dst[0..count) *= c. packet<T> exposes fma/add but no standalone multiply, so this uses fma
+// dst[0..count) *= c. simd<T> exposes fma/add but no standalone multiply, so this uses fma
 // against a zero accumulator (d*c + 0 == d*c) rather than introducing a multiply-only
 // primitive for this one call site.
 template <typename T> void scale_n(T* dst, linalg_int count, T c)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
-    typename P::packet_t cv;
-    typename P::packet_t zero_v;
-    P::set(c, cv);
-    P::set(T(0), zero_v);
+    typename P::simd_t   cv;
+    typename P::simd_t   zero_v;
+    cv           = P::set(c);
+    zero_v       = P::set(T(0));
     linalg_int i = 0;
     for (; i + width <= count; i += width)
     {
-        typename P::packet_t d;
-        P::loadu(dst + i, d);
-        P::fma(cv, d, zero_v, d);
+        typename P::simd_t d;
+        d = P::loadu(dst + i);
+        d = P::fma(cv, d, zero_v);
         P::storeu(d, dst + i);
     }
     for (; i < count; ++i)
@@ -131,18 +131,18 @@ template <typename T> void scale_n(T* dst, linalg_int count, T c)
 template <typename T> void add_scaled_n(T* dst, const T* src, linalg_int count, T c)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
-    typename P::packet_t cv;
-    P::set(c, cv);
+    typename P::simd_t   cv;
+    cv           = P::set(c);
     linalg_int i = 0;
     for (; i + width <= count; i += width)
     {
-        typename P::packet_t d;
-        typename P::packet_t s;
-        P::loadu(dst + i, d);
-        P::loadu(src + i, s);
-        P::fma(cv, s, d, d);
+        typename P::simd_t d;
+        typename P::simd_t s;
+        d = P::loadu(dst + i);
+        s = P::loadu(src + i);
+        d = P::fma(cv, s, d);
         P::storeu(d, dst + i);
     }
     for (; i < count; ++i)
@@ -172,23 +172,23 @@ template <typename T> void add_scaled(T* dst, const T* src, linalg_int n, T c)
 }
 
 // dst += c * I, n x n and tightly packed. The diagonal is strided (n + 1 elements apart), so
-// this vectorizes via packet<T>::gather/scatter — the same strided-access primitives
+// this vectorizes via simd<T>::gather/scatter — the same strided-access primitives
 // multiplication.cpp's GEBP kernel uses for its column-strided store into C — rather than
-// packet<T>::loadu/storeu, which require contiguous lanes.
+// simd<T>::loadu/storeu, which require contiguous lanes.
 template <typename T> void add_scaled_identity(T* dst, linalg_int n, T c)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
+    using P                     = simd<T>;
     constexpr linalg_int width  = P::size;
     const linalg_int     stride = n + 1;
-    typename P::packet_t cv;
-    P::set(c, cv);
+    typename P::simd_t   cv;
+    cv           = P::set(c);
     linalg_int i = 0;
     for (; i + width <= n; i += width)
     {
-        typename P::packet_t d;
-        P::gather(dst + i * stride, stride, d);
-        P::add(d, cv, d);
+        typename P::simd_t d;
+        d = P::gather(dst + i * stride, stride);
+        d = P::add(d, cv);
         P::scatter(d, stride, dst + i * stride);
     }
     for (; i < n; ++i)
@@ -498,14 +498,13 @@ void matrix_exponential_impl(const T* A_in,
 
     copy_in(A_in, lda, A, n);
 
-    const double norm1 =
-        static_cast<double>(linalg::norm<T, Backend>::apply(A,
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            linalg::norm_type::ONE,
-            nullptr,
-            0));
+    const double norm1 = static_cast<double>(linalg::norm<T, Backend>::apply(A,
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        linalg::norm_type::ONE,
+        nullptr,
+        0));
 
     const auto& thetas = mexp_theta<T>::values;
 
@@ -643,12 +642,12 @@ template <> size_t exponential<double, linalg_backend::NATIVE>::workspace_size(l
 
 template <>
 void exponential<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
-    linalg_int                                                                   n,
-    linalg_int                                                                   lda,
-    float*                                                                       result,
-    linalg_int                                                                   ldc,
-    void*                                                                        workspace,
-    size_t                                                                       workspace_size,
+    linalg_int                                                            n,
+    linalg_int                                                            lda,
+    float*                                                                result,
+    linalg_int                                                            ldc,
+    void*                                                                 workspace,
+    size_t                                                                workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("exponential/blas_lapacke<float>");
@@ -661,12 +660,12 @@ void exponential<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
 
 template <>
 void exponential<double, linalg_backend::BLAS_LAPACKE>::apply(const double* A,
-    linalg_int                                                                    n,
-    linalg_int                                                                    lda,
-    double*                                                                       result,
-    linalg_int                                                                    ldc,
-    void*                                                                         workspace,
-    size_t                                                                        workspace_size,
+    linalg_int                                                              n,
+    linalg_int                                                              lda,
+    double*                                                                 result,
+    linalg_int                                                              ldc,
+    void*                                                                   workspace,
+    size_t                                                                  workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("exponential/blas_lapacke<double>");
@@ -677,14 +676,12 @@ void exponential<double, linalg_backend::BLAS_LAPACKE>::apply(const double* A,
         A, n, lda, result, ldc, workspace, workspace_size);
 }
 
-template <>
-size_t exponential<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int n)
+template <> size_t exponential<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int n)
 {
     return matrix_exponential_workspace_size_impl<float, linalg_backend::BLAS_LAPACKE>(n);
 }
 
-template <>
-size_t exponential<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int n)
+template <> size_t exponential<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int n)
 {
     return matrix_exponential_workspace_size_impl<double, linalg_backend::BLAS_LAPACKE>(n);
 }
@@ -695,12 +692,12 @@ size_t exponential<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_
 
 template <>
 void exponential<float, linalg_backend::MKL>::apply(const float* A,
-    linalg_int                                                     n,
-    linalg_int                                                     lda,
-    float*                                                         result,
-    linalg_int                                                     ldc,
-    void*                                                          workspace,
-    size_t                                                         workspace_size,
+    linalg_int                                                   n,
+    linalg_int                                                   lda,
+    float*                                                       result,
+    linalg_int                                                   ldc,
+    void*                                                        workspace,
+    size_t                                                       workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("exponential/mkl<float>");
@@ -713,12 +710,12 @@ void exponential<float, linalg_backend::MKL>::apply(const float* A,
 
 template <>
 void exponential<double, linalg_backend::MKL>::apply(const double* A,
-    linalg_int                                                      n,
-    linalg_int                                                      lda,
-    double*                                                         result,
-    linalg_int                                                      ldc,
-    void*                                                           workspace,
-    size_t                                                          workspace_size,
+    linalg_int                                                     n,
+    linalg_int                                                     lda,
+    double*                                                        result,
+    linalg_int                                                     ldc,
+    void*                                                          workspace,
+    size_t                                                         workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("exponential/mkl<double>");

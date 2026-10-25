@@ -9,8 +9,7 @@ namespace detail
 
 // Adds the one complex n x n scratch square_root needs on top of the shared
 // Schur-function plan: the triangular factor S, unpacked from sr/si into
-// interleaved complex form so the SIMD complex_dot/complex_axpy helpers in
-// src/common/complex_vector.h can run the in-place triangular square root.
+// interleaved scalars::complex<T> storage for the triangular square-root recurrence.
 template <typename T> struct square_root_layout
 {
     schur_function_layout<T> schur;

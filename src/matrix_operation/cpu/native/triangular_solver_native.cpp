@@ -7,7 +7,7 @@
 #include "include/matrix_operation/multiplication.h"
 #include "src/common/triangular_solver_checks.h"
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 namespace linalg
@@ -21,15 +21,15 @@ template <typename T> void subtract_row(T* y, const T* x, T scale, linalg_int co
 {
     linalg_int j = 0;
 #if LINALG_HAS_VECTORIZATION
-    using P = packet<T>;
-    typename P::packet_t alpha;
-    P::set(-scale, alpha);
+    using P = simd<T>;
+    typename P::simd_t alpha;
+    alpha = P::set(-scale);
     for (; j + P::size <= count; j += P::size)
     {
-        typename P::packet_t px, py;
-        P::loadu(x + j, px);
-        P::loadu(y + j, py);
-        P::fma(alpha, px, py, py);
+        typename P::simd_t px, py;
+        px = P::loadu(x + j);
+        py = P::loadu(y + j);
+        py = P::fma(alpha, px, py);
         P::storeu(py, y + j);
     }
 #endif
@@ -113,14 +113,14 @@ void solve(bool upper,
                 const T    diagonal = coefficient(i, i);
                 linalg_int j        = 0;
 #if LINALG_HAS_VECTORIZATION
-                using P = packet<T>;
-                typename P::packet_t d;
-                P::set(diagonal, d);
+                using P = simd<T>;
+                typename P::simd_t d;
+                d = P::set(diagonal);
                 for (; j + P::size <= nrhs; j += P::size)
                 {
-                    typename P::packet_t value;
-                    P::loadu(row + j, value);
-                    P::div(value, d, value);
+                    typename P::simd_t value;
+                    value = P::loadu(row + j);
+                    value = P::div(value, d);
                     P::storeu(value, row + j);
                 }
 #endif

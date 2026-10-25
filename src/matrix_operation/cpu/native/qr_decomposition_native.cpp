@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 namespace linalg
@@ -15,20 +15,20 @@ namespace
 template <typename T> inline void qr_axpy(T* y, const T* x, T alpha, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
+    using P                     = simd<T>;
     constexpr linalg_long width = P::size;
 
-    typename P::packet_t pa;
-    P::set(alpha, pa);
+    typename P::simd_t pa;
+    pa = P::set(alpha);
 
     linalg_long c = 0;
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t px;
-        typename P::packet_t py;
-        P::loadu(x + c, px);
-        P::loadu(y + c, py);
-        P::fma(pa, px, py, py);
+        typename P::simd_t px;
+        typename P::simd_t py;
+        px = P::loadu(x + c);
+        py = P::loadu(y + c);
+        py = P::fma(pa, px, py);
         P::storeu(py, y + c);
     }
     for (; c < len; ++c)
@@ -84,17 +84,20 @@ void qr_r(linalg_long rows,
         }
         const T beta = -std::copysign(std::hypot(alpha, tail_norm), alpha);
         tau[i]       = (beta - alpha) / beta;
-        for (linalg_long r = i + 1; r < rows; ++r){
+        for (linalg_long r = i + 1; r < rows; ++r)
+        {
             A[r * lda + i] /= alpha - beta;
         }
         A[i * lda + i]      = beta;
         const auto trailing = columns - i - 1;
         std::copy_n(A + i * lda + i + 1, static_cast<size_t>(trailing), w);
-        for (linalg_long r = i + 1; r < rows; ++r){
+        for (linalg_long r = i + 1; r < rows; ++r)
+        {
             qr_axpy(w, A + r * lda + i + 1, A[r * lda + i], trailing);
         }
         qr_axpy(A + i * lda + i + 1, w, -tau[i], trailing);
-        for (linalg_long r = i + 1; r < rows; ++r){
+        for (linalg_long r = i + 1; r < rows; ++r)
+        {
             qr_axpy(A + r * lda + i + 1, w, -tau[i] * A[r * lda + i], trailing);
         }
     }
@@ -121,7 +124,8 @@ void qr_q(linalg_long rows,
         const auto i        = k - 1 - step;
         const auto trailing = k - i - 1;
         std::copy_n(A + i * lda + i + 1, static_cast<size_t>(trailing), w);
-        for (linalg_long r = i + 1; r < rows; ++r){
+        for (linalg_long r = i + 1; r < rows; ++r)
+        {
             qr_axpy(w, A + r * lda + i + 1, A[r * lda + i], trailing);
         }
         qr_axpy(A + i * lda + i + 1, w, -tau[i], trailing);
@@ -131,8 +135,10 @@ void qr_q(linalg_long rows,
             A[r * lda + i] *= -tau[i];
         }
         A[i * lda + i] = T(1) - tau[i];
-        for (linalg_long r = 0; r < i; ++r){
-            A[r * lda + i] = T(0);}
+        for (linalg_long r = 0; r < i; ++r)
+        {
+            A[r * lda + i] = T(0);
+        }
     }
 }
 }  // namespace

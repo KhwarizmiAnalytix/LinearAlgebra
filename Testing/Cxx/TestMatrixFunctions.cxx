@@ -133,7 +133,7 @@ template <typename T, linalg::linalg_backend Backend> void invalid_inputs()
     // is sized for the larger of the two and each call passes its own bytes.
     const auto     log_bytes  = linalg::logarithm<T, Backend>::workspace_size(2);
     const auto     sqrt_bytes = linalg::square_root<T, Backend>::workspace_size(2);
-    std::vector<T> workspace(log_bytes / sizeof(T));
+    std::vector<T> workspace(log_bytes / sizeof(T) + 1);
     T              a[] = {T(1), T(0), T(0), T(1)};
     T              result[4]{};
     for (bool is_log : {false, true})
@@ -152,6 +152,9 @@ template <typename T, linalg::linalg_backend Backend> void invalid_inputs()
         EXPECT_ANY_THROW((apply_function<T, Backend>(is_log, a, 2, 2, result, 2, nullptr, bytes)));
         EXPECT_ANY_THROW(
             (apply_function<T, Backend>(is_log, a, 2, 2, result, 2, workspace.data(), bytes - 1)));
+        // Scalars complex storage requires twice the real component alignment.
+        EXPECT_ANY_THROW(
+            (apply_function<T, Backend>(is_log, a, 2, 2, result, 2, workspace.data() + 1, bytes)));
         for (T invalid :
             {T(-1), std::numeric_limits<T>::quiet_NaN(), std::numeric_limits<T>::infinity()})
         {

@@ -8,7 +8,30 @@
 // degree-seven quadrature, a common CPU/CUDA/HIP/Metal implementation, and
 // reconstruction through existing backend GEMM operations.
 
-#include "src/common/complex_math.h"
+#include "include/common/linalg_macros.h"
+
+#if defined(__OBJC__)
+#include "src/matrix_operation/gpu/metal/scalars_metal.h"
+#else
+#include <cmath>
+#include <types/complex.h>
+#if !defined(__CUDACC__) && !defined(__HIPCC__)
+#include <math/complex_vector.h>
+#endif
+namespace linalg_schur
+{
+using std::atan2;
+using std::exp;
+using std::fabs;
+using std::fmax;
+using std::fmin;
+using std::hypot;
+using std::isfinite;
+using std::log;
+using std::sin;
+using std::sqrt;
+}  // namespace linalg_schur
+#endif
 
 // clang-format off
 LINALG_SCHUR_CORE(
@@ -21,11 +44,11 @@ template <typename T>
 LINALG_INLINE void unpack_triangular(LINALG_ADDRESS const T* real,
     LINALG_ADDRESS const T*                                  imag,
     int                                                       n,
-    LINALG_ADDRESS complex_value<T>*                          h)
+    LINALG_ADDRESS scalars::complex<T>*                          h)
 {
     for (int i = 0; i < n * n; ++i)
     {
-        h[i] = value(real[i], imag[i]);
+        h[i] = scalars::complex<T>(real[i], imag[i]);
     }
 }
 
@@ -33,15 +56,15 @@ LINALG_INLINE void unpack_triangular(LINALG_ADDRESS const T* real,
 // Invalid preparation poisons the result; device callers need no status readback.
 template <typename T>
 LINALG_INLINE void pack_result(int n,
-    LINALG_ADDRESS const complex_value<T>* f,
+    LINALG_ADDRESS const scalars::complex<T>* f,
     LINALG_ADDRESS T*                      fr,
     LINALG_ADDRESS T*                      fi,
     bool                                   success)
 {
     for (int i = 0; i < n * n; ++i)
     {
-        fr[i] = success ? f[i].real : T(NAN);
-        fi[i] = success ? f[i].imag : T(NAN);
+        fr[i] = success ? f[i].real() : T(NAN);
+        fi[i] = success ? f[i].imag() : T(NAN);
     }
 }
 

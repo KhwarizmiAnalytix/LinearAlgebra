@@ -9,7 +9,7 @@
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/multiplication.h"
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -19,13 +19,13 @@ namespace linalg
 namespace
 {
 
-// dst[0..count) = src[0..count). Uses linalg::packet<T> (src/common/packet.h), the same
-// Eigen-derived SIMD abstraction multiplication.cpp's native GEMM kernel is built on, instead
+// dst[0..count) = src[0..count). Uses ::simd<T> (Scalars), the same
+// Scalars SIMD interface multiplication.cpp's native GEMM kernel is built on, instead
 // of a plain scalar loop.
 template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
     linalg_int           i     = 0;
     for (; i + width <= count; i += width)
@@ -45,10 +45,10 @@ template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 template <typename T> void zero_n(T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
-    typename P::packet_t z;
-    P::set(T(0), z);
+    typename P::simd_t   z;
+    z            = P::set(T(0));
     linalg_int i = 0;
     for (; i + width <= count; i += width)
     {
@@ -130,8 +130,7 @@ power_layout<T> power_plan(detail::workspace_arena& arena, linalg_int n)
     return p;
 }
 
-template <typename T, linalg_backend Backend>
-size_t matrix_power_workspace_size_impl(linalg_int n)
+template <typename T, linalg_backend Backend> size_t matrix_power_workspace_size_impl(linalg_int n)
 {
     detail::workspace_arena arena;
     power_plan<T, Backend>(arena, n);
@@ -290,13 +289,13 @@ template <> size_t power<double, linalg_backend::NATIVE>::workspace_size(linalg_
 
 template <>
 void power<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
-    linalg_int                                                                n,
-    linalg_int                                                                lda,
-    linalg_int                                                                exponent,
-    float*                                                                    result,
-    linalg_int                                                                ldc,
-    void*                                                                     workspace,
-    size_t                                                                    workspace_size,
+    linalg_int                                                      n,
+    linalg_int                                                      lda,
+    linalg_int                                                      exponent,
+    float*                                                          result,
+    linalg_int                                                      ldc,
+    void*                                                           workspace,
+    size_t                                                          workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("power/blas_lapacke<float>");
@@ -308,13 +307,13 @@ void power<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
 
 template <>
 void power<double, linalg_backend::BLAS_LAPACKE>::apply(const double* A,
-    linalg_int                                                                 n,
-    linalg_int                                                                 lda,
-    linalg_int                                                                 exponent,
-    double*                                                                    result,
-    linalg_int                                                                 ldc,
-    void*                                                                      workspace,
-    size_t                                                                     workspace_size,
+    linalg_int                                                        n,
+    linalg_int                                                        lda,
+    linalg_int                                                        exponent,
+    double*                                                           result,
+    linalg_int                                                        ldc,
+    void*                                                             workspace,
+    size_t                                                            workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("power/blas_lapacke<double>");
@@ -340,13 +339,13 @@ template <> size_t power<double, linalg_backend::BLAS_LAPACKE>::workspace_size(l
 
 template <>
 void power<float, linalg_backend::MKL>::apply(const float* A,
-    linalg_int                                              n,
-    linalg_int                                              lda,
-    linalg_int                                              exponent,
-    float*                                                  result,
-    linalg_int                                              ldc,
-    void*                                                   workspace,
-    size_t                                                  workspace_size,
+    linalg_int                                             n,
+    linalg_int                                             lda,
+    linalg_int                                             exponent,
+    float*                                                 result,
+    linalg_int                                             ldc,
+    void*                                                  workspace,
+    size_t                                                 workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("power/mkl<float>");

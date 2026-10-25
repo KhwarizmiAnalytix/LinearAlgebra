@@ -15,7 +15,7 @@
 #include "include/common/workspace_arena.h"
 #include "include/util/cpu_info.h"
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -101,8 +101,8 @@ inline const cpu_cache_sizes& cached_cpu_cache_sizes()
 
 template <typename value_t, bool vectorizable = true> struct gemm_traits
 {
-    static constexpr linalg_int size = packet<value_t>::size;
-    // vectorizable ? packet<value_t>::size : 1;
+    static constexpr linalg_int size = simd<value_t>::size;
+    // vectorizable ? simd<value_t>::size : 1;
 
     static constexpr linalg_int number_of_registers = (2 * sizeof(void*));
 
@@ -273,8 +273,8 @@ void pack_lhs(  // NOLINT
     linalg_int stride = 0,
     linalg_int offset = 0)
 {
-    using packet_t                         = typename packet<value_t>::packet_t;
-    static constexpr linalg_int PacketSize = packet<value_t>::size;
+    using simd_t                           = typename simd<value_t>::simd_t;
+    static constexpr linalg_int PacketSize = simd<value_t>::size;
 
     linalg_int count = 0;
 
@@ -306,17 +306,17 @@ void pack_lhs(  // NOLINT
 
                 for (linalg_int k = 0; k < depth; k++)
                 {
-                    packet<value_t>::copy(
+                    simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 0 * PacketSize, k, lda),
                         block_A + count);
                     count += PacketSize;
 
-                    packet<value_t>::copy(
+                    simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 1 * PacketSize, k, lda),
                         block_A + count);
                     count += PacketSize;
 
-                    packet<value_t>::copy(
+                    simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 2 * PacketSize, k, lda),
                         block_A + count);
                     count += PacketSize;
@@ -339,12 +339,12 @@ void pack_lhs(  // NOLINT
 
                 for (linalg_int k = 0; k < depth; k++)
                 {
-                    packet<value_t>::copy(
+                    simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 0 * PacketSize, k, lda),
                         block_A + count);
                     count += PacketSize;
 
-                    packet<value_t>::copy(
+                    simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i + 1 * PacketSize, k, lda),
                         block_A + count);
                     count += PacketSize;
@@ -367,7 +367,7 @@ void pack_lhs(  // NOLINT
 
                 for (linalg_int k = 0; k < depth; k++)
                 {
-                    packet<value_t>::copy(
+                    simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i, k, lda), block_A + count);
                     count += PacketSize;
                 }
@@ -441,18 +441,18 @@ void pack_lhs(  // NOLINT
                     {
                         for (linalg_int m = 0; m < pack; m += PacketSize)
                         {
-                            packet_t tmp[PacketSize];  // NOLINT
+                            simd_t tmp[PacketSize];  // NOLINT
                             for (linalg_int p = 0; p < PacketSize; ++p)
                             {
-                                packet<value_t>::loadu(
-                                    &element<value_t, ColMajor>(data, i + p + m, k, lda), tmp[p]);
+                                tmp[p] = simd<value_t>::loadu(
+                                    &element<value_t, ColMajor>(data, i + p + m, k, lda));
                             }
 
-                            packet<value_t>::template ptranspose<PacketSize>(tmp);
+                            simd<value_t>::template ptranspose<PacketSize>(tmp);
 
                             for (linalg_int p = 0; p < PacketSize; ++p)
                             {
-                                packet<value_t>::store(tmp[p], block_A + count + m + (pack)*p);
+                                simd<value_t>::store(tmp[p], block_A + count + m + (pack)*p);
                             }
                         }
                         count += PacketSize * pack;
@@ -519,7 +519,7 @@ void pack_rhs(  // NOLINT
     linalg_int stride = 0,
     linalg_int offset = 0)
 {
-    using packet_t = typename packet<value_t>::packet_t;
+    using simd_t = typename simd<value_t>::simd_t;
 
     const linalg_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
     const linalg_int peeled_k     = (depth / PacketSize) * PacketSize;
@@ -544,56 +544,22 @@ void pack_rhs(  // NOLINT
                 linalg_int        k   = 0;
                 if constexpr ((PacketSize % nr) == 0)
                 {
-                    // ptranspose<nr> on a PacketSize-wide register produces
-                    // n_groups = PacketSize/nr independent nr-lane transposed
-                    // blocks; group g occupies lanes [g*nr .. (g+1)*nr-1].
-                    // For PacketSize == nr (SSE/NEON float, all double) there
-                    // is only one group and the full-width storeu lands exactly
-                    // on the nr-element output slot — same as the original
-                    // code, zero overhead.
-                    // For PacketSize > nr (AVX2 float: n_groups=2, AVX-512:
-                    // n_groups=4) spill to a stack buffer and copy each group
-                    // with memcpy so the compiler emits one SIMD move per
-                    // nr-element block rather than nr scalar stores.
-                    constexpr linalg_int n_groups = PacketSize / nr;
-
+                    // Scalars transposes the whole 4 x PacketSize rectangle and
+                    // repacks its rows consecutively into these four registers.
                     for (; k < peeled_k; k += PacketSize)
                     {
-                        packet_t tmp[4];  // NOLINT
-                        packet<value_t>::loadu(dm0 + k, tmp[0]);
-                        packet<value_t>::loadu(dm1 + k, tmp[1]);
-                        packet<value_t>::loadu(dm2 + k, tmp[2]);
-                        packet<value_t>::loadu(dm3 + k, tmp[3]);
+                        simd_t tmp[4];  // NOLINT
+                        tmp[0] = simd<value_t>::loadu(dm0 + k);
+                        tmp[1] = simd<value_t>::loadu(dm1 + k);
+                        tmp[2] = simd<value_t>::loadu(dm2 + k);
+                        tmp[3] = simd<value_t>::loadu(dm3 + k);
 
-                        packet<value_t>::template ptranspose<nr>(tmp);
+                        simd<value_t>::template ptranspose<nr>(tmp);
 
-                        if constexpr (n_groups == 1)
+                        for (int r = 0; r < 4; ++r)
                         {
-                            packet<value_t>::storeu(tmp[0], blockB + count);
-                            packet<value_t>::storeu(tmp[1], blockB + count + nr);
-                            packet<value_t>::storeu(tmp[2], blockB + count + 2 * nr);
-                            packet<value_t>::storeu(tmp[3], blockB + count + 3 * nr);
-                            count += 4 * nr;
-                        }
-                        else
-                        {
-                            value_t buf[4][PacketSize];  // NOLINT
-                            packet<value_t>::storeu(tmp[0], buf[0]);
-                            packet<value_t>::storeu(tmp[1], buf[1]);
-                            packet<value_t>::storeu(tmp[2], buf[2]);
-                            packet<value_t>::storeu(tmp[3], buf[3]);
-
-                            for (linalg_int g = 0; g < n_groups; ++g, count += 4 * nr)
-                            {
-                                const linalg_int base = g * nr;
-                                std::memcpy(blockB + count, buf[0] + base, nr * sizeof(value_t));
-                                std::memcpy(
-                                    blockB + count + nr, buf[1] + base, nr * sizeof(value_t));
-                                std::memcpy(
-                                    blockB + count + 2 * nr, buf[2] + base, nr * sizeof(value_t));
-                                std::memcpy(
-                                    blockB + count + 3 * nr, buf[3] + base, nr * sizeof(value_t));
-                            }
+                            simd<value_t>::storeu(tmp[r], blockB + count);
+                            count += PacketSize;
                         }
                     }
                 }
@@ -647,9 +613,9 @@ void pack_rhs(  // NOLINT
                 {
                     if constexpr (PacketSize == 4)
                     {
-                        packet_t A;
-                        packet<value_t>::loadu(&element<value_t, ColMajor>(data, k, j2, ldb), A);
-                        packet<value_t>::storeu(A, blockB + count);
+                        simd_t A;
+                        A = simd<value_t>::loadu(&element<value_t, ColMajor>(data, k, j2, ldb));
+                        simd<value_t>::storeu(A, blockB + count);
                         count += PacketSize;
                     }
                     else
@@ -711,8 +677,8 @@ void gemm(  // NOLINT
     linalg_int       offsetA = 0,
     linalg_int       offsetB = 0)  // NOLINT
 {
-    using Traits   = gemm_traits<value_t>;
-    using packet_t = typename packet<value_t>::packet_t;
+    using Traits = gemm_traits<value_t>;
+    using simd_t = typename simd<value_t>::simd_t;
     if (strideA == -1)
     {
         strideA = depth;
@@ -759,70 +725,70 @@ void gemm(  // NOLINT
                     // stored into 3 x nr registers.
 
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_3offset)];
-                    packet<value_t>::prefetch(&blA[0]);
+                    simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
-                    packet_t C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11;  // NOLINT
-                    packet<value_t>::set(static_cast<value_t>(0.), C0);
-                    packet<value_t>::set(static_cast<value_t>(0.), C1);
-                    packet<value_t>::set(static_cast<value_t>(0.), C2);
-                    packet<value_t>::set(static_cast<value_t>(0.), C3);
-                    packet<value_t>::set(static_cast<value_t>(0.), C4);
-                    packet<value_t>::set(static_cast<value_t>(0.), C5);
-                    packet<value_t>::set(static_cast<value_t>(0.), C6);
-                    packet<value_t>::set(static_cast<value_t>(0.), C7);
-                    packet<value_t>::set(static_cast<value_t>(0.), C8);
-                    packet<value_t>::set(static_cast<value_t>(0.), C9);
-                    packet<value_t>::set(static_cast<value_t>(0.), C10);
-                    packet<value_t>::set(static_cast<value_t>(0.), C11);
+                    simd_t C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11;  // NOLINT
+                    C0  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C1  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C2  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C3  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C4  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C5  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C6  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C7  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C8  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C9  = simd<value_t>::set(static_cast<value_t>(0.));
+                    C10 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C11 = simd<value_t>::set(static_cast<value_t>(0.));
 
                     auto* r0 = &element<value_t>(res, i, j2, ldc);
                     auto* r1 = &element<value_t>(res, i, j2 + 1, ldc);
                     auto* r2 = &element<value_t>(res, i, j2 + 2, ldc);
                     auto* r3 = &element<value_t>(res, i, j2 + 3, ldc);
 
-                    packet<value_t>::prefetch(r0);
-                    packet<value_t>::prefetch(r1);
-                    packet<value_t>::prefetch(r2);
-                    packet<value_t>::prefetch(r3);
+                    simd<value_t>::prefetch(r0);
+                    simd<value_t>::prefetch(r1);
+                    simd<value_t>::prefetch(r2);
+                    simd<value_t>::prefetch(r3);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
-                    packet<value_t>::prefetch(&blB[0]);
-                    packet_t A0;
-                    packet_t A1;
+                    simd<value_t>::prefetch(&blB[0]);
+                    simd_t A0;
+                    simd_t A1;
 
                     for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
-                        packet_t B_0;
-                        packet_t A2;
+                        simd_t B_0;
+                        simd_t A2;
 
 #define EIGEN_GEBP_ONESTEP(K)                                                                      \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                     \
-        packet<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                      \
-        packet<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                      \
-        packet<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                      \
-        packet<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
-        packet<value_t>::fma(A2, B_0, C8, C8);                                                     \
-        packet<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
-        packet<value_t>::fma(A0, B_0, C1, C1);                                                     \
-        packet<value_t>::fma(A1, B_0, C5, C5);                                                     \
-        packet<value_t>::fma(A2, B_0, C9, C9);                                                     \
-        packet<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
-        packet<value_t>::fma(A0, B_0, C2, C2);                                                     \
-        packet<value_t>::fma(A1, B_0, C6, C6);                                                     \
-        packet<value_t>::fma(A2, B_0, C10, C10);                                                   \
-        packet<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress), B_0);                   \
-        packet<value_t>::fma(A0, B_0, C3, C3);                                                     \
-        packet<value_t>::fma(A1, B_0, C7, C7);                                                     \
-        packet<value_t>::fma(A2, B_0, C11, C11);                                                   \
+        simd<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                       \
+        A0  = simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                      \
+        A1  = simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                      \
+        A2  = simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                      \
+        B_0 = simd<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress));                    \
+        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
+        C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
+        C8  = simd<value_t>::fma(A2, B_0, C8);                                                     \
+        B_0 = simd<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress));                    \
+        C1  = simd<value_t>::fma(A0, B_0, C1);                                                     \
+        C5  = simd<value_t>::fma(A1, B_0, C5);                                                     \
+        C9  = simd<value_t>::fma(A2, B_0, C9);                                                     \
+        B_0 = simd<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress));                    \
+        C2  = simd<value_t>::fma(A0, B_0, C2);                                                     \
+        C6  = simd<value_t>::fma(A1, B_0, C6);                                                     \
+        C10 = simd<value_t>::fma(A2, B_0, C10);                                                    \
+        B_0 = simd<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress));                    \
+        C3  = simd<value_t>::fma(A0, B_0, C3);                                                     \
+        C7  = simd<value_t>::fma(A1, B_0, C7);                                                     \
+        C11 = simd<value_t>::fma(A2, B_0, C11);                                                    \
     } while (false)
 
-                        packet<value_t>::prefetch(blB);
+                        simd<value_t>::prefetch(blB);
                         EIGEN_GEBP_ONESTEP(0);
                         EIGEN_GEBP_ONESTEP(1);
                         EIGEN_GEBP_ONESTEP(2);
@@ -838,62 +804,62 @@ void gemm(  // NOLINT
                     // process remaining peeled loop
                     for (linalg_int k = peeled_kc; k < depth; k++)
                     {
-                        packet_t B_0;
-                        packet_t A2;
+                        simd_t B_0;
+                        simd_t A2;
                         EIGEN_GEBP_ONESTEP(0);
                         blB += 4 * Traits::RhsProgress;
                         blA += lhs_3offset;
                     }
 
 #undef EIGEN_GEBP_ONESTEP
-                    packet_t R0;
-                    packet<value_t>::loadu(r0, R0);
-                    packet<value_t>::add(R0, C0, R0);
-                    packet<value_t>::storeu(R0, r0);
+                    simd_t R0;
+                    R0 = simd<value_t>::loadu(r0);
+                    R0 = simd<value_t>::add(R0, C0);
+                    simd<value_t>::storeu(R0, r0);
 
-                    packet<value_t>::loadu(r0 + Traits::size, R0);
-                    packet<value_t>::add(R0, C4, R0);
-                    packet<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C4);
+                    simd<value_t>::storeu(R0, r0 + Traits::size);
 
-                    packet<value_t>::loadu(r0 + 2 * Traits::size, R0);
-                    packet<value_t>::add(R0, C8, R0);
-                    packet<value_t>::storeu(R0, r0 + 2 * Traits::size);
+                    R0 = simd<value_t>::loadu(r0 + 2 * Traits::size);
+                    R0 = simd<value_t>::add(R0, C8);
+                    simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
 
-                    packet<value_t>::loadu(r1, R0);
-                    packet<value_t>::add(R0, C1, R0);
-                    packet<value_t>::storeu(R0, r1);
+                    R0 = simd<value_t>::loadu(r1);
+                    R0 = simd<value_t>::add(R0, C1);
+                    simd<value_t>::storeu(R0, r1);
 
-                    packet<value_t>::loadu(r1 + Traits::size, R0);
-                    packet<value_t>::add(R0, C5, R0);
-                    packet<value_t>::storeu(R0, r1 + Traits::size);
+                    R0 = simd<value_t>::loadu(r1 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C5);
+                    simd<value_t>::storeu(R0, r1 + Traits::size);
 
-                    packet<value_t>::loadu(r1 + 2 * Traits::size, R0);
-                    packet<value_t>::add(R0, C9, R0);
-                    packet<value_t>::storeu(R0, r1 + 2 * Traits::size);
+                    R0 = simd<value_t>::loadu(r1 + 2 * Traits::size);
+                    R0 = simd<value_t>::add(R0, C9);
+                    simd<value_t>::storeu(R0, r1 + 2 * Traits::size);
 
-                    packet<value_t>::loadu(r2, R0);
-                    packet<value_t>::add(R0, C2, R0);
-                    packet<value_t>::storeu(R0, r2);
+                    R0 = simd<value_t>::loadu(r2);
+                    R0 = simd<value_t>::add(R0, C2);
+                    simd<value_t>::storeu(R0, r2);
 
-                    packet<value_t>::loadu(r2 + Traits::size, R0);
-                    packet<value_t>::add(R0, C6, R0);
-                    packet<value_t>::storeu(R0, r2 + Traits::size);
+                    R0 = simd<value_t>::loadu(r2 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C6);
+                    simd<value_t>::storeu(R0, r2 + Traits::size);
 
-                    packet<value_t>::loadu(r2 + 2 * Traits::size, R0);
-                    packet<value_t>::add(R0, C10, R0);
-                    packet<value_t>::storeu(R0, r2 + 2 * Traits::size);
+                    R0 = simd<value_t>::loadu(r2 + 2 * Traits::size);
+                    R0 = simd<value_t>::add(R0, C10);
+                    simd<value_t>::storeu(R0, r2 + 2 * Traits::size);
 
-                    packet<value_t>::loadu(r3, R0);
-                    packet<value_t>::add(R0, C3, R0);
-                    packet<value_t>::storeu(R0, r3);
+                    R0 = simd<value_t>::loadu(r3);
+                    R0 = simd<value_t>::add(R0, C3);
+                    simd<value_t>::storeu(R0, r3);
 
-                    packet<value_t>::loadu(r3 + Traits::size, R0);
-                    packet<value_t>::add(R0, C7, R0);
-                    packet<value_t>::storeu(R0, r3 + Traits::size);
+                    R0 = simd<value_t>::loadu(r3 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C7);
+                    simd<value_t>::storeu(R0, r3 + Traits::size);
 
-                    packet<value_t>::loadu(r3 + 2 * Traits::size, R0);
-                    packet<value_t>::add(R0, C11, R0);
-                    packet<value_t>::storeu(R0, r3 + 2 * Traits::size);
+                    R0 = simd<value_t>::loadu(r3 + 2 * Traits::size);
+                    R0 = simd<value_t>::add(R0, C11);
+                    simd<value_t>::storeu(R0, r3 + 2 * Traits::size);
                 }
             }
 
@@ -904,34 +870,34 @@ void gemm(  // NOLINT
                 {
                     // One column at a time
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_3offset)];
-                    packet<value_t>::prefetch(&blA[0]);
+                    simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
-                    packet_t C0, C4, C8;  // NOLINT
-                    packet<value_t>::set(static_cast<value_t>(0.), C0);
-                    packet<value_t>::set(static_cast<value_t>(0.), C4);
-                    packet<value_t>::set(static_cast<value_t>(0.), C8);
+                    simd_t C0, C4, C8;  // NOLINT
+                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C4 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C8 = simd<value_t>::set(static_cast<value_t>(0.));
 
                     auto* r0 = &element<value_t>(res, i, j2, ldc);
-                    packet<value_t>::prefetch(r0);
+                    simd<value_t>::prefetch(r0);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
-                    packet_t       A0, A1, A2;  // NOLINT
+                    simd_t         A0, A1, A2;  // NOLINT
 
                     for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
-                        packet_t B_0;
+                        simd_t B_0;
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress], A0);                      \
-        packet<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress], A1);                      \
-        packet<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress], A2);                      \
-        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                           \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
-        packet<value_t>::fma(A2, B_0, C8, C8);                                                     \
+        A0  = simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                      \
+        A1  = simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                      \
+        A2  = simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                      \
+        B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
+        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
+        C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
+        C8  = simd<value_t>::fma(A2, B_0, C8);                                                     \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -950,24 +916,24 @@ void gemm(  // NOLINT
                     // process remaining peeled loop
                     for (linalg_int k = peeled_kc; k < depth; k++)
                     {
-                        packet_t B_0;
+                        simd_t B_0;
                         LINALG_GEMM_ONESTEP(0);
                         blB += Traits::RhsProgress;
                         blA += lhs_3offset;
                     }
 #undef LINALG_GEMM_ONESTEP
-                    packet_t R0;
-                    packet<value_t>::loadu(r0, R0);
-                    packet<value_t>::add(R0, C0, R0);
-                    packet<value_t>::storeu(R0, r0);
+                    simd_t R0;
+                    R0 = simd<value_t>::loadu(r0);
+                    R0 = simd<value_t>::add(R0, C0);
+                    simd<value_t>::storeu(R0, r0);
 
-                    packet<value_t>::loadu(r0 + Traits::size, R0);
-                    packet<value_t>::add(R0, C4, R0);
-                    packet<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C4);
+                    simd<value_t>::storeu(R0, r0 + Traits::size);
 
-                    packet<value_t>::loadu(r0 + 2 * Traits::size, R0);
-                    packet<value_t>::add(R0, C8, R0);
-                    packet<value_t>::storeu(R0, r0 + 2 * Traits::size);
+                    R0 = simd<value_t>::loadu(r0 + 2 * Traits::size);
+                    R0 = simd<value_t>::add(R0, C8);
+                    simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
                 }
             }
         }
@@ -992,65 +958,65 @@ void gemm(  // NOLINT
                     // stored into 2 x nr registers.
 
                     const value_t* blA = &blockA[i * strideA + offsetA * lhs_2offset];
-                    packet<value_t>::prefetch(&blA[0]);
+                    simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
-                    packet_t C0, C1, C2, C3, C4, C5, C6, C7;  // NOLINT
-                    packet<value_t>::set(static_cast<value_t>(0.), C0);
-                    packet<value_t>::set(static_cast<value_t>(0.), C1);
-                    packet<value_t>::set(static_cast<value_t>(0.), C2);
-                    packet<value_t>::set(static_cast<value_t>(0.), C3);
-                    packet<value_t>::set(static_cast<value_t>(0.), C4);
-                    packet<value_t>::set(static_cast<value_t>(0.), C5);
-                    packet<value_t>::set(static_cast<value_t>(0.), C6);
-                    packet<value_t>::set(static_cast<value_t>(0.), C7);
+                    simd_t C0, C1, C2, C3, C4, C5, C6, C7;  // NOLINT
+                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C1 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C2 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C3 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C4 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C5 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C6 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C7 = simd<value_t>::set(static_cast<value_t>(0.));
 
                     value_t* r0 = &element<value_t>(res, i, j2, ldc);
                     value_t* r1 = &element<value_t>(res, i, j2 + 1, ldc);
                     value_t* r2 = &element<value_t>(res, i, j2 + 2, ldc);
                     value_t* r3 = &element<value_t>(res, i, j2 + 3, ldc);
 
-                    packet<value_t>::prefetch(r0 + prefetch_res_offset);
-                    packet<value_t>::prefetch(r1 + prefetch_res_offset);
-                    packet<value_t>::prefetch(r2 + prefetch_res_offset);
-                    packet<value_t>::prefetch(r3 + prefetch_res_offset);
+                    simd<value_t>::prefetch(r0 + prefetch_res_offset);
+                    simd<value_t>::prefetch(r1 + prefetch_res_offset);
+                    simd<value_t>::prefetch(r2 + prefetch_res_offset);
+                    simd<value_t>::prefetch(r3 + prefetch_res_offset);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
-                    packet<value_t>::prefetch(&blB[0]);
-                    packet_t A0;
-                    packet_t A1;
+                    simd<value_t>::prefetch(&blB[0]);
+                    simd_t A0;
+                    simd_t A1;
 
                     for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
-                        packet_t B_0;
-                        packet_t B1;
-                        packet_t B2;
-                        packet_t B3;
+                        simd_t B_0;
+                        simd_t B1;
+                        simd_t B2;
+                        simd_t B3;
 
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                      \
-        packet<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                      \
+        A0               = simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);         \
+        A1               = simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);         \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
-        packet<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                        \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
-        packet<value_t>::fma(A0, B1, C1, C1);                                                      \
-        packet<value_t>::fma(A1, B1, C5, C5);                                                      \
-        packet<value_t>::fma(A0, B2, C2, C2);                                                      \
-        packet<value_t>::fma(A1, B2, C6, C6);                                                      \
-        packet<value_t>::fma(A0, B3, C3, C3);                                                      \
-        packet<value_t>::fma(A1, B3, C7, C7);                                                      \
+        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
+        C0 = simd<value_t>::fma(A0, B_0, C0);                                                      \
+        C4 = simd<value_t>::fma(A1, B_0, C4);                                                      \
+        C1 = simd<value_t>::fma(A0, B1, C1);                                                       \
+        C5 = simd<value_t>::fma(A1, B1, C5);                                                       \
+        C2 = simd<value_t>::fma(A0, B2, C2);                                                       \
+        C6 = simd<value_t>::fma(A1, B2, C6);                                                       \
+        C3 = simd<value_t>::fma(A0, B3, C3);                                                       \
+        C7 = simd<value_t>::fma(A1, B3, C7);                                                       \
     } while (false)
 
-                        packet<value_t>::prefetch(blB + (48 + 0));
+                        simd<value_t>::prefetch(blB + (48 + 0));
                         LINALG_GEMM_ONESTEP(0);
                         LINALG_GEMM_ONESTEP(1);
                         LINALG_GEMM_ONESTEP(2);
                         LINALG_GEMM_ONESTEP(3);
-                        packet<value_t>::prefetch(blB + (48 + 16));
+                        simd<value_t>::prefetch(blB + (48 + 16));
                         LINALG_GEMM_ONESTEP(4);
                         LINALG_GEMM_ONESTEP(5);
                         LINALG_GEMM_ONESTEP(6);
@@ -1062,48 +1028,48 @@ void gemm(  // NOLINT
                     // process remaining peeled loop
                     for (linalg_int k = peeled_kc; k < depth; k++)
                     {
-                        packet_t B_0;
-                        packet_t B1;
-                        packet_t B2;
-                        packet_t B3;
+                        simd_t B_0;
+                        simd_t B1;
+                        simd_t B2;
+                        simd_t B3;
                         LINALG_GEMM_ONESTEP(0);
                         blB += 4 * Traits::RhsProgress;
                         blA += lhs_2offset;
                     }
 #undef LINALG_GEMM_ONESTEP
 
-                    packet_t R0;
-                    packet<value_t>::loadu(r0, R0);
-                    packet<value_t>::add(R0, C0, R0);
-                    packet<value_t>::storeu(R0, r0);
+                    simd_t R0;
+                    R0 = simd<value_t>::loadu(r0);
+                    R0 = simd<value_t>::add(R0, C0);
+                    simd<value_t>::storeu(R0, r0);
 
-                    packet<value_t>::loadu(r0 + Traits::size, R0);
-                    packet<value_t>::add(R0, C4, R0);
-                    packet<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C4);
+                    simd<value_t>::storeu(R0, r0 + Traits::size);
 
-                    packet<value_t>::loadu(r1, R0);
-                    packet<value_t>::add(R0, C1, R0);
-                    packet<value_t>::storeu(R0, r1);
+                    R0 = simd<value_t>::loadu(r1);
+                    R0 = simd<value_t>::add(R0, C1);
+                    simd<value_t>::storeu(R0, r1);
 
-                    packet<value_t>::loadu(r1 + Traits::size, R0);
-                    packet<value_t>::add(R0, C5, R0);
-                    packet<value_t>::storeu(R0, r1 + Traits::size);
+                    R0 = simd<value_t>::loadu(r1 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C5);
+                    simd<value_t>::storeu(R0, r1 + Traits::size);
 
-                    packet<value_t>::loadu(r2, R0);
-                    packet<value_t>::add(R0, C2, R0);
-                    packet<value_t>::storeu(R0, r2);
+                    R0 = simd<value_t>::loadu(r2);
+                    R0 = simd<value_t>::add(R0, C2);
+                    simd<value_t>::storeu(R0, r2);
 
-                    packet<value_t>::loadu(r2 + Traits::size, R0);
-                    packet<value_t>::add(R0, C6, R0);
-                    packet<value_t>::storeu(R0, r2 + Traits::size);
+                    R0 = simd<value_t>::loadu(r2 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C6);
+                    simd<value_t>::storeu(R0, r2 + Traits::size);
 
-                    packet<value_t>::loadu(r3, R0);
-                    packet<value_t>::add(R0, C3, R0);
-                    packet<value_t>::storeu(R0, r3);
+                    R0 = simd<value_t>::loadu(r3);
+                    R0 = simd<value_t>::add(R0, C3);
+                    simd<value_t>::storeu(R0, r3);
 
-                    packet<value_t>::loadu(r3 + Traits::size, R0);
-                    packet<value_t>::add(R0, C7, R0);
-                    packet<value_t>::storeu(R0, r3 + Traits::size);
+                    R0 = simd<value_t>::loadu(r3 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C7);
+                    simd<value_t>::storeu(R0, r3 + Traits::size);
                 }
             }
 
@@ -1114,35 +1080,35 @@ void gemm(  // NOLINT
                 {
                     // One column at a time
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_2offset)];
-                    packet<value_t>::prefetch(&blA[0]);
+                    simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
-                    packet_t C0;
-                    packet_t C4;
-                    packet<value_t>::set(static_cast<value_t>(0.), C0);
-                    packet<value_t>::set(static_cast<value_t>(0.), C4);
+                    simd_t C0;
+                    simd_t C4;
+                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C4 = simd<value_t>::set(static_cast<value_t>(0.));
 
                     auto* r0 = &element<value_t>(res, i, j2, ldc);
-                    packet<value_t>::prefetch(r0 + prefetch_res_offset);
+                    simd<value_t>::prefetch(r0 + prefetch_res_offset);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
-                    packet_t       A0;
-                    packet_t       A1;
+                    simd_t         A0;
+                    simd_t         A1;
 
                     for (linalg_int k = 0; k < peeled_kc; k += pk)
                     {
-                        LINALG_ASM_COMMENT("begin gebp micro kernel 2pX1");
-                        packet_t B_0;
+                        (void)0;
+                        simd_t B_0;
 
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        packet<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress], A0);                      \
-        packet<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress], A1);                      \
-        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                           \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
-        packet<value_t>::fma(A1, B_0, C4, C4);                                                     \
+        A0  = simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);                      \
+        A1  = simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);                      \
+        B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
+        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
+        C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -1161,21 +1127,21 @@ void gemm(  // NOLINT
                     // process remaining peeled loop
                     for (linalg_int k = peeled_kc; k < depth; k++)
                     {
-                        packet_t B_0;
+                        simd_t B_0;
                         LINALG_GEMM_ONESTEP(0);
                         blB += Traits::RhsProgress;
                         blA += lhs_2offset;
                     }
 #undef LINALG_GEMM_ONESTEP
 
-                    packet_t R0;
-                    packet<value_t>::loadu(r0, R0);
-                    packet<value_t>::add(R0, C0, R0);
-                    packet<value_t>::storeu(R0, r0);
+                    simd_t R0;
+                    R0 = simd<value_t>::loadu(r0);
+                    R0 = simd<value_t>::add(R0, C0);
+                    simd<value_t>::storeu(R0, r0);
 
-                    packet<value_t>::loadu(r0 + Traits::size, R0);
-                    packet<value_t>::add(R0, C4, R0);
-                    packet<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = simd<value_t>::add(R0, C4);
+                    simd<value_t>::storeu(R0, r0 + Traits::size);
                 }
             }
         }
@@ -1193,63 +1159,63 @@ void gemm(  // NOLINT
                 // stored into 1 x nr registers.
 
                 const value_t* blA = &blockA[i * strideA + offsetA * (1 * Traits::LhsProgress)];
-                packet<value_t>::prefetch(&blA[0]);
+                simd<value_t>::prefetch(&blA[0]);
 
                 // gets res block as register
-                packet_t C0;
-                packet_t C1;
-                packet_t C2;
-                packet_t C3;
-                packet<value_t>::set(static_cast<value_t>(0.), C0);
-                packet<value_t>::set(static_cast<value_t>(0.), C1);
-                packet<value_t>::set(static_cast<value_t>(0.), C2);
-                packet<value_t>::set(static_cast<value_t>(0.), C3);
+                simd_t C0;
+                simd_t C1;
+                simd_t C2;
+                simd_t C3;
+                C0 = simd<value_t>::set(static_cast<value_t>(0.));
+                C1 = simd<value_t>::set(static_cast<value_t>(0.));
+                C2 = simd<value_t>::set(static_cast<value_t>(0.));
+                C3 = simd<value_t>::set(static_cast<value_t>(0.));
 
                 auto* r0 = &element<value_t>(res, i, j2, ldc);
                 auto* r1 = &element<value_t>(res, i, j2 + 1, ldc);
                 auto* r2 = &element<value_t>(res, i, j2 + 2, ldc);
                 auto* r3 = &element<value_t>(res, i, j2 + 3, ldc);
 
-                packet<value_t>::prefetch(r0 + prefetch_res_offset);
-                packet<value_t>::prefetch(r1 + prefetch_res_offset);
-                packet<value_t>::prefetch(r2 + prefetch_res_offset);
-                packet<value_t>::prefetch(r3 + prefetch_res_offset);
+                simd<value_t>::prefetch(r0 + prefetch_res_offset);
+                simd<value_t>::prefetch(r1 + prefetch_res_offset);
+                simd<value_t>::prefetch(r2 + prefetch_res_offset);
+                simd<value_t>::prefetch(r3 + prefetch_res_offset);
 
                 // performs "inner" products
                 const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
-                packet<value_t>::prefetch(&blB[0]);
-                packet_t A0;
+                simd<value_t>::prefetch(&blB[0]);
+                simd_t A0;
 
                 for (linalg_int k = 0; k < peeled_kc; k += pk)
                 {
-                    LINALG_ASM_COMMENT("begin gebp micro kernel 1pX4");
-                    packet_t B_0;
-                    packet_t B1;
-                    packet_t B2;
-                    packet_t B3;
+                    (void)0;
+                    simd_t B_0;
+                    simd_t B1;
+                    simd_t B2;
+                    simd_t B3;
 
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX4");                                \
-        LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!");                       \
-        packet<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress], A0);                      \
+        (void)0;                                                                                   \
+        (void)0;                                                                                   \
+        A0               = simd<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress]);         \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
-        packet<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                        \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
-        packet<value_t>::fma(A0, B1, C1, C1);                                                      \
-        packet<value_t>::fma(A0, B2, C2, C2);                                                      \
-        packet<value_t>::fma(A0, B3, C3, C3);                                                      \
-        LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX4");                                  \
+        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
+        C0 = simd<value_t>::fma(A0, B_0, C0);                                                      \
+        C1 = simd<value_t>::fma(A0, B1, C1);                                                       \
+        C2 = simd<value_t>::fma(A0, B2, C2);                                                       \
+        C3 = simd<value_t>::fma(A0, B3, C3);                                                       \
+        (void)0;                                                                                   \
     } while (false)
 
-                    packet<value_t>::prefetch(blB + (48 + 0));
+                    simd<value_t>::prefetch(blB + (48 + 0));
                     LINALG_GEMM_ONESTEP(0);
                     LINALG_GEMM_ONESTEP(1);
                     LINALG_GEMM_ONESTEP(2);
                     LINALG_GEMM_ONESTEP(3);
 
-                    packet<value_t>::prefetch(blB + (48 + 16));
+                    simd<value_t>::prefetch(blB + (48 + 16));
                     LINALG_GEMM_ONESTEP(4);
                     LINALG_GEMM_ONESTEP(5);
                     LINALG_GEMM_ONESTEP(6);
@@ -1258,37 +1224,37 @@ void gemm(  // NOLINT
                     blB += pk * 4 * Traits::RhsProgress;
                     blA += pk * 1 * Traits::LhsProgress;
 
-                    LINALG_ASM_COMMENT("end gebp micro kernel 1pX4");
+                    (void)0;
                 }
                 // process remaining peeled loop
                 for (linalg_int k = peeled_kc; k < depth; k++)
                 {
-                    packet_t B_0;
-                    packet_t B1;
-                    packet_t B2;
-                    packet_t B3;
+                    simd_t B_0;
+                    simd_t B1;
+                    simd_t B2;
+                    simd_t B3;
                     LINALG_GEMM_ONESTEP(0);
                     blB += 4 * Traits::RhsProgress;
                     blA += 1 * Traits::LhsProgress;
                 }
 #undef LINALG_GEMM_ONESTEP
 
-                packet_t R0;
-                packet<value_t>::loadu(r0, R0);
-                packet<value_t>::add(R0, C0, R0);
-                packet<value_t>::storeu(R0, r0);
+                simd_t R0;
+                R0 = simd<value_t>::loadu(r0);
+                R0 = simd<value_t>::add(R0, C0);
+                simd<value_t>::storeu(R0, r0);
 
-                packet<value_t>::loadu(r1, R0);
-                packet<value_t>::add(R0, C1, R0);
-                packet<value_t>::storeu(R0, r1);
+                R0 = simd<value_t>::loadu(r1);
+                R0 = simd<value_t>::add(R0, C1);
+                simd<value_t>::storeu(R0, r1);
 
-                packet<value_t>::loadu(r2, R0);
-                packet<value_t>::add(R0, C2, R0);
-                packet<value_t>::storeu(R0, r2);
+                R0 = simd<value_t>::loadu(r2);
+                R0 = simd<value_t>::add(R0, C2);
+                simd<value_t>::storeu(R0, r2);
 
-                packet<value_t>::loadu(r3, R0);
-                packet<value_t>::add(R0, C3, R0);
-                packet<value_t>::storeu(R0, r3);
+                R0 = simd<value_t>::loadu(r3);
+                R0 = simd<value_t>::add(R0, C3);
+                simd<value_t>::storeu(R0, r3);
             }
 
             // Deal with remaining columns of the rhs
@@ -1296,31 +1262,31 @@ void gemm(  // NOLINT
             {
                 // One column at a time
                 const value_t* blA = &blockA[i * strideA + offsetA * (1 * Traits::LhsProgress)];
-                packet<value_t>::prefetch(&blA[0]);
+                simd<value_t>::prefetch(&blA[0]);
 
                 // gets res block as register
-                packet_t C0;
-                packet<value_t>::set(static_cast<value_t>(0.), C0);
+                simd_t C0;
+                C0 = simd<value_t>::set(static_cast<value_t>(0.));
 
                 auto* r0 = &element<value_t>(res, i, j2, ldc);
                 // performs "inner" products
                 const value_t* blB = &blockB[j2 * strideB + offsetB];
-                packet_t       A0;
+                simd_t         A0;
 
                 for (linalg_int k = 0; k < peeled_kc; k += pk)
                 {
-                    LINALG_ASM_COMMENT("begin gebp micro kernel 1pX1");
-                    packet_t B_0;
+                    (void)0;
+                    simd_t B_0;
 
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        LINALG_ASM_COMMENT("begin step of gebp micro kernel 1pX1");                                \
-        LINALG_ASM_COMMENT("Note: these asm comments work around bug 935!");                       \
-        packet<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress], A0);                          \
-        packet<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress], B_0);                           \
-        packet<value_t>::fma(A0, B_0, C0, C0);                                                     \
-        LINALG_ASM_COMMENT("end step of gebp micro kernel 1pX1");                                  \
+        (void)0;                                                                                   \
+        (void)0;                                                                                   \
+        A0  = simd<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress]);                          \
+        B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
+        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
+        (void)0;                                                                                   \
     } while (false);
 
                     LINALG_GEMM_ONESTEP(0);
@@ -1335,22 +1301,22 @@ void gemm(  // NOLINT
                     blB += pk * Traits::RhsProgress;
                     blA += pk * 1 * Traits::LhsProgress;
 
-                    LINALG_ASM_COMMENT("end gebp micro kernel 1pX1");
+                    (void)0;
                 }
 
                 // process remaining peeled loop
                 for (linalg_int k = peeled_kc; k < depth; k++)
                 {
-                    packet_t B_0;
+                    simd_t B_0;
                     LINALG_GEMM_ONESTEP(0);
                     blB += Traits::RhsProgress;
                     blA += Traits::LhsProgress;
                 }
 #undef LINALG_GEMM_ONESTEP
-                packet_t R0;
-                packet<value_t>::loadu(r0, R0);
-                packet<value_t>::add(R0, C0, R0);
-                packet<value_t>::storeu(R0, r0);
+                simd_t R0;
+                R0 = simd<value_t>::loadu(r0);
+                R0 = simd<value_t>::add(R0, C0);
+                simd<value_t>::storeu(R0, r0);
             }
         }
     }
@@ -1364,24 +1330,37 @@ void gemm(  // NOLINT
             for (linalg_int i = peeled_mc1; i < rows; i += 1)
             {
                 const value_t* blA = &blockA[i * strideA + offsetA];
-                packet<value_t>::prefetch(&blA[0]);
+                simd<value_t>::prefetch(&blA[0]);
                 const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
 
                 // The following piece of code won't work for 512 bit registers
                 // Moreover, if LhsProgress==8 it assumes that there is a half tmp of the
                 // same size as nr (which is currently 4) for the return type.
-                static constexpr linalg_int packet_half_size = packet<value_t>::half_size;
+                static constexpr linalg_int packet_half_size = simd<value_t>::half_size;
                 if constexpr ((Traits::LhsProgress % 4) == 0 && (Traits::LhsProgress <= 8) &&
                               (Traits::LhsProgress != 8 || packet_half_size == nr))
                 {
-                    packet_t C0;
-                    packet_t C1;
-                    packet_t C2;
-                    packet_t C3;
-                    packet<value_t>::set(static_cast<value_t>(0.), C0);
-                    packet<value_t>::set(static_cast<value_t>(0.), C1);
-                    packet<value_t>::set(static_cast<value_t>(0.), C2);
-                    packet<value_t>::set(static_cast<value_t>(0.), C3);
+                    // Four-wide Scalars ploadquad duplicates pairs. This GEMM
+                    // remainder needs four copies of each lhs coefficient.
+                    const auto load_lhs = [](const value_t* ptr)
+                    {
+                        if constexpr (Traits::LhsProgress == 4)
+                        {
+                            return simd<value_t>::set(*ptr);
+                        }
+                        else
+                        {
+                            return simd<value_t>::ploadquad(ptr);
+                        }
+                    };
+                    simd_t C0;
+                    simd_t C1;
+                    simd_t C2;
+                    simd_t C3;
+                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C1 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C2 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C3 = simd<value_t>::set(static_cast<value_t>(0.));
 
                     const linalg_int spk   = std::max<linalg_int>(1, Traits::LhsProgress / 4);
                     const linalg_int endk  = (depth / spk) * spk;
@@ -1390,43 +1369,43 @@ void gemm(  // NOLINT
                     linalg_int k = 0;
                     for (; k < endk4; k += 4 * spk)
                     {
-                        packet_t A0;
-                        packet_t A1;
-                        packet_t B_0;
-                        packet_t B_1;
+                        simd_t A0;
+                        simd_t A1;
+                        simd_t B_0;
+                        simd_t B_1;
 
-                        packet<value_t>::loadu(blB, A0);
-                        packet<value_t>::loadu(blB + Traits::LhsProgress, A1);
-                        packet<value_t>::ploadquad(blA + 0 * spk, B_0);
-                        packet<value_t>::ploadquad(blA + 1 * spk, B_1);
-                        packet<value_t>::fma(A0, B_0, C0, C0);
-                        packet<value_t>::fma(A1, B_1, C1, C1);
+                        A0  = simd<value_t>::loadu(blB);
+                        A1  = simd<value_t>::loadu(blB + Traits::LhsProgress);
+                        B_0 = load_lhs(blA + 0 * spk);
+                        B_1 = load_lhs(blA + 1 * spk);
+                        C0  = simd<value_t>::fma(A0, B_0, C0);
+                        C1  = simd<value_t>::fma(A1, B_1, C1);
 
-                        packet<value_t>::loadu(blB + lhs_2offset, A0);
-                        packet<value_t>::loadu(blB + lhs_3offset, A1);
-                        packet<value_t>::ploadquad(blA + 2 * spk, B_0);
-                        packet<value_t>::ploadquad(blA + 3 * spk, B_1);
-                        packet<value_t>::fma(A0, B_0, C2, C2);
-                        packet<value_t>::fma(A1, B_1, C3, C3);
+                        A0  = simd<value_t>::loadu(blB + lhs_2offset);
+                        A1  = simd<value_t>::loadu(blB + lhs_3offset);
+                        B_0 = load_lhs(blA + 2 * spk);
+                        B_1 = load_lhs(blA + 3 * spk);
+                        C2  = simd<value_t>::fma(A0, B_0, C2);
+                        C3  = simd<value_t>::fma(A1, B_1, C3);
 
                         blB += 4 * Traits::LhsProgress;
                         blA += 4 * spk;
                     }
-                    packet<value_t>::add(C0, C1, C0);
-                    packet<value_t>::add(C2, C3, C2);
-                    packet<value_t>::add(C0, C2, C0);
-                    /* C0 = packet<value_t>::add(
-                         packet<value_t>::add(C0, C1), packet<value_t>::add(C2,
+                    C0 = simd<value_t>::add(C0, C1);
+                    C2 = simd<value_t>::add(C2, C3);
+                    C0 = simd<value_t>::add(C0, C2);
+                    /* C0 = simd<value_t>::add(
+                         simd<value_t>::add(C0, C1), simd<value_t>::add(C2,
                        C3));*/
 
                     for (; k < endk; k += spk)
                     {
-                        packet_t A0;
-                        packet_t B_0;
+                        simd_t A0;
+                        simd_t B_0;
 
-                        packet<value_t>::loadu(blB, A0);
-                        packet<value_t>::ploadquad(blA, B_0);
-                        packet<value_t>::fma(A0, B_0, C0, C0);
+                        A0  = simd<value_t>::loadu(blB);
+                        B_0 = load_lhs(blA);
+                        C0  = simd<value_t>::fma(A0, B_0, C0);
 
                         blB += Traits::LhsProgress;
                         blA += spk;
@@ -1436,32 +1415,32 @@ void gemm(  // NOLINT
 
                     if constexpr (Traits::LhsProgress == 8)
                     {
-                        using packet_half_t = typename packet<value_t>::packet_half_t;
-                        packet_half_t R;
-                        packet<value_t>::gather(to, ldc, R);
+                        using simd_half_t = typename simd<value_t>::simd_half_t;
+                        simd_half_t R;
+                        R = simd<value_t>::gather_half(to, ldc);
                         if (depth - endk > 0)
                         {
                             // We have to handle the last row of the rhs which corresponds to a
                             // half-tmp
-                            const auto a = packet<value_t>::loadu_half(blB);
-                            const auto b = packet<value_t>::set(blA);
-                            auto       c = packet<value_t>::predux_downto4(C0);
-                            packet<value_t>::fma(a, b, c);
-                            packet<value_t>::add(R, c, R);
+                            const auto a = simd<value_t>::loadu_half(blB);
+                            const auto b = simd<value_t>::set(blA);
+                            auto       c = simd<value_t>::predux_downto4(C0);
+                            c            = simd<value_t>::fma(a, b, c);
+                            R            = simd<value_t>::add(R, c);
                         }
                         else
                         {
-                            auto c = packet<value_t>::predux_downto4(C0);
-                            packet<value_t>::add(R, c, R);
+                            auto c = simd<value_t>::predux_downto4(C0);
+                            R      = simd<value_t>::add(R, c);
                         }
-                        packet<value_t>::scatter(R, ldc, to);
+                        simd<value_t>::scatter(R, ldc, to);
                     }
                     else
                     {
-                        packet_t R;
-                        packet<value_t>::gather(to, ldc, R);
-                        packet<value_t>::add(R, C0, R);
-                        packet<value_t>::scatter(R, ldc, to);
+                        simd_t R;
+                        R = simd<value_t>::gather(to, ldc);
+                        R = simd<value_t>::add(R, C0);
+                        simd<value_t>::scatter(R, ldc, to);
                     }
                 }
                 else  // scalar path
@@ -1504,7 +1483,7 @@ void gemm(  // NOLINT
             for (linalg_int i = peeled_mc1; i < rows; i++)
             {
                 const value_t* blA = &blockA[i * strideA + offsetA];
-                packet<value_t>::prefetch(&blA[0]);
+                simd<value_t>::prefetch(&blA[0]);
                 // gets a 1 x 1 res block as registers
                 value_t        C0  = 0.;
                 const value_t* blB = &blockB[j2 * strideB + offsetB];
@@ -1639,7 +1618,7 @@ void matrix_multiplication_seq(  // NOLINT
                     {
                         pack_rhs<value_t,
                             gemm_traits<value_t>::nr,
-                            packet<value_t>::size,
+                            simd<value_t>::size,
                             !transpose_a,
                             false>(block_B,
                             &element<value_t, !transpose_a>(rhs, k, j, rhs_ld),

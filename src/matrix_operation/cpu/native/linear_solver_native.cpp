@@ -10,7 +10,7 @@
 
 #include "include/common/linalg_profiler.h"
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 namespace linalg
@@ -42,41 +42,41 @@ template <typename T> T lu_dot(const T* a, const T* b, linalg_int count)
 {
     linalg_int j = 0;
 #if LINALG_HAS_VECTORIZATION
-    using P = packet<T>;
+    using P = simd<T>;
     // Independent accumulators hide FMA latency across the contiguous row dot product.
-    typename P::packet_t sum0, sum1, sum2, sum3;
-    P::set(T(0), sum0);
-    P::set(T(0), sum1);
-    P::set(T(0), sum2);
-    P::set(T(0), sum3);
+    typename P::simd_t sum0, sum1, sum2, sum3;
+    sum0 = P::set(T(0));
+    sum1 = P::set(T(0));
+    sum2 = P::set(T(0));
+    sum3 = P::set(T(0));
     for (; j + 4 * P::size <= count; j += 4 * P::size)
     {
-        typename P::packet_t av, bv;
-        P::loadu(a + j, av);
-        P::loadu(b + j, bv);
-        P::fma(av, bv, sum0, sum0);
-        P::loadu(a + j + P::size, av);
-        P::loadu(b + j + P::size, bv);
-        P::fma(av, bv, sum1, sum1);
-        P::loadu(a + j + 2 * P::size, av);
-        P::loadu(b + j + 2 * P::size, bv);
-        P::fma(av, bv, sum2, sum2);
-        P::loadu(a + j + 3 * P::size, av);
-        P::loadu(b + j + 3 * P::size, bv);
-        P::fma(av, bv, sum3, sum3);
+        typename P::simd_t av, bv;
+        av   = P::loadu(a + j);
+        bv   = P::loadu(b + j);
+        sum0 = P::fma(av, bv, sum0);
+        av   = P::loadu(a + j + P::size);
+        bv   = P::loadu(b + j + P::size);
+        sum1 = P::fma(av, bv, sum1);
+        av   = P::loadu(a + j + 2 * P::size);
+        bv   = P::loadu(b + j + 2 * P::size);
+        sum2 = P::fma(av, bv, sum2);
+        av   = P::loadu(a + j + 3 * P::size);
+        bv   = P::loadu(b + j + 3 * P::size);
+        sum3 = P::fma(av, bv, sum3);
     }
     for (; j + P::size <= count; j += P::size)
     {
-        typename P::packet_t av, bv;
-        P::loadu(a + j, av);
-        P::loadu(b + j, bv);
-        P::fma(av, bv, sum0, sum0);
+        typename P::simd_t av, bv;
+        av   = P::loadu(a + j);
+        bv   = P::loadu(b + j);
+        sum0 = P::fma(av, bv, sum0);
     }
-    typename P::packet_t sum01, sum23, packet_sum;
-    P::add(sum0, sum1, sum01);
-    P::add(sum2, sum3, sum23);
-    P::add(sum01, sum23, packet_sum);
-    T sum = P::predux(packet_sum);
+    typename P::simd_t sum01, sum23, packet_sum;
+    sum01      = P::add(sum0, sum1);
+    sum23      = P::add(sum2, sum3);
+    packet_sum = P::add(sum01, sum23);
+    T sum      = P::accumulate(packet_sum);
 #else
     T sum = T(0);
 #endif

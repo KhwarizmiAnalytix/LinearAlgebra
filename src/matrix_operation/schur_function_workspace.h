@@ -133,8 +133,8 @@ void check_schur_function_arguments(const T* a,
         "matrix function: row strides exceed supported index range");
     LINALG_CHECK(workspace != nullptr && workspace_size >= total_bytes,
         "matrix function: workspace is null or too small");
-    LINALG_CHECK(reinterpret_cast<std::uintptr_t>(workspace) % alignof(T) == 0,
-        "matrix function: workspace must be aligned for its scalar type");
+    LINALG_CHECK(reinterpret_cast<std::uintptr_t>(workspace) % (2 * alignof(T)) == 0,
+        "matrix function: workspace must be aligned for its complex scalar type");
 }
 
 }  // namespace detail

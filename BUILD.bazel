@@ -88,7 +88,7 @@ cc_library(
     # implemented in ThirdParty/Logging, wired as its own Bazel module
     # (bazel_dep + local_path_override in MODULE.bazel, matching the sibling
     # Solvers project) rather than a plain subdirectory of this workspace.
-    deps = ["@xsigma_logging//:Logging"],
+    deps = ["@xsigma_logging//:Logging", "@scalars//:scalars"],
     # Commit b09f66e replaced a PyTorch-style dispatch_stub function-pointer
     # registry (each backend self-registering via a static initializer, with
     # no other translation unit calling into it directly) with the current
@@ -130,7 +130,7 @@ pkg_files(
 
 pkg_files(
     name = "linear_algebra_installed_libs",
-    srcs = [":linear_algebra_lib"],
+    srcs = [":linear_algebra_lib", "@scalars//:scalars"],
     prefix = "lib",
 )
 
@@ -150,6 +150,7 @@ pkg_tar(
         ":linear_algebra_installed_hdrs",
         ":linear_algebra_installed_libs",
         ":linear_algebra_notices",
+        ":scalars_notice",
     ],
 )
 
@@ -159,5 +160,13 @@ pkg_install(
         ":linear_algebra_installed_hdrs",
         ":linear_algebra_installed_libs",
         ":linear_algebra_notices",
+        ":scalars_notice",
     ],
+)
+
+pkg_files(
+    name = "scalars_notice",
+    srcs = ["ThirdParty/Scalars/LICENSE"],
+    prefix = "share/LinearAlgebra/licenses/Scalars",
+    strip_prefix = strip_prefix.from_pkg("ThirdParty/Scalars"),
 )

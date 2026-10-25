@@ -281,16 +281,16 @@ bool symmetric_eigen(
 
 template <typename T> struct general_layout
 {
-    linalg_schur::complex_value<T>* h;
-    linalg_schur::complex_value<T>* q;
-    linalg_schur::complex_value<T>* work;
+    scalars::complex<T>* h;
+    scalars::complex<T>* q;
+    scalars::complex<T>* work;
 };
 
 template <typename T>
 general_layout<T> general_plan(detail::workspace_arena& arena, linalg_int n, bool vectors)
 {
     const auto count = static_cast<size_t>(n);
-    using C          = linalg_schur::complex_value<T>;
+    using C          = scalars::complex<T>;
     return {arena.next<C>(count * count),
         vectors ? arena.next<C>(count * count) : nullptr,
         arena.next<C>(count)};
@@ -341,7 +341,7 @@ bool general_eigen_impl(T* output,
     {
         for (linalg_int j = 0; j < n; ++j)
         {
-            h[i * n + j] = value(output[i * lda + j] / scale);
+            h[i * n + j] = scalars::complex<T>(output[i * lda + j] / scale);
         }
     }
     const T    eps = std::numeric_limits<T>::epsilon();
@@ -353,8 +353,8 @@ bool general_eigen_impl(T* output,
     }
     for (linalg_int i = 0; i < n; ++i)
     {
-        real[i] = h[i * n + i].real * scale;
-        imag[i] = h[i * n + i].imag * scale;
+        real[i] = h[i * n + i].real() * scale;
+        imag[i] = h[i * n + i].imag() * scale;
     }
     if (!vectors)
     {
@@ -368,22 +368,22 @@ bool general_eigen_impl(T* output,
             "eigen: scalar fallback cannot compute eigenvectors for a complex eigenvalue (index "
             "{})",
             column);
-        std::fill_n(work, n, value(T(0)));
-        work[column] = value(T(1));
+        std::fill_n(work, n, scalars::complex<T>(T(0)));
+        work[column] = scalars::complex<T>(T(1));
         for (linalg_int row = column; row-- > 0;)
         {
-            auto sum = value(T(0));
+            auto sum = scalars::complex<T>(T(0));
             for (linalg_int j = row + 1; j <= column; ++j)
             {
                 sum = sum + h[row * n + j] * work[j];
             }
             auto denominator = h[row * n + row] - h[column * n + column];
-            if (magnitude(denominator) < eps)
+            if (scalars::abs(denominator) < eps)
             {
-                denominator = value(eps);
+                denominator = scalars::complex<T>(eps);
             }
-            work[row]    = (value(T(0)) - sum) / denominator;
-            const T norm = magnitude(work[row]);
+            work[row]    = (scalars::complex<T>(T(0)) - sum) / denominator;
+            const T norm = scalars::abs(work[row]);
             if (norm > T(1))
             {
                 for (linalg_int j = row; j <= column; ++j)
@@ -394,22 +394,23 @@ bool general_eigen_impl(T* output,
         }
         // A real eigenvector may carry a complex phase. Rotate its largest
         // component onto the real axis before returning the normalized real part.
-        auto phase   = value(T(1));
+        auto phase   = scalars::complex<T>(T(1));
         T    largest = T(0);
         for (linalg_int row = 0; row < n; ++row)
         {
-            const auto component = complex_dot(q + row * n, 1, work, 1, column + 1);
-            const T    norm      = magnitude(component);
+            const auto component = scalars::complex_dot(q + row * n, 1, work, 1, column + 1);
+            const T    norm      = scalars::abs(component);
             if (norm > largest)
             {
                 largest = norm;
-                phase   = conjugate(component) / norm;
+                phase   = scalars::conj(component) / norm;
             }
         }
         T norm = T(0);
         for (linalg_int row = 0; row < n; ++row)
         {
-            const T component = (complex_dot(q + row * n, 1, work, 1, column + 1) * phase).real;
+            const T component =
+                (scalars::complex_dot(q + row * n, 1, work, 1, column + 1) * phase).real();
             output[row * ldv + column] = component;
             norm                       = std::hypot(norm, component);
         }

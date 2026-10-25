@@ -10,7 +10,7 @@
 #include "include/common/workspace_arena.h"
 
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -66,8 +66,8 @@ template <typename T> size_t invert_scalar_workspace_size(linalg_int lda, linear
 namespace
 {
 
-// y[0..len) -= a * x[0..len), vectorized via linalg::packet<T> (src/common/
-// packet.h) -- the same Eigen-derived SIMD abstraction, and the same kernel
+// y[0..len) -= a * x[0..len), vectorized via ::simd<T> (src/common/
+// Scalars) -- the same SIMD interface, and the same kernel
 // shape, as lu_decomposition_native.cpp's lu_axpy_sub (this file keeps its
 // own internal-linkage copy, same reasoning as check_invert_inputs above:
 // each backend/kernel translation unit keeps its own so linking several
@@ -82,30 +82,30 @@ template <typename T>
 inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
 
-    typename P::packet_t va;
-    P::set(-a, va);
+    typename P::simd_t va;
+    va = P::set(-a);
 
     linalg_int c = 0;
     for (; c + 4 * width <= len; c += 4 * width)
     {
-        typename P::packet_t vx0, vx1, vx2, vx3;
-        typename P::packet_t vy0, vy1, vy2, vy3;
-        typename P::packet_t vo0, vo1, vo2, vo3;
-        P::loadu(x + c, vx0);
-        P::loadu(x + c + width, vx1);
-        P::loadu(x + c + 2 * width, vx2);
-        P::loadu(x + c + 3 * width, vx3);
-        P::loadu(y + c, vy0);
-        P::loadu(y + c + width, vy1);
-        P::loadu(y + c + 2 * width, vy2);
-        P::loadu(y + c + 3 * width, vy3);
-        P::fma(va, vx0, vy0, vo0);
-        P::fma(va, vx1, vy1, vo1);
-        P::fma(va, vx2, vy2, vo2);
-        P::fma(va, vx3, vy3, vo3);
+        typename P::simd_t vx0, vx1, vx2, vx3;
+        typename P::simd_t vy0, vy1, vy2, vy3;
+        typename P::simd_t vo0, vo1, vo2, vo3;
+        vx0 = P::loadu(x + c);
+        vx1 = P::loadu(x + c + width);
+        vx2 = P::loadu(x + c + 2 * width);
+        vx3 = P::loadu(x + c + 3 * width);
+        vy0 = P::loadu(y + c);
+        vy1 = P::loadu(y + c + width);
+        vy2 = P::loadu(y + c + 2 * width);
+        vy3 = P::loadu(y + c + 3 * width);
+        vo0 = P::fma(va, vx0, vy0);
+        vo1 = P::fma(va, vx1, vy1);
+        vo2 = P::fma(va, vx2, vy2);
+        vo3 = P::fma(va, vx3, vy3);
         P::storeu(vo0, y + c);
         P::storeu(vo1, y + c + width);
         P::storeu(vo2, y + c + 2 * width);
@@ -113,12 +113,12 @@ inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int
     }
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t vx;
-        typename P::packet_t vy;
-        typename P::packet_t vout;
-        P::loadu(x + c, vx);
-        P::loadu(y + c, vy);
-        P::fma(va, vx, vy, vout);
+        typename P::simd_t vx;
+        typename P::simd_t vy;
+        typename P::simd_t vout;
+        vx   = P::loadu(x + c);
+        vy   = P::loadu(y + c);
+        vout = P::fma(va, vx, vy);
         P::storeu(vout, y + c);
     }
     for (; c < len; ++c)
@@ -147,49 +147,49 @@ inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int
 template <typename T> inline T invert_dot(const T* x, const T* y, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = packet<T>;
+    using P                    = simd<T>;
     constexpr linalg_int width = P::size;
 
-    typename P::packet_t acc0, acc1, acc2, acc3;
-    P::set(static_cast<T>(0), acc0);
-    P::set(static_cast<T>(0), acc1);
-    P::set(static_cast<T>(0), acc2);
-    P::set(static_cast<T>(0), acc3);
+    typename P::simd_t acc0, acc1, acc2, acc3;
+    acc0 = P::set(static_cast<T>(0));
+    acc1 = P::set(static_cast<T>(0));
+    acc2 = P::set(static_cast<T>(0));
+    acc3 = P::set(static_cast<T>(0));
 
     linalg_int c = 0;
     for (; c + 4 * width <= len; c += 4 * width)
     {
-        typename P::packet_t px0, px1, px2, px3;
-        typename P::packet_t py0, py1, py2, py3;
-        P::loadu(x + c, px0);
-        P::loadu(x + c + width, px1);
-        P::loadu(x + c + 2 * width, px2);
-        P::loadu(x + c + 3 * width, px3);
-        P::loadu(y + c, py0);
-        P::loadu(y + c + width, py1);
-        P::loadu(y + c + 2 * width, py2);
-        P::loadu(y + c + 3 * width, py3);
-        P::fma(px0, py0, acc0, acc0);
-        P::fma(px1, py1, acc1, acc1);
-        P::fma(px2, py2, acc2, acc2);
-        P::fma(px3, py3, acc3, acc3);
+        typename P::simd_t px0, px1, px2, px3;
+        typename P::simd_t py0, py1, py2, py3;
+        px0  = P::loadu(x + c);
+        px1  = P::loadu(x + c + width);
+        px2  = P::loadu(x + c + 2 * width);
+        px3  = P::loadu(x + c + 3 * width);
+        py0  = P::loadu(y + c);
+        py1  = P::loadu(y + c + width);
+        py2  = P::loadu(y + c + 2 * width);
+        py3  = P::loadu(y + c + 3 * width);
+        acc0 = P::fma(px0, py0, acc0);
+        acc1 = P::fma(px1, py1, acc1);
+        acc2 = P::fma(px2, py2, acc2);
+        acc3 = P::fma(px3, py3, acc3);
     }
 
-    typename P::packet_t acc01, acc23, acc;
-    P::add(acc0, acc1, acc01);
-    P::add(acc2, acc3, acc23);
-    P::add(acc01, acc23, acc);
+    typename P::simd_t acc01, acc23, acc;
+    acc01 = P::add(acc0, acc1);
+    acc23 = P::add(acc2, acc3);
+    acc   = P::add(acc01, acc23);
 
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t px;
-        typename P::packet_t py;
-        P::loadu(x + c, px);
-        P::loadu(y + c, py);
-        P::fma(px, py, acc, acc);
+        typename P::simd_t px;
+        typename P::simd_t py;
+        px  = P::loadu(x + c);
+        py  = P::loadu(y + c);
+        acc = P::fma(px, py, acc);
     }
 
-    T sum = P::predux(acc);
+    T sum = P::accumulate(acc);
     for (; c < len; ++c)
     {
         sum += x[c] * y[c];
@@ -309,7 +309,7 @@ void lu_invert(T* __restrict m,
 // old interleaved column-by-column recurrence whose two reductions read a
 // strided matrix column (m[k * lda + j], stride lda) and so could not be
 // vectorized against a contiguous row without a per-element gather
-// (packet<T>::gather is itself a scalar loop -- see src/common/packet.h --
+// (simd<T>::gather is itself a scalar loop -- see Scalars SIMD --
 // so routing through it would add indirection without adding real SIMD
 // throughput):
 //

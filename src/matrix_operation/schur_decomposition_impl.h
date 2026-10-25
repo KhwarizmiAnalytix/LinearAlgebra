@@ -9,8 +9,31 @@
 // reconstruction through existing backend GEMM operations.
 
 // Operation-owned portable kernel, compiled for native, CUDA/HIP, and Metal.
-#include "src/common/complex_math.h"
-#include "src/common/complex_vector.h"
+
+#include "include/common/linalg_macros.h"
+
+#if defined(__OBJC__)
+#include "src/matrix_operation/gpu/metal/scalars_metal.h"
+#else
+#include <cmath>
+#include <types/complex.h>
+#if !defined(__CUDACC__) && !defined(__HIPCC__)
+#include <math/complex_vector.h>
+#endif
+namespace linalg_schur
+{
+using std::atan2;
+using std::exp;
+using std::fabs;
+using std::fmax;
+using std::fmin;
+using std::hypot;
+using std::isfinite;
+using std::log;
+using std::sin;
+using std::sqrt;
+}  // namespace linalg_schur
+#endif
 
 // clang-format off
 LINALG_SCHUR_CORE(
@@ -19,9 +42,9 @@ namespace linalg_schur
 // Complex Schur form avoids the real 2x2 block cases and also handles
 // nonsymmetric matrices, conjugate eigenvalues, and defective Jordan blocks.
 template <typename T, bool ComputeVectors = true>
-LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
-    LINALG_ADDRESS complex_value<T>* q,
-    LINALG_ADDRESS complex_value<T>* v,
+LINALG_INLINE bool schur_iteration(LINALG_ADDRESS scalars::complex<T>* h,
+    LINALG_ADDRESS scalars::complex<T>* q,
+    LINALG_ADDRESS scalars::complex<T>* v,
     int                              n,
     T                                epsilon)
 {
@@ -31,7 +54,7 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         {
             for (int j = 0; j < n; ++j)
             {
-                q[i * n + j] = value(i == j ? T(1) : T(0));
+                q[i * n + j] = scalars::complex<T>(i == j ? T(1) : T(0));
             }
         }
     }
@@ -42,36 +65,36 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         for (int i = k + 1; i < n; ++i)
         {
             v[i] = h[i * n + k];
-            norm = real_hypot(norm, magnitude(v[i]));
+            norm = hypot(norm, scalars::abs(v[i]));
         }
         if (norm == T(0))
         {
             continue;
         }
-        const T    first = magnitude(v[k + 1]);
-        const auto phase = first == T(0) ? value(T(1)) : v[k + 1] / first;
+        const T    first = scalars::abs(v[k + 1]);
+        const auto phase = first == T(0) ? scalars::complex<T>(T(1)) : v[k + 1] / first;
         v[k + 1]         = v[k + 1] + phase * norm;
         T vnorm          = T(0);
         for (int i = k + 1; i < n; ++i)
         {
-            vnorm = real_hypot(vnorm, magnitude(v[i]));
+            vnorm = hypot(vnorm, scalars::abs(v[i]));
         }
         for (int i = k + 1; i < n; ++i)
         {
             v[i] = v[i] / vnorm;
         }
         constexpr int column_tile_size = 32;
-        complex_value<T> projection[column_tile_size];
+        scalars::complex<T> projection[column_tile_size];
         for (int j = k; j < n; j += column_tile_size)
         {
             const int tile_width = n - j < column_tile_size ? n - j : column_tile_size;
             for (int jj = 0; jj < tile_width; ++jj)
             {
-                projection[jj] = value(T(0));
+                projection[jj] = scalars::complex<T>(T(0));
             }
             for (int i = k + 1; i < n; ++i)
             {
-                const auto conjugated_v = conjugate(v[i]);
+                const auto conjugated_v = scalars::conj(v[i]);
                 const auto* h_i = h + i * n + j;
                 for (int jj = 0; jj < tile_width; ++jj)
                 {
@@ -93,17 +116,49 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         }
         for (int i = 0; i < n; ++i)
         {
-            const auto hd = complex_dot(h + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
-            complex_axpy(h + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, hd * T(-2), true);
+)
+#if defined(__CUDACC__) || defined(__HIPCC__)
+LINALG_SCHUR_CORE(
+            auto hd = scalars::complex<T>(T(0));
+            for (int j = k + 1; j < n; ++j)
+            {
+                hd = hd + h[i * n + j] * v[j];
+            }
+            hd = hd * T(-2);
+            for (int j = k + 1; j < n; ++j)
+            {
+                h[i * n + j] = h[i * n + j] + hd * scalars::conj(v[j]);
+            }
             if (ComputeVectors)
             {
-                const auto qd = complex_dot(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
-                complex_axpy(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, qd * T(-2), true);
+                auto qd = scalars::complex<T>(T(0));
+                for (int j = k + 1; j < n; ++j)
+                {
+                    qd = qd + q[i * n + j] * v[j];
+                }
+                qd = qd * T(-2);
+                for (int j = k + 1; j < n; ++j)
+                {
+                    q[i * n + j] = q[i * n + j] + qd * scalars::conj(v[j]);
+                }
             }
+)
+#else
+LINALG_SCHUR_CORE(
+            const auto hd = scalars::complex_dot(h + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
+            scalars::complex_axpy(h + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, hd * T(-2), true);
+            if (ComputeVectors)
+            {
+                const auto qd = scalars::complex_dot(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1);
+                scalars::complex_axpy(q + i * n + k + 1, 1, v + k + 1, 1, n - k - 1, qd * T(-2), true);
+            }
+)
+#endif
+LINALG_SCHUR_CORE(
         }
         for (int i = k + 2; i < n; ++i)
         {
-            h[i * n + k] = value(T(0));
+            h[i * n + k] = scalars::complex<T>(T(0));
         }
     }
 
@@ -115,10 +170,10 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         for (; begin > 0; --begin)
         {
             const T scale =
-                magnitude(h[(begin - 1) * n + begin - 1]) + magnitude(h[begin * n + begin]);
-            if (magnitude(h[begin * n + begin - 1]) <= T(8) * epsilon * scale)
+                scalars::abs(h[(begin - 1) * n + begin - 1]) + scalars::abs(h[begin * n + begin]);
+            if (scalars::abs(h[begin * n + begin - 1]) <= T(8) * epsilon * scale)
             {
-                h[begin * n + begin - 1] = value(T(0));
+                h[begin * n + begin - 1] = scalars::complex<T>(T(0));
                 break;
             }
         }
@@ -136,42 +191,71 @@ LINALG_INLINE bool schur_iteration(LINALG_ADDRESS complex_value<T>* h,
         const auto d     = h[end * n + end];
         const auto delta = (a - d) * T(0.5);
         const auto root =
-            square_root(delta * delta + h[(end - 1) * n + end] * h[end * n + end - 1]);
+            scalars::sqrt(delta * delta + h[(end - 1) * n + end] * h[end * n + end - 1]);
         const auto mu1   = (a + d) * T(0.5) + root;
         const auto mu2   = (a + d) * T(0.5) - root;
-        auto       shift = magnitude(mu1 - d) < magnitude(mu2 - d) ? mu1 : mu2;
+        auto       shift = scalars::abs(mu1 - d) < scalars::abs(mu2 - d) ? mu1 : mu2;
         if (iterations % 20 == 0)
         {
-            const T bump = magnitude(h[end * n + end - 1]);
-            shift        = d + value(bump, bump * T(0.25));
+            const T bump = scalars::abs(h[end * n + end - 1]);
+            shift        = d + scalars::complex<T>(bump, bump * T(0.25));
         }
         auto x = h[begin * n + begin] - shift;
         auto y = h[(begin + 1) * n + begin];
         for (int k = begin; k < end; ++k)
         {
-            const T    ax           = magnitude(x);
-            const T    ay           = magnitude(y);
-            const T    norm         = real_hypot(ax, ay);
+            const T    ax           = scalars::abs(x);
+            const T    ay           = scalars::abs(y);
+            const T    norm         = hypot(ax, ay);
             const T    c            = norm == T(0) ? T(1) : ax / norm;
-            const auto phase        = ax == T(0) ? value(T(1)) : x / ax;
-            const auto s            = norm == T(0) ? value(T(0)) : (phase * conjugate(y)) / norm;
+            const auto phase        = ax == T(0) ? scalars::complex<T>(T(1)) : x / ax;
+            const auto s            = norm == T(0) ? scalars::complex<T>(T(0)) : (phase * scalars::conj(y)) / norm;
             const int  first_column = k > begin ? k - 1 : k;
-            complex_rotate(h + k * n + first_column,
+)
+#if defined(__CUDACC__) || defined(__HIPCC__)
+LINALG_SCHUR_CORE(
+            for (int j = first_column; j < n; ++j)
+            {
+                const auto a = h[k * n + j];
+                const auto b = h[(k + 1) * n + j];
+                h[k * n + j] = a * c + s * b;
+                h[(k + 1) * n + j] = b * c - scalars::conj(s) * a;
+            }
+            for (int i = 0; i < n; ++i)
+            {
+                const auto a = h[i * n + k];
+                const auto b = h[i * n + k + 1];
+                h[i * n + k] = a * c + scalars::conj(s) * b;
+                h[i * n + k + 1] = b * c - s * a;
+                if (ComputeVectors)
+                {
+                    const auto qa = q[i * n + k];
+                    const auto qb = q[i * n + k + 1];
+                    q[i * n + k] = qa * c + scalars::conj(s) * qb;
+                    q[i * n + k + 1] = qb * c - s * qa;
+                }
+            }
+)
+#else
+LINALG_SCHUR_CORE(
+            scalars::complex_rotate(h + k * n + first_column,
                 1,
                 h + (k + 1) * n + first_column,
                 1,
                 n - first_column,
                 c,
-                s,
-                v);
-            complex_rotate(h + k, n, h + k + 1, n, n, c, conjugate(s), v);
+                s);
+            scalars::complex_rotate(h + k, n, h + k + 1, n, n, c, scalars::conj(s));
             if (ComputeVectors)
             {
-                complex_rotate(q + k, n, q + k + 1, n, n, c, conjugate(s), v);
+                scalars::complex_rotate(q + k, n, q + k + 1, n, n, c, scalars::conj(s));
             }
+)
+#endif
+LINALG_SCHUR_CORE(
             if (k > begin)
             {
-                h[(k + 1) * n + k - 1] = value(T(0));
+                h[(k + 1) * n + k - 1] = scalars::complex<T>(T(0));
             }
             if (k + 1 < end)
             {
@@ -215,14 +299,14 @@ LINALG_INLINE bool decompose_real(LINALG_ADDRESS const T* a, int n, int lda,
         }
         return true;
     }
-    auto h = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(workspace);
+    auto h = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(workspace);
     auto q = h + n * n;
     auto vector = q + n * n;
     for (int i = 0; i < n; ++i)
     {
         for (int j = 0; j < n; ++j)
         {
-            h[i * n + j] = value(a[i * lda + j] / scale);
+            h[i * n + j] = scalars::complex<T>(a[i * lda + j] / scale);
         }
     }
     if (!schur_iteration(h, q, vector, n, epsilon)) return false;
@@ -235,13 +319,13 @@ LINALG_INLINE bool decompose_real(LINALG_ADDRESS const T* a, int n, int lda,
     {
         for (int j = 0; j < n; ++j)
         {
-            const auto t = i <= j ? h[i * n + j] * scale : value(T(0));
-            finite = finite && isfinite(t.real) && isfinite(t.imag) &&
-                      isfinite(q[i * n + j].real) && isfinite(q[i * n + j].imag);
-            sr[i * lds + j] = t.real;
-            si[i * lds + j] = t.imag;
-            qr[i * ldq + j] = q[i * n + j].real;
-            qi[i * ldq + j] = q[i * n + j].imag;
+            const auto t = i <= j ? h[i * n + j] * scale : scalars::complex<T>(T(0));
+            finite = finite && isfinite(t.real()) && isfinite(t.imag()) &&
+                      isfinite(q[i * n + j].real()) && isfinite(q[i * n + j].imag());
+            sr[i * lds + j] = t.real();
+            si[i * lds + j] = t.imag();
+            qr[i * ldq + j] = q[i * n + j].real();
+            qi[i * ldq + j] = q[i * n + j].imag();
         }
     }
     return finite;

@@ -15,6 +15,7 @@ include(CMakeFindDependencyMacro)
 # installed package must make Logging discoverable separately (e.g. build
 # and install KhwarizmiAnalytix/Logging to a prefix on CMAKE_PREFIX_PATH).
 find_dependency(Logging)
+find_dependency(Scalars CONFIG)
 
 # --- Optional Intel MKL backend (LINALG_ENABLE_MKL) ---
 # Only part of this package's link interface when the installed LinearAlgebra

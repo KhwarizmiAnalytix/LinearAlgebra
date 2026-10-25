@@ -2,9 +2,10 @@
 
 #include "include/common/linalg_macros.h"
 #include "include/common/linalg_profiler.h"
+#include "include/common/types.h"
 
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 namespace linalg::banded_operations
@@ -14,10 +15,7 @@ namespace linalg::banded_operations
 // decomposition<T, BandCount>
 //=============================================================================
 template <typename T, int BandCount>
-void decomposition(std::vector<T>& output,
-    size_t                         outer_dim,
-    size_t                         dim,
-    size_t                         inner_dim)
+void decomposition(std::vector<T>& output, size_t outer_dim, size_t dim, size_t inner_dim)
 {
     static_assert(BandCount == 3 || BandCount == 5, "BandCount must be 3 or 5");
 
@@ -34,7 +32,7 @@ void decomposition(std::vector<T>& output,
         LINALG_SCOPE("banded/decomposition/3");
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = packet<T>;
+        using P                = simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
         // Same row-vs-lag reasoning as solve_decomposed above: the boundary row has no
         // recurrence at all (always safe to pack), but the main loop's lag is exactly
@@ -45,10 +43,10 @@ void decomposition(std::vector<T>& output,
         const bool       can_vectorize_outer = !can_vectorize_inner && width <= outer_dim;
         const linalg_int gstride             = static_cast<linalg_int>(n);
 
-        typename P::packet_t vzero, vone, vnegone;
-        P::set(T{0}, vzero);
-        P::set(T{1}, vone);
-        P::set(T{-1}, vnegone);
+        typename P::simd_t vzero, vone, vnegone;
+        vzero   = P::set(T{0});
+        vone    = P::set(T{1});
+        vnegone = P::set(T{-1});
 #endif
 
 #if LINALG_HAS_VECTORIZATION
@@ -65,13 +63,13 @@ void decomposition(std::vector<T>& output,
                 {
                     const size_t base = l * n + row;
 
-                    typename P::packet_t v1, v2, vinv, vout;
-                    P::gather(band1 + base, gstride, v1);
-                    P::gather(band2 + base, gstride, v2);
-                    P::div(vone, v1, vinv);
+                    typename P::simd_t v1, v2, vinv, vout;
+                    v1   = P::gather(band1 + base, gstride);
+                    v2   = P::gather(band2 + base, gstride);
+                    vinv = P::div(vone, v1);
                     P::scatter(vinv, gstride, band0 + base);
                     P::scatter(vzero, gstride, band1 + base);
-                    P::fma(v2, vinv, vzero, vout);
+                    vout = P::fma(v2, vinv, vzero);
                     P::scatter(vout, gstride, band2 + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -92,25 +90,25 @@ void decomposition(std::vector<T>& output,
                 {
                     const size_t base = l * n + row;
 
-                    typename P::packet_t v0, v1, v2, vlag, vneg0, vsum, vinv, vout;
-                    P::gather(band0 + base, gstride, v0);
-                    P::gather(band1 + base, gstride, v1);
-                    P::gather(band2 + base, gstride, v2);
-                    P::gather(band2 + base - inner_dim, gstride, vlag);
-                    P::fma(v0, vnegone, vzero, vneg0);
-                    P::fma(vneg0, vlag, v1, vsum);
-                    P::div(vone, vsum, vinv);
+                    typename P::simd_t v0, v1, v2, vlag, vneg0, vsum, vinv, vout;
+                    v0    = P::gather(band0 + base, gstride);
+                    v1    = P::gather(band1 + base, gstride);
+                    v2    = P::gather(band2 + base, gstride);
+                    vlag  = P::gather(band2 + base - inner_dim, gstride);
+                    vneg0 = P::fma(v0, vnegone, vzero);
+                    vsum  = P::fma(vneg0, vlag, v1);
+                    vinv  = P::div(vone, vsum);
                     P::scatter(vinv, gstride, band0 + base);
-                    P::fma(vneg0, vinv, vzero, vout);
+                    vout = P::fma(vneg0, vinv, vzero);
                     P::scatter(vout, gstride, band1 + base);
-                    P::fma(v2, vinv, vzero, vout);
+                    vout = P::fma(v2, vinv, vzero);
                     P::scatter(vout, gstride, band2 + base);
                 }
                 for (; l < outer_dim; ++l)
                 {
-                    const size_t base  = l * n + row;
-                    const auto   tmp   = band2[base - inner_dim];
-                    const auto   alpha = -band0[base];
+                    const size_t base     = l * n + row;
+                    const auto   tmp      = band2[base - inner_dim];
+                    const auto   alpha    = -band0[base];
                     const T      inv_diag = T{1} / (band1[base] + alpha * tmp);
 
                     band0[base] = inv_diag;
@@ -135,13 +133,13 @@ void decomposition(std::vector<T>& output,
                 for (; i + width <= inner_dim;
                     i += width, itr0 += width, itr1 += width, itr2 += width)
                 {
-                    typename P::packet_t v1, v2, vinv, vout;
-                    P::loadu(itr1, v1);
-                    P::loadu(itr2, v2);
-                    P::div(vone, v1, vinv);
+                    typename P::simd_t v1, v2, vinv, vout;
+                    v1   = P::loadu(itr1);
+                    v2   = P::loadu(itr2);
+                    vinv = P::div(vone, v1);
                     P::storeu(vinv, itr0);
                     P::storeu(vzero, itr1);
-                    P::fma(v2, vinv, vzero, vout);
+                    vout = P::fma(v2, vinv, vzero);
                     P::storeu(vout, itr2);
                 }
 #endif
@@ -159,18 +157,18 @@ void decomposition(std::vector<T>& output,
                 {
                     for (; i + width <= n; i += width, itr0 += width, itr1 += width, itr2 += width)
                     {
-                        typename P::packet_t v0, v1, v2, vlag, vneg0, vsum, vinv, vout;
-                        P::loadu(itr0, v0);
-                        P::loadu(itr1, v1);
-                        P::loadu(itr2, v2);
-                        P::loadu(itr2 - inner_dim, vlag);
-                        P::fma(v0, vnegone, vzero, vneg0);
-                        P::fma(vneg0, vlag, v1, vsum);
-                        P::div(vone, vsum, vinv);
+                        typename P::simd_t v0, v1, v2, vlag, vneg0, vsum, vinv, vout;
+                        v0    = P::loadu(itr0);
+                        v1    = P::loadu(itr1);
+                        v2    = P::loadu(itr2);
+                        vlag  = P::loadu(itr2 - inner_dim);
+                        vneg0 = P::fma(v0, vnegone, vzero);
+                        vsum  = P::fma(vneg0, vlag, v1);
+                        vinv  = P::div(vone, vsum);
                         P::storeu(vinv, itr0);
-                        P::fma(vneg0, vinv, vzero, vout);
+                        vout = P::fma(vneg0, vinv, vzero);
                         P::storeu(vout, itr1);
-                        P::fma(v2, vinv, vzero, vout);
+                        vout = P::fma(v2, vinv, vzero);
                         P::storeu(vout, itr2);
                     }
                 }
@@ -192,9 +190,9 @@ void decomposition(std::vector<T>& output,
 #if LINALG_HAS_VECTORIZATION
         for (; i + width <= stride; i += width)
         {
-            typename P::packet_t v, vout;
-            P::loadu(output.data() + 2 * stride + i, v);
-            P::fma(v, vnegone, vzero, vout);
+            typename P::simd_t v, vout;
+            v    = P::loadu(output.data() + 2 * stride + i);
+            vout = P::fma(v, vnegone, vzero);
             P::storeu(vout, output.data() + 2 * stride + i);
         }
 #endif
@@ -210,7 +208,7 @@ void decomposition(std::vector<T>& output,
         const auto two_inner_dim = 2 * inner_dim;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = packet<T>;
+        using P                = simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
         // Phase 1 has no recurrence (always safe). Phases 2 and 3 read lags of inner_dim and
         // two_inner_dim, both >= inner_dim, so width <= inner_dim is the safety condition for
@@ -220,10 +218,10 @@ void decomposition(std::vector<T>& output,
         const bool       can_vectorize_outer = !can_vectorize_inner && width <= outer_dim;
         const linalg_int gstride             = static_cast<linalg_int>(n);
 
-        typename P::packet_t vzero, vone, vnegone;
-        P::set(T{0}, vzero);
-        P::set(T{1}, vone);
-        P::set(T{-1}, vnegone);
+        typename P::simd_t vzero, vone, vnegone;
+        vzero   = P::set(T{0});
+        vone    = P::set(T{1});
+        vnegone = P::set(T{-1});
 #endif
 
 #if LINALG_HAS_VECTORIZATION
@@ -242,28 +240,28 @@ void decomposition(std::vector<T>& output,
                 {
                     const size_t base = l * n + row;
 
-                    typename P::packet_t ve, vc, vd, va, vb, vmu, vnegc, vnege, vout;
-                    P::gather(band0 + base, gstride, ve);
-                    P::gather(band1 + base, gstride, vc);
-                    P::gather(band2 + base, gstride, vd);
-                    P::gather(band3 + base, gstride, va);
-                    P::gather(band4 + base, gstride, vb);
+                    typename P::simd_t ve, vc, vd, va, vb, vmu, vnegc, vnege, vout;
+                    ve = P::gather(band0 + base, gstride);
+                    vc = P::gather(band1 + base, gstride);
+                    vd = P::gather(band2 + base, gstride);
+                    va = P::gather(band3 + base, gstride);
+                    vb = P::gather(band4 + base, gstride);
 
-                    P::div(vone, vd, vmu);
+                    vmu = P::div(vone, vd);
                     P::scatter(vmu, gstride, band0 + base);
 
-                    P::fma(vc, vnegone, vzero, vnegc);
-                    P::fma(vnegc, vmu, vzero, vout);
+                    vnegc = P::fma(vc, vnegone, vzero);
+                    vout  = P::fma(vnegc, vmu, vzero);
                     P::scatter(vout, gstride, band1 + base);
 
-                    P::fma(ve, vnegone, vzero, vnege);
-                    P::fma(vnege, vmu, vzero, vout);
+                    vnege = P::fma(ve, vnegone, vzero);
+                    vout  = P::fma(vnege, vmu, vzero);
                     P::scatter(vout, gstride, band2 + base);
 
-                    P::fma(va, vmu, vzero, vout);
+                    vout = P::fma(va, vmu, vzero);
                     P::scatter(vout, gstride, band3 + base);
 
-                    P::fma(vb, vmu, vzero, vout);
+                    vout = P::fma(vb, vmu, vzero);
                     P::scatter(vout, gstride, band4 + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -294,35 +292,35 @@ void decomposition(std::vector<T>& output,
                 {
                     const size_t base = l * n + row;
 
-                    typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, vnegalpha, vdenom, vmu,
+                    typename P::simd_t ve, vc, vd, va, vb, valpha, vbeta, vnegalpha, vdenom, vmu,
                         vnegc, vnege, vnegbeta, vt3, vout;
-                    P::gather(band0 + base, gstride, ve);
-                    P::gather(band1 + base, gstride, vc);
-                    P::gather(band2 + base, gstride, vd);
-                    P::gather(band3 + base, gstride, va);
-                    P::gather(band4 + base, gstride, vb);
-                    P::gather(band3 + base - inner_dim, gstride, valpha);
-                    P::gather(band4 + base - inner_dim, gstride, vbeta);
+                    ve     = P::gather(band0 + base, gstride);
+                    vc     = P::gather(band1 + base, gstride);
+                    vd     = P::gather(band2 + base, gstride);
+                    va     = P::gather(band3 + base, gstride);
+                    vb     = P::gather(band4 + base, gstride);
+                    valpha = P::gather(band3 + base - inner_dim, gstride);
+                    vbeta  = P::gather(band4 + base - inner_dim, gstride);
 
-                    P::fma(valpha, vnegone, vzero, vnegalpha);
-                    P::fma(vnegalpha, vc, vd, vdenom);
-                    P::div(vone, vdenom, vmu);
+                    vnegalpha = P::fma(valpha, vnegone, vzero);
+                    vdenom    = P::fma(vnegalpha, vc, vd);
+                    vmu       = P::div(vone, vdenom);
                     P::scatter(vmu, gstride, band0 + base);
 
-                    P::fma(vc, vnegone, vzero, vnegc);
-                    P::fma(vnegc, vmu, vzero, vout);
+                    vnegc = P::fma(vc, vnegone, vzero);
+                    vout  = P::fma(vnegc, vmu, vzero);
                     P::scatter(vout, gstride, band1 + base);
 
-                    P::fma(ve, vnegone, vzero, vnege);
-                    P::fma(vnege, vmu, vzero, vout);
+                    vnege = P::fma(ve, vnegone, vzero);
+                    vout  = P::fma(vnege, vmu, vzero);
                     P::scatter(vout, gstride, band2 + base);
 
-                    P::fma(vbeta, vnegone, vzero, vnegbeta);
-                    P::fma(vnegbeta, vc, va, vt3);
-                    P::fma(vt3, vmu, vzero, vout);
+                    vnegbeta = P::fma(vbeta, vnegone, vzero);
+                    vt3      = P::fma(vnegbeta, vc, va);
+                    vout     = P::fma(vt3, vmu, vzero);
                     P::scatter(vout, gstride, band3 + base);
 
-                    P::fma(vb, vmu, vzero, vout);
+                    vout = P::fma(vb, vmu, vzero);
                     P::scatter(vout, gstride, band4 + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -356,46 +354,46 @@ void decomposition(std::vector<T>& output,
                 {
                     const size_t base = l * n + row;
 
-                    typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, valpha_prev, vbeta_prev,
+                    typename P::simd_t ve, vc, vd, va, vb, valpha, vbeta, valpha_prev, vbeta_prev,
                         vneg_alpha_prev, vgamma, vneg_alpha, vt1, vneg_beta_prev, vdenom, vmu,
                         vneg_gamma, vnege, vneg_beta, vt3, vout;
-                    P::gather(band0 + base, gstride, ve);
-                    P::gather(band1 + base, gstride, vc);
-                    P::gather(band2 + base, gstride, vd);
-                    P::gather(band3 + base, gstride, va);
-                    P::gather(band4 + base, gstride, vb);
-                    P::gather(band3 + base - inner_dim, gstride, valpha);
-                    P::gather(band4 + base - inner_dim, gstride, vbeta);
-                    P::gather(band3 + base - two_inner_dim, gstride, valpha_prev);
-                    P::gather(band4 + base - two_inner_dim, gstride, vbeta_prev);
+                    ve          = P::gather(band0 + base, gstride);
+                    vc          = P::gather(band1 + base, gstride);
+                    vd          = P::gather(band2 + base, gstride);
+                    va          = P::gather(band3 + base, gstride);
+                    vb          = P::gather(band4 + base, gstride);
+                    valpha      = P::gather(band3 + base - inner_dim, gstride);
+                    vbeta       = P::gather(band4 + base - inner_dim, gstride);
+                    valpha_prev = P::gather(band3 + base - two_inner_dim, gstride);
+                    vbeta_prev  = P::gather(band4 + base - two_inner_dim, gstride);
 
                     // gamma = c - alpha_prev * e
-                    P::fma(valpha_prev, vnegone, vzero, vneg_alpha_prev);
-                    P::fma(vneg_alpha_prev, ve, vc, vgamma);
+                    vneg_alpha_prev = P::fma(valpha_prev, vnegone, vzero);
+                    vgamma          = P::fma(vneg_alpha_prev, ve, vc);
 
                     // mu = 1 / (d - alpha * gamma - beta_prev * e)
-                    P::fma(valpha, vnegone, vzero, vneg_alpha);
-                    P::fma(vneg_alpha, vgamma, vd, vt1);
-                    P::fma(vbeta_prev, vnegone, vzero, vneg_beta_prev);
-                    P::fma(vneg_beta_prev, ve, vt1, vdenom);
-                    P::div(vone, vdenom, vmu);
+                    vneg_alpha     = P::fma(valpha, vnegone, vzero);
+                    vt1            = P::fma(vneg_alpha, vgamma, vd);
+                    vneg_beta_prev = P::fma(vbeta_prev, vnegone, vzero);
+                    vdenom         = P::fma(vneg_beta_prev, ve, vt1);
+                    vmu            = P::div(vone, vdenom);
                     P::scatter(vmu, gstride, band0 + base);
 
-                    P::fma(vgamma, vnegone, vzero, vneg_gamma);
-                    P::fma(vneg_gamma, vmu, vzero, vout);
+                    vneg_gamma = P::fma(vgamma, vnegone, vzero);
+                    vout       = P::fma(vneg_gamma, vmu, vzero);
                     P::scatter(vout, gstride, band1 + base);
 
-                    P::fma(ve, vnegone, vzero, vnege);
-                    P::fma(vnege, vmu, vzero, vout);
+                    vnege = P::fma(ve, vnegone, vzero);
+                    vout  = P::fma(vnege, vmu, vzero);
                     P::scatter(vout, gstride, band2 + base);
 
                     // (a - beta * gamma) * mu
-                    P::fma(vbeta, vnegone, vzero, vneg_beta);
-                    P::fma(vneg_beta, vgamma, va, vt3);
-                    P::fma(vt3, vmu, vzero, vout);
+                    vneg_beta = P::fma(vbeta, vnegone, vzero);
+                    vt3       = P::fma(vneg_beta, vgamma, va);
+                    vout      = P::fma(vt3, vmu, vzero);
                     P::scatter(vout, gstride, band3 + base);
 
-                    P::fma(vb, vmu, vzero, vout);
+                    vout = P::fma(vb, vmu, vzero);
                     P::scatter(vout, gstride, band4 + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -439,31 +437,35 @@ void decomposition(std::vector<T>& output,
 
                 size_t i = 0;
 #if LINALG_HAS_VECTORIZATION
-                for (; i + width <= inner_dim;
-                    i += width, itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+                for (; i + width <= inner_dim; i += width,
+                    itr0 += width,
+                    itr1 += width,
+                    itr2 += width,
+                    itr3 += width,
+                    itr4 += width)
                 {
-                    typename P::packet_t ve, vc, vd, va, vb, vmu, vnegc, vnege, vout;
-                    P::loadu(itr0, ve);
-                    P::loadu(itr1, vc);
-                    P::loadu(itr2, vd);
-                    P::loadu(itr3, va);
-                    P::loadu(itr4, vb);
+                    typename P::simd_t ve, vc, vd, va, vb, vmu, vnegc, vnege, vout;
+                    ve = P::loadu(itr0);
+                    vc = P::loadu(itr1);
+                    vd = P::loadu(itr2);
+                    va = P::loadu(itr3);
+                    vb = P::loadu(itr4);
 
-                    P::div(vone, vd, vmu);
+                    vmu = P::div(vone, vd);
                     P::storeu(vmu, itr0);
 
-                    P::fma(vc, vnegone, vzero, vnegc);
-                    P::fma(vnegc, vmu, vzero, vout);
+                    vnegc = P::fma(vc, vnegone, vzero);
+                    vout  = P::fma(vnegc, vmu, vzero);
                     P::storeu(vout, itr1);
 
-                    P::fma(ve, vnegone, vzero, vnege);
-                    P::fma(vnege, vmu, vzero, vout);
+                    vnege = P::fma(ve, vnegone, vzero);
+                    vout  = P::fma(vnege, vmu, vzero);
                     P::storeu(vout, itr2);
 
-                    P::fma(va, vmu, vzero, vout);
+                    vout = P::fma(va, vmu, vzero);
                     P::storeu(vout, itr3);
 
-                    P::fma(vb, vmu, vzero, vout);
+                    vout = P::fma(vb, vmu, vzero);
                     P::storeu(vout, itr4);
                 }
 #endif
@@ -489,37 +491,41 @@ void decomposition(std::vector<T>& output,
                 if (can_vectorize_inner)
                 {
                     for (; i + width <= two_inner_dim; i += width,
-                        itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+                        itr0 += width,
+                        itr1 += width,
+                        itr2 += width,
+                        itr3 += width,
+                        itr4 += width)
                     {
-                        typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, vnegalpha, vdenom, vmu,
-                            vnegc, vnege, vnegbeta, vt3, vout;
-                        P::loadu(itr0, ve);
-                        P::loadu(itr1, vc);
-                        P::loadu(itr2, vd);
-                        P::loadu(itr3, va);
-                        P::loadu(itr4, vb);
-                        P::loadu(itr3 - inner_dim, valpha);
-                        P::loadu(itr4 - inner_dim, vbeta);
+                        typename P::simd_t ve, vc, vd, va, vb, valpha, vbeta, vnegalpha, vdenom,
+                            vmu, vnegc, vnege, vnegbeta, vt3, vout;
+                        ve     = P::loadu(itr0);
+                        vc     = P::loadu(itr1);
+                        vd     = P::loadu(itr2);
+                        va     = P::loadu(itr3);
+                        vb     = P::loadu(itr4);
+                        valpha = P::loadu(itr3 - inner_dim);
+                        vbeta  = P::loadu(itr4 - inner_dim);
 
-                        P::fma(valpha, vnegone, vzero, vnegalpha);
-                        P::fma(vnegalpha, vc, vd, vdenom);
-                        P::div(vone, vdenom, vmu);
+                        vnegalpha = P::fma(valpha, vnegone, vzero);
+                        vdenom    = P::fma(vnegalpha, vc, vd);
+                        vmu       = P::div(vone, vdenom);
                         P::storeu(vmu, itr0);
 
-                        P::fma(vc, vnegone, vzero, vnegc);
-                        P::fma(vnegc, vmu, vzero, vout);
+                        vnegc = P::fma(vc, vnegone, vzero);
+                        vout  = P::fma(vnegc, vmu, vzero);
                         P::storeu(vout, itr1);
 
-                        P::fma(ve, vnegone, vzero, vnege);
-                        P::fma(vnege, vmu, vzero, vout);
+                        vnege = P::fma(ve, vnegone, vzero);
+                        vout  = P::fma(vnege, vmu, vzero);
                         P::storeu(vout, itr2);
 
-                        P::fma(vbeta, vnegone, vzero, vnegbeta);
-                        P::fma(vnegbeta, vc, va, vt3);
-                        P::fma(vt3, vmu, vzero, vout);
+                        vnegbeta = P::fma(vbeta, vnegone, vzero);
+                        vt3      = P::fma(vnegbeta, vc, va);
+                        vout     = P::fma(vt3, vmu, vzero);
                         P::storeu(vout, itr3);
 
-                        P::fma(vb, vmu, vzero, vout);
+                        vout = P::fma(vb, vmu, vzero);
                         P::storeu(vout, itr4);
                     }
                 }
@@ -549,48 +555,52 @@ void decomposition(std::vector<T>& output,
                 if (can_vectorize_inner)
                 {
                     for (; i + width <= n; i += width,
-                        itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+                        itr0 += width,
+                        itr1 += width,
+                        itr2 += width,
+                        itr3 += width,
+                        itr4 += width)
                     {
-                        typename P::packet_t ve, vc, vd, va, vb, valpha, vbeta, valpha_prev, vbeta_prev,
-                            vneg_alpha_prev, vgamma, vneg_alpha, vt1, vneg_beta_prev, vdenom, vmu,
-                            vneg_gamma, vnege, vneg_beta, vt3, vout;
-                        P::loadu(itr0, ve);
-                        P::loadu(itr1, vc);
-                        P::loadu(itr2, vd);
-                        P::loadu(itr3, va);
-                        P::loadu(itr4, vb);
-                        P::loadu(itr3 - inner_dim, valpha);
-                        P::loadu(itr4 - inner_dim, vbeta);
-                        P::loadu(itr3 - two_inner_dim, valpha_prev);
-                        P::loadu(itr4 - two_inner_dim, vbeta_prev);
+                        typename P::simd_t ve, vc, vd, va, vb, valpha, vbeta, valpha_prev,
+                            vbeta_prev, vneg_alpha_prev, vgamma, vneg_alpha, vt1, vneg_beta_prev,
+                            vdenom, vmu, vneg_gamma, vnege, vneg_beta, vt3, vout;
+                        ve          = P::loadu(itr0);
+                        vc          = P::loadu(itr1);
+                        vd          = P::loadu(itr2);
+                        va          = P::loadu(itr3);
+                        vb          = P::loadu(itr4);
+                        valpha      = P::loadu(itr3 - inner_dim);
+                        vbeta       = P::loadu(itr4 - inner_dim);
+                        valpha_prev = P::loadu(itr3 - two_inner_dim);
+                        vbeta_prev  = P::loadu(itr4 - two_inner_dim);
 
                         // gamma = c - alpha_prev * e
-                        P::fma(valpha_prev, vnegone, vzero, vneg_alpha_prev);
-                        P::fma(vneg_alpha_prev, ve, vc, vgamma);
+                        vneg_alpha_prev = P::fma(valpha_prev, vnegone, vzero);
+                        vgamma          = P::fma(vneg_alpha_prev, ve, vc);
 
                         // mu = 1 / (d - alpha * gamma - beta_prev * e)
-                        P::fma(valpha, vnegone, vzero, vneg_alpha);
-                        P::fma(vneg_alpha, vgamma, vd, vt1);
-                        P::fma(vbeta_prev, vnegone, vzero, vneg_beta_prev);
-                        P::fma(vneg_beta_prev, ve, vt1, vdenom);
-                        P::div(vone, vdenom, vmu);
+                        vneg_alpha     = P::fma(valpha, vnegone, vzero);
+                        vt1            = P::fma(vneg_alpha, vgamma, vd);
+                        vneg_beta_prev = P::fma(vbeta_prev, vnegone, vzero);
+                        vdenom         = P::fma(vneg_beta_prev, ve, vt1);
+                        vmu            = P::div(vone, vdenom);
                         P::storeu(vmu, itr0);
 
-                        P::fma(vgamma, vnegone, vzero, vneg_gamma);
-                        P::fma(vneg_gamma, vmu, vzero, vout);
+                        vneg_gamma = P::fma(vgamma, vnegone, vzero);
+                        vout       = P::fma(vneg_gamma, vmu, vzero);
                         P::storeu(vout, itr1);
 
-                        P::fma(ve, vnegone, vzero, vnege);
-                        P::fma(vnege, vmu, vzero, vout);
+                        vnege = P::fma(ve, vnegone, vzero);
+                        vout  = P::fma(vnege, vmu, vzero);
                         P::storeu(vout, itr2);
 
                         // (a - beta * gamma) * mu
-                        P::fma(vbeta, vnegone, vzero, vneg_beta);
-                        P::fma(vneg_beta, vgamma, va, vt3);
-                        P::fma(vt3, vmu, vzero, vout);
+                        vneg_beta = P::fma(vbeta, vnegone, vzero);
+                        vt3       = P::fma(vneg_beta, vgamma, va);
+                        vout      = P::fma(vt3, vmu, vzero);
                         P::storeu(vout, itr3);
 
-                        P::fma(vb, vmu, vzero, vout);
+                        vout = P::fma(vb, vmu, vzero);
                         P::storeu(vout, itr4);
                     }
                 }
@@ -652,7 +662,7 @@ void solve_decomposed(std::vector<T>& x,
         auto const* __restrict itr2 = itr1 + stride;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = packet<T>;
+        using P                = simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
         // Lanes 0..inner_dim-1 within a row are independent interleaved systems (see the
         // layout note in banded_operations.h); the only recurrence is row-to-row, at a fixed
@@ -679,11 +689,11 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     const size_t base = l * n + r;
 
-                    typename P::packet_t va, vprev, vcur, vout;
-                    P::gather(itr1 + base, gstride, va);
-                    P::gather(itr_x + base - inner_dim, gstride, vprev);
-                    P::gather(itr_x + base, gstride, vcur);
-                    P::fma(va, vprev, vcur, vout);
+                    typename P::simd_t va, vprev, vcur, vout;
+                    va    = P::gather(itr1 + base, gstride);
+                    vprev = P::gather(itr_x + base - inner_dim, gstride);
+                    vcur  = P::gather(itr_x + base, gstride);
+                    vout  = P::fma(va, vprev, vcur);
                     P::scatter(vout, gstride, itr_x + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -701,11 +711,11 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     const size_t base = l * n + static_cast<size_t>(rj);
 
-                    typename P::packet_t va, vnext, vcur, vout;
-                    P::gather(itr2 + base, gstride, va);
-                    P::gather(itr_x + base + inner_dim, gstride, vnext);
-                    P::gather(itr_x + base, gstride, vcur);
-                    P::fma(va, vnext, vcur, vout);
+                    typename P::simd_t va, vnext, vcur, vout;
+                    va    = P::gather(itr2 + base, gstride);
+                    vnext = P::gather(itr_x + base + inner_dim, gstride);
+                    vcur  = P::gather(itr_x + base, gstride);
+                    vout  = P::fma(va, vnext, vcur);
                     P::scatter(vout, gstride, itr_x + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -731,11 +741,11 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     for (; i + width <= n; i += width)
                     {
-                        typename P::packet_t va, vprev, vcur, vout;
-                        P::loadu(tmp_itr1 + i, va);
-                        P::loadu(tmp + i - inner_dim, vprev);
-                        P::loadu(tmp + i, vcur);
-                        P::fma(va, vprev, vcur, vout);
+                        typename P::simd_t va, vprev, vcur, vout;
+                        va    = P::loadu(tmp_itr1 + i);
+                        vprev = P::loadu(tmp + i - inner_dim);
+                        vcur  = P::loadu(tmp + i);
+                        vout  = P::fma(va, vprev, vcur);
                         P::storeu(vout, tmp + i);
                     }
                 }
@@ -753,11 +763,11 @@ void solve_decomposed(std::vector<T>& x,
                     {
                         const size_t base = static_cast<size_t>(j) - width + 1;
 
-                        typename P::packet_t va, vnext, vcur, vout;
-                        P::loadu(tmp_itr2 + base, va);
-                        P::loadu(tmp + base + inner_dim, vnext);
-                        P::loadu(tmp + base, vcur);
-                        P::fma(va, vnext, vcur, vout);
+                        typename P::simd_t va, vnext, vcur, vout;
+                        va    = P::loadu(tmp_itr2 + base);
+                        vnext = P::loadu(tmp + base + inner_dim);
+                        vcur  = P::loadu(tmp + base);
+                        vout  = P::fma(va, vnext, vcur);
                         P::storeu(vout, tmp + base);
                     }
                 }
@@ -792,8 +802,8 @@ void solve_decomposed(std::vector<T>& x,
         }
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = packet<T>;
-        constexpr int width    = P::size;
+        using P             = simd<T>;
+        constexpr int width = P::size;
         // Same safety condition as the 3-band case above: a packet is only safe across a
         // recurrence lag of inner_dim (or two_inner_dim, which is always >= inner_dim) when
         // width <= inner_dim. When inner_dim is too narrow for that but outer_dim is wide
@@ -804,9 +814,9 @@ void solve_decomposed(std::vector<T>& x,
             !can_vectorize_inner && static_cast<size_t>(width) <= outer_dim;
         const linalg_int gstride = static_cast<linalg_int>(n);
 
-        typename P::packet_t vzero, vnegone;
-        P::set(T{0}, vzero);
-        P::set(T{-1}, vnegone);
+        typename P::simd_t vzero, vnegone;
+        vzero   = P::set(T{0});
+        vnegone = P::set(T{-1});
 #endif
 
 #if LINALG_HAS_VECTORIZATION
@@ -825,11 +835,11 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
 
-                    typename P::packet_t va, vprev, vcur, vout;
-                    P::gather(band1 + base, gstride, va);
-                    P::gather(x.data() + base - inner_dim, gstride, vprev);
-                    P::gather(x.data() + base, gstride, vcur);
-                    P::fma(va, vprev, vcur, vout);
+                    typename P::simd_t va, vprev, vcur, vout;
+                    va    = P::gather(band1 + base, gstride);
+                    vprev = P::gather(x.data() + base - inner_dim, gstride);
+                    vcur  = P::gather(x.data() + base, gstride);
+                    vout  = P::fma(va, vprev, vcur);
                     P::scatter(vout, gstride, x.data() + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -846,14 +856,15 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
 
-                    typename P::packet_t v1, v2, vprev1, vprev2, vcur, vs, vout;
-                    P::gather(band1 + base, gstride, v1);
-                    P::gather(band2 + base, gstride, v2);
-                    P::gather(x.data() + base - inner_dim, gstride, vprev1);
-                    P::gather(x.data() + base - static_cast<size_t>(two_inner_dim), gstride, vprev2);
-                    P::gather(x.data() + base, gstride, vcur);
-                    P::fma(v2, vprev2, vcur, vs);
-                    P::fma(v1, vprev1, vs, vout);
+                    typename P::simd_t v1, v2, vprev1, vprev2, vcur, vs, vout;
+                    v1     = P::gather(band1 + base, gstride);
+                    v2     = P::gather(band2 + base, gstride);
+                    vprev1 = P::gather(x.data() + base - inner_dim, gstride);
+                    vprev2 =
+                        P::gather(x.data() + base - static_cast<size_t>(two_inner_dim), gstride);
+                    vcur = P::gather(x.data() + base, gstride);
+                    vs   = P::fma(v2, vprev2, vcur);
+                    vout = P::fma(v1, vprev1, vs);
                     P::scatter(vout, gstride, x.data() + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -872,12 +883,12 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
 
-                    typename P::packet_t v3, vnext, vcur, vs, vout;
-                    P::gather(band3 + base, gstride, v3);
-                    P::gather(x.data() + base + inner_dim, gstride, vnext);
-                    P::gather(x.data() + base, gstride, vcur);
-                    P::fma(v3, vnext, vzero, vs);
-                    P::fma(vs, vnegone, vcur, vout);
+                    typename P::simd_t v3, vnext, vcur, vs, vout;
+                    v3    = P::gather(band3 + base, gstride);
+                    vnext = P::gather(x.data() + base + inner_dim, gstride);
+                    vcur  = P::gather(x.data() + base, gstride);
+                    vs    = P::fma(v3, vnext, vzero);
+                    vout  = P::fma(vs, vnegone, vcur);
                     P::scatter(vout, gstride, x.data() + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -895,15 +906,16 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     const size_t base = l * static_cast<size_t>(n) + static_cast<size_t>(idx);
 
-                    typename P::packet_t v3, v4, vnext1, vnext2, vcur, vs, vout;
-                    P::gather(band3 + base, gstride, v3);
-                    P::gather(band4 + base, gstride, v4);
-                    P::gather(x.data() + base + inner_dim, gstride, vnext1);
-                    P::gather(x.data() + base + static_cast<size_t>(two_inner_dim), gstride, vnext2);
-                    P::gather(x.data() + base, gstride, vcur);
-                    P::fma(v4, vnext2, vzero, vs);
-                    P::fma(v3, vnext1, vs, vs);
-                    P::fma(vs, vnegone, vcur, vout);
+                    typename P::simd_t v3, v4, vnext1, vnext2, vcur, vs, vout;
+                    v3     = P::gather(band3 + base, gstride);
+                    v4     = P::gather(band4 + base, gstride);
+                    vnext1 = P::gather(x.data() + base + inner_dim, gstride);
+                    vnext2 =
+                        P::gather(x.data() + base + static_cast<size_t>(two_inner_dim), gstride);
+                    vcur = P::gather(x.data() + base, gstride);
+                    vs   = P::fma(v4, vnext2, vzero);
+                    vs   = P::fma(v3, vnext1, vs);
+                    vout = P::fma(vs, vnegone, vcur);
                     P::scatter(vout, gstride, x.data() + base);
                 }
                 for (; l < outer_dim; ++l)
@@ -921,7 +933,7 @@ void solve_decomposed(std::vector<T>& x,
             {
                 const auto offset = l * static_cast<size_t>(n);
 
-                auto* __restrict itr_x  = x.data() + offset;
+                auto* __restrict itr_x       = x.data() + offset;
                 auto const* __restrict band1 = decomposed.data() + 1 * stride + offset;
                 auto const* __restrict band2 = band1 + stride;
                 auto const* __restrict band3 = band2 + stride;
@@ -936,11 +948,11 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     for (; idx + width <= two_inner_dim; idx += width)
                     {
-                        typename P::packet_t va, vprev, vcur, vout;
-                        P::loadu(band1 + idx, va);
-                        P::loadu(itr_x + idx - static_cast<int>(inner_dim), vprev);
-                        P::loadu(itr_x + idx, vcur);
-                        P::fma(va, vprev, vcur, vout);
+                        typename P::simd_t va, vprev, vcur, vout;
+                        va    = P::loadu(band1 + idx);
+                        vprev = P::loadu(itr_x + idx - static_cast<int>(inner_dim));
+                        vcur  = P::loadu(itr_x + idx);
+                        vout  = P::fma(va, vprev, vcur);
                         P::storeu(vout, itr_x + idx);
                     }
                 }
@@ -955,14 +967,14 @@ void solve_decomposed(std::vector<T>& x,
                 {
                     for (; idx + width <= n; idx += width)
                     {
-                        typename P::packet_t v1, v2, vprev1, vprev2, vcur, vs, vout;
-                        P::loadu(band1 + idx, v1);
-                        P::loadu(band2 + idx, v2);
-                        P::loadu(itr_x + idx - static_cast<int>(inner_dim), vprev1);
-                        P::loadu(itr_x + idx - two_inner_dim, vprev2);
-                        P::loadu(itr_x + idx, vcur);
-                        P::fma(v2, vprev2, vcur, vs);
-                        P::fma(v1, vprev1, vs, vout);
+                        typename P::simd_t v1, v2, vprev1, vprev2, vcur, vs, vout;
+                        v1     = P::loadu(band1 + idx);
+                        v2     = P::loadu(band2 + idx);
+                        vprev1 = P::loadu(itr_x + idx - static_cast<int>(inner_dim));
+                        vprev2 = P::loadu(itr_x + idx - two_inner_dim);
+                        vcur   = P::loadu(itr_x + idx);
+                        vs     = P::fma(v2, vprev2, vcur);
+                        vout   = P::fma(v1, vprev1, vs);
                         P::storeu(vout, itr_x + idx);
                     }
                 }
@@ -983,12 +995,12 @@ void solve_decomposed(std::vector<T>& x,
 #if LINALG_HAS_VECTORIZATION
                 for (; idx + width <= end_1 + 1; idx += width)
                 {
-                    typename P::packet_t v3, vnext, vcur, vs, vout;
-                    P::loadu(band3 + idx, v3);
-                    P::loadu(itr_x + idx + static_cast<int>(inner_dim), vnext);
-                    P::loadu(itr_x + idx, vcur);
-                    P::fma(v3, vnext, vzero, vs);
-                    P::fma(vs, vnegone, vcur, vout);
+                    typename P::simd_t v3, vnext, vcur, vs, vout;
+                    v3    = P::loadu(band3 + idx);
+                    vnext = P::loadu(itr_x + idx + static_cast<int>(inner_dim));
+                    vcur  = P::loadu(itr_x + idx);
+                    vs    = P::fma(v3, vnext, vzero);
+                    vout  = P::fma(vs, vnegone, vcur);
                     P::storeu(vout, itr_x + idx);
                 }
 #endif
@@ -1005,15 +1017,15 @@ void solve_decomposed(std::vector<T>& x,
                     {
                         const int base = idx - width + 1;
 
-                        typename P::packet_t v3, v4, vnext1, vnext2, vcur, vs, vout;
-                        P::loadu(band3 + base, v3);
-                        P::loadu(band4 + base, v4);
-                        P::loadu(itr_x + base + static_cast<int>(inner_dim), vnext1);
-                        P::loadu(itr_x + base + two_inner_dim, vnext2);
-                        P::loadu(itr_x + base, vcur);
-                        P::fma(v4, vnext2, vzero, vs);
-                        P::fma(v3, vnext1, vs, vs);
-                        P::fma(vs, vnegone, vcur, vout);
+                        typename P::simd_t v3, v4, vnext1, vnext2, vcur, vs, vout;
+                        v3     = P::loadu(band3 + base);
+                        v4     = P::loadu(band4 + base);
+                        vnext1 = P::loadu(itr_x + base + static_cast<int>(inner_dim));
+                        vnext2 = P::loadu(itr_x + base + two_inner_dim);
+                        vcur   = P::loadu(itr_x + base);
+                        vs     = P::fma(v4, vnext2, vzero);
+                        vs     = P::fma(v3, vnext1, vs);
+                        vout   = P::fma(vs, vnegone, vcur);
                         P::storeu(vout, itr_x + base);
                     }
                 }
@@ -1050,12 +1062,12 @@ void multiply(std::vector<T>& result,
         const auto stride = outer_dim * n;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = packet<T>;
+        using P                = simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
 
-        typename P::packet_t vzero, vtm;
-        P::set(T{0}, vzero);
-        P::set(time_multiplier, vtm);
+        typename P::simd_t vzero, vtm;
+        vzero = P::set(T{0});
+        vtm   = P::set(time_multiplier);
 #endif
 
         for (size_t l = 0; l < outer_dim; ++l)
@@ -1075,18 +1087,22 @@ void multiply(std::vector<T>& result,
             // inner_dim.
             size_t i = 0;
 #if LINALG_HAS_VECTORIZATION
-            for (; i + width <= inner_dim; i += width, itr += width, itr_tmp += width, itr0 += width,
-                itr1 += width, itr2 += width)
+            for (; i + width <= inner_dim; i += width,
+                itr += width,
+                itr_tmp += width,
+                itr0 += width,
+                itr1 += width,
+                itr2 += width)
             {
-                typename P::packet_t vb, vc, vx0, vx1, vr, vs, vout;
-                P::loadu(itr1, vb);
-                P::loadu(itr2, vc);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr_tmp + inner_dim, vx1);
-                P::loadu(itr, vr);
-                P::fma(vc, vx1, vzero, vs);
-                P::fma(vb, vx0, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t vb, vc, vx0, vx1, vr, vs, vout;
+                vb   = P::loadu(itr1);
+                vc   = P::loadu(itr2);
+                vx0  = P::loadu(itr_tmp);
+                vx1  = P::loadu(itr_tmp + inner_dim);
+                vr   = P::loadu(itr);
+                vs   = P::fma(vc, vx1, vzero);
+                vs   = P::fma(vb, vx0, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1099,21 +1115,25 @@ void multiply(std::vector<T>& result,
             }
 
 #if LINALG_HAS_VECTORIZATION
-            for (; i + width <= n - inner_dim; i += width, itr += width, itr_tmp += width,
-                itr0 += width, itr1 += width, itr2 += width)
+            for (; i + width <= n - inner_dim; i += width,
+                itr += width,
+                itr_tmp += width,
+                itr0 += width,
+                itr1 += width,
+                itr2 += width)
             {
-                typename P::packet_t va, vb, vc, vxm1, vx0, vx1, vr, vs, vout;
-                P::loadu(itr0, va);
-                P::loadu(itr1, vb);
-                P::loadu(itr2, vc);
-                P::loadu(itr_tmp - inner_dim, vxm1);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr_tmp + inner_dim, vx1);
-                P::loadu(itr, vr);
-                P::fma(vc, vx1, vzero, vs);
-                P::fma(vb, vx0, vs, vs);
-                P::fma(va, vxm1, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t va, vb, vc, vxm1, vx0, vx1, vr, vs, vout;
+                va   = P::loadu(itr0);
+                vb   = P::loadu(itr1);
+                vc   = P::loadu(itr2);
+                vxm1 = P::loadu(itr_tmp - inner_dim);
+                vx0  = P::loadu(itr_tmp);
+                vx1  = P::loadu(itr_tmp + inner_dim);
+                vr   = P::loadu(itr);
+                vs   = P::fma(vc, vx1, vzero);
+                vs   = P::fma(vb, vx0, vs);
+                vs   = P::fma(va, vxm1, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1128,18 +1148,22 @@ void multiply(std::vector<T>& result,
             }
 
 #if LINALG_HAS_VECTORIZATION
-            for (; i + width <= n; i += width, itr += width, itr_tmp += width, itr0 += width,
-                itr1 += width, itr2 += width)
+            for (; i + width <= n; i += width,
+                itr += width,
+                itr_tmp += width,
+                itr0 += width,
+                itr1 += width,
+                itr2 += width)
             {
-                typename P::packet_t va, vb, vxm1, vx0, vr, vs, vout;
-                P::loadu(itr0, va);
-                P::loadu(itr1, vb);
-                P::loadu(itr_tmp - inner_dim, vxm1);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr, vr);
-                P::fma(vb, vx0, vzero, vs);
-                P::fma(va, vxm1, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t va, vb, vxm1, vx0, vr, vs, vout;
+                va   = P::loadu(itr0);
+                vb   = P::loadu(itr1);
+                vxm1 = P::loadu(itr_tmp - inner_dim);
+                vx0  = P::loadu(itr_tmp);
+                vr   = P::loadu(itr);
+                vs   = P::fma(vb, vx0, vzero);
+                vs   = P::fma(va, vxm1, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1161,12 +1185,12 @@ void multiply(std::vector<T>& result,
         const auto stride        = outer_dim * n;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = packet<T>;
+        using P                = simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
 
-        typename P::packet_t vzero, vtm;
-        P::set(T{0}, vzero);
-        P::set(time_multiplier, vtm);
+        typename P::simd_t vzero, vtm;
+        vzero = P::set(T{0});
+        vtm   = P::set(time_multiplier);
 #endif
 
         // The unrolled block loop below assumes 5 distinct band-position regions (first/second/
@@ -1202,12 +1226,12 @@ void multiply(std::vector<T>& result,
                         {
                             const size_t idx = row + p;
 
-                            typename P::packet_t vband, vin, vr, vprod, vout;
-                            P::loadu(band0 + idx, vband);
-                            P::loadu(in.data() + offset + idx - two_inner_dim, vin);
-                            P::loadu(result.data() + offset + idx, vr);
-                            P::fma(vband, vin, vzero, vprod);
-                            P::fma(vtm, vprod, vr, vout);
+                            typename P::simd_t vband, vin, vr, vprod, vout;
+                            vband = P::loadu(band0 + idx);
+                            vin   = P::loadu(in.data() + offset + idx - two_inner_dim);
+                            vr    = P::loadu(result.data() + offset + idx);
+                            vprod = P::fma(vband, vin, vzero);
+                            vout  = P::fma(vtm, vprod, vr);
                             P::storeu(vout, result.data() + offset + idx);
                         }
 #endif
@@ -1226,12 +1250,12 @@ void multiply(std::vector<T>& result,
                         {
                             const size_t idx = row + p;
 
-                            typename P::packet_t vband, vin, vr, vprod, vout;
-                            P::loadu(band1 + idx, vband);
-                            P::loadu(in.data() + offset + idx - inner_dim, vin);
-                            P::loadu(result.data() + offset + idx, vr);
-                            P::fma(vband, vin, vzero, vprod);
-                            P::fma(vtm, vprod, vr, vout);
+                            typename P::simd_t vband, vin, vr, vprod, vout;
+                            vband = P::loadu(band1 + idx);
+                            vin   = P::loadu(in.data() + offset + idx - inner_dim);
+                            vr    = P::loadu(result.data() + offset + idx);
+                            vprod = P::fma(vband, vin, vzero);
+                            vout  = P::fma(vtm, vprod, vr);
                             P::storeu(vout, result.data() + offset + idx);
                         }
 #endif
@@ -1249,12 +1273,12 @@ void multiply(std::vector<T>& result,
                         {
                             const size_t idx = row + p;
 
-                            typename P::packet_t vband, vin, vr, vprod, vout;
-                            P::loadu(band2 + idx, vband);
-                            P::loadu(in.data() + offset + idx, vin);
-                            P::loadu(result.data() + offset + idx, vr);
-                            P::fma(vband, vin, vzero, vprod);
-                            P::fma(vtm, vprod, vr, vout);
+                            typename P::simd_t vband, vin, vr, vprod, vout;
+                            vband = P::loadu(band2 + idx);
+                            vin   = P::loadu(in.data() + offset + idx);
+                            vr    = P::loadu(result.data() + offset + idx);
+                            vprod = P::fma(vband, vin, vzero);
+                            vout  = P::fma(vtm, vprod, vr);
                             P::storeu(vout, result.data() + offset + idx);
                         }
 #endif
@@ -1272,12 +1296,12 @@ void multiply(std::vector<T>& result,
                         {
                             const size_t idx = row + p;
 
-                            typename P::packet_t vband, vin, vr, vprod, vout;
-                            P::loadu(band3 + idx, vband);
-                            P::loadu(in.data() + offset + idx + inner_dim, vin);
-                            P::loadu(result.data() + offset + idx, vr);
-                            P::fma(vband, vin, vzero, vprod);
-                            P::fma(vtm, vprod, vr, vout);
+                            typename P::simd_t vband, vin, vr, vprod, vout;
+                            vband = P::loadu(band3 + idx);
+                            vin   = P::loadu(in.data() + offset + idx + inner_dim);
+                            vr    = P::loadu(result.data() + offset + idx);
+                            vprod = P::fma(vband, vin, vzero);
+                            vout  = P::fma(vtm, vprod, vr);
                             P::storeu(vout, result.data() + offset + idx);
                         }
 #endif
@@ -1296,12 +1320,12 @@ void multiply(std::vector<T>& result,
                         {
                             const size_t idx = row + p;
 
-                            typename P::packet_t vband, vin, vr, vprod, vout;
-                            P::loadu(band4 + idx, vband);
-                            P::loadu(in.data() + offset + idx + two_inner_dim, vin);
-                            P::loadu(result.data() + offset + idx, vr);
-                            P::fma(vband, vin, vzero, vprod);
-                            P::fma(vtm, vprod, vr, vout);
+                            typename P::simd_t vband, vin, vr, vprod, vout;
+                            vband = P::loadu(band4 + idx);
+                            vin   = P::loadu(in.data() + offset + idx + two_inner_dim);
+                            vr    = P::loadu(result.data() + offset + idx);
+                            vprod = P::fma(vband, vin, vzero);
+                            vout  = P::fma(vtm, vprod, vr);
                             P::storeu(vout, result.data() + offset + idx);
                         }
 #endif
@@ -1321,33 +1345,37 @@ void multiply(std::vector<T>& result,
         {
             const auto offset = l * n;
 
-            auto* __restrict itr        = result.data() + offset;
+            auto* __restrict itr           = result.data() + offset;
             auto const* __restrict itr_tmp = in.data() + offset;
-            auto const* __restrict itr0 = mat.data() + offset;
-            auto const* __restrict itr1 = itr0 + stride;
-            auto const* __restrict itr2 = itr1 + stride;
-            auto const* __restrict itr3 = itr2 + stride;
-            auto const* __restrict itr4 = itr3 + stride;
+            auto const* __restrict itr0    = mat.data() + offset;
+            auto const* __restrict itr1    = itr0 + stride;
+            auto const* __restrict itr2    = itr1 + stride;
+            auto const* __restrict itr3    = itr2 + stride;
+            auto const* __restrict itr4    = itr3 + stride;
 
             // Same pure-stencil reasoning as the 3-band case: result/in/mat never alias, so
             // every output position is independent and any packet width is safe.
             size_t i = 0;
 #if LINALG_HAS_VECTORIZATION
-            for (; i + width <= inner_dim;
-                i += width, itr += width, itr_tmp += width, itr2 += width, itr3 += width, itr4 += width)
+            for (; i + width <= inner_dim; i += width,
+                itr += width,
+                itr_tmp += width,
+                itr2 += width,
+                itr3 += width,
+                itr4 += width)
             {
-                typename P::packet_t v2, v3, v4, vx0, vx1, vx2, vr, vs, vout;
-                P::loadu(itr2, v2);
-                P::loadu(itr3, v3);
-                P::loadu(itr4, v4);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr_tmp + inner_dim, vx1);
-                P::loadu(itr_tmp + two_inner_dim, vx2);
-                P::loadu(itr, vr);
-                P::fma(v4, vx2, vzero, vs);
-                P::fma(v3, vx1, vs, vs);
-                P::fma(v2, vx0, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t v2, v3, v4, vx0, vx1, vx2, vr, vs, vout;
+                v2   = P::loadu(itr2);
+                v3   = P::loadu(itr3);
+                v4   = P::loadu(itr4);
+                vx0  = P::loadu(itr_tmp);
+                vx1  = P::loadu(itr_tmp + inner_dim);
+                vx2  = P::loadu(itr_tmp + two_inner_dim);
+                vr   = P::loadu(itr);
+                vs   = P::fma(v4, vx2, vzero);
+                vs   = P::fma(v3, vx1, vs);
+                vs   = P::fma(v2, vx0, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1359,24 +1387,29 @@ void multiply(std::vector<T>& result,
 
             itr1 += inner_dim;
 #if LINALG_HAS_VECTORIZATION
-            for (; i + width <= two_inner_dim; i += width, itr += width,
-                itr_tmp += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+            for (; i + width <= two_inner_dim; i += width,
+                itr += width,
+                itr_tmp += width,
+                itr1 += width,
+                itr2 += width,
+                itr3 += width,
+                itr4 += width)
             {
-                typename P::packet_t v1, v2, v3, v4, vxm1, vx0, vx1, vx2, vr, vs, vout;
-                P::loadu(itr1, v1);
-                P::loadu(itr2, v2);
-                P::loadu(itr3, v3);
-                P::loadu(itr4, v4);
-                P::loadu(itr_tmp - inner_dim, vxm1);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr_tmp + inner_dim, vx1);
-                P::loadu(itr_tmp + two_inner_dim, vx2);
-                P::loadu(itr, vr);
-                P::fma(v4, vx2, vzero, vs);
-                P::fma(v3, vx1, vs, vs);
-                P::fma(v2, vx0, vs, vs);
-                P::fma(v1, vxm1, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t v1, v2, v3, v4, vxm1, vx0, vx1, vx2, vr, vs, vout;
+                v1   = P::loadu(itr1);
+                v2   = P::loadu(itr2);
+                v3   = P::loadu(itr3);
+                v4   = P::loadu(itr4);
+                vxm1 = P::loadu(itr_tmp - inner_dim);
+                vx0  = P::loadu(itr_tmp);
+                vx1  = P::loadu(itr_tmp + inner_dim);
+                vx2  = P::loadu(itr_tmp + two_inner_dim);
+                vr   = P::loadu(itr);
+                vs   = P::fma(v4, vx2, vzero);
+                vs   = P::fma(v3, vx1, vs);
+                vs   = P::fma(v2, vx0, vs);
+                vs   = P::fma(v1, vxm1, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1389,27 +1422,33 @@ void multiply(std::vector<T>& result,
 
             itr0 += two_inner_dim;
 #if LINALG_HAS_VECTORIZATION
-            for (; i + width <= n - two_inner_dim; i += width, itr += width, itr_tmp += width,
-                itr0 += width, itr1 += width, itr2 += width, itr3 += width, itr4 += width)
+            for (; i + width <= n - two_inner_dim; i += width,
+                itr += width,
+                itr_tmp += width,
+                itr0 += width,
+                itr1 += width,
+                itr2 += width,
+                itr3 += width,
+                itr4 += width)
             {
-                typename P::packet_t v0, v1, v2, v3, v4, vxm2, vxm1, vx0, vx1, vx2, vr, vs, vout;
-                P::loadu(itr0, v0);
-                P::loadu(itr1, v1);
-                P::loadu(itr2, v2);
-                P::loadu(itr3, v3);
-                P::loadu(itr4, v4);
-                P::loadu(itr_tmp - two_inner_dim, vxm2);
-                P::loadu(itr_tmp - inner_dim, vxm1);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr_tmp + inner_dim, vx1);
-                P::loadu(itr_tmp + two_inner_dim, vx2);
-                P::loadu(itr, vr);
-                P::fma(v4, vx2, vzero, vs);
-                P::fma(v3, vx1, vs, vs);
-                P::fma(v2, vx0, vs, vs);
-                P::fma(v1, vxm1, vs, vs);
-                P::fma(v0, vxm2, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t v0, v1, v2, v3, v4, vxm2, vxm1, vx0, vx1, vx2, vr, vs, vout;
+                v0   = P::loadu(itr0);
+                v1   = P::loadu(itr1);
+                v2   = P::loadu(itr2);
+                v3   = P::loadu(itr3);
+                v4   = P::loadu(itr4);
+                vxm2 = P::loadu(itr_tmp - two_inner_dim);
+                vxm1 = P::loadu(itr_tmp - inner_dim);
+                vx0  = P::loadu(itr_tmp);
+                vx1  = P::loadu(itr_tmp + inner_dim);
+                vx2  = P::loadu(itr_tmp + two_inner_dim);
+                vr   = P::loadu(itr);
+                vs   = P::fma(v4, vx2, vzero);
+                vs   = P::fma(v3, vx1, vs);
+                vs   = P::fma(v2, vx0, vs);
+                vs   = P::fma(v1, vxm1, vs);
+                vs   = P::fma(v0, vxm2, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1424,29 +1463,33 @@ void multiply(std::vector<T>& result,
 
             size_t k = 0;
 #if LINALG_HAS_VECTORIZATION
-            for (; k + width <= inner_dim; k += width, itr += width, itr_tmp += width, itr0 += width,
-                itr1 += width, itr2 += width, itr3 += width)
+            for (; k + width <= inner_dim; k += width,
+                itr += width,
+                itr_tmp += width,
+                itr0 += width,
+                itr1 += width,
+                itr2 += width,
+                itr3 += width)
             {
-                typename P::packet_t v0, v1, v2, v3, vxm2, vxm1, vx0, vx1, vr, vs, vout;
-                P::loadu(itr0, v0);
-                P::loadu(itr1, v1);
-                P::loadu(itr2, v2);
-                P::loadu(itr3, v3);
-                P::loadu(itr_tmp - two_inner_dim, vxm2);
-                P::loadu(itr_tmp - inner_dim, vxm1);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr_tmp + inner_dim, vx1);
-                P::loadu(itr, vr);
-                P::fma(v3, vx1, vzero, vs);
-                P::fma(v2, vx0, vs, vs);
-                P::fma(v1, vxm1, vs, vs);
-                P::fma(v0, vxm2, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t v0, v1, v2, v3, vxm2, vxm1, vx0, vx1, vr, vs, vout;
+                v0   = P::loadu(itr0);
+                v1   = P::loadu(itr1);
+                v2   = P::loadu(itr2);
+                v3   = P::loadu(itr3);
+                vxm2 = P::loadu(itr_tmp - two_inner_dim);
+                vxm1 = P::loadu(itr_tmp - inner_dim);
+                vx0  = P::loadu(itr_tmp);
+                vx1  = P::loadu(itr_tmp + inner_dim);
+                vr   = P::loadu(itr);
+                vs   = P::fma(v3, vx1, vzero);
+                vs   = P::fma(v2, vx0, vs);
+                vs   = P::fma(v1, vxm1, vs);
+                vs   = P::fma(v0, vxm2, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
-            for (; k < inner_dim;
-                ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3)
+            for (; k < inner_dim; ++k, ++itr, ++itr_tmp, ++itr0, ++itr1, ++itr2, ++itr3)
             {
                 *itr += time_multiplier *
                         (*itr0 * *(itr_tmp - two_inner_dim) + *itr1 * *(itr_tmp - inner_dim) +
@@ -1455,21 +1498,25 @@ void multiply(std::vector<T>& result,
 
             k = 0;
 #if LINALG_HAS_VECTORIZATION
-            for (; k + width <= inner_dim; k += width, itr += width, itr_tmp += width, itr0 += width,
-                itr1 += width, itr2 += width)
+            for (; k + width <= inner_dim; k += width,
+                itr += width,
+                itr_tmp += width,
+                itr0 += width,
+                itr1 += width,
+                itr2 += width)
             {
-                typename P::packet_t v0, v1, v2, vxm2, vxm1, vx0, vr, vs, vout;
-                P::loadu(itr0, v0);
-                P::loadu(itr1, v1);
-                P::loadu(itr2, v2);
-                P::loadu(itr_tmp - two_inner_dim, vxm2);
-                P::loadu(itr_tmp - inner_dim, vxm1);
-                P::loadu(itr_tmp, vx0);
-                P::loadu(itr, vr);
-                P::fma(v2, vx0, vzero, vs);
-                P::fma(v1, vxm1, vs, vs);
-                P::fma(v0, vxm2, vs, vs);
-                P::fma(vtm, vs, vr, vout);
+                typename P::simd_t v0, v1, v2, vxm2, vxm1, vx0, vr, vs, vout;
+                v0   = P::loadu(itr0);
+                v1   = P::loadu(itr1);
+                v2   = P::loadu(itr2);
+                vxm2 = P::loadu(itr_tmp - two_inner_dim);
+                vxm1 = P::loadu(itr_tmp - inner_dim);
+                vx0  = P::loadu(itr_tmp);
+                vr   = P::loadu(itr);
+                vs   = P::fma(v2, vx0, vzero);
+                vs   = P::fma(v1, vxm1, vs);
+                vs   = P::fma(v0, vxm2, vs);
+                vout = P::fma(vtm, vs, vr);
                 P::storeu(vout, itr);
             }
 #endif
@@ -1497,20 +1544,20 @@ void decomposition_aad(std::vector<T>& output_aad,
     const auto stride = outer_dim * n;
 
 #if LINALG_HAS_VECTORIZATION
-    using P                = packet<T>;
-    constexpr size_t width = static_cast<size_t>(P::size);
-    typename P::packet_t vzero, vnegone;
-    P::set(T{0}, vzero);
-    P::set(T{-1}, vnegone);
+    using P                  = simd<T>;
+    constexpr size_t   width = static_cast<size_t>(P::size);
+    typename P::simd_t vzero, vnegone;
+    vzero   = P::set(T{0});
+    vnegone = P::set(T{-1});
 #endif
 
     size_t neg_i = 0;
 #if LINALG_HAS_VECTORIZATION
     for (; neg_i + width <= stride; neg_i += width)
     {
-        typename P::packet_t v, vout;
-        P::loadu(output_aad.data() + 2 * stride + neg_i, v);
-        P::fma(v, vnegone, vzero, vout);
+        typename P::simd_t v, vout;
+        v    = P::loadu(output_aad.data() + 2 * stride + neg_i);
+        vout = P::fma(v, vnegone, vzero);
         P::storeu(vout, output_aad.data() + 2 * stride + neg_i);
     }
 #endif
@@ -1556,50 +1603,50 @@ void decomposition_aad(std::vector<T>& output_aad,
             {
                 const size_t base = l * n;
 
-                typename P::packet_t v_inv_diag, v_b1, v_b2, v_b2_lag, v_b0a, v_b1a, v_b2a;
-                P::gather(b0 + base + r, gstride, v_inv_diag);
-                P::gather(b1 + base + r, gstride, v_b1);
-                P::gather(b2 + base + r, gstride, v_b2);
-                P::gather(b2 + base + (r - inner_dim), gstride, v_b2_lag);
-                P::gather(b0a + base + r, gstride, v_b0a);
-                P::gather(b1a + base + r, gstride, v_b1a);
-                P::gather(b2a + base + r, gstride, v_b2a);
+                typename P::simd_t v_inv_diag, v_b1, v_b2, v_b2_lag, v_b0a, v_b1a, v_b2a;
+                v_inv_diag = P::gather(b0 + base + r, gstride);
+                v_b1       = P::gather(b1 + base + r, gstride);
+                v_b2       = P::gather(b2 + base + r, gstride);
+                v_b2_lag   = P::gather(b2 + base + (r - inner_dim), gstride);
+                v_b0a      = P::gather(b0a + base + r, gstride);
+                v_b1a      = P::gather(b1a + base + r, gstride);
+                v_b2a      = P::gather(b2a + base + r, gstride);
 
-                typename P::packet_t v_alpha, v_tmp, v_ratio, v_tmp_itr2;
-                P::div(v_b1, v_inv_diag, v_alpha);
-                P::fma(v_b2_lag, vnegone, vzero, v_tmp);
-                P::div(v_b2, v_inv_diag, v_ratio);
-                P::fma(v_ratio, vnegone, vzero, v_tmp_itr2);
+                typename P::simd_t v_alpha, v_tmp, v_ratio, v_tmp_itr2;
+                v_alpha    = P::div(v_b1, v_inv_diag);
+                v_tmp      = P::fma(v_b2_lag, vnegone, vzero);
+                v_ratio    = P::div(v_b2, v_inv_diag);
+                v_tmp_itr2 = P::fma(v_ratio, vnegone, vzero);
 
-                typename P::packet_t v_inv_diag_aad, v_alpha_aad;
-                P::fma(v_b2a, v_tmp_itr2, vzero, v_inv_diag_aad);
-                P::fma(v_b2a, v_inv_diag, vzero, v_b2a);
+                typename P::simd_t v_inv_diag_aad, v_alpha_aad;
+                v_inv_diag_aad = P::fma(v_b2a, v_tmp_itr2, vzero);
+                v_b2a          = P::fma(v_b2a, v_inv_diag, vzero);
 
-                P::fma(v_b1a, v_alpha, v_inv_diag_aad, v_inv_diag_aad);
-                P::fma(v_b1a, v_inv_diag, vzero, v_alpha_aad);
+                v_inv_diag_aad = P::fma(v_b1a, v_alpha, v_inv_diag_aad);
+                v_alpha_aad    = P::fma(v_b1a, v_inv_diag, vzero);
 
-                P::add(v_inv_diag_aad, v_b0a, v_inv_diag_aad);
+                v_inv_diag_aad = P::add(v_inv_diag_aad, v_b0a);
 
-                typename P::packet_t v_sq, v_negsq;
-                P::fma(v_inv_diag, v_inv_diag, vzero, v_sq);
-                P::fma(v_sq, vnegone, vzero, v_negsq);
-                P::fma(v_inv_diag_aad, v_negsq, vzero, v_inv_diag_aad);
+                typename P::simd_t v_sq, v_negsq;
+                v_sq           = P::fma(v_inv_diag, v_inv_diag, vzero);
+                v_negsq        = P::fma(v_sq, vnegone, vzero);
+                v_inv_diag_aad = P::fma(v_inv_diag_aad, v_negsq, vzero);
 
                 v_b1a = v_inv_diag_aad;
 
-                P::fma(v_inv_diag_aad, v_tmp, v_alpha_aad, v_alpha_aad);
-                typename P::packet_t v_tmp_aad;
-                P::fma(v_inv_diag_aad, v_alpha, vzero, v_tmp_aad);
+                v_alpha_aad = P::fma(v_inv_diag_aad, v_tmp, v_alpha_aad);
+                typename P::simd_t v_tmp_aad;
+                v_tmp_aad = P::fma(v_inv_diag_aad, v_alpha, vzero);
 
-                P::fma(v_alpha_aad, vnegone, vzero, v_b0a);
+                v_b0a = P::fma(v_alpha_aad, vnegone, vzero);
 
                 P::scatter(v_b0a, gstride, b0a + base + r);
                 P::scatter(v_b1a, gstride, b1a + base + r);
                 P::scatter(v_b2a, gstride, b2a + base + r);
 
-                typename P::packet_t v_b2a_lag;
-                P::gather(b2a + base + (r - inner_dim), gstride, v_b2a_lag);
-                P::add(v_b2a_lag, v_tmp_aad, v_b2a_lag);
+                typename P::simd_t v_b2a_lag;
+                v_b2a_lag = P::gather(b2a + base + (r - inner_dim), gstride);
+                v_b2a_lag = P::add(v_b2a_lag, v_tmp_aad);
                 P::scatter(v_b2a_lag, gstride, b2a + base + (r - inner_dim));
             }
         }
@@ -1644,26 +1691,26 @@ void decomposition_aad(std::vector<T>& output_aad,
             {
                 const size_t base = l * n;
 
-                typename P::packet_t v_inv_diag, v_b2, v_b2a, v_b0a;
-                P::gather(b0 + base + r, gstride, v_inv_diag);
-                P::gather(b2 + base + r, gstride, v_b2);
-                P::gather(b2a + base + r, gstride, v_b2a);
-                P::gather(b0a + base + r, gstride, v_b0a);
+                typename P::simd_t v_inv_diag, v_b2, v_b2a, v_b0a;
+                v_inv_diag = P::gather(b0 + base + r, gstride);
+                v_b2       = P::gather(b2 + base + r, gstride);
+                v_b2a      = P::gather(b2a + base + r, gstride);
+                v_b0a      = P::gather(b0a + base + r, gstride);
 
-                typename P::packet_t v_ratio, v_tmp_itr2;
-                P::div(v_b2, v_inv_diag, v_ratio);
-                P::fma(v_ratio, vnegone, vzero, v_tmp_itr2);
+                typename P::simd_t v_ratio, v_tmp_itr2;
+                v_ratio    = P::div(v_b2, v_inv_diag);
+                v_tmp_itr2 = P::fma(v_ratio, vnegone, vzero);
 
-                typename P::packet_t v_inv_diag_aad;
-                P::fma(v_b2a, v_tmp_itr2, vzero, v_inv_diag_aad);
-                P::fma(v_b2a, v_inv_diag, vzero, v_b2a);
+                typename P::simd_t v_inv_diag_aad;
+                v_inv_diag_aad = P::fma(v_b2a, v_tmp_itr2, vzero);
+                v_b2a          = P::fma(v_b2a, v_inv_diag, vzero);
 
-                P::add(v_inv_diag_aad, v_b0a, v_inv_diag_aad);
+                v_inv_diag_aad = P::add(v_inv_diag_aad, v_b0a);
 
-                typename P::packet_t v_sq, v_b1a;
-                P::fma(v_inv_diag, v_inv_diag, vzero, v_sq);
-                P::fma(v_inv_diag_aad, v_sq, vzero, v_b1a);
-                P::fma(v_b1a, vnegone, vzero, v_b1a);
+                typename P::simd_t v_sq, v_b1a;
+                v_sq  = P::fma(v_inv_diag, v_inv_diag, vzero);
+                v_b1a = P::fma(v_inv_diag_aad, v_sq, vzero);
+                v_b1a = P::fma(v_b1a, vnegone, vzero);
 
                 P::scatter(v_b2a, gstride, b2a + base + r);
                 P::scatter(v_b1a, gstride, b1a + base + r);
@@ -1673,7 +1720,7 @@ void decomposition_aad(std::vector<T>& output_aad,
 #endif
         for (; l < outer_dim; ++l)
         {
-            const auto base = l * n;
+            const auto base     = l * n;
             const T    inv_diag = b0[base + r];
 
             auto tmp_itr2     = -b2[base + r] / inv_diag;
@@ -1718,7 +1765,7 @@ void solve_decomposed_vectorised(std::vector<T>& x,
     auto const* __restrict itr2 = itr1 + stride;
 
 #if LINALG_HAS_VECTORIZATION
-    using P                = packet<T>;
+    using P                = simd<T>;
     constexpr size_t width = static_cast<size_t>(P::size);
 #endif
 
@@ -1741,14 +1788,14 @@ void solve_decomposed_vectorised(std::vector<T>& x,
             // inner_dim.
             size_t j = 0;
 #if LINALG_HAS_VECTORIZATION
-            typename P::packet_t va;
-            P::set(a, va);
+            typename P::simd_t va;
+            va = P::set(a);
             for (; j + width <= columns; j += width)
             {
-                typename P::packet_t vprev, vcur, vout;
-                P::loadu(tmp_i_1 + j, vprev);
-                P::loadu(tmp_i + j, vcur);
-                P::fma(va, vprev, vcur, vout);
+                typename P::simd_t vprev, vcur, vout;
+                vprev = P::loadu(tmp_i_1 + j);
+                vcur  = P::loadu(tmp_i + j);
+                vout  = P::fma(va, vprev, vcur);
                 P::storeu(vout, tmp_i + j);
             }
 #endif
@@ -1766,14 +1813,14 @@ void solve_decomposed_vectorised(std::vector<T>& x,
 
             size_t j = 0;
 #if LINALG_HAS_VECTORIZATION
-            typename P::packet_t va;
-            P::set(a, va);
+            typename P::simd_t va;
+            va = P::set(a);
             for (; j + width <= columns; j += width)
             {
-                typename P::packet_t vnext, vcur, vout;
-                P::loadu(tmp_i_1 + j, vnext);
-                P::loadu(tmp_i + j, vcur);
-                P::fma(va, vnext, vcur, vout);
+                typename P::simd_t vnext, vcur, vout;
+                vnext = P::loadu(tmp_i_1 + j);
+                vcur  = P::loadu(tmp_i + j);
+                vout  = P::fma(va, vnext, vcur);
                 P::storeu(vout, tmp_i + j);
             }
 #endif
@@ -1799,7 +1846,7 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
     const int  end    = static_cast<int>(n) - static_cast<int>(inner_dim) - 1;
     const auto stride = outer_dim * n;
 
-    auto* __restrict band1      = decomposed.data() + stride;
+    auto* __restrict band1       = decomposed.data() + stride;
     auto const* __restrict band2 = band1 + stride;
 
     auto* __restrict band1_aad = decomposed_aad.data() + stride;
@@ -1812,13 +1859,13 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
     // outer loop and l the (vectorized) inner one; this is a pure loop-nest transpose of two
     // independent axes, so it changes nothing about per-l correctness.
 #if LINALG_HAS_VECTORIZATION
-    using P                = packet<T>;
-    constexpr size_t width = static_cast<size_t>(P::size);
-    const bool       can_vectorize_outer = width <= outer_dim;
-    const linalg_int gstride             = static_cast<linalg_int>(n);
-    typename P::packet_t vzero, vnegone;
-    P::set(T{0}, vzero);
-    P::set(T{-1}, vnegone);
+    using P                                = simd<T>;
+    constexpr size_t   width               = static_cast<size_t>(P::size);
+    const bool         can_vectorize_outer = width <= outer_dim;
+    const linalg_int   gstride             = static_cast<linalg_int>(n);
+    typename P::simd_t vzero, vnegone;
+    vzero   = P::set(T{0});
+    vnegone = P::set(T{-1});
 #endif
 
     for (int i = 0; i <= end; ++i)
@@ -1831,26 +1878,26 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
             {
                 const size_t base = l * n + static_cast<size_t>(i);
 
-                typename P::packet_t v_tmp_aad_i, v_tmp_itr2_i, v_tmp_ip, v_tmp_aad_ip,
+                typename P::simd_t v_tmp_aad_i, v_tmp_itr2_i, v_tmp_ip, v_tmp_aad_ip,
                     v_tmp_itr2_aad_i, v_tmp_i;
-                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
-                P::gather(band2 + base, gstride, v_tmp_itr2_i);
-                P::gather(x.data() + base + inner_dim, gstride, v_tmp_ip);
-                P::gather(x_aad.data() + base + inner_dim, gstride, v_tmp_aad_ip);
-                P::gather(band2_aad + base, gstride, v_tmp_itr2_aad_i);
-                P::gather(x.data() + base, gstride, v_tmp_i);
+                v_tmp_aad_i      = P::gather(x_aad.data() + base, gstride);
+                v_tmp_itr2_i     = P::gather(band2 + base, gstride);
+                v_tmp_ip         = P::gather(x.data() + base + inner_dim, gstride);
+                v_tmp_aad_ip     = P::gather(x_aad.data() + base + inner_dim, gstride);
+                v_tmp_itr2_aad_i = P::gather(band2_aad + base, gstride);
+                v_tmp_i          = P::gather(x.data() + base, gstride);
 
-                typename P::packet_t v_contrib1, v_contrib2, v_prod;
-                P::fma(v_tmp_aad_i, v_tmp_ip, vzero, v_contrib1);
-                P::add(v_tmp_itr2_aad_i, v_contrib1, v_tmp_itr2_aad_i);
+                typename P::simd_t v_contrib1, v_contrib2, v_prod;
+                v_contrib1       = P::fma(v_tmp_aad_i, v_tmp_ip, vzero);
+                v_tmp_itr2_aad_i = P::add(v_tmp_itr2_aad_i, v_contrib1);
                 P::scatter(v_tmp_itr2_aad_i, gstride, band2_aad + base);
 
-                P::fma(v_tmp_aad_i, v_tmp_itr2_i, vzero, v_contrib2);
-                P::add(v_tmp_aad_ip, v_contrib2, v_tmp_aad_ip);
+                v_contrib2   = P::fma(v_tmp_aad_i, v_tmp_itr2_i, vzero);
+                v_tmp_aad_ip = P::add(v_tmp_aad_ip, v_contrib2);
                 P::scatter(v_tmp_aad_ip, gstride, x_aad.data() + base + inner_dim);
 
-                P::fma(v_tmp_itr2_i, v_tmp_ip, vzero, v_prod);
-                P::fma(v_prod, vnegone, v_tmp_i, v_tmp_i);
+                v_prod  = P::fma(v_tmp_itr2_i, v_tmp_ip, vzero);
+                v_tmp_i = P::fma(v_prod, vnegone, v_tmp_i);
                 P::scatter(v_tmp_i, gstride, x.data() + base);
             }
         }
@@ -1876,26 +1923,26 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
             {
                 const size_t base = l * n + i;
 
-                typename P::packet_t v_tmp_aad_i, v_tmp_itr1_i, v_tmp_im, v_tmp_aad_im,
+                typename P::simd_t v_tmp_aad_i, v_tmp_itr1_i, v_tmp_im, v_tmp_aad_im,
                     v_tmp_itr1_aad_i, v_tmp_i;
-                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
-                P::gather(band1 + base, gstride, v_tmp_itr1_i);
-                P::gather(x.data() + base - inner_dim, gstride, v_tmp_im);
-                P::gather(x_aad.data() + base - inner_dim, gstride, v_tmp_aad_im);
-                P::gather(band1_aad + base, gstride, v_tmp_itr1_aad_i);
-                P::gather(x.data() + base, gstride, v_tmp_i);
+                v_tmp_aad_i      = P::gather(x_aad.data() + base, gstride);
+                v_tmp_itr1_i     = P::gather(band1 + base, gstride);
+                v_tmp_im         = P::gather(x.data() + base - inner_dim, gstride);
+                v_tmp_aad_im     = P::gather(x_aad.data() + base - inner_dim, gstride);
+                v_tmp_itr1_aad_i = P::gather(band1_aad + base, gstride);
+                v_tmp_i          = P::gather(x.data() + base, gstride);
 
-                typename P::packet_t v_contrib1, v_contrib2, v_prod;
-                P::fma(v_tmp_aad_i, v_tmp_im, vzero, v_contrib1);
-                P::add(v_tmp_itr1_aad_i, v_contrib1, v_tmp_itr1_aad_i);
+                typename P::simd_t v_contrib1, v_contrib2, v_prod;
+                v_contrib1       = P::fma(v_tmp_aad_i, v_tmp_im, vzero);
+                v_tmp_itr1_aad_i = P::add(v_tmp_itr1_aad_i, v_contrib1);
                 P::scatter(v_tmp_itr1_aad_i, gstride, band1_aad + base);
 
-                P::fma(v_tmp_aad_i, v_tmp_itr1_i, vzero, v_contrib2);
-                P::add(v_tmp_aad_im, v_contrib2, v_tmp_aad_im);
+                v_contrib2   = P::fma(v_tmp_aad_i, v_tmp_itr1_i, vzero);
+                v_tmp_aad_im = P::add(v_tmp_aad_im, v_contrib2);
                 P::scatter(v_tmp_aad_im, gstride, x_aad.data() + base - inner_dim);
 
-                P::fma(v_tmp_itr1_i, v_tmp_im, vzero, v_prod);
-                P::fma(v_prod, vnegone, v_tmp_i, v_tmp_i);
+                v_prod  = P::fma(v_tmp_itr1_i, v_tmp_im, vzero);
+                v_tmp_i = P::fma(v_prod, vnegone, v_tmp_i);
                 P::scatter(v_tmp_i, gstride, x.data() + base);
             }
         }
@@ -1915,10 +1962,10 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
 #if LINALG_HAS_VECTORIZATION
     for (; i + width <= stride; i += width)
     {
-        typename P::packet_t vx, vd, vout;
-        P::loadu(x.data() + i, vx);
-        P::loadu(decomposed.data() + i, vd);
-        P::div(vx, vd, vout);
+        typename P::simd_t vx, vd, vout;
+        vx   = P::loadu(x.data() + i);
+        vd   = P::loadu(decomposed.data() + i);
+        vout = P::div(vx, vd);
         P::storeu(vout, x.data() + i);
     }
 #endif
@@ -1931,11 +1978,11 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
 #if LINALG_HAS_VECTORIZATION
     for (; i + width <= stride; i += width)
     {
-        typename P::packet_t vxa, vx, vda, vout;
-        P::loadu(x_aad.data() + i, vxa);
-        P::loadu(x.data() + i, vx);
-        P::loadu(decomposed_aad.data() + i, vda);
-        P::fma(vxa, vx, vda, vout);
+        typename P::simd_t vxa, vx, vda, vout;
+        vxa  = P::loadu(x_aad.data() + i);
+        vx   = P::loadu(x.data() + i);
+        vda  = P::loadu(decomposed_aad.data() + i);
+        vout = P::fma(vxa, vx, vda);
         P::storeu(vout, decomposed_aad.data() + i);
     }
 #endif
@@ -1948,10 +1995,10 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
 #if LINALG_HAS_VECTORIZATION
     for (; i + width <= stride; i += width)
     {
-        typename P::packet_t vxa, vd, vout;
-        P::loadu(x_aad.data() + i, vxa);
-        P::loadu(decomposed.data() + i, vd);
-        P::fma(vxa, vd, vzero, vout);
+        typename P::simd_t vxa, vd, vout;
+        vxa  = P::loadu(x_aad.data() + i);
+        vd   = P::loadu(decomposed.data() + i);
+        vout = P::fma(vxa, vd, vzero);
         P::storeu(vout, x_aad.data() + i);
     }
 #endif
@@ -1977,12 +2024,12 @@ void solve_decomposed_aad(std::vector<T>& x_aad,
     auto const* __restrict band2 = band1 + stride;
 
 #if LINALG_HAS_VECTORIZATION
-    using P                = packet<T>;
-    constexpr size_t width = static_cast<size_t>(P::size);
-    const bool       can_vectorize_outer = width <= outer_dim;
-    const linalg_int gstride             = static_cast<linalg_int>(n);
-    typename P::packet_t vzero;
-    P::set(T{0}, vzero);
+    using P                                = simd<T>;
+    constexpr size_t   width               = static_cast<size_t>(P::size);
+    const bool         can_vectorize_outer = width <= outer_dim;
+    const linalg_int   gstride             = static_cast<linalg_int>(n);
+    typename P::simd_t vzero;
+    vzero = P::set(T{0});
 #endif
 
     for (int i = 0; i <= end; ++i)
@@ -1995,13 +2042,13 @@ void solve_decomposed_aad(std::vector<T>& x_aad,
             {
                 const size_t base = l * n + static_cast<size_t>(i);
 
-                typename P::packet_t v_tmp_aad_i, v_tmp_itr2_i, v_tmp_aad_ip, v_contrib;
-                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
-                P::gather(band2 + base, gstride, v_tmp_itr2_i);
-                P::gather(x_aad.data() + base + inner_dim, gstride, v_tmp_aad_ip);
+                typename P::simd_t v_tmp_aad_i, v_tmp_itr2_i, v_tmp_aad_ip, v_contrib;
+                v_tmp_aad_i  = P::gather(x_aad.data() + base, gstride);
+                v_tmp_itr2_i = P::gather(band2 + base, gstride);
+                v_tmp_aad_ip = P::gather(x_aad.data() + base + inner_dim, gstride);
 
-                P::fma(v_tmp_aad_i, v_tmp_itr2_i, vzero, v_contrib);
-                P::add(v_tmp_aad_ip, v_contrib, v_tmp_aad_ip);
+                v_contrib    = P::fma(v_tmp_aad_i, v_tmp_itr2_i, vzero);
+                v_tmp_aad_ip = P::add(v_tmp_aad_ip, v_contrib);
                 P::scatter(v_tmp_aad_ip, gstride, x_aad.data() + base + inner_dim);
             }
         }
@@ -2023,13 +2070,13 @@ void solve_decomposed_aad(std::vector<T>& x_aad,
             {
                 const size_t base = l * n + i;
 
-                typename P::packet_t v_tmp_aad_i, v_tmp_itr1_i, v_tmp_aad_im, v_contrib;
-                P::gather(x_aad.data() + base, gstride, v_tmp_aad_i);
-                P::gather(band1 + base, gstride, v_tmp_itr1_i);
-                P::gather(x_aad.data() + base - inner_dim, gstride, v_tmp_aad_im);
+                typename P::simd_t v_tmp_aad_i, v_tmp_itr1_i, v_tmp_aad_im, v_contrib;
+                v_tmp_aad_i  = P::gather(x_aad.data() + base, gstride);
+                v_tmp_itr1_i = P::gather(band1 + base, gstride);
+                v_tmp_aad_im = P::gather(x_aad.data() + base - inner_dim, gstride);
 
-                P::fma(v_tmp_aad_i, v_tmp_itr1_i, vzero, v_contrib);
-                P::add(v_tmp_aad_im, v_contrib, v_tmp_aad_im);
+                v_contrib    = P::fma(v_tmp_aad_i, v_tmp_itr1_i, vzero);
+                v_tmp_aad_im = P::add(v_tmp_aad_im, v_contrib);
                 P::scatter(v_tmp_aad_im, gstride, x_aad.data() + base - inner_dim);
             }
         }
@@ -2045,10 +2092,10 @@ void solve_decomposed_aad(std::vector<T>& x_aad,
 #if LINALG_HAS_VECTORIZATION
     for (; i + width <= stride; i += width)
     {
-        typename P::packet_t vxa, vd, vout;
-        P::loadu(x_aad.data() + i, vxa);
-        P::loadu(decomposed.data() + i, vd);
-        P::fma(vxa, vd, vzero, vout);
+        typename P::simd_t vxa, vd, vout;
+        vxa  = P::loadu(x_aad.data() + i);
+        vd   = P::loadu(decomposed.data() + i);
+        vout = P::fma(vxa, vd, vzero);
         P::storeu(vout, x_aad.data() + i);
     }
 #endif
@@ -2096,13 +2143,13 @@ void multiply_aad(std::vector<T>& mat_aad,
     auto* __restrict in_aad_p  = in_aad.data();
 
 #if LINALG_HAS_VECTORIZATION
-    using P                = packet<T>;
-    constexpr size_t width = static_cast<size_t>(P::size);
-    const bool       can_vectorize_outer = width <= outer_dim;
-    const linalg_int gstride             = static_cast<linalg_int>(n);
-    typename P::packet_t vzero, vtm;
-    P::set(T{0}, vzero);
-    P::set(time_multiplier, vtm);
+    using P                                = simd<T>;
+    constexpr size_t   width               = static_cast<size_t>(P::size);
+    const bool         can_vectorize_outer = width <= outer_dim;
+    const linalg_int   gstride             = static_cast<linalg_int>(n);
+    typename P::simd_t vzero, vtm;
+    vzero = P::set(T{0});
+    vtm   = P::set(time_multiplier);
 #endif
 
     for (size_t r = 0; r < n; ++r)
@@ -2118,93 +2165,93 @@ void multiply_aad(std::vector<T>& mat_aad,
             {
                 const size_t base = l * n + r;
 
-                typename P::packet_t v_res, v_tmp_aad;
-                P::gather(res_aad + base, gstride, v_res);
-                P::fma(v_res, vtm, vzero, v_tmp_aad);
+                typename P::simd_t v_res, v_tmp_aad;
+                v_res     = P::gather(res_aad + base, gstride);
+                v_tmp_aad = P::fma(v_res, vtm, vzero);
 
                 if (has_below && has_above)
                 {
-                    typename P::packet_t v_a, v_b, v_c, v_in_m, v_in_0, v_in_p;
-                    P::gather(band0 + base, gstride, v_a);
-                    P::gather(band1 + base, gstride, v_b);
-                    P::gather(band2 + base, gstride, v_c);
-                    P::gather(in_ro + base - inner_dim, gstride, v_in_m);
-                    P::gather(in_ro + base, gstride, v_in_0);
-                    P::gather(in_ro + base + inner_dim, gstride, v_in_p);
+                    typename P::simd_t v_a, v_b, v_c, v_in_m, v_in_0, v_in_p;
+                    v_a    = P::gather(band0 + base, gstride);
+                    v_b    = P::gather(band1 + base, gstride);
+                    v_c    = P::gather(band2 + base, gstride);
+                    v_in_m = P::gather(in_ro + base - inner_dim, gstride);
+                    v_in_0 = P::gather(in_ro + base, gstride);
+                    v_in_p = P::gather(in_ro + base + inner_dim, gstride);
 
-                    typename P::packet_t v_acc;
-                    P::gather(band0_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_m, v_acc, v_acc);
+                    typename P::simd_t v_acc;
+                    v_acc = P::gather(band0_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_m, v_acc);
                     P::scatter(v_acc, gstride, band0_aad + base);
 
-                    P::gather(band1_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_0, v_acc, v_acc);
+                    v_acc = P::gather(band1_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_0, v_acc);
                     P::scatter(v_acc, gstride, band1_aad + base);
 
-                    P::gather(band2_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_p, v_acc, v_acc);
+                    v_acc = P::gather(band2_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_p, v_acc);
                     P::scatter(v_acc, gstride, band2_aad + base);
 
-                    P::gather(in_aad_p + base - inner_dim, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_a, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base - inner_dim, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_a, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base - inner_dim);
 
-                    P::gather(in_aad_p + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_b, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_b, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base);
 
-                    P::gather(in_aad_p + base + inner_dim, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_c, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base + inner_dim, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_c, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base + inner_dim);
                 }
                 else if (has_below)  // top block: no band2/c term
                 {
-                    typename P::packet_t v_a, v_b, v_in_m, v_in_0;
-                    P::gather(band0 + base, gstride, v_a);
-                    P::gather(band1 + base, gstride, v_b);
-                    P::gather(in_ro + base - inner_dim, gstride, v_in_m);
-                    P::gather(in_ro + base, gstride, v_in_0);
+                    typename P::simd_t v_a, v_b, v_in_m, v_in_0;
+                    v_a    = P::gather(band0 + base, gstride);
+                    v_b    = P::gather(band1 + base, gstride);
+                    v_in_m = P::gather(in_ro + base - inner_dim, gstride);
+                    v_in_0 = P::gather(in_ro + base, gstride);
 
-                    typename P::packet_t v_acc;
-                    P::gather(band0_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_m, v_acc, v_acc);
+                    typename P::simd_t v_acc;
+                    v_acc = P::gather(band0_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_m, v_acc);
                     P::scatter(v_acc, gstride, band0_aad + base);
 
-                    P::gather(band1_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_0, v_acc, v_acc);
+                    v_acc = P::gather(band1_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_0, v_acc);
                     P::scatter(v_acc, gstride, band1_aad + base);
 
-                    P::gather(in_aad_p + base - inner_dim, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_a, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base - inner_dim, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_a, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base - inner_dim);
 
-                    P::gather(in_aad_p + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_b, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_b, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base);
                 }
                 else  // bottom block: no band0/a term
                 {
-                    typename P::packet_t v_b, v_c, v_in_0, v_in_p;
-                    P::gather(band1 + base, gstride, v_b);
-                    P::gather(band2 + base, gstride, v_c);
-                    P::gather(in_ro + base, gstride, v_in_0);
-                    P::gather(in_ro + base + inner_dim, gstride, v_in_p);
+                    typename P::simd_t v_b, v_c, v_in_0, v_in_p;
+                    v_b    = P::gather(band1 + base, gstride);
+                    v_c    = P::gather(band2 + base, gstride);
+                    v_in_0 = P::gather(in_ro + base, gstride);
+                    v_in_p = P::gather(in_ro + base + inner_dim, gstride);
 
-                    typename P::packet_t v_acc;
-                    P::gather(band1_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_0, v_acc, v_acc);
+                    typename P::simd_t v_acc;
+                    v_acc = P::gather(band1_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_0, v_acc);
                     P::scatter(v_acc, gstride, band1_aad + base);
 
-                    P::gather(band2_aad + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_in_p, v_acc, v_acc);
+                    v_acc = P::gather(band2_aad + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_in_p, v_acc);
                     P::scatter(v_acc, gstride, band2_aad + base);
 
-                    P::gather(in_aad_p + base, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_b, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_b, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base);
 
-                    P::gather(in_aad_p + base + inner_dim, gstride, v_acc);
-                    P::fma(v_tmp_aad, v_c, v_acc, v_acc);
+                    v_acc = P::gather(in_aad_p + base + inner_dim, gstride);
+                    v_acc = P::fma(v_tmp_aad, v_c, v_acc);
                     P::scatter(v_acc, gstride, in_aad_p + base + inner_dim);
                 }
             }
@@ -2262,29 +2309,91 @@ template LINALG_API void decomposition<float, 3>(std::vector<float>&, size_t, si
 template LINALG_API void decomposition<double, 5>(std::vector<double>&, size_t, size_t, size_t);
 template LINALG_API void decomposition<float, 5>(std::vector<float>&, size_t, size_t, size_t);
 
-template LINALG_API void solve_decomposed<double, 3>(std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
-template LINALG_API void solve_decomposed<float, 3>(std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
-template LINALG_API void solve_decomposed<double, 5>(std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
-template LINALG_API void solve_decomposed<float, 5>(std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed<double, 3>(
+    std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed<float, 3>(
+    std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed<double, 5>(
+    std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed<float, 5>(
+    std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
 
-template LINALG_API void multiply<double, 3>(std::vector<double>&, const std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t, double);
-template LINALG_API void multiply<float, 3>(std::vector<float>&, const std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t, float);
-template LINALG_API void multiply<double, 5>(std::vector<double>&, const std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t, double);
-template LINALG_API void multiply<float, 5>(std::vector<float>&, const std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t, float);
+template LINALG_API void multiply<double, 3>(std::vector<double>&,
+    const std::vector<double>&,
+    const std::vector<double>&,
+    size_t,
+    size_t,
+    size_t,
+    double);
+template LINALG_API void multiply<float, 3>(std::vector<float>&,
+    const std::vector<float>&,
+    const std::vector<float>&,
+    size_t,
+    size_t,
+    size_t,
+    float);
+template LINALG_API void multiply<double, 5>(std::vector<double>&,
+    const std::vector<double>&,
+    const std::vector<double>&,
+    size_t,
+    size_t,
+    size_t,
+    double);
+template LINALG_API void multiply<float, 5>(std::vector<float>&,
+    const std::vector<float>&,
+    const std::vector<float>&,
+    size_t,
+    size_t,
+    size_t,
+    float);
 
-template LINALG_API void decomposition_aad<double>(std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
-template LINALG_API void decomposition_aad<float>(std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
+template LINALG_API void decomposition_aad<double>(
+    std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
+template LINALG_API void decomposition_aad<float>(
+    std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
 
-template LINALG_API void solve_decomposed_vectorised<double>(std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t, size_t, size_t);
-template LINALG_API void solve_decomposed_vectorised<float>(std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed_vectorised<double>(
+    std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed_vectorised<float>(
+    std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t, size_t, size_t);
 
-template LINALG_API void solve_decomposed_aad<double>(std::vector<double>&, std::vector<double>&, std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
-template LINALG_API void solve_decomposed_aad<float>(std::vector<float>&, std::vector<float>&, std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed_aad<double>(std::vector<double>&,
+    std::vector<double>&,
+    std::vector<double>&,
+    const std::vector<double>&,
+    size_t,
+    size_t,
+    size_t);
+template LINALG_API void solve_decomposed_aad<float>(std::vector<float>&,
+    std::vector<float>&,
+    std::vector<float>&,
+    const std::vector<float>&,
+    size_t,
+    size_t,
+    size_t);
 
-template LINALG_API void solve_decomposed_aad<double>(std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
-template LINALG_API void solve_decomposed_aad<float>(std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed_aad<double>(
+    std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t);
+template LINALG_API void solve_decomposed_aad<float>(
+    std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t);
 
-template LINALG_API void multiply_aad<double>(std::vector<double>&, std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, size_t, size_t, size_t, double);
-template LINALG_API void multiply_aad<float>(std::vector<float>&, std::vector<float>&, const std::vector<float>&, const std::vector<float>&, const std::vector<float>&, size_t, size_t, size_t, float);
+template LINALG_API void multiply_aad<double>(std::vector<double>&,
+    std::vector<double>&,
+    const std::vector<double>&,
+    const std::vector<double>&,
+    const std::vector<double>&,
+    size_t,
+    size_t,
+    size_t,
+    double);
+template LINALG_API void multiply_aad<float>(std::vector<float>&,
+    std::vector<float>&,
+    const std::vector<float>&,
+    const std::vector<float>&,
+    const std::vector<float>&,
+    size_t,
+    size_t,
+    size_t,
+    float);
 
 }  // namespace linalg::banded_operations

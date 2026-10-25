@@ -1,7 +1,7 @@
 load("//bazel:xsigma.bzl", "xsigma_copts", "xsigma_defines", "xsigma_linkopts")
 
-# C++ standard for LinearAlgebra — mirrors CMake LINALG_CXX_STANDARD (default: 17)
-LINALG_CXX_STD = "c++17"
+# C++ standard for LinearAlgebra — mirrors CMake LINALG_CXX_STANDARD (default: 20)
+LINALG_CXX_STD = "c++20"
 
 def linear_algebra_copts():
     return xsigma_copts(cxx_std = LINALG_CXX_STD)
@@ -21,7 +21,7 @@ def linear_algebra_defines():
     on those headers/libs already being on the toolchain's default search
     paths. CMake remains this repo's primary, exercised build system for the
     blas_lapack backend (see BUILD.bazel). LINALG_HAS_LAPACKE,
-    LINALG_HAS_ACCELERATE, LINALG_HAS_CUBLAS, LINALG_HAS_VECTORIZATION, and
+    LINALG_HAS_ACCELERATE, LINALG_HAS_CUBLAS, and
     LINALG_HAS_WIN32_WARNINGS have no Bazel toggle at all (see BUILD.bazel);
     they are simply left undefined here, which the #if sites that reference
     them treat as 0 — the same behavior as before this macro rename.
@@ -41,6 +41,8 @@ def linear_algebra_defines():
         "//conditions:default": ["LINALG_HAS_LU_PIVOTING=0"],
     })
 
+    # Bazel preserves the scalar algorithm configuration; CMake selects SIMD.
+    defines += ["LINALG_HAS_VECTORIZATION=0"]
     return defines
 
 def linear_algebra_linkopts():

@@ -215,18 +215,20 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # --- LINALG vectorization ISA option ---
-# Which linalg::packet<T> specialization backs LINALG_ENABLE_VECTORIZATION.
+# Which Scalars simd<T> backend supplies LINALG_ENABLE_VECTORIZATION.
 # There is no "auto" choice: the ISA is always explicit, and CMake computes a
 # platform-appropriate default when the cache variable is not overridden on the
 # command line:
-#   scalar - force linalg::packet<T>'s scalar (width-1) primary template.
+#   scalar - use scalar algorithm loops (Scalars CPU backend=no).
 #            Default for platforms other than x86_64/aarch64.
-#   sse2/avx/avx2/avx512/neon - force that specialization and (x86 targets
+#   sse/avx/avx2/avx512/neon - force that specialization and (x86 targets
 #            only) add the matching -m<isa> compiler flag so it is actually
 #            enabled; a target that cannot assemble the requested ISA fails
 #            to build rather than silently falling back to a narrower one.
-#            SSE2 is the x86_64 baseline; neon is the
+#            SSE (SSE2 baseline) is the x86_64 baseline; neon is the
 #            default on aarch64/arm64.
+#
+# Aligned with Scalars CPU backend naming: no, sse, avx, avx2, avx512, neon, sve.
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _linalg_system_processor_lower)
 if(CMAKE_OSX_ARCHITECTURES)
     list(LENGTH CMAKE_OSX_ARCHITECTURES _linalg_arch_count)
@@ -239,7 +241,7 @@ endif()
 if(_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
     set(_linalg_vectorization_isa_default "neon")
 elseif(_linalg_system_processor_lower MATCHES "^(x86_64|amd64)$")
-    set(_linalg_vectorization_isa_default "sse2")
+    set(_linalg_vectorization_isa_default "sse")
 else()
     set(_linalg_vectorization_isa_default "scalar")
 endif()
@@ -247,13 +249,14 @@ set(LINALG_VECTORIZATION_ISA
     "${_linalg_vectorization_isa_default}"
     CACHE
         STRING
-        "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse2, avx, avx2, avx512, neon"
+        "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse (or sse2), avx, avx2, avx512, neon"
 )
 unset(_linalg_vectorization_isa_default)
 set_property(
     CACHE LINALG_VECTORIZATION_ISA
     PROPERTY STRINGS
              scalar
+             sse
              sse2
              avx
              avx2
@@ -261,7 +264,7 @@ set_property(
              neon
 )
 
-if(NOT LINALG_VECTORIZATION_ISA MATCHES "^(scalar|sse2|avx|avx2|avx512|neon)$")
+if(NOT LINALG_VECTORIZATION_ISA MATCHES "^(scalar|sse|sse2|avx|avx2|avx512|neon)$")
     message(FATAL_ERROR "Invalid LINALG_VECTORIZATION_ISA: ${LINALG_VECTORIZATION_ISA}")
 endif()
 if(LINALG_ENABLE_VECTORIZATION AND NOT LINALG_VECTORIZATION_ISA STREQUAL "scalar")
@@ -292,48 +295,4 @@ function(linalg_apply_platform_compile_flags target)
     endif()
 endfunction()
 
-# Apply SIMD vectorization compile options to a target.  Emits the
-# LINALG_SIMD_<ISA> compile definition and, on non-MSVC toolchains, the
-# matching -m<isa> / -mfma flags wrapped in a $<NOT:CUDA> generator expression
-# so nvcc's cl.exe host compiler is never passed GCC-style flags.
-# Does nothing when LINALG_ENABLE_VECTORIZATION is OFF.
-function(linalg_apply_vectorization_flags target)
-    if(NOT LINALG_ENABLE_VECTORIZATION)
-        return()
-    endif()
-
-    string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _linalg_simd_isa_upper)
-    target_compile_definitions(${target} PRIVATE "LINALG_SIMD_${_linalg_simd_isa_upper}")
-    unset(_linalg_simd_isa_upper)
-
-    # x86 ISAs need the matching -m<isa> flag to actually be assembled;
-    # NEON is the aarch64 baseline (no single standard x86-style flag), so
-    # "neon" adds none.  cl.exe (MSVC, non-Clang) has no -mXXX flags;
-    # clang-cl sets MSVC=1 but accepts GCC-style -m flags via its Clang
-    # backend, so it is explicitly included in this path.
-    if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        if(LINALG_VECTORIZATION_ISA STREQUAL "sse2")
-            target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-msse2>)
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx")
-            target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-mavx>)
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx2")
-            target_compile_options(
-                ${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-mavx2>
-                                  $<$<COMPILE_LANGUAGE:CXX>:-mfma>
-            )
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "avx512")
-            # Half-packet operations also use the 128/256-bit FMA intrinsics.
-            target_compile_options(
-                ${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-mavx512f>
-                                  $<$<COMPILE_LANGUAGE:CXX>:-mfma>
-            )
-        endif()
-    else()
-        if(LINALG_VECTORIZATION_ISA MATCHES "^(avx|avx2|avx512)$")
-            string(TOUPPER "${LINALG_VECTORIZATION_ISA}" _arch)
-            target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/arch:${_arch}>")
-        elseif(LINALG_VECTORIZATION_ISA STREQUAL "sse2" AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-            target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/arch:SSE2>")
-        endif()
-    endif()
-endfunction()
+# Scalars::Scalars supplies the selected ISA's compiler flags and definitions.

@@ -80,164 +80,26 @@ jobs:
             ./build-eigen/bin/benchmark_linalg_${operation} --benchmark_filter='/(8|16|32/32/32)/'
           done
 
-  cmake-minimum-linux:
-    name: CMake 3.24.4 (${{ matrix.compiler }} ${{ matrix.version }}, C++17)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  cmake-cxx20-baseline:
+    name: C++20 baseline (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - compiler: gcc
-            id: GNU
-            version: '9.1'
-          - compiler: clang
-            id: Clang
-            version: '9.0'
-    env:
-      MINIMUM_COMPILER: ${{ matrix.compiler }}
-      MINIMUM_COMPILER_ID: ${{ matrix.id }}
-      MINIMUM_COMPILER_VERSION: ${{ matrix.version }}
-    steps:
-      # Checkout on the host: JavaScript actions need a newer libc than this image.
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Download pinned build tools
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/minimum-tools/cmake"
-          curl -fsSL --retry 3 \
-            https://github.com/Kitware/CMake/releases/download/v3.24.4/cmake-3.24.4-linux-x86_64.tar.gz \
-            -o "$RUNNER_TEMP/cmake.tar.gz"
-          tar -xzf "$RUNNER_TEMP/cmake.tar.gz" --strip-components=1 \
-            -C "$RUNNER_TEMP/minimum-tools/cmake"
-          if [[ "$MINIMUM_COMPILER" == clang ]]; then
-            mkdir -p "$RUNNER_TEMP/minimum-tools/clang"
-            curl -fsSL --retry 3 \
-              https://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz \
-              -o "$RUNNER_TEMP/clang.tar.xz"
-            tar -xJf "$RUNNER_TEMP/clang.tar.xz" --strip-components=1 \
-              -C "$RUNNER_TEMP/minimum-tools/clang"
-
-            # This clang binary was built for Ubuntu 16.04 and needs the ncurses5
-            # ABI (libtinfo.so.5). The gcc:9.1.0 build container is Debian
-            # buster, which dropped libtinfo5 entirely in favor of libtinfo6.
-            # Debian Stretch is the last release to carry it; archive.debian.org
-            # is Debian's own permanent archive for EOL releases.
-            curl -fsSL --retry 3 \
-              https://archive.debian.org/debian/pool/main/n/ncurses/libtinfo5_6.0+20161126-1+deb9u2_amd64.deb \
-              -o "$RUNNER_TEMP/libtinfo5.deb"
-            dpkg-deb -x "$RUNNER_TEMP/libtinfo5.deb" "$RUNNER_TEMP/libtinfo5"
-            cp "$RUNNER_TEMP"/libtinfo5/lib/x86_64-linux-gnu/libtinfo.so.5* \
-              "$RUNNER_TEMP/minimum-tools/clang/lib/"
-          fi
-
-      - name: Configure, build, and test the minimum compiler
-        shell: bash
-        run: |
-          docker run --rm -i --user "$(id -u):$(id -g)" \
-            -v "$PWD:/src" -v "$RUNNER_TEMP/minimum-tools:/ci-tools:ro" -w /src \
-            -e MINIMUM_COMPILER -e MINIMUM_COMPILER_ID -e MINIMUM_COMPILER_VERSION \
-            gcc:9.1.0 bash -euo pipefail <<'BASH'
-              export PATH="/ci-tools/cmake/bin:$PATH"
-              if [[ "$MINIMUM_COMPILER" == clang ]]; then
-                export CC=/ci-tools/clang/bin/clang CXX=/ci-tools/clang/bin/clang++
-                export CFLAGS=--gcc-toolchain=/usr/local CXXFLAGS=--gcc-toolchain=/usr/local
-                export LD_LIBRARY_PATH=/ci-tools/clang/lib
-              else
-                export CC=gcc CXX=g++
-              fi
-              cmake -S . -B build-minimum -G "Unix Makefiles" \
-                -C .github/cmake/minimum-options.cmake \
-                -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="$PWD/.github/cmake/check-compiler.cmake" \
-                -DLINALG_CI_COMPILER_ID="$MINIMUM_COMPILER_ID" \
-                -DLINALG_CI_COMPILER_VERSION="$MINIMUM_COMPILER_VERSION"
-              cmake --build build-minimum --parallel 4
-              ctest --test-dir build-minimum --output-on-failure --no-tests=error
-          BASH
-
-  cmake-minimum-appleclang:
-    name: CMake minimum (AppleClang 11.0, C++17)
-    if: github.event_name == 'push' && vars.LINALG_APPLECLANG_11_CI_ENABLED == 'true'
-    runs-on: [self-hosted, macOS, X64, appleclang-11]
-    timeout-minutes: 30
+        os: [ubuntu-22.04, macos-14, windows-2022]
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
+      - name: Configure MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
-        shell: bash
-        run: |
-          cmake -S . -B build-minimum -G Ninja \
-            -C .github/cmake/minimum-options.cmake \
-            -DCMAKE_C_COMPILER="$(xcrun --find clang)" \
-            -DCMAKE_CXX_COMPILER="$(xcrun --find clang++)" \
-            -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="$PWD/.github/cmake/check-compiler.cmake" \
-            -DLINALG_CI_COMPILER_ID=AppleClang -DLINALG_CI_COMPILER_VERSION=11.0
-
+        run: cmake -S . -B build-baseline -G Ninja -C .github/cmake/minimum-options.cmake
       - name: Build
-        run: cmake --build build-minimum --parallel 4
-
+        run: cmake --build build-baseline --parallel 4
       - name: Test
-        run: ctest --test-dir build-minimum --output-on-failure --no-tests=error
-
-  cmake-minimum-msvc:
-    name: CMake minimum (MSVC 19.14, C++17)
-    runs-on: windows-2022
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install MSVC 19.14 and Windows SDK
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $installer = Join-Path $env:RUNNER_TEMP 'vs_buildtools_2017.exe'
-          $installPath = Join-Path $env:RUNNER_TEMP 'vs2017'
-          curl.exe --fail --location --retry 3 https://aka.ms/vs/15/release/vs_buildtools.exe --output $installer
-          if ($LASTEXITCODE -ne 0) { throw 'VS 2017 installer download failed' }
-
-          # The v141 component in VS 2022 installs 14.16, not the 14.14 baseline.
-          # VS 2017 still offers the exact 15.7 toolset as an optional component.
-          $arguments = @(
-            '--quiet', '--wait', '--norestart', '--nocache',
-            '--installPath', "`"$installPath`"",
-            '--add', 'Microsoft.VisualStudio.Workload.VCTools',
-            '--add', 'Microsoft.VisualStudio.Component.VC.Tools.14.14',
-            '--add', 'Microsoft.VisualStudio.Component.Windows10SDK.19041'
-          )
-          $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
-          if ($process.ExitCode -notin @(0, 3010)) {
-            throw "VS 2017 installation failed with exit code $($process.ExitCode)"
-          }
-
-          $vcvars = Join-Path $installPath 'VC\Auxiliary\Build\vcvarsall.bat'
-          if (-not (Test-Path $vcvars)) { throw "Missing toolchain setup: $vcvars" }
-          $compiler = Get-ChildItem "$installPath\VC\Tools\MSVC\14.14.*\bin\Hostx64\x64\cl.exe"
-          if (-not $compiler) { throw 'MSVC 14.14 x64 compiler was not installed' }
-          "LINALG_MSVC_1914_VCVARSALL=$vcvars" >> $env:GITHUB_ENV
-
-      - name: Configure, build, and test
-        shell: cmd
-        run: |
-          if not defined LINALG_MSVC_1914_VCVARSALL exit /b 1
-          call "%LINALG_MSVC_1914_VCVARSALL%" x64 10.0.19041.0 -vcvars_ver=14.14
-          if errorlevel 1 exit /b 1
-          cmake -S . -B build-minimum -G Ninja ^
-            -C .github/cmake/minimum-options.cmake ^
-            -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ^
-            -DCMAKE_PROJECT_LinearAlgebra_INCLUDE="%CD%/.github/cmake/check-compiler.cmake" ^
-            -DLINALG_CI_COMPILER_ID=MSVC -DLINALG_CI_COMPILER_VERSION=19.14
-          if errorlevel 1 exit /b 1
-          cmake --build build-minimum --parallel 4
-          if errorlevel 1 exit /b 1
-          ctest --test-dir build-minimum --output-on-failure --no-tests=error
-          if errorlevel 1 exit /b 1
+        run: ctest --test-dir build-baseline --output-on-failure --no-tests=error
 
   cmake-mkl:
     name: CMake (Linux, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
@@ -518,7 +380,7 @@ jobs:
         run: >
           cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DLINALG_ENABLE_CUBLAS=ON
-          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
           -DLINALG_ENABLE_BLAS="$CUDA_BLAS" -DBLA_VENDOR=OpenBLAS
           -DLINALG_ENABLE_MKL="$CUDA_MKL"
           -DLINALG_BUILD_EXAMPLES="$CUDA_EXAMPLES"
@@ -553,7 +415,7 @@ jobs:
         run: |
           cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release `
             -DLINALG_ENABLE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=75 `
-            -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+            -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
           if ($LASTEXITCODE -ne 0) { throw 'CUDA configure failed' }
           cmake --build build-cuda --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'CUDA build failed' }
@@ -619,7 +481,7 @@ jobs:
         run: >
           cmake -S . -B build-hip -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DLINALG_ENABLE_ROCBLAS=ON
-          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
           -DLINALG_ENABLE_BLAS="$HIP_BLAS" -DBLA_VENDOR=OpenBLAS
           -DLINALG_ENABLE_MKL="$HIP_MKL"
           -DLINALG_BUILD_EXAMPLES="$HIP_EXAMPLES"
@@ -652,7 +514,7 @@ jobs:
         run: >
           cmake -S . -B build-metal -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DLINALG_ENABLE_METAL=ON
-          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=17
+          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
           -DBUILD_TESTING=ON -DLINALG_ENABLE_TESTING=ON -DLINALG_ENABLE_GTEST=ON
       - name: Build
         run: cmake --build build-metal --parallel 4

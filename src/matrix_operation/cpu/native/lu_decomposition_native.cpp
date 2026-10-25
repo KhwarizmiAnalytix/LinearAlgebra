@@ -14,7 +14,7 @@
 #include "include/common/linalg_macros.h"
 
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -45,13 +45,13 @@ namespace
 // y[c] -= a * x[c] for c in [0, len), the axpy this blocked LU's panel
 // elimination, triangular solve, and rank-bs trailing update all reduce
 // to (see lu_decomposition_blocked_impl below). Vectorized via
-// linalg::packet<T> (src/common/packet.h) -- the same Eigen-derived SIMD
+// ::simd<T> (Scalars) -- the same Scalars SIMD
 // abstraction cholesky_decomposition.cpp's blocked kernel and
 // multiplication.cpp's native GEMM micro-kernel are built on -- instead of
 // relying on the compiler to auto-vectorize a scalar loop with a
 // runtime-variable trip count.
 //
-// Processes 4*width elements per iteration across 4 independent packet_t
+// Processes 4*width elements per iteration across 4 independent simd_t
 // slots rather than one width-at-a-time. Each output element is already
 // independent of every other (no cross-iteration dependency, unlike
 // lu_dot's reduction below), so correctness doesn't need the unrolling --
@@ -61,7 +61,7 @@ namespace
 // auto-vectorizer, left to vectorize the scalar form itself, chose to
 // unroll 4x with 4 independent accumulators precisely to amortize
 // per-iteration loop overhead (compare/increment/branch) over more work;
-// a hand-vectorized loop that always does only one packet_t per iteration
+// a hand-vectorized loop that always does only one simd_t per iteration
 // gives that back. Matching that unroll factor here recovers it.
 // y and x are __restrict: every call site below passes two different rows
 // of m (lu_panel_factor's r > i, the triangular solve's p < ii), so they
@@ -70,30 +70,30 @@ template <typename T>
 inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
+    using P                     = simd<T>;
     constexpr linalg_long width = P::size;
 
-    typename P::packet_t va;
-    P::set(-a, va);
+    typename P::simd_t va;
+    va = P::set(-a);
 
     linalg_long c = 0;
     for (; c + 4 * width <= len; c += 4 * width)
     {
-        typename P::packet_t vx0, vx1, vx2, vx3;
-        typename P::packet_t vy0, vy1, vy2, vy3;
-        typename P::packet_t vo0, vo1, vo2, vo3;
-        P::loadu(x + c, vx0);
-        P::loadu(x + c + width, vx1);
-        P::loadu(x + c + 2 * width, vx2);
-        P::loadu(x + c + 3 * width, vx3);
-        P::loadu(y + c, vy0);
-        P::loadu(y + c + width, vy1);
-        P::loadu(y + c + 2 * width, vy2);
-        P::loadu(y + c + 3 * width, vy3);
-        P::fma(va, vx0, vy0, vo0);
-        P::fma(va, vx1, vy1, vo1);
-        P::fma(va, vx2, vy2, vo2);
-        P::fma(va, vx3, vy3, vo3);
+        typename P::simd_t vx0, vx1, vx2, vx3;
+        typename P::simd_t vy0, vy1, vy2, vy3;
+        typename P::simd_t vo0, vo1, vo2, vo3;
+        vx0 = P::loadu(x + c);
+        vx1 = P::loadu(x + c + width);
+        vx2 = P::loadu(x + c + 2 * width);
+        vx3 = P::loadu(x + c + 3 * width);
+        vy0 = P::loadu(y + c);
+        vy1 = P::loadu(y + c + width);
+        vy2 = P::loadu(y + c + 2 * width);
+        vy3 = P::loadu(y + c + 3 * width);
+        vo0 = P::fma(va, vx0, vy0);
+        vo1 = P::fma(va, vx1, vy1);
+        vo2 = P::fma(va, vx2, vy2);
+        vo3 = P::fma(va, vx3, vy3);
         P::storeu(vo0, y + c);
         P::storeu(vo1, y + c + width);
         P::storeu(vo2, y + c + 2 * width);
@@ -101,12 +101,12 @@ inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long
     }
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t vx;
-        typename P::packet_t vy;
-        typename P::packet_t vout;
-        P::loadu(x + c, vx);
-        P::loadu(y + c, vy);
-        P::fma(va, vx, vy, vout);
+        typename P::simd_t vx;
+        typename P::simd_t vy;
+        typename P::simd_t vout;
+        vx   = P::loadu(x + c);
+        vy   = P::loadu(y + c);
+        vout = P::fma(va, vx, vy);
         P::storeu(vout, y + c);
     }
     for (; c < len; ++c)
@@ -267,7 +267,7 @@ template <typename T>
 size_t lu_trailing_update_workspace_size(linalg_long lda, linalg_long k, linalg_long bs)
 {
     const linalg_long rest = lda - k - bs;
-    if (rest <= 0)
+    if (k + bs >= lda)
     {
         return 0;
     }

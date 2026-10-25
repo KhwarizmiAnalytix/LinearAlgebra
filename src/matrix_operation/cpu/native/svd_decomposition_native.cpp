@@ -10,7 +10,7 @@
 #include <cstring>
 
 #if LINALG_HAS_VECTORIZATION
-#include "src/common/packet.h"
+#include <backend/simd.h>
 #endif
 
 #include "include/common/linalg_profiler.h"
@@ -51,58 +51,59 @@ namespace
 // compute a Householder dot-product against a row that is already
 // contiguous in S_/U_ (the row Householder's S_ update and every column
 // Householder's U_ update walk a row, not a strided column -- see SVD's
-// comments at each call site). Same linalg::packet<T> (src/common/
-// packet.h) SIMD abstraction, and the same 4-accumulator tree-reduction
+// comments at each call site). Same ::simd<T> (src/common/
+// Scalars) SIMD abstraction, and the same 4-accumulator tree-reduction
 // shape, as lu_decomposition_native.cpp's lu_dot.
 // x and y are __restrict: every call site below passes a row of S_/U_
 // against house_vec, two buffers svd_scalar_plan carves as disjoint
 // sub-ranges of the caller's workspace arena, so they never alias.
-template <typename T> inline T svd_dot(const T* __restrict x, const T* __restrict y, linalg_long len)
+template <typename T>
+inline T svd_dot(const T* __restrict x, const T* __restrict y, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
+    using P                     = simd<T>;
     constexpr linalg_long width = P::size;
 
-    typename P::packet_t acc0, acc1, acc2, acc3;
-    P::set(static_cast<T>(0), acc0);
-    P::set(static_cast<T>(0), acc1);
-    P::set(static_cast<T>(0), acc2);
-    P::set(static_cast<T>(0), acc3);
+    typename P::simd_t acc0, acc1, acc2, acc3;
+    acc0 = P::set(static_cast<T>(0));
+    acc1 = P::set(static_cast<T>(0));
+    acc2 = P::set(static_cast<T>(0));
+    acc3 = P::set(static_cast<T>(0));
 
     linalg_long c = 0;
     for (; c + 4 * width <= len; c += 4 * width)
     {
-        typename P::packet_t px0, px1, px2, px3;
-        typename P::packet_t py0, py1, py2, py3;
-        P::loadu(x + c, px0);
-        P::loadu(x + c + width, px1);
-        P::loadu(x + c + 2 * width, px2);
-        P::loadu(x + c + 3 * width, px3);
-        P::loadu(y + c, py0);
-        P::loadu(y + c + width, py1);
-        P::loadu(y + c + 2 * width, py2);
-        P::loadu(y + c + 3 * width, py3);
-        P::fma(px0, py0, acc0, acc0);
-        P::fma(px1, py1, acc1, acc1);
-        P::fma(px2, py2, acc2, acc2);
-        P::fma(px3, py3, acc3, acc3);
+        typename P::simd_t px0, px1, px2, px3;
+        typename P::simd_t py0, py1, py2, py3;
+        px0  = P::loadu(x + c);
+        px1  = P::loadu(x + c + width);
+        px2  = P::loadu(x + c + 2 * width);
+        px3  = P::loadu(x + c + 3 * width);
+        py0  = P::loadu(y + c);
+        py1  = P::loadu(y + c + width);
+        py2  = P::loadu(y + c + 2 * width);
+        py3  = P::loadu(y + c + 3 * width);
+        acc0 = P::fma(px0, py0, acc0);
+        acc1 = P::fma(px1, py1, acc1);
+        acc2 = P::fma(px2, py2, acc2);
+        acc3 = P::fma(px3, py3, acc3);
     }
 
-    typename P::packet_t acc01, acc23, acc;
-    P::add(acc0, acc1, acc01);
-    P::add(acc2, acc3, acc23);
-    P::add(acc01, acc23, acc);
+    typename P::simd_t acc01, acc23, acc;
+    acc01 = P::add(acc0, acc1);
+    acc23 = P::add(acc2, acc3);
+    acc   = P::add(acc01, acc23);
 
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t px;
-        typename P::packet_t py;
-        P::loadu(x + c, px);
-        P::loadu(y + c, py);
-        P::fma(px, py, acc, acc);
+        typename P::simd_t px;
+        typename P::simd_t py;
+        px  = P::loadu(x + c);
+        py  = P::loadu(y + c);
+        acc = P::fma(px, py, acc);
     }
 
-    T sum = P::predux(acc);
+    T sum = P::accumulate(acc);
     for (; c < len; ++c)
     {
         sum += x[c] * y[c];
@@ -129,23 +130,24 @@ template <typename T> inline T svd_dot(const T* __restrict x, const T* __restric
 // y and x are __restrict for the same reason as svd_dot above: call sites
 // pass disjoint rows of S_/U_/V_, the `w` scratch row, or house_vec, never
 // the same buffer for both.
-template <typename T> inline void svd_axpy(T* __restrict y, const T* __restrict x, T alpha, linalg_long len)
+template <typename T>
+inline void svd_axpy(T* __restrict y, const T* __restrict x, T alpha, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
+    using P                     = simd<T>;
     constexpr linalg_long width = P::size;
 
-    typename P::packet_t pa;
-    P::set(alpha, pa);
+    typename P::simd_t pa;
+    pa = P::set(alpha);
 
     linalg_long c = 0;
     for (; c + width <= len; c += width)
     {
-        typename P::packet_t px;
-        typename P::packet_t py;
-        P::loadu(x + c, px);
-        P::loadu(y + c, py);
-        P::fma(pa, px, py, py);
+        typename P::simd_t px;
+        typename P::simd_t py;
+        px = P::loadu(x + c);
+        py = P::loadu(y + c);
+        py = P::fma(pa, px, py);
         P::storeu(py, y + c);
     }
     for (; c < len; ++c)
@@ -174,9 +176,9 @@ template <typename T> inline void svd_axpy(T* __restrict y, const T* __restrict 
 // only the column i varies) instead of recomputing m * dim[1] and
 // (m + 1) * dim[1] on every iteration. Both rows are contiguous (dim[1]
 // elements each), unlike GivensR's column pair below, so this is
-// vectorized via linalg::packet<T>: each lane independently computes the
+// vectorized via ::simd<T>: each lane independently computes the
 // same 2x2 rotation per lane -- out0 = c*S0 - s*S1, out1 = s*S0 + c*S1 --
-// expressed as two fma's per output since packet<T> has no standalone
+// expressed as two fma's per output since simd<T> has no standalone
 // multiply (only fma/add), matching the rest of this file's idiom.
 template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLINT
 {
@@ -190,27 +192,27 @@ template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, 
     T* const __restrict row_m1 = row_m + dim[1];
 
 #if LINALG_HAS_VECTORIZATION
-    using P                     = packet<T>;
+    using P                     = simd<T>;
     constexpr linalg_long width = P::size;
 
-    typename P::packet_t vc, vs, vnegs, vzero;
-    P::set(c, vc);
-    P::set(s, vs);
-    P::set(-s, vnegs);
-    P::set(static_cast<T>(0), vzero);
+    typename P::simd_t vc, vs, vnegs, vzero;
+    vc    = P::set(c);
+    vs    = P::set(s);
+    vnegs = P::set(-s);
+    vzero = P::set(static_cast<T>(0));
 
     linalg_long i = 0;
     for (; i + width <= dim[1]; i += width)
     {
-        typename P::packet_t vS0, vS1;
-        P::loadu(row_m + i, vS0);
-        P::loadu(row_m1 + i, vS1);
+        typename P::simd_t vS0, vS1;
+        vS0 = P::loadu(row_m + i);
+        vS1 = P::loadu(row_m1 + i);
 
-        typename P::packet_t out0, out1, tmp0, tmp1;
-        P::fma(vc, vS0, vzero, tmp0);
-        P::fma(vnegs, vS1, tmp0, out0);
-        P::fma(vs, vS0, vzero, tmp1);
-        P::fma(vc, vS1, tmp1, out1);
+        typename P::simd_t out0, out1, tmp0, tmp1;
+        tmp0 = P::fma(vc, vS0, vzero);
+        out0 = P::fma(vnegs, vS1, tmp0);
+        tmp1 = P::fma(vs, vS0, vzero);
+        out1 = P::fma(vc, vS1, tmp1);
 
         P::storeu(out0, row_m + i);
         P::storeu(out1, row_m1 + i);
@@ -238,7 +240,7 @@ template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, 
 // column m and m + 1 -- instead of recomputing i * dim[1] twice per
 // iteration. Left scalar, unlike GivensL above: each row only ever touches
 // two elements here (columns m and m + 1), so there is no same-row run of
-// contiguous elements for packet<T> to load/store over -- vectorizing
+// contiguous elements for simd<T> to load/store over -- vectorizing
 // would mean gathering across the `dim[0]` rows instead, a different and
 // more involved transformation not worth it for this O(dim[0]) step.
 template <class T> void GivensR(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLINT
@@ -268,8 +270,13 @@ template <class T> void GivensR(T* S_, const linalg_long dim[2], linalg_long m, 
 // state, so blanket-marking every such view would be incorrect rather than
 // just unhelpful.
 template <class T>
-void SVD(const linalg_long dim[2], T* __restrict U_, T* __restrict S_, T* __restrict V_,
-    T* __restrict house_vec, T* __restrict w, T eps = -1)  // NOLINT
+void SVD(const linalg_long dim[2],
+    T* __restrict U_,
+    T* __restrict S_,
+    T* __restrict V_,
+    T* __restrict house_vec,
+    T* __restrict w,
+    T eps = -1)  // NOLINT
 {
     assert(dim[0] >= dim[1]);
 
@@ -477,7 +484,7 @@ void SVD(const linalg_long dim[2], T* __restrict U_, T* __restrict S_, T* __rest
     {  // Diagonalization
         // S_max walks the diagonal, stride dim[1] + 1, via a running
         // pointer instead of recomputing i * dim[1] + i on every i.
-        T        S_max   = 0.0;
+        T        S_max    = 0.0;
         const T* diag_ptr = S_;
         for (linalg_long i = 0; i < dim[1]; i++, diag_ptr += dim[1] + 1)
         {
@@ -507,10 +514,10 @@ void SVD(const linalg_long dim[2], T* __restrict U_, T* __restrict S_, T* __rest
             // for each.
             T C[2][2];  // NOLINT
 
-            const T* const row_n2  = S_ + (n - 2) * dim[1];
-            const T        s_n2_2  = row_n2[n - 2];
-            const T        s_n2_1  = row_n2[n - 1];
-            const T        s_n1_1  = S_[(n - 1) * dim[1] + (n - 1)];
+            const T* const row_n2 = S_ + (n - 2) * dim[1];
+            const T        s_n2_2 = row_n2[n - 2];
+            const T        s_n2_1 = row_n2[n - 1];
+            const T        s_n1_1 = S_[(n - 1) * dim[1] + (n - 1)];
 
             C[0][0] = s_n2_2 * s_n2_2;
             if (n - k0 > 2)
@@ -538,8 +545,8 @@ void SVD(const linalg_long dim[2], T* __restrict U_, T* __restrict S_, T* __rest
             // read too.
             const T* const row_k0  = S_ + k0 * dim[1];
             const T        s_k0_k0 = row_k0[k0];
-            alpha = s_k0_k0 * s_k0_k0 - mu;
-            beta  = s_k0_k0 * row_k0[k0 + 1];
+            alpha                  = s_k0_k0 * s_k0_k0 - mu;
+            beta                   = s_k0_k0 * row_k0[k0 + 1];
         }
 
         for (linalg_long k = k0; k < n - 1; k++)
@@ -556,8 +563,8 @@ void SVD(const linalg_long dim[2], T* __restrict U_, T* __restrict S_, T* __rest
             // GivensR calls between its first and later uses since it's
             // only an address into S_'s storage, not a cached value.
             const T* const row_k = S_ + k * dim[1];
-            alpha = row_k[k];
-            beta  = S_[(k + 1) * dim[1] + k];
+            alpha                = row_k[k];
+            beta                 = S_[(k + 1) * dim[1] + k];
             GivensL(S_, dim, k, alpha, beta);
             GivensR(U_, dimU, k, alpha, beta);
 
@@ -646,14 +653,14 @@ inline void svd(  // NOLINT
     linalg_long rows,
     linalg_long columns,
     T* __restrict A,
-    linalg_long   lda,
+    linalg_long lda,
     T* __restrict S,
     T* __restrict U,
-    linalg_long   ldu,
+    linalg_long ldu,
     T* __restrict VT,
-    linalg_long   ldv,
-    void*         workspace,
-    size_t        workspace_size)
+    linalg_long ldv,
+    void*       workspace,
+    size_t      workspace_size)
 {
     const linalg_long dim[2] = {std::max(rows, columns), std::min(rows, columns)};  // NOLINT
 
@@ -750,15 +757,15 @@ inline void svd(  // NOLINT
 template <>
 void svd_decomposition<float, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                          columns,
-    float* __restrict                                                   A,
-    linalg_long                                                          lda,
-    float* __restrict                                                   S,
-    float* __restrict                                                   U,
-    linalg_long                                                          ldu,
-    float* __restrict                                                   VT,
-    linalg_long                                                          ldv,
-    void*                                                                workspace,
-    size_t                                                               workspace_size,
+    float* __restrict A,
+    linalg_long lda,
+    float* __restrict S,
+    float* __restrict U,
+    linalg_long ldu,
+    float* __restrict VT,
+    linalg_long ldv,
+    void*       workspace,
+    size_t      workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/native<float>");
@@ -769,15 +776,15 @@ void svd_decomposition<float, linalg_backend::NATIVE>::apply(linalg_long rows,
 template <>
 void svd_decomposition<double, linalg_backend::NATIVE>::apply(linalg_long rows,
     linalg_long                                                           columns,
-    double* __restrict                                                   A,
-    linalg_long                                                           lda,
-    double* __restrict                                                   S,
-    double* __restrict                                                   U,
-    linalg_long                                                           ldu,
-    double* __restrict                                                   VT,
-    linalg_long                                                           ldv,
-    void*                                                                 workspace,
-    size_t                                                                workspace_size,
+    double* __restrict A,
+    linalg_long lda,
+    double* __restrict S,
+    double* __restrict U,
+    linalg_long ldu,
+    double* __restrict VT,
+    linalg_long ldv,
+    void*       workspace,
+    size_t      workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/native<double>");

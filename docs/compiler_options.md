@@ -208,36 +208,17 @@ Source: [all platform branches](../Cmake/platform.cmake).
 `LINALG_VECTORIZATION_ISA` is `avx2` for x86_64/AMD64/i386/i686, `neon` for
 arm64/aarch64, and `scalar` otherwise. There is no runtime ISA selection here.
 
-| Selected ISA | Public definition | Public non-CUDA options for non-MSVC compilers or Clang |
-|---|---|---|
-| `scalar` | `LINALG_SIMD_SCALAR` | None |
-| `sse2` | `LINALG_SIMD_SSE2` | `-msse2` |
-| `avx` | `LINALG_SIMD_AVX` | `-mavx` |
-| `avx2` | `LINALG_SIMD_AVX2` | `-mavx2 -mfma` |
-| `avx512` | `LINALG_SIMD_AVX512` | `-mavx512f -mfma` |
-| `neon` | `LINALG_SIMD_NEON` | None; intended for an AArch64 baseline |
+The bundled `Scalars::Scalars` target supplies the selected backend's definitions
+and compiler flags. `sse2` maps to Scalars' `sse`; `avx`, `avx2`, `avx512`, and
+`neon` map directly. `scalar` and disabled vectorization select Scalars' `no`
+backend and the scalar algorithm loops. The selected ISA is checked against
+the target architecture during configuration.
 
-Disabling vectorization bypasses this helper's definition and ISA options. Selecting
-`scalar` keeps the vectorized GEMM framework enabled with scalar-width packets;
-these are different configurations. Neither setting prevents the compiler from
-automatically vectorizing other code with its available instruction set.
+ISA options propagate to consumers through `Scalars::Scalars`; deploy binaries
+on CPUs that support that ISA. There is no runtime ISA dispatch.
 
-The ISA switches permit instructions that may be unavailable on older CPUs; this
-is a deployment requirement, not just a performance hint. They are PUBLIC and
-therefore affect linked consumers as well as library sources. GCC documents the
-[x86 instruction-set options](https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html).
-
-Native `cl.exe` receives the ISA definition but no matching `/arch:` option from
-this helper. Microsoft documents `/arch:AVX2` and `/arch:AVX512` as native x64
-code-generation controls; their absence here is a configuration gap, not proof
-that the corresponding builds fail. See [MSVC architecture options](https://learn.microsoft.com/en-us/cpp/build/reference/arch-x64?view=msvc-170).
-
-ISA names are advertised through the cache's `STRINGS` property but are not
-explicitly validated by this helper. An invalid value can reach a packet-header
-error later. A user-selected ISA is not checked against the target architecture.
-
-Sources: [SIMD helper](../Cmake/platform.cmake),
-[packet implementation](../src/common/packet.h).
+Sources: [SIMD selection](../Cmake/platform.cmake),
+[Scalars SIMD interface](../ThirdParty/Scalars/include/backend/simd.h).
 
 ## Build modes, LTO, linkers, and instrumentation
 
@@ -245,7 +226,7 @@ Sources: [SIMD helper](../Cmake/platform.cmake),
 
 | Control | Default and effect |
 |---|---|
-| `LINALG_CXX_STANDARD` | `17`; accepts `17`, `20`, or `23`. Applies to the library's required C++ standard. |
+| `LINALG_CXX_STANDARD` | `20`; accepts `20` or `23`. Applies to the library's required C++ standard. |
 | `CMAKE_BUILD_TYPE` | Defaults to `Release` if empty. `build_type.cmake` does not add its own optimization flags or normalize existing names. |
 | `CMAKE_CXX_FLAGS_<CONFIG>` and C equivalents | Toolchain/CMake defaults plus user overrides. Local Clang values are Debug `-g`, Release `-O3 -DNDEBUG`, RelWithDebInfo `-O2 -g -DNDEBUG`, and MinSizeRel `-Os -DNDEBUG`. These are local observations, not universal defaults. |
 | `CMAKE_CONFIGURATION_TYPES` / `--config` | Visual Studio and Xcode select their actual build configuration at build time; a printed `CMAKE_BUILD_TYPE` alone does not establish the selected configuration. |
@@ -381,7 +362,7 @@ Sources: [backend and target setup](../CMakeLists.txt),
 
 | Area | Bazel implementation |
 |---|---|
-| Standard selection | `.bazelrc` sets C++20 globally and for host tools; `linear_algebra_copts()` also requests C++17 for the library. Inspect resolved actions to establish the effective option order. |
+| Standard selection | `.bazelrc` sets C++20 globally and for host tools; `linear_algebra_copts()` also requests C++20 for the library. Inspect resolved actions to establish the effective option order. |
 | Unix warnings | `-Wall -Wextra -Wpedantic`, plus `-include cstdlib`. |
 | Windows options | `/std:<mode> /Zc:__cplusplus /EHsc /bigobj /utf-8 /wd4244 /wd4267 /wd4715 /wd4018 /WX`. Selection is by OS, rather than compiler frontend. |
 | Other global include option | Adds the vendored Logging include root using `-I` or `/I`. |

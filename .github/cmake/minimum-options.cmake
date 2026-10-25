@@ -1,7 +1,7 @@
-# Test the C++17 baseline with bundled dependencies and the portable scalar ISA.
+# Test the C++20 baseline with bundled dependencies and the portable scalar ISA.
 set(CMAKE_BUILD_TYPE Release CACHE STRING "")
-set(LINALG_CXX_STANDARD 17 CACHE STRING "")
-set(LOGGING_CXX_STANDARD 17 CACHE STRING "")
+set(LINALG_CXX_STANDARD 20 CACHE STRING "")
+set(LOGGING_CXX_STANDARD 20 CACHE STRING "")
 set(LINALG_VECTORIZATION_ISA scalar CACHE STRING "")
 set(LINALG_ENABLE_TESTING ON CACHE BOOL "")
 set(LINALG_ENABLE_GTEST ON CACHE BOOL "")

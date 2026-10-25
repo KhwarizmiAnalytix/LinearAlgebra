@@ -3,7 +3,9 @@
 import argparse
 import json
 import os
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,6 +67,37 @@ class ConfigurationChecks(unittest.TestCase):
             + f'add_subdirectory("{SOURCE.as_posix()}" linalg)\n'
             + after
         )
+
+    @unittest.skipUnless(sys.platform == "darwin", "Metal requires an Apple SDK")
+    def test_metal_sdk_consistency(self):
+        sdk = subprocess.check_output(
+            ["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True
+        ).strip()
+        explicit_sdk = Path(sdk).parent / "MacOSX.sdk"
+        if not explicit_sdk.is_dir():
+            explicit_sdk = Path(sdk)
+        for name, selected_sdk in (("automatic", sdk), ("explicit", str(explicit_sdk))):
+            with self.subTest(selection=name):
+                build = self.configure(
+                    f"metal-sdk-{name}",
+                    self.host(),
+                    [
+                        "-DBUILD_TESTING=OFF",
+                        "-DLINALG_ENABLE_METAL=ON",
+                        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                        f"-DCMAKE_OSX_SYSROOT={'' if name == 'automatic' else selected_sdk}",
+                    ],
+                )
+                commands = json.loads((build / "compile_commands.json").read_text())
+                for filename in (
+                    "banded_operations.cpp",
+                    "schur_decomposition_metal.mm",
+                ):
+                    command = next(c for c in commands if c["file"].endswith(filename))
+                    args = shlex.split(command["command"])
+                    self.assertEqual(args[args.index("-isysroot") + 1], selected_sdk)
+                    if filename.endswith(".mm"):
+                        self.assertIn(("-include", "cmath"), list(zip(args, args[1:])))
 
     def test_embedding_and_test_switches(self):
         for name, options, has_gtest, count in [
@@ -275,6 +308,7 @@ class ConfigurationChecks(unittest.TestCase):
         prefix = self.work / "hip-packages"
         for package, targets in {
             "Logging": ["Logging::Logging"],
+            "Scalars": ["Scalars::Scalars"],
             "hip": ["hip::host"],
             "hipblas": ["roc::hipblas"],
             "hipsolver": ["roc::hipsolver"],

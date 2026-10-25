@@ -82,7 +82,7 @@ def domains(platform):
     return {
         "BUILD_SHARED_LIBS": BOOL,
         "CMAKE_BUILD_TYPE": ("Release", "Debug", "RelWithDebInfo", "MinSizeRel"),
-        "LINALG_CXX_STANDARD": ("17", "20", "23"),
+        "LINALG_CXX_STANDARD": ("20", "23"),
         "generator": ("Ninja", "Ninja Multi-Config"),
         "BUILD_TESTING": BOOL,
         "LINALG_ENABLE_TESTING": BOOL,

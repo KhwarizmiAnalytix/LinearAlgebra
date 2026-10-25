@@ -201,7 +201,7 @@ class LoggingBazelConfiguration:
 
             if arg_lower in ["debug", "release", "relwithdebinfo"]:
                 self.build_type = arg_lower
-            elif arg_lower in ["cxx17", "cxx20", "cxx23"]:
+            elif arg_lower in ["cxx20", "cxx23"]:
                 self.cxx_standard = arg_lower
             elif arg_lower in _BACKEND_NAMES:
                 self.logging_backend = arg_lower
@@ -859,7 +859,7 @@ def print_help() -> None:
     print("\nCompiler (via --repo_env=CC=/CXX=; default: Clang):")
     print("  clang | gcc | clang-15 | gcc-13 | ...")
     print("\nC++ Standard:")
-    print("  cxx17 | cxx20 (default, from .bazelrc) | cxx23")
+    print("  cxx20 (default, from .bazelrc) | cxx23")
     print("\nLogging backend (mirrors CMake LOGGING_BACKEND; default loguru):")
     print("  native | loguru | glog | spdlog")
     print("  --backend.native | --backend.loguru | --backend.glog | --backend.spdlog  (same, long form)")

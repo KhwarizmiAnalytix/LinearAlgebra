@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <numeric>
 
 #include "include/common/linalg_checks.h"
 #include "include/common/workspace_arena.h"
@@ -48,10 +49,7 @@ template <typename T, bool Squared> T norm_row_sum(const T* row, linalg_long cou
             sum += std::fabs(row[j]);
         }
     }
-    for (const T partial : sums)
-    {
-        sum += partial;
-    }
+    sum = std::accumulate(std::begin(sums), std::end(sums), sum);
     return sum;
 }
 

@@ -57,3 +57,9 @@ new_local_repository(
 
 logging_vendor_deps = use_extension("@xsigma_logging//bazel:vendor_deps.bzl", "vendor_deps")
 override_repo(logging_vendor_deps, "fmt", "loguru", "spdlog")
+
+new_local_repository(
+    name = "scalars",
+    path = "ThirdParty/Scalars",
+    build_file = "//bazel:scalars.BUILD",
+)

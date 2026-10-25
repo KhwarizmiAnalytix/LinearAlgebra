@@ -10,8 +10,6 @@
 // instead of an embedded copy of it.
 
 // No standard includes: this body is also stringified into Metal source.
-#include "src/common/complex_math.h"
-#include "src/common/complex_vector.h"
 #include "src/common/real_result.h"
 
 // clang-format off
@@ -19,11 +17,11 @@ LINALG_SQUARE_ROOT_CORE(
 namespace linalg_schur
 {
 // Eigen's triangular square-root recurrence, evaluated in place.
-template <typename T> LINALG_INLINE bool triangular_sqrt(LINALG_ADDRESS complex_value<T>* h, int n)
+template <typename T> LINALG_INLINE bool triangular_sqrt(LINALG_ADDRESS scalars::complex<T>* h, int n)
 {
     for (int i = 0; i < n; ++i)
     {
-        h[i * n + i] = square_root(h[i * n + i]);
+        h[i * n + i] = scalars::sqrt(h[i * n + i]);
     }
     for (int distance = 1; distance < n; ++distance)
     {
@@ -31,16 +29,31 @@ template <typename T> LINALG_INLINE bool triangular_sqrt(LINALG_ADDRESS complex_
         {
             const int j         = i + distance;
             auto      numerator = h[i * n + j];
-            numerator =
-                numerator - complex_dot(h + i * n + i + 1, 1, h + (i + 1) * n + j, n, j - i - 1);
-            const auto denominator = h[i * n + i] + h[j * n + j];
-            if (magnitude(denominator) == T(0))
+)
+#if defined(__CUDACC__) || defined(__HIPCC__)
+LINALG_SQUARE_ROOT_CORE(
+            auto product = scalars::complex<T>(T(0));
+            for (int k = i + 1; k < j; ++k)
             {
-                if (magnitude(numerator) != T(0))
+                product = product + h[i * n + k] * h[k * n + j];
+            }
+            numerator = numerator - product;
+)
+#else
+LINALG_SQUARE_ROOT_CORE(
+            numerator =
+                numerator - scalars::complex_dot(h + i * n + i + 1, 1, h + (i + 1) * n + j, n, j - i - 1);
+)
+#endif
+LINALG_SQUARE_ROOT_CORE(
+            const auto denominator = h[i * n + i] + h[j * n + j];
+            if (scalars::abs(denominator) == T(0))
+            {
+                if (scalars::abs(numerator) != T(0))
                 {
                     return false;
                 }
-                h[i * n + j] = value(T(0));
+                h[i * n + j] = scalars::complex<T>(T(0));
             }
             else
             {
@@ -58,13 +71,13 @@ template <typename T> LINALG_INLINE bool triangular_sqrt(LINALG_ADDRESS complex_
 // evaluates the triangular recurrence over the upper triangle in place.
 // Failure is communicated without host access, so GPU callers remain async.
 template <typename T>
-LINALG_INLINE bool square_root_triangular(LINALG_ADDRESS complex_value<T>* h, int n, T epsilon)
+LINALG_INLINE bool square_root_triangular(LINALG_ADDRESS scalars::complex<T>* h, int n, T epsilon)
 {
     for (int i = 0; i < n; ++i)
     {
         const auto eigenvalue = h[i * n + i];
-        if (eigenvalue.real < T(0) &&
-            fabs(eigenvalue.imag) <= T(64) * epsilon * fabs(eigenvalue.real))
+        if (eigenvalue.real() < T(0) &&
+            fabs(eigenvalue.imag()) <= T(64) * epsilon * fabs(eigenvalue.real()))
         {
             return false;
         }
@@ -86,15 +99,15 @@ LINALG_INLINE void square_root_triangular_step(LINALG_ADDRESS T* h_buffer,
     T                                                            epsilon,
     LINALG_ADDRESS T*                                            success_flag)
 {
-    auto h        = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(h_buffer);
+    auto h        = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(h_buffer);
     *success_flag = square_root_triangular(h, n, epsilon) ? T(1) : T(0);
 }
 
 // Combines unpack_triangular, square_root_triangular, and pack_result behind
 // one call that only ever names plain real/imaginary planes, so CUDA/HIP
 // kernel wrappers and the stringified Metal kernel never need to spell out
-// the interleaved complex_value<T> scratch type themselves. h_buffer is
-// n*n complex_value<T> scratch (2*n*n reals), caller-owned. This sequential
+// the interleaved scalars::complex<T> scratch type themselves. h_buffer is
+// n*n scalars::complex<T> scratch (2*n*n reals), caller-owned. This sequential
 // form (unpack and pack_result folded into the same single-thread call) is
 // what the CPU path uses; GPU backends call unpack_triangular_element,
 // square_root_triangular_step and pack_result_element as three separate
@@ -108,7 +121,7 @@ LINALG_INLINE bool square_root_schur(LINALG_ADDRESS const T* sr,
     LINALG_ADDRESS T*                                         fi,
     T                                                         epsilon)
 {
-    auto       h       = reinterpret_cast<LINALG_ADDRESS complex_value<T>*>(h_buffer);
+    auto       h       = reinterpret_cast<LINALG_ADDRESS scalars::complex<T>*>(h_buffer);
     unpack_triangular(sr, si, n, h);
     const bool success = square_root_triangular(h, n, epsilon);
     pack_result(n, h, fr, fi, success);

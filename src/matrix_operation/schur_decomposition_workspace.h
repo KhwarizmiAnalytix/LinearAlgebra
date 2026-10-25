@@ -54,7 +54,7 @@ void check_schur_decomposition(const T* a,
         "schur_decomposition: row stride span exceeds supported indexing");
     LINALG_CHECK(bytes >= (schur_decomposition<T, Backend>::workspace_size(n)),
         "schur_decomposition: workspace too small");
-    LINALG_CHECK(reinterpret_cast<std::uintptr_t>(workspace) % alignof(T) == 0,
-        "schur_decomposition: workspace must be aligned for its scalar type");
+    LINALG_CHECK(reinterpret_cast<std::uintptr_t>(workspace) % (2 * alignof(T)) == 0,
+        "schur_decomposition: workspace must be aligned for its complex scalar type");
 }
 }  // namespace linalg::detail

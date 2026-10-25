@@ -10,3 +10,6 @@
 [submodule "ThirdParty/eigen"]
 	path = ThirdParty/eigen
 	url = https://gitlab.com/libeigen/eigen.git
+[submodule "ThirdParty/Scalars"]
+	path = ThirdParty/Scalars
+	url = https://github.com/KhwarizmiAnalytix/Scalars.git

@@ -19,7 +19,7 @@ if(DEFINED LINALG_CXX_STANDARD AND NOT LINALG_CXX_STANDARD STREQUAL "")
 elseif(DEFINED CMAKE_CXX_STANDARD AND NOT CMAKE_CXX_STANDARD STREQUAL "")
     set(_linalg_checks_min_standard "${CMAKE_CXX_STANDARD}")
 else()
-    set(_linalg_checks_min_standard 17)
+    set(_linalg_checks_min_standard 20)
 endif()
 
 if(_linalg_checks_min_standard STREQUAL "23")

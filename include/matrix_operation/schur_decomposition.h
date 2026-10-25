@@ -20,7 +20,8 @@ namespace linalg
  * on stream without synchronizing; numerical failure writes NaNs to all four
  * planes. Metal supports float page-aligned shared buffers, waits for the
  * command queue, and also writes NaNs on numerical failure. Invalid host
- * arguments throw on every backend. All numerical scratch is caller-owned.
+ * arguments throw on every backend. All numerical scratch is caller-owned
+ * and must be aligned to at least 2 * alignof(T) for complex storage.
  */
 template <typename T, linalg_backend Backend> struct schur_decomposition
 {

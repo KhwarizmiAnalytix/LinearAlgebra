@@ -24,7 +24,7 @@ template <typename T, linalg_backend Backend> struct logarithm
      *
      * A and result are row-major n x n matrices, with row strides lda/ldc >= n.
      * The input is preserved unless result aliases A; exact aliasing is supported.
-     * n must be positive. Workspace is caller-owned, suitably aligned for T, and
+     * n must be positive. Workspace is caller-owned, aligned to at least 2 * alignof(T), and
      * must contain at least workspace_size(n) bytes and not overlap either matrix.
      * CPU backends use host pointers;
      * CUDA/HIP use device pointers for matrices and workspace. Metal uses page-aligned
