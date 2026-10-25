@@ -108,6 +108,7 @@ def domains(platform):
         "LINALG_ENABLE_BENCHMARK": BOOL,
         "LINALG_ENABLE_EXTERNAL": BOOL,
         "LINALG_USE_SYSTEM_LOGGING": BOOL,
+        "LINALG_USE_SYSTEM_SCALARS": BOOL,
     }
 
 
