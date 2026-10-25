@@ -306,19 +306,18 @@ void pack_lhs(  // NOLINT
 
                 for (linalg_int k = 0; k < depth; k++)
                 {
-                    simd<value_t>::copy(
-                        &element<value_t, ColMajor>(data, i + 0 * PacketSize, k, lda),
-                        block_A + count);
+                    // The three packets share the same column base (i, k): compute
+                    // its k * lda offset once instead of re-multiplying by lda for
+                    // each one, then reach the others by plain pointer addition.
+                    const value_t* col = &element<value_t, ColMajor>(data, i, k, lda);
+
+                    simd<value_t>::copy(col + 0 * PacketSize, block_A + count);
                     count += PacketSize;
 
-                    simd<value_t>::copy(
-                        &element<value_t, ColMajor>(data, i + 1 * PacketSize, k, lda),
-                        block_A + count);
+                    simd<value_t>::copy(col + 1 * PacketSize, block_A + count);
                     count += PacketSize;
 
-                    simd<value_t>::copy(
-                        &element<value_t, ColMajor>(data, i + 2 * PacketSize, k, lda),
-                        block_A + count);
+                    simd<value_t>::copy(col + 2 * PacketSize, block_A + count);
                     count += PacketSize;
                 }
                 if (PanelMode)
@@ -339,14 +338,14 @@ void pack_lhs(  // NOLINT
 
                 for (linalg_int k = 0; k < depth; k++)
                 {
-                    simd<value_t>::copy(
-                        &element<value_t, ColMajor>(data, i + 0 * PacketSize, k, lda),
-                        block_A + count);
+                    // Same reasoning as the 3-packet case above: one k * lda
+                    // multiplication shared by both packets.
+                    const value_t* col = &element<value_t, ColMajor>(data, i, k, lda);
+
+                    simd<value_t>::copy(col + 0 * PacketSize, block_A + count);
                     count += PacketSize;
 
-                    simd<value_t>::copy(
-                        &element<value_t, ColMajor>(data, i + 1 * PacketSize, k, lda),
-                        block_A + count);
+                    simd<value_t>::copy(col + 1 * PacketSize, block_A + count);
                     count += PacketSize;
                 }
                 if (PanelMode)
@@ -442,17 +441,21 @@ void pack_lhs(  // NOLINT
                         for (linalg_int m = 0; m < pack; m += PacketSize)
                         {
                             simd_t tmp[PacketSize];  // NOLINT
+                            // Row (i + p + m) is (i + m) + p: compute the (i + m) * lda
+                            // offset once instead of re-multiplying by lda for every p,
+                            // then step to each subsequent row by plain addition.
+                            const value_t* row = &element<value_t, ColMajor>(data, i + m, k, lda);
                             for (linalg_int p = 0; p < PacketSize; ++p)
                             {
-                                tmp[p] = simd<value_t>::loadu(
-                                    &element<value_t, ColMajor>(data, i + p + m, k, lda));
+                                tmp[p] = simd<value_t>::loadu(row);
+                                row += lda;
                             }
 
                             simd<value_t>::template ptranspose<PacketSize>(tmp);
 
                             for (linalg_int p = 0; p < PacketSize; ++p)
                             {
-                                simd<value_t>::store(tmp[p], block_A + count + m + (pack)*p);
+                                simd<value_t>::storeu(tmp[p], block_A + count + m + (pack)*p);
                             }
                         }
                         count += PacketSize * pack;
@@ -767,9 +770,9 @@ void gemm(  // NOLINT
     do                                                                                             \
     {                                                                                              \
         simd<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                       \
-        A0  = simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                      \
-        A1  = simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                      \
-        A2  = simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                      \
+        A0  = simd<value_t>::loadu(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A1  = simd<value_t>::loadu(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A2  = simd<value_t>::loadu(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                     \
         B_0 = simd<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress));                    \
         C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
         C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
@@ -891,9 +894,9 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        A0  = simd<value_t>::load(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                      \
-        A1  = simd<value_t>::load(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                      \
-        A2  = simd<value_t>::load(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                      \
+        A0  = simd<value_t>::loadu(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A1  = simd<value_t>::loadu(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A2  = simd<value_t>::loadu(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                     \
         B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
         C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
         C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
@@ -997,8 +1000,8 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        A0               = simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);         \
-        A1               = simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);         \
+        A0               = simd<value_t>::loadu(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);        \
+        A1               = simd<value_t>::loadu(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);        \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
         simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
         C0 = simd<value_t>::fma(A0, B_0, C0);                                                      \
@@ -1104,8 +1107,8 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        A0  = simd<value_t>::load(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);                      \
-        A1  = simd<value_t>::load(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);                      \
+        A0  = simd<value_t>::loadu(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);                     \
+        A1  = simd<value_t>::loadu(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);                     \
         B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
         C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
         C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
@@ -1199,7 +1202,7 @@ void gemm(  // NOLINT
     {                                                                                              \
         (void)0;                                                                                   \
         (void)0;                                                                                   \
-        A0               = simd<value_t>::load(&blA[(0 + 1 * (K)) * Traits::LhsProgress]);         \
+        A0               = simd<value_t>::loadu(&blA[(0 + 1 * (K)) * Traits::LhsProgress]);        \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
         simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
         C0 = simd<value_t>::fma(A0, B_0, C0);                                                      \
@@ -1283,7 +1286,7 @@ void gemm(  // NOLINT
     {                                                                                              \
         (void)0;                                                                                   \
         (void)0;                                                                                   \
-        A0  = simd<value_t>::load(&blA[(0 + (K)) * Traits::LhsProgress]);                          \
+        A0  = simd<value_t>::loadu(&blA[(0 + (K)) * Traits::LhsProgress]);                         \
         B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
         C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
         (void)0;                                                                                   \

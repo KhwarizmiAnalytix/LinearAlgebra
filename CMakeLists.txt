@@ -319,12 +319,24 @@ if(LINALG_ENABLE_MKL)
         # called. Intel's own linking guidance is to force --no-as-needed
         # around the MKL libraries on ELF/GNU-ld platforms; MSVC has no such
         # flag and Apple's ld doesn't prune unresolved lazy symbols this way.
+        #
+        # This used to be done with plain -Wl,--no-as-needed / -Wl,--as-needed
+        # list items bracketing MKL::MKL, but LINALG_DEPENDENCY_LIBS is linked
+        # PUBLIC and that bracket does not reliably survive transitive
+        # propagation to consumers (CMake's link-line de-duplication isn't
+        # guaranteed to keep raw flag items adjacent to the target they were
+        # meant to wrap) -- which is exactly what still produced the runtime
+        # "undefined symbol" failure. $<LINK_LIBRARY:FEATURE,...> is CMake's
+        # supported mechanism for a flag that must stay bound to one link
+        # item through any such transformation.
         if(UNIX AND NOT APPLE)
-            list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--no-as-needed)
-        endif()
-        list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
-        if(UNIX AND NOT APPLE)
-            list(APPEND LINALG_DEPENDENCY_LIBS -Wl,--as-needed)
+            set(CMAKE_LINK_LIBRARY_USING_LINALG_MKL_NO_AS_NEEDED
+                "LINKER:--push-state,--no-as-needed" "<LINK_ITEM>" "LINKER:--pop-state"
+            )
+            set(CMAKE_LINK_LIBRARY_USING_LINALG_MKL_NO_AS_NEEDED_SUPPORTED TRUE)
+            list(APPEND LINALG_DEPENDENCY_LIBS "$<LINK_LIBRARY:LINALG_MKL_NO_AS_NEEDED,MKL::MKL>")
+        else()
+            list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
         endif()
     endif()
 endif()
@@ -841,12 +853,15 @@ if(LINALG_ENABLE_CUBLAS)
     target_compile_options(
         LinearAlgebra PRIVATE $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>
     )
-    # CUDA 13.x CCCL headers require the conforming MSVC preprocessor.
-    # /Zc:preprocessor is applied to the host-side CXX TUs that include CUDA
-    # headers (e.g. <cuda_runtime.h>), not to NVCC device code.
+    # CUDA 13.x CCCL headers require the conforming MSVC preprocessor, both
+    # for host-side CXX TUs that include CUDA headers (e.g. <cuda_runtime.h>)
+    # and for .cu TUs' own host-compiler pass: NVCC invokes cl.exe for that
+    # pass too, so it needs the same flag forwarded via -Xcompiler.
     if(MSVC)
         target_compile_options(
-            LinearAlgebra PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+            LinearAlgebra
+            PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+                    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
         )
     endif()
 endif()
