@@ -85,7 +85,13 @@ void BM_LUDecomposition(benchmark::State& state)
 
         bool ok = linalg::lu_decomposition<T, Backend>::apply(
             work.data(), static_cast<linalg_int>(n), pivot.data(), workspace.data(), ws_size);
+        if (!ok)
+        {
+            state.SkipWithError("LU factorization failed");
+            break;
+        }
         benchmark::DoNotOptimize(ok);
+        benchmark::ClobberMemory();
     }
 
     state.SetLabel(backend_name(Backend));

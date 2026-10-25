@@ -227,6 +227,13 @@ void BM_EigenEigensolver(benchmark::State& state)
     state.SetComplexityN(n);
 }
 
+void general_vector_sizes(benchmark::Benchmark* registration)
+{
+    registration->Arg(8)->Arg(32)->Arg(64)->Arg(128)
+        ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)
+        ->ReportAggregatesOnly(true)->Threads(1);
+}
+
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::NATIVE, true)
@@ -304,6 +311,11 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::NATIVE)
     ->Threads(1);
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
+BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::BLAS_LAPACKE, true)
+    ->Apply(general_vector_sizes);
+BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::BLAS_LAPACKE, true)
+    ->Apply(general_vector_sizes);
+
 BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::BLAS_LAPACKE)
     ->Arg(8)
     ->Arg(16)
@@ -358,6 +370,11 @@ BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::BLAS_LAPACKE
 #endif
 
 #if LINALG_HAS_MKL
+BENCHMARK_TEMPLATE(BM_GeneralEigen, float, linalg::linalg_backend::MKL, true)
+    ->Apply(general_vector_sizes);
+BENCHMARK_TEMPLATE(BM_GeneralEigen, double, linalg::linalg_backend::MKL, true)
+    ->Apply(general_vector_sizes);
+
 BENCHMARK_TEMPLATE(BM_SymmetricEigen, float, linalg::linalg_backend::MKL)
     ->Arg(8)
     ->Arg(16)

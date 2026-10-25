@@ -15,6 +15,7 @@ import time
 OPERATIONS = (
     "multiplication",
     "ludecomposition",
+    "schurdecomposition",
     "qrdecomposition",
     "choleskydecomposition",
     "svddecomposition",

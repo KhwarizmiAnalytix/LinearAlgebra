@@ -286,7 +286,7 @@ reconstruction and orthogonality, symmetric eigenpairs, and real/complex general
 spectra against every enabled CPU backend. Comparisons allow factor signs and
 spectrum ordering to differ.
 
-All seven benchmark programs add `BM_Eigen*` rows using the same
+The benchmark programs add `BM_Eigen*` rows using the same
 seed, row-major inputs, dimensions, and requested outputs as their library rows.
 Eigen runs single-threaded. LU uses Eigen partial pivoting even when native LU
 pivoting is disabled. QR includes explicit Q formation; SVD uses Eigen JacobiSVD
@@ -294,6 +294,14 @@ with thin U and explicitly transposed VT. Input refresh is excluded from timing
 except for SVD, matching the existing benchmarks. Decomposition objects and output buffers are reused;
 internal Eigen work and copies remain timed. Run Release builds and compare the
 matching operation, scalar type, size, and output mode.
+
+`benchmark_linalg_schurdecomposition` compares full complex Schur form and
+unitary vectors on dense nonsymmetric real inputs, checking reconstruction,
+unitarity, and triangular form before timing. Eigen's real-to-complex input
+conversion and split real/imaginary output copies are included in timing.
+The native, BLAS, and MKL Schur backends currently share the portable algorithm.
+General eigenpair benchmarks also include every enabled CPU backend, using the
+same real-spectrum inputs as Eigen.
 
 The additional `benchmark_linalg_kernels` executable compares in-place transpose,
 Frobenius/one/infinity norms, LU factorization and solve, solves with existing LU
@@ -334,6 +342,11 @@ to select case names. Choose a fresh output directory for each run. To compare
 native speedups against a previous run, pass `--baseline /path/to/previous-results`
 to the summarizer; `--no-charts` omits the Matplotlib dependency. MKL and
 BLAS/LAPACKE results retain separate columns.
+
+For LU, Schur, and eigenvalues/eigenvectors only, use
+`--operations ludecomposition schurdecomposition eigen`.
+The [recorded LU, Schur, and eigensolver comparison](Testing/Benchmark/results/2026-10-24-lu-schur-eigen/REPORT.md)
+includes 162 float/double cases across native, OpenBLAS, and Eigen.
 
 The runner executes the unit tests first, then benchmarks each case sequentially
 with one thread per backend. It preserves timeouts and failures alongside raw

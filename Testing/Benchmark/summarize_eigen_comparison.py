@@ -14,6 +14,7 @@ TITLES = {
     "multiplication_tn": "Multiplication TN",
     "multiplication_tt": "Multiplication TT",
     "lu": "LU factorization",
+    "schur": "Complex Schur form and unitary vectors",
     "qr": "QR including explicit Q",
     "cholesky": "Cholesky lower factor",
     "svd": "Economy SVD",
@@ -73,6 +74,7 @@ def identify(name):
                 ("NormOne", "norm_one"),
                 ("NormInfinity", "norm_infinity"),
                 ("Cholesky", "cholesky"),
+                ("Schur", "schur"),
                 ("LU", "lu"),
                 ("QR", "qr"),
                 ("SVD", "svd"),
@@ -330,6 +332,10 @@ def summarize(directory, baseline=None, charts=True):
         "- Factorized solves exclude LU factorization for every backend. Linear solve and inversion include factorization.",
         "- Triangular solves include copying the right-hand side and use a non-unit diagonal. Transpose is in place for every backend.",
         "- General eigenpairs use a real-spectrum input distinct from eigenvalues-only cases.",
+        "- Schur uses dense nonsymmetric real inputs, full complex triangular S and unitary Q, "
+        "and split real/imaginary output planes. Eigen input promotion and output splitting are timed. "
+        "Reconstruction, unitarity, and triangular form are checked before timing. "
+        "Native and BLAS/MKL Schur currently share the portable algorithm.",
         "- Native SVD registrations stop at 128. Results describe these inputs on this host; scheduling and thermal state can affect them.",
         "",
         "## All measurements",
