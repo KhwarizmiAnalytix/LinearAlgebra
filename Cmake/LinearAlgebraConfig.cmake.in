@@ -15,6 +15,17 @@ include(CMakeFindDependencyMacro)
 # installed package must make Logging discoverable separately (e.g. build
 # and install KhwarizmiAnalytix/Logging to a prefix on CMAKE_PREFIX_PATH).
 find_dependency(Logging)
+# When Scalars is embedded in a LinearAlgebra build, its cmake config is installed
+# alongside LinearAlgebra's own cmake directory (one level up from LinearAlgebra/).
+# Provide that path as a hint so find_dependency can locate it even when the
+# package was installed to a non-standard LIBDIR (e.g. customlib/).
+if(NOT DEFINED Scalars_DIR)
+    set(_linalg_scalars_hint "${CMAKE_CURRENT_LIST_DIR}/../Scalars")
+    if(EXISTS "${_linalg_scalars_hint}/ScalarsConfig.cmake")
+        set(Scalars_DIR "${_linalg_scalars_hint}")
+    endif()
+    unset(_linalg_scalars_hint)
+endif()
 find_dependency(Scalars CONFIG)
 
 # --- Optional Intel MKL backend (LINALG_ENABLE_MKL) ---
