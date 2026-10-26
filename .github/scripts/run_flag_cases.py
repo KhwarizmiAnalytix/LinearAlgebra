@@ -91,6 +91,86 @@ def installed_logging(source, work, shared, config, env, log):
     return prefix
 
 
+def scalars_cpu_backend(flags):
+    """Select the Scalars CPU backend used for a bundled LinearAlgebra build."""
+    if (
+        flags["LINALG_ENABLE_VECTORIZATION"] != "ON"
+        or flags["LINALG_VECTORIZATION_ISA"] == "scalar"
+    ):
+        return "no"
+    if flags["LINALG_VECTORIZATION_ISA"] == "sse2":
+        return "sse"
+    return flags["LINALG_VECTORIZATION_ISA"]
+
+
+def installed_scalars(source, work, flags, env, log):
+    """Install the Scalars config package that this flag assignment would embed."""
+    shared = flags["BUILD_SHARED_LIBS"]
+    config = flags["CMAKE_BUILD_TYPE"]
+    standard = flags["LINALG_CXX_STANDARD"]
+    backend = scalars_cpu_backend(flags)
+    package = f"scalars-{shared}-{config}-{standard}-{backend}"
+    build, prefix = work / package, work / f"{package}-prefix"
+    if not (prefix / "lib/cmake/Scalars/ScalarsConfig.cmake").is_file():
+        command(
+            [
+                "cmake",
+                "-S",
+                source / ".github/cmake/scalars-package",
+                "-B",
+                build,
+                "-G",
+                "Ninja",
+                f"-DLINALG_SOURCE_DIR={source}",
+                f"-DBUILD_SHARED_LIBS={shared}",
+                f"-DCMAKE_BUILD_TYPE={config}",
+                f"-DCMAKE_INSTALL_PREFIX={prefix}",
+                f"-DSCALARS_CXX_STANDARD={standard}",
+                f"-DSCALARS_CPU_BACKEND={backend}",
+                "-DSCALARS_GPU_BACKEND=none",
+                "-DSCALARS_ENABLE_TESTING=OFF",
+                "-DSCALARS_ENABLE_BENCHMARK=OFF",
+                "-DSCALARS_LTO_MODE=off",
+                "-DSCALARS_ENABLE_CACHE=OFF",
+                "-DSCALARS_ENABLE_ICECC=OFF",
+                "-DSCALARS_ENABLE_SANITIZER=OFF",
+                "-DSCALARS_ENABLE_COVERAGE=OFF",
+            ],
+            log,
+            env,
+        )
+        command(
+            [
+                "cmake",
+                "--build",
+                build,
+                "--config",
+                config,
+                "--target",
+                "Scalars",
+                "--parallel",
+                "4",
+            ],
+            log,
+            env,
+        )
+        command(["cmake", "--install", build / "scalars", "--config", config], log, env)
+    return prefix
+
+
+def vectorization_definition(flags):
+    """Return the recorded definition; scalar ISA keeps the SIMD paths off."""
+    enabled = flags["LINALG_ENABLE_VECTORIZATION"]
+    isa = flags["LINALG_VECTORIZATION_ISA"]
+    return (
+        "LINALG_HAS_VECTORIZATION=$<AND:$<BOOL:"
+        + enabled
+        + ">,$<NOT:$<STREQUAL:"
+        + isa
+        + ",scalar>>>"
+    )
+
+
 def verify(build, flags):
     """Check the realized target contract, including options that may otherwise be ignored."""
     state = dict(
@@ -136,15 +216,10 @@ def verify(build, flags):
             marker in state["COMPILE_OPTIONS"]
             for marker in ("--coverage", "-fprofile-instr-generate", "/Zi", "/Z7")
         ), state
-    if flags["LINALG_ENABLE_VECTORIZATION"] == "ON":
-        assert (
-            "LINALG_SIMD_" + flags["LINALG_VECTORIZATION_ISA"].upper()
-            in state["COMPILE_DEFINITIONS"]
-        ), state
+    assert vectorization_definition(flags) in state["COMPILE_DEFINITIONS"], state
     for option, definition in (
         ("LINALG_LU_PIVOTING", "LINALG_HAS_LU_PIVOTING"),
         ("LINALG_DISPLAY_WIN32_WARNINGS", "LINALG_HAS_WIN32_WARNINGS"),
-        ("LINALG_ENABLE_VECTORIZATION", "LINALG_HAS_VECTORIZATION"),
     ):
         assert (
             f"{definition}=$<BOOL:{flags[option]}>" in state["COMPILE_DEFINITIONS"]
@@ -168,7 +243,8 @@ def run_case(case_id, case, source, work):
         SCCACHE_DIR=str(work / "sccache"),
         BUILDCACHE_DIR=str(work / "buildcache"),
     )
-    # Logging packages, optional BLAS DLLs, and Clang's ASan runtime must be on PATH on Windows.
+    # Installed packages, optional BLAS DLLs, and Clang's ASan runtime must be
+    # on PATH on Windows.
     prefix = os.environ.get("CMAKE_PREFIX_PATH", "")
     if flags["LINALG_USE_SYSTEM_LOGGING"] == "ON":
         logging = installed_logging(
@@ -181,6 +257,10 @@ def run_case(case_id, case, source, work):
         )
         prefix = str(logging) + (";" + prefix if prefix else "")
         env["PATH"] = str(logging / "bin") + os.pathsep + env["PATH"]
+    if flags["LINALG_USE_SYSTEM_SCALARS"] == "ON":
+        scalars = installed_scalars(source, work, flags, env, log)
+        prefix = str(scalars) + (";" + prefix if prefix else "")
+        env["PATH"] = str(scalars / "bin") + os.pathsep + env["PATH"]
     options = [f"-D{key}={value}" for key, value in flags.items() if key != "generator"]
     if flags["generator"] == "Ninja Multi-Config":
         # Ninja's defaults omit MinSizeRel, which is part of the flag domain.

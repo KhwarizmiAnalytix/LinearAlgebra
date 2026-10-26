@@ -3,6 +3,7 @@
 import importlib.util
 import itertools
 import math
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ SPEC = importlib.util.spec_from_file_location(
     "flag_matrix", SOURCE / ".github/scripts/flag_matrix.py"
 )
 matrix = importlib.util.module_from_spec(SPEC)
+sys.modules["flag_matrix"] = matrix
 SPEC.loader.exec_module(matrix)
 
 
@@ -161,6 +163,37 @@ class FlagMatrixChecks(unittest.TestCase):
         self.assertTrue(
             matrix.valid({"LINALG_ENABLE_BLIS": "ON", "LINALG_ENABLE_BLAS": "OFF"})
         )
+
+    def test_scalars_package_backend_follows_the_bundled_selection(self):
+        spec = importlib.util.spec_from_file_location(
+            "run_flag_cases", SOURCE / ".github/scripts/run_flag_cases.py"
+        )
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        expected = {
+            ("OFF", "avx2"): "no",
+            ("ON", "scalar"): "no",
+            ("ON", "sse2"): "sse",
+            ("ON", "avx"): "avx",
+            ("ON", "avx2"): "avx2",
+            ("ON", "avx512"): "avx512",
+            ("ON", "neon"): "neon",
+        }
+        for (enabled, isa), backend in expected.items():
+            flags = {
+                "LINALG_ENABLE_VECTORIZATION": enabled,
+                "LINALG_VECTORIZATION_ISA": isa,
+            }
+            with self.subTest(enabled=enabled, isa=isa):
+                self.assertEqual(runner.scalars_cpu_backend(flags), backend)
+                self.assertEqual(
+                    runner.vectorization_definition(flags),
+                    "LINALG_HAS_VECTORIZATION=$<AND:$<BOOL:"
+                    + enabled
+                    + ">,$<NOT:$<STREQUAL:"
+                    + isa
+                    + ",scalar>>>",
+                )
 
     def test_inventory_rejects_uncovered_boolean_and_enum(self):
         with tempfile.TemporaryDirectory() as temporary:
