@@ -26,7 +26,12 @@ using std::fabs;
 using std::fmax;
 using std::fmin;
 using std::hypot;
+#if defined(__CUDACC__) || defined(__HIPCC__)
+// MSVC's std::isfinite template is host-only; use the GPU runtime overloads.
+using ::isfinite;
+#else
 using std::isfinite;
+#endif
 using std::log;
 using std::sin;
 using std::sqrt;
