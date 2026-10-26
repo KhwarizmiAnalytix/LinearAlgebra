@@ -297,11 +297,8 @@ if(LINALG_ENABLE_MKL)
     # Must be set before find_package(MKL CONFIG) — it selects which
     # MKL::MKL interface target that package defines.
     set(MKL_INTERFACE "ilp64")
-    # MKL 2026.x changed the default threading layer to TBB.  TBB is not
-    # installed in CI or typical Linux distributions, causing a runtime link
-    # error ("undefined symbol: mkl_blas_dgemm").  Force sequential threading
-    # so no additional TBB dependency is required.  Set before find_package so
-    # the oneMKL config package selects the sequential interface target.
+    # Default to sequential threading so no additional threading runtime is
+    # required. Set before find_package so oneMKL selects the matching target.
     if(NOT DEFINED MKL_THREADING)
         set(MKL_THREADING "sequential")
     endif()
@@ -309,36 +306,7 @@ if(LINALG_ENABLE_MKL)
     if(NOT TARGET MKL::MKL)
         message(FATAL_ERROR "Intel oneMKL must provide MKL::MKL with the ILP64 interface.")
     endif()
-    if(TARGET MKL::MKL)
-        # GNU ld's default --as-needed can drop libmkl_core.so (and the
-        # threading library) from DT_NEEDED: the interface library
-        # (libmkl_intel_ilp64.so) calls into them through an internal ABI
-        # rather than a linker-visible undefined symbol, so --as-needed sees no
-        # reason to keep the dependency and the loader later fails with
-        # "undefined symbol: mkl_blas_dgemm" the first time MKL is actually
-        # called. Intel's own linking guidance is to force --no-as-needed
-        # around the MKL libraries on ELF/GNU-ld platforms; MSVC has no such
-        # flag and Apple's ld doesn't prune unresolved lazy symbols this way.
-        #
-        # This used to be done with plain -Wl,--no-as-needed / -Wl,--as-needed
-        # list items bracketing MKL::MKL, but LINALG_DEPENDENCY_LIBS is linked
-        # PUBLIC and that bracket does not reliably survive transitive
-        # propagation to consumers (CMake's link-line de-duplication isn't
-        # guaranteed to keep raw flag items adjacent to the target they were
-        # meant to wrap) -- which is exactly what still produced the runtime
-        # "undefined symbol" failure. $<LINK_LIBRARY:FEATURE,...> is CMake's
-        # supported mechanism for a flag that must stay bound to one link
-        # item through any such transformation.
-        if(UNIX AND NOT APPLE)
-            set(CMAKE_LINK_LIBRARY_USING_LINALG_MKL_NO_AS_NEEDED
-                "LINKER:--push-state,--no-as-needed" "<LINK_ITEM>" "LINKER:--pop-state"
-            )
-            set(CMAKE_LINK_LIBRARY_USING_LINALG_MKL_NO_AS_NEEDED_SUPPORTED TRUE)
-            list(APPEND LINALG_DEPENDENCY_LIBS "$<LINK_LIBRARY:LINALG_MKL_NO_AS_NEEDED,MKL::MKL>")
-        else()
-            list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
-        endif()
-    endif()
+    list(APPEND LINALG_DEPENDENCY_LIBS MKL::MKL)
 endif()
 
 # --- Optional vendor-neutral BLAS/LAPACK backend ---
@@ -922,6 +890,13 @@ if(LINALG_ENABLE_IWYU)
 endif()
 if(LINALG_DEPENDENCY_LIBS)
     target_link_libraries(LinearAlgebra PUBLIC ${LINALG_DEPENDENCY_LIBS})
+endif()
+if(LINALG_ENABLE_MKL AND UNIX AND NOT APPLE)
+    # Retain MKL's core/threading libraries, which its interface library loads
+    # through an internal ABI. LINK_LIBRARY features on MKL::MKL are ignored
+    # because it is an INTERFACE target. A PUBLIC link option reaches the final
+    # executable even when LinearAlgebra is static, and survives install/export.
+    target_link_options(LinearAlgebra PUBLIC "LINKER:--no-as-needed")
 endif()
 
 # --- Installation ---

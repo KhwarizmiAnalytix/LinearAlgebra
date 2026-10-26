@@ -304,6 +304,66 @@ class ConfigurationChecks(unittest.TestCase):
         )
         subprocess.run([(build / "probe-path.txt").read_text()], check=True)
 
+    @unittest.skipUnless(os.name == "posix", "Generate an ELF link command")
+    def test_mkl_transitive_link_options(self):
+        # MKL::MKL is an interface target. LINK_LIBRARY features applied to it
+        # are ignored, leaving its implementation libraries subject to as-needed.
+        prefix = self.work / "mkl-package"
+        prefix.mkdir()
+        libraries = ["mkl_intel_ilp64", "mkl_sequential", "mkl_core"]
+        config = "add_library(MKL::MKL INTERFACE IMPORTED GLOBAL)\n"
+        for library in libraries:
+            location = prefix / f"lib{library}.so"
+            location.touch()
+            config += (
+                f"add_library(MKL::{library} SHARED IMPORTED)\n"
+                f'set_property(TARGET MKL::{library} PROPERTY IMPORTED_LOCATION "{location.as_posix()}")\n'
+            )
+        config += (
+            "target_link_libraries(MKL::MKL INTERFACE "
+            + " ".join(f"MKL::{library}" for library in libraries)
+            + ")\n"
+        )
+        (prefix / "MKLConfig.cmake").write_text(config, encoding="utf-8")
+        for shared in ("ON", "OFF"):
+            with self.subTest(shared=shared):
+                build = self.configure(
+                    f"mkl-link-{shared}",
+                    self.host(
+                        after='file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/main.cpp" "int main() { return 0; }")\n'
+                        'add_executable(consumer "${CMAKE_CURRENT_BINARY_DIR}/main.cpp")\n'
+                        "target_link_libraries(consumer PRIVATE LinearAlgebra::LinearAlgebra)\n"
+                    ),
+                    [
+                        "-DCMAKE_SYSTEM_NAME=Linux",
+                        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+                        f"-DMKL_DIR={prefix.as_posix()}",
+                        "-DLINALG_ENABLE_MKL=ON",
+                        "-DBUILD_TESTING=OFF",
+                        f"-DBUILD_SHARED_LIBS={shared}",
+                        "-DLINALG_LTO_MODE=off",
+                        "-DLINALG_LINKER_CHOICE=default",
+                        "-DLINALG_ENABLE_VECTORIZATION=OFF",
+                    ],
+                )
+                command = subprocess.check_output(
+                    ["ninja", "-C", str(build), "-t", "commands", "consumer"],
+                    text=True,
+                ).splitlines()[-1]
+                self.assertIn("--no-as-needed", command)
+                for library in libraries:
+                    self.assertIn(f"lib{library}.so", command)
+                    self.assertLess(
+                        command.index("--no-as-needed"),
+                        command.index(f"lib{library}.so"),
+                    )
+                exported = next(
+                    (build / "linalg" / "CMakeFiles" / "Export").rglob(
+                        "LinearAlgebraTargets.cmake"
+                    )
+                ).read_text()
+                self.assertIn('INTERFACE_LINK_OPTIONS "LINKER:--no-as-needed"', exported)
+
     def test_installed_hip_dependencies(self):
         prefix = self.work / "hip-packages"
         for package, targets in {
