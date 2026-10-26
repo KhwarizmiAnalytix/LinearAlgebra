@@ -35,6 +35,15 @@ def runtime_skip(flags):
             return (
                 "ThreadSanitizer runtime requires a compatible virtual address layout"
             )
+        # Clang's Windows ASan runtime cannot intercept ucrtbased. The only
+        # executed address-sanitizer case is a Debug build, and it aborts in
+        # the debug CRT before any test body runs.
+        if (
+            flags["LINALG_SANITIZER_TYPE"] == "address"
+            and platform.system() == "Windows"
+            and flags["CMAKE_BUILD_TYPE"] == "Debug"
+        ):
+            return "Clang AddressSanitizer cannot intercept the Windows debug CRT"
     if flags["LINALG_ENABLE_VECTORIZATION"] == "ON":
         isa = flags["LINALG_VECTORIZATION_ISA"]
         required = {

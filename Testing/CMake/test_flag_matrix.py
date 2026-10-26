@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SOURCE = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -194,6 +195,29 @@ class FlagMatrixChecks(unittest.TestCase):
                     + isa
                     + ",scalar>>>",
                 )
+
+    def test_windows_debug_asan_is_compile_only(self):
+        spec = importlib.util.spec_from_file_location(
+            "run_flag_cases_asan", SOURCE / ".github/scripts/run_flag_cases.py"
+        )
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        flags = {
+            "LINALG_ENABLE_SANITIZER": "ON",
+            "LINALG_SANITIZER_TYPE": "address",
+            "LINALG_ENABLE_VECTORIZATION": "OFF",
+            "LINALG_VECTORIZATION_ISA": "scalar",
+            "CMAKE_BUILD_TYPE": "Debug",
+        }
+        with mock.patch.object(runner.platform, "system", return_value="Windows"):
+            self.assertEqual(
+                runner.runtime_skip(flags),
+                "Clang AddressSanitizer cannot intercept the Windows debug CRT",
+            )
+            release = {**flags, "CMAKE_BUILD_TYPE": "RelWithDebInfo"}
+            self.assertIsNone(runner.runtime_skip(release))
+        with mock.patch.object(runner.platform, "system", return_value="Linux"):
+            self.assertIsNone(runner.runtime_skip(flags))
 
     def test_inventory_rejects_uncovered_boolean_and_enum(self):
         with tempfile.TemporaryDirectory() as temporary:
