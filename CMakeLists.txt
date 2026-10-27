@@ -25,10 +25,10 @@
 # op except exponential and the tri-/pentadiagonal operations (scalar
 # only), and every GPU op except general (non-symmetric) eigenvalue
 # decomposition (METAL_BLAS covers a narrower subset still, see above).
-# LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL are
-# pairwise mutually exclusive (see the guard below): all three target a
-# single `batched_matrix_multiplication` free-function symbol
-# (include/matrix_operation/multiplication_batched.h), which is not
+# LINALG_GPU_BACKEND selects exactly one GPU backend (cuda/hip/metal/none):
+# all three GPU backends target the same `batched_matrix_multiplication`
+# free-function symbol (include/matrix_operation/multiplication_batched.h),
+# which is not
 # backend-templated.
 # =============================================================================
 cmake_minimum_required(VERSION 3.24)
@@ -85,47 +85,30 @@ option(LINALG_ENABLE_BLAS "Enable a vendor-neutral CBLAS/LAPACKE backend for Lin
 # factorization ops (cholesky / lu / svd / inversion / linear_solver).
 option(LINALG_ENABLE_BLIS "Enable BLIS as the CBLAS/LAPACKE provider" OFF)
 
-# cuBLAS (GEMM) / cuSOLVER (factorizations) GPU backend, exposed as
-# linalg_backend::CUDA_BLAS specializations of the same struct-template API
-# used by the CPU backends (src/matrix_operation/gpu/cublas/). Requires the CUDA
-# toolkit; enables the CUDA language only when this option is ON so plain CPU
-# builds remain free of any CUDA toolchain requirement.
-option(LINALG_ENABLE_CUBLAS "Enable a cuBLAS/cuSOLVER GPU backend for LinearAlgebra" OFF)
-
-# hipBLAS (GEMM) / hipSOLVER (factorizations) GPU backend, exposed as
-# linalg_backend::ROCM_BLAS specializations of the same struct-template API
-# used by the CPU and CUDA_BLAS backends (src/matrix_operation/gpu/hipblas/).
-# Requires a ROCm/HIP toolchain; enables the HIP language only when this
-# option is ON so plain CPU/CUDA builds remain free of any ROCm toolchain
-# requirement. Mutually exclusive with LINALG_ENABLE_CUBLAS (see the guard
-# below multiplication_batched's free functions are not backend-templated).
-option(LINALG_ENABLE_ROCBLAS "Enable a hipBLAS/hipSOLVER GPU backend for LinearAlgebra" OFF)
-
-# Metal Performance Shaders GPU backend, exposed as linalg_backend::METAL_BLAS
-# specializations of the same struct-template API used by the CPU and other
-# GPU backends (src/matrix_operation/gpu/metal/). Apple platforms only
-# (enforced below); float only, since Apple GPUs have no native double
-# type, and covering only multiplication / batched multiplication /
-# transpose / norm / trace, since Metal Performance Shaders has no QR/SVD/
-# general-solver routines (see linalg_backend::METAL_BLAS's doc comment in
-# include/common/backend.h and docs/backend_roadmap.md §3, which deferred
-# Apple MPS support as "float-only ... high effort" before this backend
-# existed). Mutually exclusive with LINALG_ENABLE_CUBLAS/LINALG_ENABLE_ROCBLAS
-# (see the guard below).
-option(
-    LINALG_ENABLE_METAL
-    "Enable a Metal Performance Shaders GPU backend (float-only; Apple platforms) for LinearAlgebra"
-    OFF
+# GPU backend selector: none, cuda (cuBLAS/cuSOLVER), hip (hipBLAS/hipSOLVER),
+# metal (Metal Performance Shaders, float-only, Apple-only).
+# Only one GPU backend can be active at a time; every GPU backend defines the
+# same batched_matrix_multiplication symbols (multiplication_batched.h is not
+# backend-templated), so enabling more than one would be a duplicate-symbol
+# link error.
+set(LINALG_GPU_BACKEND "none"
+    CACHE STRING "GPU backend for LinearAlgebra: none, cuda, hip, metal"
 )
-
-if(LINALG_ENABLE_METAL AND NOT APPLE)
+set_property(CACHE LINALG_GPU_BACKEND PROPERTY STRINGS none cuda hip metal)
+if(NOT LINALG_GPU_BACKEND MATCHES "^(none|cuda|hip|metal)$")
     message(
         FATAL_ERROR
-            "LINALG_ENABLE_METAL requires an Apple platform (Metal is not available elsewhere)."
+            "LINALG_GPU_BACKEND must be one of: none, cuda, hip, metal "
+            "(got '${LINALG_GPU_BACKEND}')"
     )
 endif()
-
-if(LINALG_ENABLE_METAL AND NOT CMAKE_OSX_SYSROOT)
+if(LINALG_GPU_BACKEND STREQUAL "metal" AND NOT APPLE)
+    message(
+        FATAL_ERROR
+            "LINALG_GPU_BACKEND=metal requires an Apple platform (Metal is not available elsewhere)."
+    )
+endif()
+if(LINALG_GPU_BACKEND STREQUAL "metal" AND NOT CMAKE_OSX_SYSROOT)
     # Homebrew Clang may default to the Command Line Tools SDK while Metal
     # frameworks come from the active Xcode SDK. Use one SDK for both.
     execute_process(
@@ -133,21 +116,6 @@ if(LINALG_ENABLE_METAL AND NOT CMAKE_OSX_SYSROOT)
         OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY
     )
     set(CMAKE_OSX_SYSROOT "${_linalg_metal_sdk}" CACHE PATH "Apple SDK used by LinearAlgebra" FORCE)
-endif()
-
-if((LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_ROCBLAS) OR (LINALG_ENABLE_CUBLAS AND LINALG_ENABLE_METAL
-                                                       ) OR (LINALG_ENABLE_ROCBLAS
-                                                             AND LINALG_ENABLE_METAL)
-)
-    message(
-        FATAL_ERROR
-            "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL are "
-            "pairwise mutually exclusive: every GPU backend defines the same "
-            "batched_matrix_multiplication symbols "
-            "(include/matrix_operation/multiplication_batched.h is not "
-            "backend-templated), so enabling more than one would be a duplicate-symbol "
-            "link error. Enable only the GPU backend that matches the target hardware."
-    )
 endif()
 
 option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
@@ -158,13 +126,12 @@ option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
 # ships).
 option(LINALG_LU_PIVOTING "Enable partial pivoting in the scalar LU fallback paths" OFF)
 
-# Enables the scalar (non-MKL/BLAS) multiplication backend's blocked,
-# SIMD-vectorized GEMM (Scalars simd<T> and the
-# LINALG_HAS_VECTORIZATION block in native/multiplication_native.cpp) in
-# place of its plain triple-loop fallback.
-option(LINALG_ENABLE_VECTORIZATION
-       "Enable the SIMD-vectorized scalar GEMM fallback for LinearAlgebra" ON
-)
+# CPU SIMD backend selector (also controls whether the scalar GEMM fallback is
+# vectorized). Set by platform.cmake after host-architecture detection.
+# Values: no, sse, avx, avx2, avx512, neon, sve.
+# "no" means plain scalar loops; any other value activates the corresponding
+# Scalars simd<T> specialization (LINALG_HAS_VECTORIZATION block in
+# native/multiplication_native.cpp).
 
 # On MSVC, native/multiplication_native.cpp normally suppresses C4244
 # narrowing-conversion warnings around its non-MKL fallback; this re-enables
@@ -471,9 +438,9 @@ endif()
 # Several operations under src/matrix_operation/gpu/cublas/ are genuine
 # CUDA-kernel .cu files (batched matmul, norm, QR, SVD, pseudo-inverse,
 # inversion/determinant, trace), so `enable_language(CUDA)` and an nvcc
-# toolchain are only required — and only enabled — when this option is ON;
+# toolchain are only required — and only enabled — when LINALG_GPU_BACKEND=cuda;
 # plain CPU builds remain free of any CUDA toolchain requirement.
-if(LINALG_ENABLE_CUBLAS)
+if(LINALG_GPU_BACKEND STREQUAL "cuda")
     find_package(CUDAToolkit REQUIRED)
     if(NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD ${LINALG_CXX_STANDARD})
@@ -508,9 +475,9 @@ endif()
 # HIP-kernel .hip files (batched matmul, norm, QR, SVD, pseudo-inverse,
 # inversion/determinant, trace — the same set as their cuBLAS .cu
 # counterparts), so `enable_language(HIP)` and a ROCm toolchain are only
-# required — and only enabled — when this option is ON; plain CPU/CUDA
+# required — and only enabled — when LINALG_GPU_BACKEND=hip; plain CPU/CUDA
 # builds remain free of any ROCm toolchain requirement.
-if(LINALG_ENABLE_ROCBLAS)
+if(LINALG_GPU_BACKEND STREQUAL "hip")
     find_package(hip CONFIG REQUIRED)
     find_package(hipblas CONFIG REQUIRED)
     find_package(hipsolver CONFIG REQUIRED)
@@ -531,9 +498,9 @@ endif()
 # plain C++ (.cpp) source lives alongside them for trace, which needs no
 # Metal API calls at all (see trace_metal.cpp). OBJCXX is CMake's own
 # language for .mm files (Clang-only, which every Apple toolchain ships),
-# enabled only when this option is ON so plain CPU/CUDA/HIP builds need no
-# Objective-C++ support at all.
-if(LINALG_ENABLE_METAL)
+# enabled only when LINALG_GPU_BACKEND=metal so plain CPU/CUDA/HIP builds
+# need no Objective-C++ support at all.
+if(LINALG_GPU_BACKEND STREQUAL "metal")
     enable_language(OBJCXX)
     find_library(LINALG_METAL_FRAMEWORK Metal REQUIRED)
     find_library(LINALG_MPS_FRAMEWORK MetalPerformanceShaders REQUIRED)
@@ -643,25 +610,10 @@ if(NOT TARGET Scalars::Scalars)
             set(SCALARS_ENABLE_TESTING OFF)
             set(SCALARS_ENABLE_BENCHMARK OFF)
 
-            # CPU SIMD backend: aligned with Scalars naming (no, sse, avx, avx2, avx512, neon, sve)
-            if(NOT LINALG_ENABLE_VECTORIZATION OR LINALG_VECTORIZATION_ISA STREQUAL "scalar")
-                set(SCALARS_CPU_BACKEND "no")
-            elseif(LINALG_VECTORIZATION_ISA STREQUAL "sse2")
-                set(SCALARS_CPU_BACKEND "sse")
-            else()
-                set(SCALARS_CPU_BACKEND "${LINALG_VECTORIZATION_ISA}")
-            endif()
-
-            # GPU backend: activate when corresponding LinearAlgebra GPU backend is enabled
-            if(LINALG_ENABLE_CUBLAS)
-                set(SCALARS_GPU_BACKEND "cuda")
-            elseif(LINALG_ENABLE_ROCBLAS)
-                set(SCALARS_GPU_BACKEND "hip")
-            elseif(LINALG_ENABLE_METAL)
-                set(SCALARS_GPU_BACKEND "metal")
-            else()
-                set(SCALARS_GPU_BACKEND "none")
-            endif()
+            # Forward both backends directly — LINALG_CPU_BACKEND and Scalars
+            # use identical value sets (no/sse/avx/avx2/avx512/neon/sve).
+            set(SCALARS_CPU_BACKEND "${LINALG_CPU_BACKEND}")
+            set(SCALARS_GPU_BACKEND "${LINALG_GPU_BACKEND}")
 
             linalg_add_dependency_subdirectory(
                 "${LINALG_SOURCE_DIR}/ThirdParty/Scalars"
@@ -716,9 +668,8 @@ endif()
 
 # cuBLAS/cuSOLVER bridge sources and .cu kernel sources (all under
 # src/matrix_operation/gpu/cublas/) need an nvcc toolchain, so they are only
-# globbed in — and only compilable — when LINALG_ENABLE_CUBLAS turned on
-# CUDA above.
-if(LINALG_ENABLE_CUBLAS)
+# globbed in — and only compilable — when LINALG_GPU_BACKEND=cuda.
+if(LINALG_GPU_BACKEND STREQUAL "cuda")
     file(GLOB linalg_cublas_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/cublas/*.cpp"
     )
@@ -731,9 +682,8 @@ endif()
 
 # hipBLAS/hipSOLVER bridge sources and .hip kernel sources (all under
 # src/matrix_operation/gpu/hipblas/) need a ROCm/HIP toolchain, so they are
-# only globbed in — and only compilable — when LINALG_ENABLE_ROCBLAS turned
-# on HIP above.
-if(LINALG_ENABLE_ROCBLAS)
+# only globbed in — and only compilable — when LINALG_GPU_BACKEND=hip.
+if(LINALG_GPU_BACKEND STREQUAL "hip")
     file(GLOB linalg_hipblas_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/hipblas/*.cpp"
     )
@@ -746,9 +696,9 @@ endif()
 
 # Metal bridge sources (all under src/matrix_operation/gpu/metal/) need an
 # Objective-C++ (.mm) compiler, so they are only globbed in -- and only
-# compilable -- when LINALG_ENABLE_METAL turned on OBJCXX above. trace's
-# Metal source is plain C++ (no Metal API calls, see trace_metal.cpp) but
-# lives alongside its .mm siblings and is globbed in the same way.
+# compilable -- when LINALG_GPU_BACKEND=metal. trace's Metal source is plain
+# C++ (no Metal API calls, see trace_metal.cpp) but lives alongside its .mm
+# siblings and is globbed in the same way.
 #
 # The .mm files use ordinary alloc/init Objective-C object lifetimes (no
 # explicit `release`, relying on @autoreleasepool for the per-call
@@ -757,7 +707,7 @@ endif()
 # so they require ARC -- `enable_language(OBJCXX)` alone does not turn it
 # on -- scoped to just these sources so the rest of the library is
 # unaffected.
-if(LINALG_ENABLE_METAL)
+if(LINALG_GPU_BACKEND STREQUAL "metal")
     file(GLOB linalg_metal_mm_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/src/matrix_operation/gpu/metal/*.mm"
     )
@@ -815,7 +765,7 @@ set_target_properties(
                              CXX_EXTENSIONS OFF
 )
 linalg_apply_platform_compile_flags(LinearAlgebra)
-if(LINALG_ENABLE_CUBLAS)
+if(LINALG_GPU_BACKEND STREQUAL "cuda")
     # Scalars' arithmetic operators are constexpr. Allow NVCC device kernels
     # to call them without exposing the dependency's host/device dispatch here.
     target_compile_options(
@@ -870,13 +820,13 @@ target_compile_definitions(
         "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
         "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
         "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
-        "LINALG_HAS_CUBLAS=$<BOOL:${LINALG_ENABLE_CUBLAS}>"
-        "LINALG_HAS_ROCBLAS=$<BOOL:${LINALG_ENABLE_ROCBLAS}>"
-        "LINALG_HAS_METAL=$<BOOL:${LINALG_ENABLE_METAL}>"
+        "LINALG_HAS_CUBLAS=$<STREQUAL:${LINALG_GPU_BACKEND},cuda>"
+        "LINALG_HAS_ROCBLAS=$<STREQUAL:${LINALG_GPU_BACKEND},hip>"
+        "LINALG_HAS_METAL=$<STREQUAL:${LINALG_GPU_BACKEND},metal>"
         "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
         "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
         "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
-        "LINALG_HAS_VECTORIZATION=$<AND:$<BOOL:${LINALG_ENABLE_VECTORIZATION}>,$<NOT:$<STREQUAL:${LINALG_VECTORIZATION_ISA},scalar>>>"
+        "LINALG_HAS_VECTORIZATION=$<NOT:$<STREQUAL:${LINALG_CPU_BACKEND},no>>"
         "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
 )
 

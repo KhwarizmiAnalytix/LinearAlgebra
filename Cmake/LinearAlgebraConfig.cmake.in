@@ -60,15 +60,14 @@ if(LinearAlgebra_HAS_BLAS AND NOT LinearAlgebra_HAS_MKL)
     endif()
 endif()
 
-# --- Optional cuBLAS/cuSOLVER GPU backend (LINALG_ENABLE_CUBLAS) ---
-set(LinearAlgebra_HAS_CUBLAS @LINALG_ENABLE_CUBLAS@)
-if(LinearAlgebra_HAS_CUBLAS)
+# --- GPU backend (LINALG_GPU_BACKEND) ---
+set(LinearAlgebra_GPU_BACKEND "@LINALG_GPU_BACKEND@")
+set(LinearAlgebra_HAS_CUBLAS "$<STREQUAL:@LINALG_GPU_BACKEND@,cuda>")
+set(LinearAlgebra_HAS_ROCBLAS "$<STREQUAL:@LINALG_GPU_BACKEND@,hip>")
+set(LinearAlgebra_HAS_METAL "$<STREQUAL:@LINALG_GPU_BACKEND@,metal>")
+if(LinearAlgebra_GPU_BACKEND STREQUAL "cuda")
     find_dependency(CUDAToolkit)
-endif()
-
-# --- Optional hipBLAS/hipSOLVER GPU backend (LINALG_ENABLE_ROCBLAS) ---
-set(LinearAlgebra_HAS_ROCBLAS @LINALG_ENABLE_ROCBLAS@)
-if(LinearAlgebra_HAS_ROCBLAS)
+elseif(LinearAlgebra_GPU_BACKEND STREQUAL "hip")
     find_dependency(hip CONFIG)
     find_dependency(hipblas CONFIG)
     find_dependency(hipsolver CONFIG)

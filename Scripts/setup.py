@@ -13,8 +13,8 @@ Usage:
     python Scripts/setup.py config.build.test
     python Scripts/setup.py config.build.test.coverage
     python Scripts/setup.py config.build.test.mkl
-    python Scripts/setup.py config.build.test.hipblas
-    python Scripts/setup.py config.build.test.metalblas
+    python Scripts/setup.py config.build.test --gpu_backend.hip
+    python Scripts/setup.py config.build.test --gpu_backend.metal
     python Scripts/setup.py config.build.test.gcc.release
 """
 
@@ -451,9 +451,8 @@ class LinearAlgebraFlags:
             "mkl",
             "blas",
             "blis",
-            "cublas",
-            "hipblas",
-            "metalblas",
+            "gpu_backend",
+            "cpu_backend",
             "lupivoting",
             "win32warnings",
             "icecc",
@@ -472,8 +471,6 @@ class LinearAlgebraFlags:
             "lto",
             "cppcheck",
             "benchmark",
-            "isa",
-            "vectorization",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -484,12 +481,10 @@ class LinearAlgebraFlags:
             "(OpenBLAS, Accelerate, netlib, ...)",
             "enable BLIS as the explicit CBLAS/LAPACKE provider "
             "(pair with AOCL libflame or netlib LAPACKE for factorization ops)",
-            "enable the cuBLAS/cuSOLVER GPU backend "
-            "(requires CUDA toolkit; mutually exclusive with hipblas and metalblas)",
-            "enable the hipBLAS/hipSOLVER GPU backend "
-            "(requires ROCm/HIP; mutually exclusive with cublas and metalblas)",
-            "enable the Metal Performance Shaders GPU backend "
-            "(macOS, float only; mutually exclusive with cublas and hipblas)",
+            "GPU backend: --gpu_backend.none|cuda|hip|metal "
+            "(metal requires macOS; default none)",
+            "CPU SIMD backend: --cpu_backend.no|sse|avx|avx2|avx512|neon|sve "
+            "(default: host-detected; no = scalar loops)",
             "enable partial pivoting in the scalar (non-MKL) LU fallback paths",
             "re-enable MSVC narrowing-conversion warnings (C4244) "
             "around the scalar fallback",
@@ -510,10 +505,6 @@ class LinearAlgebraFlags:
             "LTO mode: off | thin | full | ipo | auto (bare 'lto' = auto)",
             "enable cppcheck static analysis",
             "enable Google Benchmark micro-benchmarks (LINALG_ENABLE_BENCHMARK)",
-            "SIMD ISA override: scalar, sse2, avx, avx2, avx512, neon "
-            "(bare tokens also accepted)",
-            "enable the SIMD-vectorized scalar GEMM fallback "
-            "(LINALG_ENABLE_VECTORIZATION; default ON; token disables it)",
         ]
 
     def __build_cmake_flag(self):
@@ -525,9 +516,8 @@ class LinearAlgebraFlags:
             "mkl": "LINALG_ENABLE_MKL",
             "blas": "LINALG_ENABLE_BLAS",
             "blis": "LINALG_ENABLE_BLIS",
-            "cublas": "LINALG_ENABLE_CUBLAS",
-            "hipblas": "LINALG_ENABLE_ROCBLAS",
-            "metalblas": "LINALG_ENABLE_METAL",
+            "gpu_backend": "LINALG_GPU_BACKEND",
+            "cpu_backend": "LINALG_CPU_BACKEND",
             "lupivoting": "LINALG_LU_PIVOTING",
             "win32warnings": "LINALG_DISPLAY_WIN32_WARNINGS",
             "icecc": "LINALG_ENABLE_ICECC",
@@ -545,8 +535,6 @@ class LinearAlgebraFlags:
             "cxxstd": "LINALG_CXX_STANDARD",
             "lto": "LINALG_LTO_MODE",
             "benchmark": "LINALG_ENABLE_BENCHMARK",
-            "isa": "LINALG_VECTORIZATION_ISA",
-            "vectorization": "LINALG_ENABLE_VECTORIZATION",
             # "cppcheck" runs via Scripts/helpers/cppcheck.py after the build; no
             # CMakeLists.txt option consumes it (avoid an unused-var warning).
         }
@@ -571,8 +559,8 @@ class LinearAlgebraFlags:
                 "cxxstd": "",  # empty = let CMake use its own default (20)
                 "lto": "",  # empty = let CMake compute the smart per-compiler default
                 "sanitizer_enum": "address",
-                "isa": "",  # empty = let CMake pick the platform default
-                "vectorization": self.ON,  # LINALG_ENABLE_VECTORIZATION default ON
+                "gpu_backend": "none",   # LINALG_GPU_BACKEND default
+                "cpu_backend": "",       # empty = let CMake pick the platform default
             }
         )
 
@@ -581,7 +569,8 @@ class LinearAlgebraFlags:
         cxx_std_list = ["cxx20", "cxx23"]
         cache_type_list = ["none", "ccache", "sccache", "buildcache"]
         linker_list = ["default", "mold", "lld", "gold", "lld-link"]
-        isa_list = ["scalar", "sse2", "avx", "avx2", "avx512", "neon"]
+        cpu_backend_list = ["no", "sse", "avx", "avx2", "avx512", "neon", "sve"]
+        gpu_backend_list = ["none", "cuda", "hip", "metal"]
 
         self.builder_suffix = ""
         for arg in arg_list:
@@ -627,21 +616,30 @@ class LinearAlgebraFlags:
                 self.__value["cache_type"] = arg
                 self.builder_suffix += f"_{arg}"
                 print_status(f"Setting cache type to {arg}", "INFO")
-            elif arg.lower() in isa_list:
-                isa_value = arg.lower()
-                self.__value["isa"] = isa_value
-                self.builder_suffix += f"_isa_{isa_value}"
-                print_status(f"Setting vectorization ISA to {isa_value}", "INFO")
-            elif arg.startswith("isa."):
-                isa_value = arg.split(".", 1)[1].lower()
-                if isa_value in isa_list:
-                    self.__value["isa"] = isa_value
-                    self.builder_suffix += f"_isa_{isa_value}"
-                    print_status(f"Setting vectorization ISA to {isa_value}", "INFO")
+            elif arg.startswith("cpu_backend."):
+                cpu_value = arg.split(".", 1)[1].lower()
+                if cpu_value in cpu_backend_list:
+                    self.__value["cpu_backend"] = cpu_value
+                    self.builder_suffix += f"_cpu_{cpu_value}"
+                    print_status(f"Setting CPU backend to {cpu_value}", "INFO")
                 else:
                     print_status(
-                        f"Unknown ISA '{isa_value}'. "
-                        f"Valid options: {', '.join(isa_list)}",
+                        f"Unknown CPU backend '{cpu_value}'. "
+                        f"Valid options: {', '.join(cpu_backend_list)}",
+                        "ERROR",
+                    )
+                    sys.exit(1)
+            elif arg.startswith("gpu_backend."):
+                gpu_value = arg.split(".", 1)[1].lower()
+                if gpu_value in gpu_backend_list:
+                    self.__value["gpu_backend"] = gpu_value
+                    if gpu_value != "none":
+                        self.builder_suffix += f"_gpu_{gpu_value}"
+                    print_status(f"Setting GPU backend to {gpu_value}", "INFO")
+                else:
+                    print_status(
+                        f"Unknown GPU backend '{gpu_value}'. "
+                        f"Valid options: {', '.join(gpu_backend_list)}",
                         "ERROR",
                     )
                     sys.exit(1)
@@ -654,7 +652,7 @@ class LinearAlgebraFlags:
                 self.__value["cxxstd"] = std_version
                 print_status(f"Setting C++ standard to C++{std_version}", "INFO")
             elif arg in self.__key:
-                if arg in ("gtest", "cache", "vectorization"):
+                if arg in ("gtest", "cache"):
                     # CMake default ON: providing the token turns it OFF.
                     self.__value[arg] = self.OFF
                 elif arg == "lto":
@@ -668,18 +666,10 @@ class LinearAlgebraFlags:
                     self.builder_suffix += f"_{arg}"
 
     def __validate_flags(self):
-        gpu_backends = ("cublas", "hipblas", "metalblas")
-        if sum(self.__value.get(backend) == self.ON for backend in gpu_backends) > 1:
+        if self.__value.get("gpu_backend") == "metal" and platform.system() != "Darwin":
             print_status(
-                "cublas, hipblas, and metalblas are mutually exclusive - "
-                "enable only one GPU backend.",
+                "LINALG_GPU_BACKEND=metal requires macOS (Metal Performance Shaders).",
                 "ERROR",
-            )
-            sys.exit(1)
-
-        if self.__value.get("metalblas") == self.ON and platform.system() != "Darwin":
-            print_status(
-                "metalblas requires macOS (Metal Performance Shaders).", "ERROR"
             )
             sys.exit(1)
 
@@ -1162,9 +1152,10 @@ def main():
         print("     setup.py config.build.test.mkl")
         print("     setup.py config.build.test.blas")
         print("     setup.py config.build.test.blis")
-        print("     setup.py config.build.test.cublas")
-        print("     setup.py config.build.test.hipblas")
-        print("     setup.py config.build.test.metalblas  (macOS, float only)")
+        print("     setup.py config.build.test --gpu_backend.cuda")
+        print("     setup.py config.build.test --gpu_backend.hip")
+        print("     setup.py config.build.test --gpu_backend.metal  (macOS, float only)")
+        print("     setup.py config.build.test --cpu_backend.avx2")
         print("\nBuild commands:")
         print("  config    - Configure the build system")
         print("  build     - Build the project")

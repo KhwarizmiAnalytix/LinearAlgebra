@@ -214,21 +214,18 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
-# --- LINALG vectorization ISA option ---
-# Which Scalars simd<T> backend supplies LINALG_ENABLE_VECTORIZATION.
-# There is no "auto" choice: the ISA is always explicit, and CMake computes a
-# platform-appropriate default when the cache variable is not overridden on the
-# command line:
-#   scalar - use scalar algorithm loops (Scalars CPU backend=no).
-#            Default for platforms other than x86_64/aarch64.
-#   sse/avx/avx2/avx512/neon - force that specialization and (x86 targets
-#            only) add the matching -m<isa> compiler flag so it is actually
-#            enabled; a target that cannot assemble the requested ISA fails
-#            to build rather than silently falling back to a narrower one.
-#            SSE (SSE2 baseline) is the x86_64 baseline; neon is the
-#            default on aarch64/arm64.
-#
-# Aligned with Scalars CPU backend naming: no, sse, avx, avx2, avx512, neon, sve.
+# --- LINALG_CPU_BACKEND ---
+# Selects the Scalars simd<T> backend used by LinearAlgebra's scalar GEMM
+# fallback. Matches Vectorization's VECTORIZATION_CPU_BACKEND value set:
+#   no       - scalar loops, no SIMD (default for non-x86_64/aarch64 hosts).
+#   sse      - SSE2 (x86_64 baseline).
+#   avx      - AVX (x86_64).
+#   avx2     - AVX2 (x86_64, default on x86_64).
+#   avx512   - AVX-512 (x86_64).
+#   neon     - NEON (aarch64, default on aarch64/arm64).
+#   sve      - SVE (aarch64).
+# The Scalars dependency picks up compiler flags for the chosen ISA.
+# "no" disables vectorization (LINALG_HAS_VECTORIZATION=0).
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _linalg_system_processor_lower)
 if(CMAKE_OSX_ARCHITECTURES)
     list(LENGTH CMAKE_OSX_ARCHITECTURES _linalg_arch_count)
@@ -239,43 +236,38 @@ if(CMAKE_OSX_ARCHITECTURES)
     endif()
 endif()
 if(_linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
-    set(_linalg_vectorization_isa_default "neon")
+    set(_linalg_cpu_backend_default "neon")
 elseif(_linalg_system_processor_lower MATCHES "^(x86_64|amd64)$")
-    set(_linalg_vectorization_isa_default "sse")
+    set(_linalg_cpu_backend_default "sse")
 else()
-    set(_linalg_vectorization_isa_default "scalar")
+    set(_linalg_cpu_backend_default "no")
 endif()
-set(LINALG_VECTORIZATION_ISA
-    "${_linalg_vectorization_isa_default}"
-    CACHE
-        STRING
-        "SIMD ISA for LinearAlgebra's vectorized scalar GEMM: scalar, sse (or sse2), avx, avx2, avx512, neon"
+set(LINALG_CPU_BACKEND
+    "${_linalg_cpu_backend_default}"
+    CACHE STRING "CPU SIMD backend for LinearAlgebra: no, sse, avx, avx2, avx512, neon, sve"
 )
-unset(_linalg_vectorization_isa_default)
+unset(_linalg_cpu_backend_default)
 set_property(
-    CACHE LINALG_VECTORIZATION_ISA
-    PROPERTY STRINGS
-             scalar
-             sse
-             sse2
-             avx
-             avx2
-             avx512
-             neon
+    CACHE LINALG_CPU_BACKEND
+    PROPERTY STRINGS no sse avx avx2 avx512 neon sve
 )
 
-if(NOT LINALG_VECTORIZATION_ISA MATCHES "^(scalar|sse|sse2|avx|avx2|avx512|neon)$")
-    message(FATAL_ERROR "Invalid LINALG_VECTORIZATION_ISA: ${LINALG_VECTORIZATION_ISA}")
+if(NOT LINALG_CPU_BACKEND MATCHES "^(no|sse|avx|avx2|avx512|neon|sve)$")
+    message(
+        FATAL_ERROR
+            "LINALG_CPU_BACKEND must be one of: no, sse, avx, avx2, avx512, neon, sve "
+            "(got '${LINALG_CPU_BACKEND}')"
+    )
 endif()
-if(LINALG_ENABLE_VECTORIZATION AND NOT LINALG_VECTORIZATION_ISA STREQUAL "scalar")
+if(NOT LINALG_CPU_BACKEND STREQUAL "no")
     if(_linalg_system_processor_lower STREQUAL "universal")
-        message(FATAL_ERROR "Universal builds require LINALG_VECTORIZATION_ISA=scalar")
-    elseif(LINALG_VECTORIZATION_ISA STREQUAL "neon")
+        message(FATAL_ERROR "Universal builds require LINALG_CPU_BACKEND=no")
+    elseif(LINALG_CPU_BACKEND MATCHES "^(neon|sve)$")
         if(NOT _linalg_system_processor_lower MATCHES "^(aarch64|arm64)$")
-            message(FATAL_ERROR "NEON requires an arm64 target")
+            message(FATAL_ERROR "LINALG_CPU_BACKEND=${LINALG_CPU_BACKEND} requires an arm64 target")
         endif()
     elseif(NOT _linalg_system_processor_lower MATCHES "^(x86_64|amd64|i386|i686|x86)$")
-        message(FATAL_ERROR "${LINALG_VECTORIZATION_ISA} requires an x86 target")
+        message(FATAL_ERROR "LINALG_CPU_BACKEND=${LINALG_CPU_BACKEND} requires an x86 target")
     endif()
 endif()
 
@@ -288,7 +280,7 @@ function(linalg_apply_platform_compile_flags target)
     )
         # Excludes CUDA: nvcc's frontend does not recognize the bare MSVC-style
         # /WX flag and misparses it as a second input file when
-        # LINALG_ENABLE_CUBLAS compiles .cu sources.
+        # LINALG_GPU_BACKEND=cuda compiles .cu sources.
         target_compile_options(${target} PRIVATE $<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:/WX>)
     else()
         target_compile_options(${target} PRIVATE -include cstdlib)
