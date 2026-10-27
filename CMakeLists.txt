@@ -564,6 +564,13 @@ if(NOT TARGET Logging::Logging)
             set(LOGGING_ENABLE_TESTING OFF)
             set(LOGGING_ENABLE_BENCHMARK OFF)
             set(LOGGING_ENABLE_EXAMPLES OFF)
+            # Forward tool flags so Logging inherits LinearAlgebra's build settings.
+            foreach(_linalg_log_feat IN ITEMS CACHE ICECC CLANGTIDY FIX IWYU SANITIZER COVERAGE SPELL VALGRIND)
+                set(LOGGING_ENABLE_${_linalg_log_feat} "${LINALG_ENABLE_${_linalg_log_feat}}")
+            endforeach()
+            foreach(_linalg_log_setting IN ITEMS CACHE_BACKEND SANITIZER_TYPE LINKER_CHOICE LTO_MODE)
+                set(LOGGING_${_linalg_log_setting} "${LINALG_${_linalg_log_setting}}")
+            endforeach()
             set(XSIGMA_ENABLE_EXTERNAL "${LINALG_ENABLE_EXTERNAL}")
             # Loguru treats an empty CMAKE_DL_LIBS as missing stack-trace
             # support. macOS supplies dladdr in libSystem and a libdl stub;
@@ -614,6 +621,13 @@ if(NOT TARGET Scalars::Scalars)
             # use identical value sets (no/sse/avx/avx2/avx512/neon/sve).
             set(SCALARS_CPU_BACKEND "${LINALG_CPU_BACKEND}")
             set(SCALARS_GPU_BACKEND "${LINALG_GPU_BACKEND}")
+            # Forward tool flags so Scalars inherits LinearAlgebra's build settings.
+            foreach(_linalg_sc_feat IN ITEMS CACHE ICECC CLANGTIDY FIX IWYU SANITIZER COVERAGE SPELL VALGRIND)
+                set(SCALARS_ENABLE_${_linalg_sc_feat} "${LINALG_ENABLE_${_linalg_sc_feat}}")
+            endforeach()
+            foreach(_linalg_sc_setting IN ITEMS CACHE_BACKEND SANITIZER_TYPE LINKER_CHOICE LTO_MODE)
+                set(SCALARS_${_linalg_sc_setting} "${LINALG_${_linalg_sc_setting}}")
+            endforeach()
 
             linalg_add_dependency_subdirectory(
                 "${LINALG_SOURCE_DIR}/ThirdParty/Scalars"
