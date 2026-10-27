@@ -1,6 +1,6 @@
 {
   "started_utc": "2026-10-24T10:14:23.123021+00:00",
-  "build_directory": "/Users/toufikbellaj/dev/LinearAlgebra/build_eigen_compare",
+  "build_directory": "build_eigen_compare",
   "hardware": [
     "Model Name: MacBook Pro",
     "Chip: Apple M4 Pro",
@@ -55,7 +55,7 @@
     "LINALG_LTO_MODE": "off",
     "LINALG_LU_PIVOTING": "OFF",
     "LINALG_SANITIZER_TYPE": "address",
-    "LINALG_THIRD_PARTY_DIR": "/Users/toufikbellaj/dev/LinearAlgebra/ThirdParty",
+    "LINALG_THIRD_PARTY_DIR": "ThirdParty",
     "LINALG_USE_SYSTEM_LOGGING": "OFF",
     "LINALG_VECTORIZATION_ISA": "neon",
     "BLAS_WORKS": "",
