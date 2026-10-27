@@ -204,15 +204,14 @@ Source: [all platform branches](../Cmake/platform.cmake).
 
 ## SIMD and CPU architecture
 
-`LINALG_ENABLE_VECTORIZATION` defaults to ON. The default
-`LINALG_VECTORIZATION_ISA` is `avx2` for x86_64/AMD64/i386/i686, `neon` for
-arm64/aarch64, and `scalar` otherwise. There is no runtime ISA selection here.
+`LINALG_CPU_BACKEND` selects the SIMD backend. The default is `sse` for
+x86_64/AMD64, `neon` for arm64/aarch64, and `no` otherwise. Accepted values are
+`no`, `sse`, `avx`, `avx2`, `avx512`, `neon`, and `sve`. There is no runtime
+ISA selection here.
 
 The bundled `Scalars::Scalars` target supplies the selected backend's definitions
-and compiler flags. `sse2` maps to Scalars' `sse`; `avx`, `avx2`, `avx512`, and
-`neon` map directly. `scalar` and disabled vectorization select Scalars' `no`
-backend and the scalar algorithm loops. The selected ISA is checked against
-the target architecture during configuration.
+and compiler flags. `no` selects the scalar algorithm loops. The selected
+backend is checked against the target architecture during configuration.
 
 ISA options propagate to consumers through `Scalars::Scalars`; deploy binaries
 on CPUs that support that ISA. There is no runtime ISA dispatch.
@@ -464,7 +463,7 @@ this report. Commands run from the repository root unless stated otherwise.
 
 ```sh
 # Linux GCC, explicit CPU ISA
-cmake -S . -B build-gcc -G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release -DLINALG_VECTORIZATION_ISA=sse2 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake -S . -B build-gcc -G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release -DLINALG_CPU_BACKEND=sse -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 # macOS system AppleClang
 cmake -S . -B build-apple -G Ninja -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
@@ -478,7 +477,7 @@ cmake -LAH -N build-gcc
 
 # Setup helper: run from Scripts/
 cd Scripts
-python3 setup.py config.build.test.gcc.release.sse2
+python3 setup.py config.build.test.gcc.release --cpu_backend.sse
 ```
 
 For Windows, run from a developer environment with the selected compiler, SDK,

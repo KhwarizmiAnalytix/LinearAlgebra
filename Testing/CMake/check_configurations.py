@@ -343,7 +343,7 @@ class ConfigurationChecks(unittest.TestCase):
                         f"-DBUILD_SHARED_LIBS={shared}",
                         "-DLINALG_LTO_MODE=off",
                         "-DLINALG_LINKER_CHOICE=default",
-                        "-DLINALG_ENABLE_VECTORIZATION=OFF",
+                        "-DLINALG_CPU_BACKEND=no",
                     ],
                 )
                 command = subprocess.check_output(
@@ -422,7 +422,7 @@ class ConfigurationChecks(unittest.TestCase):
 
     def test_invalid_isa_and_lto_fail_at_configure(self):
         for option, error in [
-            ("-DLINALG_VECTORIZATION_ISA=typo", "Invalid LINALG_VECTORIZATION_ISA"),
+            ("-DLINALG_CPU_BACKEND=typo", "LINALG_CPU_BACKEND must be one of"),
             ("-DLINALG_LTO_MODE=typo", "Invalid LINALG_LTO_MODE"),
             ("-DLINALG_LINKER_CHOICE=typo", "Invalid linker choice"),
         ]:

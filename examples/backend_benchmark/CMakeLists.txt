@@ -1,10 +1,10 @@
 # This example uses all CPU providers plus whichever single GPU backend is
-# enabled (LINALG_ENABLE_CUBLAS and LINALG_ENABLE_ROCBLAS are mutually
-# exclusive — see CMakeLists.txt) in the same executable.
+# enabled (cuda and hip are mutually exclusive — see CMakeLists.txt) in the
+# same executable.
 if(NOT LINALG_ENABLE_BLAS
    OR NOT LINALG_BLAS_HAS_LAPACKE
    OR NOT LINALG_ENABLE_MKL
-   OR NOT (LINALG_ENABLE_CUBLAS OR LINALG_ENABLE_ROCBLAS)
+   OR NOT (LINALG_GPU_BACKEND STREQUAL "cuda" OR LINALG_GPU_BACKEND STREQUAL "hip")
 )
     message(
         FATAL_ERROR

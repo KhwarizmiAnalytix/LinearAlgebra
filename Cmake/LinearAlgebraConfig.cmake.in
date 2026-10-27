@@ -62,9 +62,23 @@ endif()
 
 # --- GPU backend (LINALG_GPU_BACKEND) ---
 set(LinearAlgebra_GPU_BACKEND "@LINALG_GPU_BACKEND@")
-set(LinearAlgebra_HAS_CUBLAS "$<STREQUAL:@LINALG_GPU_BACKEND@,cuda>")
-set(LinearAlgebra_HAS_ROCBLAS "$<STREQUAL:@LINALG_GPU_BACKEND@,hip>")
-set(LinearAlgebra_HAS_METAL "$<STREQUAL:@LINALG_GPU_BACKEND@,metal>")
+# Package files generated from a project that still sets the boolean switches
+# (the configuration regression probe does this) record those switches when
+# LINALG_GPU_BACKEND was not substituted.
+if(LinearAlgebra_GPU_BACKEND STREQUAL "")
+    if("@LINALG_ENABLE_CUBLAS@" STREQUAL "ON")
+        set(LinearAlgebra_GPU_BACKEND "cuda")
+    elseif("@LINALG_ENABLE_ROCBLAS@" STREQUAL "ON")
+        set(LinearAlgebra_GPU_BACKEND "hip")
+    elseif("@LINALG_ENABLE_METAL@" STREQUAL "ON")
+        set(LinearAlgebra_GPU_BACKEND "metal")
+    else()
+        set(LinearAlgebra_GPU_BACKEND "none")
+    endif()
+endif()
+set(LinearAlgebra_HAS_CUBLAS "$<STREQUAL:${LinearAlgebra_GPU_BACKEND},cuda>")
+set(LinearAlgebra_HAS_ROCBLAS "$<STREQUAL:${LinearAlgebra_GPU_BACKEND},hip>")
+set(LinearAlgebra_HAS_METAL "$<STREQUAL:${LinearAlgebra_GPU_BACKEND},metal>")
 if(LinearAlgebra_GPU_BACKEND STREQUAL "cuda")
     find_dependency(CUDAToolkit)
 elseif(LinearAlgebra_GPU_BACKEND STREQUAL "hip")

@@ -209,8 +209,7 @@ def summarize(directory, baseline=None, charts=True):
         "",
         "; ".join(metadata["hardware"]) or metadata["os"],
         "",
-        f"Release; SIMD={cache.get('LINALG_ENABLE_VECTORIZATION', 'unknown')}; "
-        f"ISA={cache.get('LINALG_VECTORIZATION_ISA', 'unknown')}; "
+        f"Release; CPU backend={cache.get('LINALG_CPU_BACKEND', 'unknown')}; "
         f"C++{cache.get('LINALG_CXX_STANDARD', 'unknown')}; LTO={cache.get('LINALG_LTO_MODE', 'unknown')}. "
         "All backends use one thread. Cases run sequentially with three repetitions, "
         "at least 0.1 seconds per repetition. Timings are median CPU microseconds.",

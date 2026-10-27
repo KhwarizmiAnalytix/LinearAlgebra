@@ -171,29 +171,13 @@ class FlagMatrixChecks(unittest.TestCase):
         )
         runner = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(runner)
-        expected = {
-            ("OFF", "avx2"): "no",
-            ("ON", "scalar"): "no",
-            ("ON", "sse2"): "sse",
-            ("ON", "avx"): "avx",
-            ("ON", "avx2"): "avx2",
-            ("ON", "avx512"): "avx512",
-            ("ON", "neon"): "neon",
-        }
-        for (enabled, isa), backend in expected.items():
-            flags = {
-                "LINALG_ENABLE_VECTORIZATION": enabled,
-                "LINALG_VECTORIZATION_ISA": isa,
-            }
-            with self.subTest(enabled=enabled, isa=isa):
+        for backend in ("no", "sse", "avx", "avx2", "avx512", "neon", "sve"):
+            flags = {"LINALG_CPU_BACKEND": backend}
+            with self.subTest(backend=backend):
                 self.assertEqual(runner.scalars_cpu_backend(flags), backend)
                 self.assertEqual(
                     runner.vectorization_definition(flags),
-                    "LINALG_HAS_VECTORIZATION=$<AND:$<BOOL:"
-                    + enabled
-                    + ">,$<NOT:$<STREQUAL:"
-                    + isa
-                    + ",scalar>>>",
+                    "LINALG_HAS_VECTORIZATION=$<NOT:$<STREQUAL:" + backend + ",no>>",
                 )
 
     def test_windows_debug_asan_is_compile_only(self):
@@ -205,8 +189,7 @@ class FlagMatrixChecks(unittest.TestCase):
         flags = {
             "LINALG_ENABLE_SANITIZER": "ON",
             "LINALG_SANITIZER_TYPE": "address",
-            "LINALG_ENABLE_VECTORIZATION": "OFF",
-            "LINALG_VECTORIZATION_ISA": "scalar",
+            "LINALG_CPU_BACKEND": "no",
             "CMAKE_BUILD_TYPE": "Debug",
         }
         with mock.patch.object(runner.platform, "system", return_value="Windows"):

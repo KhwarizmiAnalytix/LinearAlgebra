@@ -44,18 +44,18 @@ def runtime_skip(flags):
             and flags["CMAKE_BUILD_TYPE"] == "Debug"
         ):
             return "Clang AddressSanitizer cannot intercept the Windows debug CRT"
-    if flags["LINALG_ENABLE_VECTORIZATION"] == "ON":
-        isa = flags["LINALG_VECTORIZATION_ISA"]
-        required = {
-            "avx": {"avx"},
-            "avx2": {"avx2", "fma"},
-            "avx512": {"avx512f", "avx2", "fma"},
-        }.get(isa, set())
-        if required:
-            cpuinfo = Path("/proc/cpuinfo")
-            available = set(cpuinfo.read_text().split()) if cpuinfo.exists() else set()
-            if not required <= available:
-                return f"Runner ISA capabilities do not establish {isa} support"
+    backend = flags["LINALG_CPU_BACKEND"]
+    required = {
+        "avx": {"avx"},
+        "avx2": {"avx2", "fma"},
+        "avx512": {"avx512f", "avx2", "fma"},
+        "sve": {"sve"},
+    }.get(backend, set())
+    if required:
+        cpuinfo = Path("/proc/cpuinfo")
+        available = set(cpuinfo.read_text().split()) if cpuinfo.exists() else set()
+        if not required <= available:
+            return f"Runner ISA capabilities do not establish {backend} support"
     return None
 
 
@@ -102,14 +102,7 @@ def installed_logging(source, work, shared, config, env, log):
 
 def scalars_cpu_backend(flags):
     """Select the Scalars CPU backend used for a bundled LinearAlgebra build."""
-    if (
-        flags["LINALG_ENABLE_VECTORIZATION"] != "ON"
-        or flags["LINALG_VECTORIZATION_ISA"] == "scalar"
-    ):
-        return "no"
-    if flags["LINALG_VECTORIZATION_ISA"] == "sse2":
-        return "sse"
-    return flags["LINALG_VECTORIZATION_ISA"]
+    return flags["LINALG_CPU_BACKEND"]
 
 
 def installed_scalars(source, work, flags, env, log):
@@ -168,16 +161,9 @@ def installed_scalars(source, work, flags, env, log):
 
 
 def vectorization_definition(flags):
-    """Return the recorded definition; scalar ISA keeps the SIMD paths off."""
-    enabled = flags["LINALG_ENABLE_VECTORIZATION"]
-    isa = flags["LINALG_VECTORIZATION_ISA"]
-    return (
-        "LINALG_HAS_VECTORIZATION=$<AND:$<BOOL:"
-        + enabled
-        + ">,$<NOT:$<STREQUAL:"
-        + isa
-        + ",scalar>>>"
-    )
+    """Return the recorded definition; backend "no" keeps the SIMD paths off."""
+    backend = flags["LINALG_CPU_BACKEND"]
+    return "LINALG_HAS_VECTORIZATION=$<NOT:$<STREQUAL:" + backend + ",no>>"
 
 
 def verify(build, flags):

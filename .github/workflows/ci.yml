@@ -520,26 +520,24 @@ jobs:
         run: cmake --build build-metal --parallel 4
 
   simd:
-    name: SIMD (${{ matrix.isa }})
+    name: SIMD (${{ matrix.backend }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            isa: disabled
+            backend: no
           - os: ubuntu-latest
-            isa: scalar
+            backend: sse
           - os: ubuntu-latest
-            isa: sse2
+            backend: avx
           - os: ubuntu-latest
-            isa: avx
+            backend: avx2
           - os: ubuntu-latest
-            isa: avx2
-          - os: ubuntu-latest
-            isa: avx512
+            backend: avx512
           - os: macos-latest
-            isa: neon
+            backend: neon
     steps:
       - uses: actions/checkout@v4
         with:
@@ -555,25 +553,21 @@ jobs:
 
       - name: Configure
         env:
-          SIMD_ISA: ${{ matrix.isa }}
+          SIMD_BACKEND: ${{ matrix.backend }}
         shell: bash
         run: |
-          if [[ "$SIMD_ISA" == disabled ]]; then
-            cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINALG_ENABLE_VECTORIZATION=OFF
-          else
-            cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release \
-              -DLINALG_ENABLE_VECTORIZATION=ON -DLINALG_VECTORIZATION_ISA="$SIMD_ISA"
-          fi
+          cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DLINALG_CPU_BACKEND="$SIMD_BACKEND"
 
       - name: Build
         run: cmake --build build-simd --parallel 4
 
       - name: Test when the runner supports the ISA
         env:
-          SIMD_ISA: ${{ matrix.isa }}
+          SIMD_BACKEND: ${{ matrix.backend }}
         shell: bash
         run: |
-          case "$SIMD_ISA" in
+          case "$SIMD_BACKEND" in
             avx) required_flags="avx" ;;
             avx2) required_flags="avx2 fma" ;;
             avx512) required_flags="avx512f avx2 fma" ;;

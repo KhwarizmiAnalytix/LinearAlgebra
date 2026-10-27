@@ -153,8 +153,8 @@ macOS, and Windows with bundled dependencies and the scalar algorithm path.
 [Scalars](https://github.com/KhwarizmiAnalytix/Scalars), pinned in
 `ThirdParty/Scalars`, supplies complex arithmetic and the `simd<T>` CPU
 primitives. The native kernels and complex vector operations use that API
-directly. `LINALG_VECTORIZATION_ISA` selects the Scalars backend (`sse2` maps
-to `sse`); `scalar` or `LINALG_ENABLE_VECTORIZATION=OFF` selects scalar loops.
+directly. `LINALG_CPU_BACKEND` selects the Scalars backend (`no`, `sse`,
+`avx`, `avx2`, `avx512`, `neon`, or `sve`). `no` selects scalar loops.
 Runtime-compiled Metal kernels retain an MSL compatibility layer.
 
 | CMake variable | Default | Summary |
@@ -169,6 +169,7 @@ Runtime-compiled Metal kernels retain an MSL compatibility layer.
 | `LINALG_ENABLE_METAL` | OFF | Metal Performance Shaders GPU backend (`linalg_backend::METAL_BLAS`); Apple platforms, float only; enables Objective-C++ and links Metal, MetalPerformanceShaders, and Foundation; mutually exclusive with CUDA and ROCm |
 | `LINALG_BUILD_EXAMPLES` | OFF | Build the four-backend CPU/GPU benchmark example; requires BLAS/LAPACKE, MKL and cuBLAS or hipBLAS |
 | `LINALG_ENABLE_PROFILING` | OFF | Enable Profiler instrumentation and build profiling programs; requires `Profiler::Profiler`. When OFF, Profiler is neither discovered nor linked |
+| `LINALG_CPU_BACKEND` | `sse` on x86_64, `neon` on arm64, `no` otherwise | CPU SIMD backend: `no`, `sse`, `avx`, `avx2`, `avx512`, `neon`, `sve`. `no` is scalar loops |
 | `LINALG_LU_PIVOTING` | OFF | Partial pivoting in the scalar (non-MKL) LU fallback paths |
 | `LINALG_DISPLAY_WIN32_WARNINGS` | OFF | Re-enable MSVC narrowing-conversion warnings around the scalar fallback |
 | `LINALG_ENABLE_TESTING` | Standalone: ON; embedded: host setting or OFF | Build the test suite; `BUILD_TESTING=OFF` disables it |
@@ -193,10 +194,10 @@ When `LINALG_ENABLE_ROCBLAS` is `ON`, `find_package(hip)`,
 Configuration fails with `FATAL_ERROR` if more than one of `LINALG_ENABLE_CUBLAS`,
 `LINALG_ENABLE_ROCBLAS`, and `LINALG_ENABLE_METAL` is `ON` at once.
 
-SIMD defaults to SSE2 on x86_64, NEON on arm64, and scalar elsewhere. Higher
-x86 ISAs require an explicit `LINALG_VECTORIZATION_ISA` setting and a CPU that
+SIMD defaults to SSE on x86_64, NEON on arm64, and scalar (`no`) elsewhere. Higher
+x86 ISAs and SVE require an explicit `LINALG_CPU_BACKEND` and a CPU that
 supports it; there is no runtime ISA dispatch. Universal macOS builds require
-`LINALG_VECTORIZATION_ISA=scalar`. ISA flags stay private to the implementation.
+`LINALG_CPU_BACKEND=no`. ISA flags stay private to the implementation.
 LTO modes and linker names are validated at configure time. CUDA builds require
 LTO off. Explicit per-target linkers require a GNU compiler driver; MSVC and
 clang-cl use the linker selected by their toolchain file. Sanitizer and coverage runtimes propagate to static-library consumers;

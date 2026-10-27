@@ -211,7 +211,7 @@ The generated suppression list is protected by `_xsigma_sanitizer_blacklist_conf
 
 The ISA cache property offers choices but never validates the actual value. Defaults select AVX2 for all listed x86 processors and NEON for arm64. Processor-family detection does not establish runtime CPU capability. The x86 flags are PUBLIC, so they also constrain consumers and are exported. Native MSVC receives the selection macro but no corresponding `/arch:` option. macOS universal or alternate-architecture builds are not represented by one host-family choice.
 
-**Reproduced:** `LINALG_VECTORIZATION_ISA=typo` configures successfully and fails later in the packet header. Default arm64 NEON builds pass. x86 runtime portability, native MSVC ISA code generation, and universal binaries were not executed locally.
+**Reproduced:** an unrecognized ISA used to configure successfully and fail later in the packet header. `LINALG_CPU_BACKEND` is now rejected at configure unless it is `no`, `sse`, `avx`, `avx2`, `avx512`, `neon`, or `sve`. Default arm64 NEON builds pass. x86 runtime portability, native MSVC ISA code generation, and universal binaries were not executed locally.
 
 **Fix:** validate names and target-architecture compatibility at configure time. Decide and document the supported minimum CPU ISA; use runtime dispatch or a portable default for broadly distributed binaries. Scope ISA flags to implementation files where possible, implement native MSVC flags, and handle multi-architecture outputs explicitly.
 

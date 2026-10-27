@@ -95,6 +95,44 @@ set(LINALG_GPU_BACKEND "none"
     CACHE STRING "GPU backend for LinearAlgebra: none, cuda, hip, metal"
 )
 set_property(CACHE LINALG_GPU_BACKEND PROPERTY STRINGS none cuda hip metal)
+# CI, examples, and the configuration regression tests still pass the boolean
+# switches that LINALG_GPU_BACKEND replaced. Honor one of them when the
+# selector is left at its default.
+set(_linalg_legacy_gpus)
+if(LINALG_ENABLE_CUBLAS)
+    list(APPEND _linalg_legacy_gpus cuda)
+endif()
+if(LINALG_ENABLE_ROCBLAS)
+    list(APPEND _linalg_legacy_gpus hip)
+endif()
+if(LINALG_ENABLE_METAL)
+    list(APPEND _linalg_legacy_gpus metal)
+endif()
+list(LENGTH _linalg_legacy_gpus _linalg_legacy_gpu_count)
+if(_linalg_legacy_gpu_count GREATER 1)
+    message(
+        FATAL_ERROR
+            "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL "
+            "are mutually exclusive"
+    )
+elseif(_linalg_legacy_gpu_count EQUAL 1)
+    list(GET _linalg_legacy_gpus 0 _linalg_legacy_gpu)
+    if(LINALG_GPU_BACKEND STREQUAL "none")
+        set(LINALG_GPU_BACKEND
+            "${_linalg_legacy_gpu}"
+            CACHE STRING "GPU backend for LinearAlgebra: none, cuda, hip, metal" FORCE
+        )
+    elseif(NOT LINALG_GPU_BACKEND STREQUAL "${_linalg_legacy_gpu}")
+        message(
+            FATAL_ERROR
+                "LINALG_GPU_BACKEND=${LINALG_GPU_BACKEND} conflicts with a legacy GPU switch "
+                "selecting ${_linalg_legacy_gpu}"
+        )
+    endif()
+endif()
+unset(_linalg_legacy_gpus)
+unset(_linalg_legacy_gpu_count)
+unset(_linalg_legacy_gpu)
 if(NOT LINALG_GPU_BACKEND MATCHES "^(none|cuda|hip|metal)$")
     message(
         FATAL_ERROR
@@ -116,6 +154,17 @@ if(LINALG_GPU_BACKEND STREQUAL "metal" AND NOT CMAKE_OSX_SYSROOT)
         OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY
     )
     set(CMAKE_OSX_SYSROOT "${_linalg_metal_sdk}" CACHE PATH "Apple SDK used by LinearAlgebra" FORCE)
+endif()
+# Publish the resolved backend under the boolean names examples and tests check.
+set(LINALG_ENABLE_CUBLAS OFF)
+set(LINALG_ENABLE_ROCBLAS OFF)
+set(LINALG_ENABLE_METAL OFF)
+if(LINALG_GPU_BACKEND STREQUAL "cuda")
+    set(LINALG_ENABLE_CUBLAS ON)
+elseif(LINALG_GPU_BACKEND STREQUAL "hip")
+    set(LINALG_ENABLE_ROCBLAS ON)
+elseif(LINALG_GPU_BACKEND STREQUAL "metal")
+    set(LINALG_ENABLE_METAL ON)
 endif()
 
 option(LINALG_BUILD_EXAMPLES "Build the CPU/GPU backend benchmark example" OFF)
@@ -146,6 +195,13 @@ set(LINALG_LTO_MODE "${_lto_default}"
     CACHE STRING "LTO mode for LinearAlgebra: off | thin | full | ipo | auto"
 )
 set_property(CACHE LINALG_LTO_MODE PROPERTY STRINGS off thin full ipo auto)
+# Reject a bad mode before it is copied onto Logging and Scalars, which report
+# their own prefix and hide this project's diagnostic.
+string(TOLOWER "${LINALG_LTO_MODE}" _linalg_lto_mode)
+if(NOT _linalg_lto_mode MATCHES "^(off|thin|full|ipo|auto)$")
+    message(FATAL_ERROR "Invalid LINALG_LTO_MODE: ${_linalg_lto_mode}")
+endif()
+unset(_linalg_lto_mode)
 
 # Coverage instrumentation — activates -fprofile-instr-generate / --coverage compiler flags for
 # this module only. LTO is automatically skipped when coverage is enabled.
