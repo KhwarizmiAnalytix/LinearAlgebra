@@ -37,12 +37,16 @@ def main():
             "-G",
             "Ninja",
             "-DCMAKE_BUILD_TYPE=Release",
-            "-DBUILD_TESTING=OFF",
+            # CI uses local storage; avoid runner-specific OpenSSL DLLs.
+            "-DDISABLE_SSL=ON",
             f"-DCMAKE_INSTALL_PREFIX={prefix}",
         ],
         check=True,
     )
-    subprocess.run(["cmake", "--build", str(build), "--parallel", "4"], check=True)
+    subprocess.run(
+        ["cmake", "--build", str(build), "--target", "buildcache", "--parallel", "4"],
+        check=True,
+    )
     executable = "buildcache.exe" if os.name == "nt" else "buildcache"
     binaries = [path for path in build.rglob(executable) if path.is_file()]
     if not binaries:
