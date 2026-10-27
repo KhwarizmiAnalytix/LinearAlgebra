@@ -254,8 +254,11 @@ and [configuration flags](https://cmake.org/cmake/help/latest/variable/CMAKE_LAN
 | `full` | Native MSVC: `/GL` for compilation and `/LTCG` for linking. Otherwise probes `-flto`, then falls back to IPO. |
 | `ipo` | Checks C++ IPO support, then sets `INTERPROCEDURAL_OPTIMIZATION` on the target. |
 
-LTO is skipped when coverage or sanitizers are enabled. Unsupported modes and
-failed probes can warn or fall back; the requested cache mode does not always
+LTO is skipped when coverage or sanitizers are enabled, and that effective
+mode is what bundled Logging and Scalars receive. Shared MSVC builds also keep
+Scalars' LTO off, because that library's Windows export dumper cannot read
+whole-program objects. Unsupported modes and failed probes can warn or fall
+back; the requested cache mode does not always
 equal the effective mode. ThinLTO also needs an appropriate link toolchain, as
 explained by the [Clang ThinLTO documentation](https://clang.llvm.org/docs/ThinLTO.html).
 
@@ -267,11 +270,11 @@ is `ld.lld`, `mold`, `ld.gold` when LTO is requested, and `mold`, `ld.gold`,
 `ld.lld`/`lld`; MSVC-style paths generally retain their existing linker unless
 handled explicitly.
 
-Selected GNU-style linker options are added as PUBLIC `-fuse-ld=<name>` usage
-requirements. The discovered absolute path is reduced to a name. MSVC's explicit
-`lld-link` handling sets `CMAKE_LINKER`. For MSVC-style Clang the helper returns
-without applying a discovered linker in `_xsigma_apply_fuse`; do not assume that
-its printed choice changed the actual linker.
+Selected GNU-style linker options are PRIVATE on the configured target. Clang
+receives an explicit `lld` choice as `-fuse-ld=lld`, so it selects `ld.lld`
+instead of executing the multi-call `lld` driver. Other discovered Clang
+linkers keep their absolute path. GCC passes `-B<directory> -fuse-ld=<name>`.
+MSVC-style Clang does not get a GNU `-fuse-ld` option.
 
 Source: [LTO and linker helper](../Cmake/lto.cmake).
 

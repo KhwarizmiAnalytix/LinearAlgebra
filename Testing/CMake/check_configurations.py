@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -419,6 +420,52 @@ class ConfigurationChecks(unittest.TestCase):
                 ["-DCMAKE_DISABLE_FIND_PACKAGE_Threads=ON"],
                 error="REQUIRED",
             )
+
+    def test_bundled_dependencies_follow_effective_lto(self):
+        def probe(name, sanitizer, linker):
+            build = self.configure(
+                name,
+                "set(LINALG_LTO_MODE full)\n"
+                f"set(LINALG_ENABLE_SANITIZER {sanitizer})\n"
+                "set(LINALG_ENABLE_COVERAGE OFF)\n"
+                f"set(LINALG_LINKER_CHOICE {linker})\n"
+                "set(BUILD_SHARED_LIBS ON)\n"
+                'include("${LINALG_SOURCE_DIR}/Cmake/lto.cmake")\n'
+                "linalg_dependency_lto_mode(dep_lto)\n"
+                "linalg_scalars_lto_mode(scalars_lto)\n"
+                "linalg_scalars_linker_choice(scalars_link)\n"
+                'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/forwarded.txt" '
+                '"${dep_lto} ${scalars_lto} ${scalars_link}")\n',
+            )
+            return (build / "forwarded.txt").read_text().strip()
+
+        self.assertEqual(probe("dependency-lto-skipped", "ON", "lld"), "off off default")
+        self.assertEqual(
+            probe("dependency-lto-requested", "OFF", "mold"), "full full mold"
+        )
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "the lld driver bug shows up on Linux")
+    def test_clang_lld_selection_uses_the_frontend_name(self):
+        clang = shutil.which("clang++")
+        if clang is None or (
+            shutil.which("ld.lld") is None and shutil.which("lld") is None
+        ):
+            self.skipTest("clang++ and lld are not both installed")
+        build = self.configure(
+            "clang-lld",
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int probe() { return 1; }")\n'
+            'add_library(probe STATIC "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n'
+            "set(LINALG_LTO_MODE off)\n"
+            'include("${LINALG_SOURCE_DIR}/Cmake/lto.cmake")\n'
+            "linalg_target_apply_lto(probe LINALG)\n"
+            "linalg_find_linker(lld probe)\n"
+            "get_target_property(options probe LINK_OPTIONS)\n"
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/link-options.txt" "${options}")\n',
+            [f"-DCMAKE_CXX_COMPILER={clang}"],
+        )
+        options = (build / "link-options.txt").read_text()
+        self.assertIn("-fuse-ld=lld", options)
+        self.assertNotIn("/lld", options)
 
     def test_invalid_isa_and_lto_fail_at_configure(self):
         for option, error in [

@@ -634,9 +634,11 @@ if(NOT TARGET Logging::Logging)
             set(LOGGING_ENABLE_COVERAGE OFF)
             set(LOGGING_ENABLE_SPELL OFF)
             set(LOGGING_ENABLE_VALGRIND OFF)
-            foreach(_linalg_log_setting IN ITEMS CACHE_BACKEND SANITIZER_TYPE LINKER_CHOICE LTO_MODE)
+            foreach(_linalg_log_setting IN ITEMS CACHE_BACKEND SANITIZER_TYPE LINKER_CHOICE)
                 set(LOGGING_${_linalg_log_setting} "${LINALG_${_linalg_log_setting}}")
             endforeach()
+            linalg_dependency_lto_mode(_linalg_logging_lto)
+            set(LOGGING_LTO_MODE "${_linalg_logging_lto}")
             set(XSIGMA_ENABLE_EXTERNAL "${LINALG_ENABLE_EXTERNAL}")
             # Loguru treats an empty CMAKE_DL_LIBS as missing stack-trace
             # support. macOS supplies dladdr in libSystem and a libdl stub;
@@ -701,9 +703,13 @@ if(NOT TARGET Scalars::Scalars)
             set(SCALARS_ENABLE_COVERAGE OFF)
             set(SCALARS_ENABLE_SPELL OFF)
             set(SCALARS_ENABLE_VALGRIND OFF)
-            foreach(_linalg_sc_setting IN ITEMS CACHE_BACKEND SANITIZER_TYPE LINKER_CHOICE LTO_MODE)
+            foreach(_linalg_sc_setting IN ITEMS CACHE_BACKEND SANITIZER_TYPE)
                 set(SCALARS_${_linalg_sc_setting} "${LINALG_${_linalg_sc_setting}}")
             endforeach()
+            linalg_scalars_lto_mode(_linalg_scalars_lto)
+            linalg_scalars_linker_choice(_linalg_scalars_linker)
+            set(SCALARS_LTO_MODE "${_linalg_scalars_lto}")
+            set(SCALARS_LINKER_CHOICE "${_linalg_scalars_linker}")
 
             linalg_add_dependency_subdirectory(
                 "${LINALG_SOURCE_DIR}/ThirdParty/Scalars"

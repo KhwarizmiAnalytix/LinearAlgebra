@@ -228,7 +228,14 @@ function(_linalg_apply_fuse target path)
         string(REGEX REPLACE "\\.exe$" "" _s "${_b}")
         string(REPLACE "ld." "" _s "${_s}")
         if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-            target_link_options("${target}" PRIVATE "-fuse-ld=${path}")
+            # The absolute path of the multi-call `lld` driver is not a linker:
+            # Clang executes it and it exits with "Invoke ld.lld instead".
+            # `-fuse-ld=lld` makes Clang select ld.lld itself.
+            if(_s STREQUAL "lld")
+                target_link_options("${target}" PRIVATE "-fuse-ld=lld")
+            else()
+                target_link_options("${target}" PRIVATE "-fuse-ld=${path}")
+            endif()
         else()
             get_filename_component(_link_dir "${path}" DIRECTORY)
             target_link_options("${target}" PRIVATE "-B${_link_dir}" "-fuse-ld=${_s}")
@@ -241,7 +248,12 @@ endfunction()
 function(_linalg_pick_link linker_choice target lto_on)
     set(_path "")
     if(NOT linker_choice STREQUAL "default")
-        find_program(_e NAMES "${linker_choice}" "ld.${linker_choice}" "${linker_choice}-link")
+        if(linker_choice STREQUAL "lld")
+            # Search the ELF frontend before the multi-call `lld` driver.
+            find_program(_e NAMES "ld.lld" "lld" "lld-link")
+        else()
+            find_program(_e NAMES "${linker_choice}" "ld.${linker_choice}" "${linker_choice}-link")
+        endif()
         if(_e)
             set(_path "${_e}")
             message(STATUS "Linker: explicit '${linker_choice}'")
@@ -313,4 +325,37 @@ function(linalg_find_linker linker_choice target_name)
         set(_lto TRUE)
     endif()
     _linalg_pick_link("${linker_choice}" "${target_name}" ${_lto})
+endfunction()
+
+# LTO mode to forward to bundled dependencies. Coverage and sanitizers skip
+# LTO on LinearAlgebra; forwarding the requested mode would publish -flto from
+# static archives into those links and would turn LTO back on next to sccache.
+function(linalg_dependency_lto_mode out_var)
+    set(_mode "${LINALG_LTO_MODE}")
+    string(TOLOWER "${_mode}" _mode)
+    if(LINALG_ENABLE_COVERAGE OR LINALG_ENABLE_SANITIZER OR _mode STREQUAL "")
+        set(_mode "off")
+    endif()
+    set(${out_var} "${_mode}" PARENT_SCOPE)
+endfunction()
+
+# Scalars exports a shared MSVC library with WINDOWS_EXPORT_ALL_SYMBOLS.
+# CMake's export dumper cannot parse the LTCG objects /GL and IPO produce.
+function(linalg_scalars_lto_mode out_var)
+    linalg_dependency_lto_mode(_mode)
+    if(BUILD_SHARED_LIBS AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND NOT _mode STREQUAL "off")
+        set(_mode "off")
+    endif()
+    set(${out_var} "${_mode}" PARENT_SCOPE)
+endfunction()
+
+# Scalars passes -fuse-ld=<absolute path>. find_program("lld") returns the
+# multi-call driver, which cannot link. Its default search prefers ld.lld
+# when LTO is enabled and another real linker otherwise.
+function(linalg_scalars_linker_choice out_var)
+    set(_choice "${LINALG_LINKER_CHOICE}")
+    if(_choice STREQUAL "" OR _choice STREQUAL "lld")
+        set(_choice "default")
+    endif()
+    set(${out_var} "${_choice}" PARENT_SCOPE)
 endfunction()
