@@ -1,8 +1,0 @@
-name: Checkout submodules with retry
-description: Fetch pinned recursive submodules with backoff for temporary hosting failures.
-runs:
-  using: composite
-  steps:
-    - name: Fetch submodules
-      shell: bash
-      run: bash "$GITHUB_ACTION_PATH/checkout.sh"
