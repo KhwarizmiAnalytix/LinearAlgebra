@@ -435,14 +435,19 @@ class ConfigurationChecks(unittest.TestCase):
                 "linalg_scalars_lto_mode(scalars_lto)\n"
                 "linalg_scalars_linker_choice(scalars_link)\n"
                 'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/forwarded.txt" '
-                '"${dep_lto} ${scalars_lto} ${scalars_link}")\n',
+                '"${dep_lto} ${scalars_lto} ${scalars_link} '
+                '${CMAKE_CXX_COMPILER_ID}")\n',
             )
-            return (build / "forwarded.txt").read_text().strip()
+            return (build / "forwarded.txt").read_text().strip().split()
 
-        self.assertEqual(probe("dependency-lto-skipped", "ON", "lld"), "off off default")
         self.assertEqual(
-            probe("dependency-lto-requested", "OFF", "mold"), "full full mold"
+            probe("dependency-lto-skipped", "ON", "lld")[:3], ["off", "off", "default"]
         )
+        forwarded = probe("dependency-lto-requested", "OFF", "mold")
+        # Shared MSVC Scalars uses WINDOWS_EXPORT_ALL_SYMBOLS. CMake cannot
+        # dump symbols from the LTCG objects that /GL and IPO produce.
+        scalars_lto = "off" if forwarded[3] == "MSVC" else "full"
+        self.assertEqual(forwarded[:3], ["full", scalars_lto, "mold"])
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "the lld driver bug shows up on Linux")
     def test_clang_lld_selection_uses_the_frontend_name(self):
