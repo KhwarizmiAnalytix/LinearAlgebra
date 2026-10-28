@@ -877,6 +877,15 @@ if(LINALG_GPU_BACKEND STREQUAL "cuda")
             PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
                     $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
         )
+    elseif(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+        # GCC 12+ pulls in amxtileintrin.h via the AVX header chain when -mavx2
+        # is active. The builtins it uses (__builtin_ia32_ldtilecfg etc.) are
+        # undefined in nvcc's EDG device front-end, causing build failures.
+        # Pass -mno-amx-tile to the host-compiler pass only to suppress them.
+        target_compile_options(
+            LinearAlgebra PRIVATE
+            $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:-Xcompiler=-mno-amx-tile>
+        )
     endif()
 endif()
 
