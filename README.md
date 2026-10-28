@@ -490,6 +490,10 @@ the installed packages. Coverage runs on Linux/macOS/Windows for the native
 backend and on Linux for OpenBLAS/LAPACKE and MKL, with separate report artifacts
 and Codecov flags per backend.
 
+CI fetches pinned recursive submodules in a separate step with up to five
+attempts and delays of 15, 30, 60, and 120 seconds. This lets temporary
+dependency-hosting failures recover; checkout still fails if all attempts fail.
+
 CUDA is compiled without a GPU on Linux and Windows. Linux additionally
 compiles CUDA with OpenBLAS, MKL, and the example requiring all three backends.
 GPU runtime tests run on pushes

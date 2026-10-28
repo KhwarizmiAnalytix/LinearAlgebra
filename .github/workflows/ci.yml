@@ -29,8 +29,7 @@ jobs:
       CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja + Clang (Linux)
         if: runner.os == 'Linux'
@@ -61,8 +60,7 @@ jobs:
       BLIS_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libopenblas-dev liblapacke-dev
       - name: Configure
@@ -89,8 +87,7 @@ jobs:
         os: [ubuntu-22.04, macos-14, windows-2022]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - name: Configure MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -114,8 +111,7 @@ jobs:
       MKL_SHARED: ${{ matrix.shared }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja + Clang
         run: sudo apt-get update && sudo apt-get install -y ninja-build clang gpg wget libopenblas-dev liblapacke-dev
@@ -159,8 +155,7 @@ jobs:
       MKL_SHARED: ${{ matrix.shared }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -212,8 +207,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja + Clang + OpenBLAS/LAPACKE (Linux)
         if: runner.os == 'Linux'
@@ -253,8 +247,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
       - run: cmake -S . -B build-memcheck -G Ninja -DLINALG_ENABLE_VALGRIND=ON
       - run: cmake --build build-memcheck --parallel 4
@@ -269,8 +262,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja + Clang (Linux)
         if: runner.os == 'Linux'
@@ -298,8 +290,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja + Clang (Linux)
         if: runner.os == 'Linux'
@@ -356,8 +347,7 @@ jobs:
           cmake --version
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Intel oneMKL for combined backend cases
         if: matrix.mkl == 'ON'
@@ -399,8 +389,7 @@ jobs:
       CXX: cl
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -456,8 +445,7 @@ jobs:
           cmake --version
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Intel oneMKL for combined backend cases
         if: matrix.mkl == 'ON'
@@ -501,8 +489,7 @@ jobs:
       OBJCXX: clang++
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -540,8 +527,7 @@ jobs:
             backend: neon
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja (Linux)
         if: runner.os == 'Linux'
@@ -602,8 +588,7 @@ jobs:
           python3 -m pip install "cmake>=3.24,<4"
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Verify GPU access
         run: nvidia-smi
@@ -638,8 +623,7 @@ jobs:
           python3 -m pip install "cmake>=3.24,<4"
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Verify GPU access
         run: rocm-smi
@@ -677,8 +661,7 @@ jobs:
             instrumentation: coverage
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install Ninja (Linux)
         if: runner.os == 'Linux'
@@ -741,8 +724,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: bazelbuild/setup-bazelisk@v3
 
@@ -791,8 +773,7 @@ jobs:
       CXX: ${{ matrix.os == 'ubuntu-latest' && 'g++' || '' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - name: Install tools (Linux)
         if: matrix.os == 'ubuntu-latest'

@@ -44,7 +44,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check matrix generator and coverage inventory
-        run: python -m unittest discover -s Testing/CMake -p test_flag_matrix.py -v
+        run: |
+          python -m unittest discover -s Testing/CMake -p test_flag_matrix.py -v
+          python -m unittest discover -s Testing/CMake -p test_submodule_checkout.py -v
       - name: Generate constrained combinations
         id: generate
         env:
@@ -79,8 +81,7 @@ jobs:
       ICECC: 'no'
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -185,8 +186,7 @@ jobs:
       CXX: ${{ matrix.cxx }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'

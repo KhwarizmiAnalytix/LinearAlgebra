@@ -24,8 +24,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: ./.github/actions/checkout-submodules
 
       - uses: actions/setup-python@v7
         with:
