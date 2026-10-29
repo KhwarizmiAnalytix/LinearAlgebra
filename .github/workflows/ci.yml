@@ -41,13 +41,13 @@ jobs:
         run: brew install ninja
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja --build-type=Release
 
       - name: Build
-        run: cmake --build build -j
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --parallel=4
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
 
       - name: Configuration regression checks
         run: python3 Testing/CMake/check_configurations.py
@@ -67,13 +67,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ninja-build libopenblas-dev liblapacke-dev
       - name: Configure
         run: >-
-          cmake -S . -B build-eigen -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DLINALG_ENABLE_BENCHMARK=ON
-          -DLINALG_ENABLE_BLAS=ON -DLINALG_LTO_MODE=off
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-eigen --generator Ninja --build-type=Release
+          --benchmark=ON
+          --blas=ON --lto-mode=off
       - name: Build
-        run: cmake --build build-eigen --parallel 2
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-eigen --parallel 2
       - name: Test
-        run: ctest --test-dir build-eigen -L Unit --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-eigen --test-label Unit
       - name: Benchmark smoke checks
         run: |
           for operation in multiplication ludecomposition qrdecomposition choleskydecomposition svddecomposition eigen; do
@@ -95,11 +95,11 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
-        run: cmake -S . -B build-baseline -G Ninja -C .github/cmake/minimum-options.cmake
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-baseline --generator Ninja --preload-file .github/cmake/minimum-options.cmake
       - name: Build
-        run: cmake --build build-baseline --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-baseline --parallel 4
       - name: Test
-        run: ctest --test-dir build-baseline --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-baseline
 
   cmake-mkl:
     name: CMake (Linux, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
@@ -131,17 +131,17 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S . -B build-mkl -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DLINALG_ENABLE_MKL=ON \
-            -DLINALG_ENABLE_BLAS="$MKL_BLAS" -DBLA_VENDOR=OpenBLAS \
-            -DBUILD_SHARED_LIBS="$MKL_SHARED" \
-            -DCMAKE_PREFIX_PATH=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-mkl --generator Ninja --build-type=Release \
+            --mkl=ON \
+            --blas="$MKL_BLAS" --blas-vendor=OpenBLAS \
+            --shared="$MKL_SHARED" \
+            --prefix-path=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
 
       - name: Build
-        run: cmake --build build-mkl -j
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-mkl --parallel=4
 
       - name: Test
-        run: ctest --test-dir build-mkl --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-mkl
 
   cmake-mkl-windows:
     name: CMake (Windows, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
@@ -193,14 +193,14 @@ jobs:
       - name: Configure, build, and test both vendor interfaces
         shell: pwsh
         run: |
-          cmake -S . -B build-mkl -G Ninja -DCMAKE_BUILD_TYPE=Release `
-            -DLINALG_ENABLE_MKL=ON "-DMKL_DIR=$env:MKL_DIR" `
-            "-DLINALG_ENABLE_BLAS=$env:MKL_BLAS" -DBLA_VENDOR=OpenBLAS `
-            "-DBUILD_SHARED_LIBS=$env:MKL_SHARED"
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-mkl --generator Ninja --build-type=Release `
+            --mkl=ON "--mkl-dir=$env:MKL_DIR" `
+            "--blas=$env:MKL_BLAS" --blas-vendor=OpenBLAS `
+            "--shared=$env:MKL_SHARED"
           if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
-          cmake --build build-mkl --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-mkl --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-          ctest --test-dir build-mkl --output-on-failure --no-tests=error
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-mkl
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
 
   cmake-blas:
@@ -229,24 +229,24 @@ jobs:
         # Accelerate (GEMM/transpose only, no LAPACKE) instead.
         run: |
           brew install ninja openblas
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix openblas)" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --install-prefix openblas)" >> "$GITHUB_ENV"
 
       - name: Configure
-        run: cmake -S . -B build-blas -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINALG_ENABLE_BLAS=ON
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-blas --generator Ninja --build-type=Release --blas=ON
 
       - name: Build
-        run: cmake --build build-blas -j
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-blas --parallel=4
 
       - name: Test
-        run: ctest --test-dir build-blas --output-on-failure
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-blas
 
       - name: Explicit Accelerate with OpenBLAS installed (macOS)
         if: runner.os == 'macOS'
         run: |
-          cmake -S . -B build-accelerate -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DLINALG_ENABLE_BLAS=ON -DBLA_VENDOR=Apple
-          cmake --build build-accelerate --parallel 4
-          ctest --test-dir build-accelerate --output-on-failure --no-tests=error
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-accelerate --generator Ninja --build-type=Release \
+            --blas=ON --blas-vendor=Apple
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-accelerate --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-accelerate
 
   cmake-valgrind:
     name: CTest Valgrind dashboard
@@ -256,9 +256,9 @@ jobs:
         with:
           submodules: recursive
       - run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
-      - run: cmake -S . -B build-memcheck -G Ninja -DLINALG_ENABLE_VALGRIND=ON
-      - run: cmake --build build-memcheck --parallel 4
-      - run: ctest --test-dir build-memcheck -T memcheck --output-on-failure --no-tests=error
+      - run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-memcheck --generator Ninja --valgrind=ON
+      - run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-memcheck --parallel 4
+      - run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-memcheck --memcheck
 
   cmake-lu-pivoting:
     name: CMake (${{ matrix.os }}, LU pivoting)
@@ -281,13 +281,13 @@ jobs:
         run: brew install ninja
 
       - name: Configure
-        run: cmake -S . -B build-lupivot -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINALG_LU_PIVOTING=ON
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-lupivot --generator Ninja --build-type=Release --lu-pivoting=ON
 
       - name: Build
-        run: cmake --build build-lupivot -j
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-lupivot --parallel=4
 
       - name: Test
-        run: ctest --test-dir build-lupivot --output-on-failure
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-lupivot
 
   sanitizer:
     name: Sanitizer (${{ matrix.os }}, ASan+UBSan)
@@ -311,15 +311,15 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-san -G Ninja -DCMAKE_BUILD_TYPE=Debug
-          -DLINALG_ENABLE_SANITIZER=ON
-          -DLINALG_SANITIZER_TYPE=address,undefined
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-san --generator Ninja --build-type=Debug
+          --sanitizer=ON
+          --sanitizer-types=address,undefined
 
       - name: Build
-        run: cmake --build build-san -j
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-san --parallel=4
 
       - name: Test
-        run: ctest --test-dir build-san --output-on-failure
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-san
 
   cuda-compile:
     name: CUDA (Linux, BLAS=${{ matrix.blas }}, MKL=${{ matrix.mkl }}, examples=${{ matrix.examples }})
@@ -378,17 +378,17 @@ jobs:
         # see docs/backend_roadmap.md §7 on that remaining manual,
         # on-hardware check.
         run: >
-          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DLINALG_ENABLE_CUBLAS=ON
-          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
-          -DLINALG_ENABLE_BLAS="$CUDA_BLAS" -DBLA_VENDOR=OpenBLAS
-          -DLINALG_ENABLE_MKL="$CUDA_MKL"
-          -DLINALG_BUILD_EXAMPLES="$CUDA_EXAMPLES"
-          -DCMAKE_PREFIX_PATH=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
-          -DCMAKE_CUDA_ARCHITECTURES=75
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release
+          --cublas=ON
+          --lto-mode=off --cxx-standard=20
+          --blas="$CUDA_BLAS" --blas-vendor=OpenBLAS
+          --mkl="$CUDA_MKL"
+          --examples="$CUDA_EXAMPLES"
+          --prefix-path=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
+          --cuda-architectures=75
 
       - name: Build
-        run: cmake --build build-cuda --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
 
   cuda-windows:
     name: CUDA (Windows compile-only)
@@ -413,11 +413,11 @@ jobs:
       - name: Configure and compile GPU targets without executing GPU workloads
         shell: pwsh
         run: |
-          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release `
-            -DLINALG_ENABLE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=75 `
-            -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release `
+            --cublas=ON --cuda-architectures=75 `
+            --lto-mode=off --cxx-standard=20
           if ($LASTEXITCODE -ne 0) { throw 'CUDA configure failed' }
-          cmake --build build-cuda --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'CUDA build failed' }
 
   hip-compile:
@@ -479,17 +479,17 @@ jobs:
         # docs/backend_roadmap.md §7 on that remaining manual, on-hardware
         # check.
         run: >
-          cmake -S . -B build-hip -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DLINALG_ENABLE_ROCBLAS=ON
-          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
-          -DLINALG_ENABLE_BLAS="$HIP_BLAS" -DBLA_VENDOR=OpenBLAS
-          -DLINALG_ENABLE_MKL="$HIP_MKL"
-          -DLINALG_BUILD_EXAMPLES="$HIP_EXAMPLES"
-          -DCMAKE_PREFIX_PATH="/opt/intel/oneapi/mkl/latest/lib/cmake/mkl;/opt/rocm"
-          -DCMAKE_HIP_ARCHITECTURES=gfx1100
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-hip --generator Ninja --build-type=Release
+          --rocblas=ON
+          --lto-mode=off --cxx-standard=20
+          --blas="$HIP_BLAS" --blas-vendor=OpenBLAS
+          --mkl="$HIP_MKL"
+          --examples="$HIP_EXAMPLES"
+          --prefix-path="/opt/intel/oneapi/mkl/latest/lib/cmake/mkl;/opt/rocm"
+          --hip-architectures=gfx1100
 
       - name: Build
-        run: cmake --build build-hip --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-hip --parallel 4
 
   metal-compile:
     name: Metal (macOS compile-only)
@@ -512,12 +512,12 @@ jobs:
         # Compile the Metal bridge and GPU tests without requiring a GPU on
         # the hosted runner. Runtime validation needs a Metal-capable host.
         run: >
-          cmake -S . -B build-metal -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DLINALG_ENABLE_METAL=ON
-          -DLINALG_LTO_MODE=off -DLINALG_CXX_STANDARD=20
-          -DBUILD_TESTING=ON -DLINALG_ENABLE_TESTING=ON -DLINALG_ENABLE_GTEST=ON
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-metal --generator Ninja --build-type=Release
+          --metal=ON
+          --lto-mode=off --cxx-standard=20
+          --build-testing=ON --testing=ON --gtest=ON
       - name: Build
-        run: cmake --build build-metal --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-metal --parallel 4
 
   simd:
     name: SIMD (${{ matrix.backend }})
@@ -556,11 +556,11 @@ jobs:
           SIMD_BACKEND: ${{ matrix.backend }}
         shell: bash
         run: |
-          cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DLINALG_CPU_BACKEND="$SIMD_BACKEND"
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-simd --generator Ninja --build-type=Release \
+            --cpu-backend="$SIMD_BACKEND"
 
       - name: Build
-        run: cmake --build build-simd --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-simd --parallel 4
 
       - name: Test when the runner supports the ISA
         env:
@@ -582,7 +582,7 @@ jobs:
               exit 0
             fi
           done
-          ctest --test-dir build-simd --output-on-failure --no-tests=error
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-simd
 
   cuda-runtime:
     name: CUDA (GPU runtime)
@@ -610,14 +610,14 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-gpu -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DLINALG_ENABLE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=native
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          --cublas=ON --cuda-architectures=native
 
       - name: Build
-        run: cmake --build build-gpu --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: ctest --test-dir build-gpu --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
 
   hip-runtime:
     name: HIP (GPU runtime)
@@ -646,15 +646,15 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-gpu -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DLINALG_ENABLE_ROCBLAS=ON -DCMAKE_HIP_ARCHITECTURES=native
-          -DCMAKE_PREFIX_PATH=/opt/rocm
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          --rocblas=ON --hip-architectures=native
+          --prefix-path=/opt/rocm
 
       - name: Build
-        run: cmake --build build-gpu --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: ctest --test-dir build-gpu --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
 
   install-consumer:
     name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }}, ${{ matrix.instrumentation }})
@@ -703,34 +703,34 @@ jobs:
           fi
           instrumentation_flags=()
           if [[ "$INSTRUMENTATION" == address ]]; then
-            instrumentation_flags=(-DLINALG_ENABLE_SANITIZER=ON)
+            instrumentation_flags=(--sanitizer=ON)
           elif [[ "$INSTRUMENTATION" == coverage ]]; then
-            instrumentation_flags=(-DLINALG_ENABLE_COVERAGE=ON)
+            instrumentation_flags=(--coverage=ON)
           fi
-          cmake -S ThirdParty/Logging -B build-logging-install -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS="$BUILD_SHARED" \
-            -DLOGGING_ENABLE_TESTING=OFF -DLOGGING_ENABLE_BENCHMARK=OFF \
-            -DLOGGING_ENABLE_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$package_prefix" \
-            -DCMAKE_INSTALL_RPATH="$runtime_origin"
-          cmake --build build-logging-install --parallel 4
-          cmake --install build-logging-install
-          cmake -S . -B build-install -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS="$BUILD_SHARED" -DLINALG_ENABLE_TESTING=OFF \
-            -DLINALG_USE_SYSTEM_LOGGING=ON -DCMAKE_PREFIX_PATH="$package_prefix" \
-            -DCMAKE_INSTALL_LIBDIR=customlib -DCMAKE_INSTALL_INCLUDEDIR=custominclude \
-            -DCMAKE_INSTALL_PREFIX="$package_prefix" -DCMAKE_INSTALL_RPATH="$runtime_origin/../lib" \
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir ThirdParty/Logging --build-dir build-logging-install --generator Ninja \
+            --build-type=Release --shared="$BUILD_SHARED" \
+            --logging-testing=OFF --logging-benchmark=OFF \
+            --logging-examples=OFF --install-prefix="$package_prefix" \
+            --install-rpath="$runtime_origin"
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-logging-install --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-logging-install
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-install --generator Ninja --build-type=Release \
+            --shared="$BUILD_SHARED" --testing=OFF \
+            --system-logging=ON --prefix-path="$package_prefix" \
+            --install-libdir=customlib --install-includedir=custominclude \
+            --install-prefix="$package_prefix" --install-rpath="$runtime_origin/../lib" \
             "${instrumentation_flags[@]}"
-          cmake --build build-install --parallel 4
-          cmake --install build-install
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-install --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-install
           mv "$package_prefix" "$RUNNER_TEMP/linalg-package-moved"
           package_prefix="$RUNNER_TEMP/linalg-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
-          cp -R Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
-          cmake -S "$RUNNER_TEMP/linalg-consumer" -B "$RUNNER_TEMP/linalg-consumer-build" \
-            -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$package_prefix" \
-            -DLinearAlgebra_DIR="$package_prefix/customlib/cmake/LinearAlgebra"
-          cmake --build "$RUNNER_TEMP/linalg-consumer-build" --parallel 4
-          ctest --test-dir "$RUNNER_TEMP/linalg-consumer-build" --output-on-failure --no-tests=error
+          cp --test-filter Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/linalg-consumer" --build-dir "$RUNNER_TEMP/linalg-consumer-build" \
+            --generator Ninja --build-type=Release --prefix-path="$package_prefix" \
+            --package-dir="$package_prefix/customlib/cmake/LinearAlgebra"
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir "$RUNNER_TEMP/linalg-consumer-build" --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir "$RUNNER_TEMP/linalg-consumer-build"
 
   bazel:
     name: Bazel (${{ matrix.os }})
@@ -758,7 +758,7 @@ jobs:
         # //:LinearAlgebra), not run as a test suite — CMake's equivalent
         # add_subdirectory(ThirdParty/Logging) likewise builds it with its
         # own testing disabled.
-        run: bazel test //Testing/...
+        run: python3 "${{ github.workspace }}/Scripts/setup_bazel.py" test --compiler=default --compilation-mode=fastbuild --target=//Testing/...
 
   # ---------------------------------------------------------------------------
   # Coverage: gcc/gcov+lcov (Linux), Homebrew LLVM/clang (macOS), MSVC/OpenCppCoverage
@@ -816,7 +816,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install ninja llvm
-          LLVM_PREFIX="$(brew --prefix llvm)"
+          LLVM_PREFIX="$(brew --install-prefix llvm)"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           echo "CC=${LLVM_PREFIX}/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=${LLVM_PREFIX}/bin/clang++" >> "$GITHUB_ENV"
@@ -835,21 +835,21 @@ jobs:
       - name: Configure (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          -DLINALG_ENABLE_TESTING=ON
-          -DLINALG_ENABLE_COVERAGE=ON
-          -DLINALG_ENABLE_BLAS=${{ matrix.backend == 'openblas' && 'ON' || 'OFF' }}
-          -DLINALG_ENABLE_MKL=${{ matrix.backend == 'mkl' && 'ON' || 'OFF' }}
-          -DCMAKE_PREFIX_PATH=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja
+          --build-type=Debug
+          --compile-commands=ON
+          --testing=ON
+          --coverage=ON
+          --blas=${{ matrix.backend == 'openblas' && 'ON' || 'OFF' }}
+          --mkl=${{ matrix.backend == 'mkl' && 'ON' || 'OFF' }}
+          --prefix-path=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
 
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
         run: >
-          cmake -S . -B build
-          -DLINALG_ENABLE_TESTING=ON
-          -DLINALG_ENABLE_COVERAGE=ON
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir . --build-dir build
+          --testing=ON
+          --coverage=ON
 
       - name: Verify coverage backend
         if: matrix.os != 'windows-latest'
@@ -874,19 +874,19 @@ jobs:
 
       - name: Build (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: cmake --build build
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
-        run: cmake --build build --config Release
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --build-type Release
 
       - name: Test (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: ctest --test-dir build --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
 
       - name: Test (Windows)
         if: matrix.os == 'windows-latest'
-        run: ctest --test-dir build --build-config Release --output-on-failure
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build --build-type Release
 
       - name: Collect coverage
         run: >

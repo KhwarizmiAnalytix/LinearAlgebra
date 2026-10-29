@@ -23,7 +23,6 @@ import importlib.util
 import os
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -39,12 +38,13 @@ try:
 except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
 
     class Fore:
-        CYAN = GREEN = YELLOW = RED = WHITE = ""
+        BLUE = CYAN = GREEN = YELLOW = RED = WHITE = ""
 
     class Style:
         RESET_ALL = ""
 
 
+from helpers import cli as cli_helper
 from helpers import (
     build as build_helper,
     config as config_helper,
@@ -437,6 +437,14 @@ class LinearAlgebraFlags:
     ON = "ON"
 
     def __init__(self, arg_list):
+        self.requested_build_type = next(
+            (
+                cli_helper.canonical_build_type(arg)
+                for arg in reversed(arg_list)
+                if arg in ("debug", "release", "relwithdebinfo", "minsizerel")
+            ),
+            None,
+        )
         self.__initialize_flags()
         if arg_list:
             self.__build_cmake_flag()
@@ -559,8 +567,8 @@ class LinearAlgebraFlags:
                 "cxxstd": "",  # empty = let CMake use its own default (20)
                 "lto": "",  # empty = let CMake compute the smart per-compiler default
                 "sanitizer_enum": "address",
-                "gpu_backend": "none",   # LINALG_GPU_BACKEND default
-                "cpu_backend": "",       # empty = let CMake pick the platform default
+                "gpu_backend": "none",  # LINALG_GPU_BACKEND default
+                "cpu_backend": "",  # empty = let CMake pick the platform default
             }
         )
 
@@ -579,7 +587,15 @@ class LinearAlgebraFlags:
                 self.builder_suffix += "_static"
             elif arg in sanitizer_list:
                 self.__value["sanitizer"] = self.ON
-                self.__value["sanitizer_enum"] = arg
+                selected = (
+                    self.__value["sanitizer_enum"].split(",")
+                    if getattr(self, "_sanitizer_selected", False)
+                    else []
+                )
+                if arg not in selected:
+                    selected.append(arg)
+                self.__value["sanitizer_enum"] = ",".join(selected)
+                self._sanitizer_selected = True
                 self.builder_suffix += f"_{arg}"
             elif arg.startswith("lto."):
                 lto_modes = ["off", "thin", "full", "ipo", "auto"]
@@ -741,7 +757,7 @@ class LinearAlgebraFlags:
         del (
             system
         )  # unused; kept for parity with the CMake-driven build-type selection below
-        if (
+        if not self.requested_build_type and (
             self.__value.get("valgrind") == self.ON
             or self.__value.get("sanitizer") == self.ON
             or self.__value.get("coverage") == self.ON
@@ -750,9 +766,9 @@ class LinearAlgebraFlags:
                 "Enabling debug build for sanitizer, valgrind, or coverage analysis",
                 "INFO",
             )
-            build_type = "DEBUG"
+            build_type = "Debug"
         else:
-            build_type = str(build_enum).capitalize()
+            build_type = cli_helper.canonical_build_type(build_enum)
 
         for key, value in self.__value.items():
             if key in self.__name:
@@ -787,6 +803,7 @@ class LinearAlgebraConfiguration:
     """Drive config, build, test, and coverage from dotted-token CLI args."""
 
     def __init__(self, args_list):
+        self.source_path = Path(__file__).resolve().parents[1]
         missing_deps = check_dependencies()
         if missing_deps:
             print_status("Missing required dependencies:", "ERROR")
@@ -795,12 +812,23 @@ class LinearAlgebraConfiguration:
             print_status("Please install missing dependencies and try again.", "ERROR")
             sys.exit(1)
 
-        self.error_logger = ErrorLogger()
+        self.error_logger = ErrorLogger(str(self.source_path / "logs"))
         self.summary_reporter = SummaryReporter()
 
         self.__initialize_values()
         self.__linalg_flags = LinearAlgebraFlags(args_list)
+        self.__set_ninja_flags()
         self.__fill_compilation_flags(args_list)
+        self.__value["build_enum"] = self.__linalg_flags.create_cmake_flags(
+            [], self.__value["build_enum"], self.__value["system"]
+        )
+        if self.__compiler_user_specified:
+            compiler = self.__value["cmake_cxx_compiler"].split("=", 1)[-1]
+            self.__value["build_folder"] += "_" + re.sub(
+                r"[^a-zA-Z0-9+-]", "_", Path(compiler).name
+            )
+        if self.__value["build_enum"] != "Release":
+            self.__value["build_folder"] += "_" + self.__value["build_enum"].lower()
 
     def __initialize_values(self):
         default_cxx_compiler = "clang++"
@@ -834,14 +862,8 @@ class LinearAlgebraConfiguration:
         elif self.__is_clang_compiler(arg):
             self.__set_clang_compiler(arg)
         elif arg == "clang-cl":
-            # CMAKE_GENERATOR_TOOLSET=ClangCL only works with VS generators.
-            # With Ninja (the default), pass the compiler directly.
-            if self.__value.get("cmake_generator", "Ninja") == "Ninja":
-                self.__value["cmake_cxx_compiler"] = "-DCMAKE_CXX_COMPILER=clang-cl"
-                self.__value["cmake_c_compiler"] = "-DCMAKE_C_COMPILER=clang-cl"
-            else:
-                self.__value["cmake_cxx_compiler"] = "-DCMAKE_GENERATOR_TOOLSET=ClangCL"
-                self.__value["cmake_c_compiler"] = ""
+            self.__value["cmake_cxx_compiler"] = "-DCMAKE_CXX_COMPILER=clang-cl"
+            self.__value["cmake_c_compiler"] = "-DCMAKE_C_COMPILER=clang-cl"
             self.__compiler_user_specified = True
         elif self.__is_gcc_compiler(arg):
             self.__set_gcc_compiler(arg)
@@ -849,8 +871,8 @@ class LinearAlgebraConfiguration:
             self.__set_visual_studio(arg)
         elif arg in ["config", "build", "test"]:
             self.__value[arg] = arg
-        elif arg in ["release", "debug", "relwithdebinfo"]:
-            self.__value["build_enum"] = arg.capitalize()
+        elif arg in ["release", "debug", "relwithdebinfo", "minsizerel"]:
+            self.__value["build_enum"] = cli_helper.canonical_build_type(arg)
         elif arg in ["vv", "v"]:
             self.__set_verbose_flags()
 
@@ -1071,17 +1093,13 @@ class LinearAlgebraConfiguration:
         return 1
 
     def __shell_flag(self):
-        return self.__value["system"] == "Windows"
+        return False
 
     def move_to_build_folder(self):
-        os.chdir("..")
-        build_folder = self.__value["build_folder"]
-        if os.path.isdir(build_folder) and self.__value.get("config") == "config":
-            shutil.rmtree(build_folder, ignore_errors=True)
-        if not os.path.isdir(build_folder):
-            os.mkdir(build_folder)
+        build_folder = self.source_path / self.__value["build_folder"]
+        build_folder.mkdir(parents=True, exist_ok=True)
         os.chdir(build_folder)
-        return os.getcwd()
+        return str(build_folder)
 
 
 def parse_args(args):
@@ -1128,7 +1146,14 @@ def parse_args(args):
 
 def main():
     """Parse CLI args and drive config/build/test/coverage, or print --help."""
+    forwarded = cli_helper.dispatch(
+        sys.argv[1:], Path(__file__).resolve().parents[1], LinearAlgebraFlags, LinearAlgebraConfiguration, parse_args
+    )
+    if forwarded is not None:
+        sys.exit(forwarded)
+
     if len(sys.argv) == 2 and sys.argv[1] == "--help":
+        cli_helper.print_help()
         print_status("LinearAlgebra Build Configuration Helper", "INFO")
         print("\n" + "=" * 80)
         print("DEFAULT CONFIGURATION:")
@@ -1154,7 +1179,9 @@ def main():
         print("     setup.py config.build.test.blis")
         print("     setup.py config.build.test --gpu_backend.cuda")
         print("     setup.py config.build.test --gpu_backend.hip")
-        print("     setup.py config.build.test --gpu_backend.metal  (macOS, float only)")
+        print(
+            "     setup.py config.build.test --gpu_backend.metal  (macOS, float only)"
+        )
         print("     setup.py config.build.test --cpu_backend.avx2")
         print("\nBuild commands:")
         print("  config    - Configure the build system")
@@ -1179,7 +1206,7 @@ def main():
         print_status(f"Starting build configuration for {platform.system()}", "INFO")
         compilation_calc = LinearAlgebraConfiguration(arg_list)
 
-        source_path = os.path.dirname(os.getcwd())
+        source_path = str(compilation_calc.source_path)
         build_path = compilation_calc.move_to_build_folder()
         print_status(f"Build directory: {build_path}", "INFO")
 
@@ -1191,13 +1218,17 @@ def main():
             compilation_calc.build()
             build_end = time.perf_counter()
 
-            compilation_calc.cppcheck(source_path, build_path)
+            phase_result = compilation_calc.cppcheck(source_path, build_path)
+            if phase_result:
+                sys.exit(phase_result)
             cppcheck_end = time.perf_counter()
 
             test_exit = compilation_calc.test(source_path, build_path)
             test_end = time.perf_counter()
 
-            compilation_calc.coverage(source_path, build_path)
+            phase_result = compilation_calc.coverage(source_path, build_path)
+            if phase_result:
+                sys.exit(phase_result)
             end = time.perf_counter()
 
             print_status(f"Config time: {config_end - start:.4f} seconds", "INFO")

@@ -49,7 +49,12 @@ except ImportError:  # Bazel CI jobs may not pip-install colorama
 
 
 def print_status(message: str, status: str = "INFO") -> None:
-    colors = {"INFO": COLOR_CYAN, "SUCCESS": COLOR_GREEN, "WARNING": COLOR_YELLOW, "ERROR": COLOR_RED}
+    colors = {
+        "INFO": COLOR_CYAN,
+        "SUCCESS": COLOR_GREEN,
+        "WARNING": COLOR_YELLOW,
+        "ERROR": COLOR_RED,
+    }
     print(f"{colors.get(status, COLOR_WHITE)}[{status}]{COLOR_RESET} {message}")
 
 
@@ -103,7 +108,11 @@ def _merge_dotted_segments(parts: list[str]) -> list[str]:
         elif pl[i] == "sanitizer" and i + 1 < len(pl) and pl[i + 1] in _SANITIZER_NAMES:
             out.append(f"sanitizer.{pl[i + 1]}")
             i += 2
-        elif pl[i] == "lto" and i + 1 < len(pl) and pl[i + 1] in ("off", "thin", "full", "ipo", "auto"):
+        elif (
+            pl[i] == "lto"
+            and i + 1 < len(pl)
+            and pl[i + 1] in ("off", "thin", "full", "ipo", "auto")
+        ):
             out.append(f"lto.{pl[i + 1]}")
             i += 2
         elif pl[i] == "linker" and i + 1 < len(pl):
@@ -194,8 +203,18 @@ class LoggingBazelConfiguration:
         for arg in self.args:
             arg_lower = arg.lower()
 
-            if arg_lower in ("clang", "gcc") or "clang" in arg_lower or "gcc" in arg_lower or "g++" in arg_lower:
-                if arg_lower not in ("clangtidy", "clang-tidy", "clang_tidy", "cppcheck"):
+            if (
+                arg_lower in ("clang", "gcc")
+                or "clang" in arg_lower
+                or "gcc" in arg_lower
+                or "g++" in arg_lower
+            ):
+                if arg_lower not in (
+                    "clangtidy",
+                    "clang-tidy",
+                    "clang_tidy",
+                    "cppcheck",
+                ):
                     self._set_compiler(arg_lower)
                     continue
 
@@ -210,7 +229,10 @@ class LoggingBazelConfiguration:
                 if backend in _BACKEND_NAMES:
                     self.logging_backend = backend
                 else:
-                    print_status(f"Invalid logging backend '{backend}'. Use native, loguru, glog, or spdlog.", "ERROR")
+                    print_status(
+                        f"Invalid logging backend '{backend}'. Use native, loguru, glog, or spdlog.",
+                        "ERROR",
+                    )
                     sys.exit(1)
             elif arg_lower in ("shared", "static"):
                 # CMake's BUILD_SHARED_LIBS defaults ON for this repo; Bazel's own
@@ -233,7 +255,9 @@ class LoggingBazelConfiguration:
                 self.sanitizer = arg_lower.split(".", 1)[1]
                 self._cmake_only(arg_lower)
             elif arg_lower.startswith("lto"):
-                self.lto_mode = arg_lower.split(".", 1)[1] if "." in arg_lower else "auto"
+                self.lto_mode = (
+                    arg_lower.split(".", 1)[1] if "." in arg_lower else "auto"
+                )
                 self._cmake_only(arg_lower)
             elif arg_lower.startswith("linker."):
                 self.linker = arg_lower.split(".", 1)[1]
@@ -345,7 +369,9 @@ class LoggingBazelConfiguration:
 
         return flags
 
-    def build_bazel_command(self, action: str, extra_flags: Optional[list[str]] = None) -> list[str]:
+    def build_bazel_command(
+        self, action: str, extra_flags: Optional[list[str]] = None
+    ) -> list[str]:
         """Build the Bazel command with all configurations.
 
         `extra_flags` (e.g. --test_output=...) must land before the targets:
@@ -371,7 +397,10 @@ class LoggingBazelConfiguration:
         for proc_name in ["bazel-real.exe", "bazel.exe"]:
             try:
                 result = subprocess.run(
-                    ["taskkill", "/F", "/IM", proc_name], capture_output=True, timeout=10, check=False
+                    ["taskkill", "/F", "/IM", proc_name],
+                    capture_output=True,
+                    timeout=10,
+                    check=False,
                 )
                 if result.returncode == 0:
                     print_status(f"Killed stale process: {proc_name}", "WARNING")
@@ -381,14 +410,27 @@ class LoggingBazelConfiguration:
     def _shutdown_bazel_for_batch(self) -> None:
         if not self.use_batch:
             return
-        print_status("Running `bazel shutdown` before `--batch` (avoids startup-option mismatch).", "INFO")
+        print_status(
+            "Running `bazel shutdown` before `--batch` (avoids startup-option mismatch).",
+            "INFO",
+        )
         try:
-            subprocess.run(bazel_prefix() + ["shutdown"], capture_output=True, text=True, timeout=120, check=False)
+            subprocess.run(
+                bazel_prefix() + ["shutdown"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
 
     def _on_off(self, condition: bool) -> str:
-        return f"{COLOR_GREEN}ON{COLOR_RESET}" if condition else f"{COLOR_RED}OFF{COLOR_RESET}"
+        return (
+            f"{COLOR_GREEN}ON{COLOR_RESET}"
+            if condition
+            else f"{COLOR_RED}OFF{COLOR_RESET}"
+        )
 
     def _na(self) -> str:
         return f"{COLOR_YELLOW}N/A (CMake-only){COLOR_RESET}"
@@ -406,7 +448,12 @@ class LoggingBazelConfiguration:
         self._pf("Platform", self.system)
         self._pf("Compiler", (self.compiler or "clang").upper())
         self._pf("Build type", self.build_type.upper())
-        self._pf("Cxx standard", self.cxx_standard.replace("cxx", "C++") if self.cxx_standard else "C++20 (default)")
+        self._pf(
+            "Cxx standard",
+            self.cxx_standard.replace("cxx", "C++")
+            if self.cxx_standard
+            else "C++20 (default)",
+        )
 
         print(f"\n{COLOR_CYAN}Logging module (Bazel flags):{COLOR_RESET}")
         self._pf("Backend", (self.logging_backend or "loguru").upper())
@@ -434,7 +481,11 @@ class LoggingBazelConfiguration:
         self._pf("Lto", self._na() if self.lto_mode else self._on_off(False))
 
         if self.run_build or self.run_tests or self.run_coverage:
-            action = "test" if self.run_tests else ("coverage" if self.run_coverage else "build")
+            action = (
+                "test"
+                if self.run_tests
+                else ("coverage" if self.run_coverage else "build")
+            )
             cmd = self.build_bazel_command(action)
             print(f"\n{COLOR_CYAN}Bazel Command:{COLOR_RESET}")
             print(f"  {' '.join(cmd)}")
@@ -450,7 +501,9 @@ class LoggingBazelConfiguration:
         print_status("Cleaning Bazel build artifacts...", "INFO")
         try:
             start_time = time.time()
-            subprocess.run(bazel_prefix() + ["clean", "--expunge"], check=True, timeout=300)
+            subprocess.run(
+                bazel_prefix() + ["clean", "--expunge"], check=True, timeout=300
+            )
             elapsed = time.time() - start_time
             self.timing_data["clean"] = elapsed
             print_status(f"Clean completed successfully ({elapsed:.2f}s)", "SUCCESS")
@@ -475,12 +528,17 @@ class LoggingBazelConfiguration:
             self.timing_data["build"] = elapsed
             print_status(f"Build completed successfully ({elapsed:.2f}s)", "SUCCESS")
             if elapsed > self.slow_phase_warn_seconds:
-                print_status(f"Build took longer than {self.slow_phase_warn_seconds:.0f}s.", "WARNING")
+                print_status(
+                    f"Build took longer than {self.slow_phase_warn_seconds:.0f}s.",
+                    "WARNING",
+                )
         except subprocess.CalledProcessError as e:
             print_status(f"Build failed with exit code {e.returncode}", "ERROR")
             sys.exit(1)
         except subprocess.TimeoutExpired:
-            print_status(f"Build timed out (exceeded {self.subprocess_timeout}s)", "ERROR")
+            print_status(
+                f"Build timed out (exceeded {self.subprocess_timeout}s)", "ERROR"
+            )
             sys.exit(1)
 
     def test(self) -> None:
@@ -488,7 +546,9 @@ class LoggingBazelConfiguration:
             return
         print_status("Running Bazel tests...", "INFO")
         self._shutdown_bazel_for_batch()
-        test_flags = ["--test_output=all" if self.verbose_tests else "--test_output=errors"]
+        test_flags = [
+            "--test_output=all" if self.verbose_tests else "--test_output=errors"
+        ]
         if self.verbose_tests:
             test_flags.append("--verbose_failures")
         cmd = self.build_bazel_command("test", extra_flags=test_flags)
@@ -499,14 +559,21 @@ class LoggingBazelConfiguration:
             elapsed = time.time() - start_time
             self.timing_data["test"] = elapsed
             if result.returncode == 0:
-                print_status(f"Tests completed successfully ({elapsed:.2f}s)", "SUCCESS")
+                print_status(
+                    f"Tests completed successfully ({elapsed:.2f}s)", "SUCCESS"
+                )
             elif result.returncode == 4:
-                print_status(f"No test targets found ({elapsed:.2f}s)", "WARNING")
+                print_status("No test targets found", "ERROR")
+                sys.exit(4)
             else:
-                print_status(f"Tests failed with exit code {result.returncode}", "ERROR")
+                print_status(
+                    f"Tests failed with exit code {result.returncode}", "ERROR"
+                )
                 sys.exit(1)
         except subprocess.TimeoutExpired:
-            print_status(f"Tests timed out (exceeded {self.subprocess_timeout}s)", "ERROR")
+            print_status(
+                f"Tests timed out (exceeded {self.subprocess_timeout}s)", "ERROR"
+            )
             sys.exit(1)
 
     def coverage(self) -> None:
@@ -514,7 +581,9 @@ class LoggingBazelConfiguration:
             return
         print_status("Running Bazel coverage...", "INFO")
         self._shutdown_bazel_for_batch()
-        coverage_flags = ["--test_output=all" if self.verbose_tests else "--test_output=errors"]
+        coverage_flags = [
+            "--test_output=all" if self.verbose_tests else "--test_output=errors"
+        ]
         cmd = self.build_bazel_command("coverage", extra_flags=coverage_flags)
         print_status(f"Running: {' '.join(cmd)}", "INFO")
         try:
@@ -523,19 +592,26 @@ class LoggingBazelConfiguration:
             elapsed = time.time() - start_time
             self.timing_data["coverage"] = elapsed
             if result.returncode == 0:
-                print_status(f"Coverage completed successfully ({elapsed:.2f}s)", "SUCCESS")
+                print_status(
+                    f"Coverage completed successfully ({elapsed:.2f}s)", "SUCCESS"
+                )
                 dat_path = self._build_llvm_coverage_report(start_time)
                 if dat_path is None:
                     dat_path = self._resolve_coverage_dat_path()
                 print_status(f"Coverage report (LCOV): {dat_path}", "INFO")
                 self._generate_coverage_html(dat_path)
             elif result.returncode == 4:
-                print_status(f"No coverage targets found ({elapsed:.2f}s)", "WARNING")
+                print_status("No test targets found", "ERROR")
+                sys.exit(4)
             else:
-                print_status(f"Coverage failed with exit code {result.returncode}", "ERROR")
+                print_status(
+                    f"Coverage failed with exit code {result.returncode}", "ERROR"
+                )
                 sys.exit(1)
         except subprocess.TimeoutExpired:
-            print_status(f"Coverage timed out (exceeded {self.subprocess_timeout}s)", "ERROR")
+            print_status(
+                f"Coverage timed out (exceeded {self.subprocess_timeout}s)", "ERROR"
+            )
             sys.exit(1)
 
     def _bazel_info(self, key: str, fallback: str, match_config: bool = False) -> str:
@@ -551,9 +627,15 @@ class LoggingBazelConfiguration:
             cmd.extend(self._config_flags())
         cmd.append(key)
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(
+                cmd, check=True, capture_output=True, text=True, timeout=60
+            )
             return result.stdout.strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        except (
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+        ):
             return fallback
 
     def _resolve_coverage_dat_path(self) -> str:
@@ -616,7 +698,11 @@ class LoggingBazelConfiguration:
                 text=True,
                 timeout=120,
             )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        except (
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+        ):
             return []
 
         bazel_bin = self._bazel_info("bazel-bin", "", match_config=True)
@@ -686,7 +772,10 @@ class LoggingBazelConfiguration:
                 timeout=self.subprocess_timeout,
             )
             if merge_result.returncode != 0:
-                print_status(f"llvm-profdata merge failed: {merge_result.stderr.strip()}", "WARNING")
+                print_status(
+                    f"llvm-profdata merge failed: {merge_result.stderr.strip()}",
+                    "WARNING",
+                )
                 return None
 
             export_cmd = [
@@ -703,10 +792,15 @@ class LoggingBazelConfiguration:
             for binary in binaries:
                 export_cmd += ["-object", binary]
             export_result = subprocess.run(
-                export_cmd, capture_output=True, text=True, timeout=self.subprocess_timeout
+                export_cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.subprocess_timeout,
             )
             if export_result.returncode != 0:
-                print_status(f"llvm-cov export failed: {export_result.stderr.strip()}", "WARNING")
+                print_status(
+                    f"llvm-cov export failed: {export_result.stderr.strip()}", "WARNING"
+                )
                 return None
 
             # llvm-cov reports source paths as seen at compile time, i.e. under the
@@ -716,7 +810,10 @@ class LoggingBazelConfiguration:
             lcov_text = export_result.stdout
             if workspace_root:
                 lcov_text = re.sub(
-                    r"^SF:.*?/execroot/_main/", f"SF:{workspace_root}/", lcov_text, flags=re.MULTILINE
+                    r"^SF:.*?/execroot/_main/",
+                    f"SF:{workspace_root}/",
+                    lcov_text,
+                    flags=re.MULTILINE,
                 )
             with open(dat_path, "w", encoding="utf-8") as f:
                 f.write(lcov_text)
@@ -729,7 +826,10 @@ class LoggingBazelConfiguration:
     def _generate_coverage_html(self, dat_path: str) -> None:
         """Convert the Bazel LCOV coverage report into an HTML report via genhtml."""
         if not os.path.isfile(dat_path):
-            print_status(f"Coverage LCOV file not found at {dat_path}; skipping HTML report", "WARNING")
+            print_status(
+                f"Coverage LCOV file not found at {dat_path}; skipping HTML report",
+                "WARNING",
+            )
             return
         genhtml = shutil.which("genhtml")
         if genhtml is None:
@@ -751,11 +851,20 @@ class LoggingBazelConfiguration:
             "inconsistent,corrupt,unsupported",
         ]
         try:
-            subprocess.run(cmd, check=True, timeout=self.subprocess_timeout, capture_output=True, text=True)
+            subprocess.run(
+                cmd,
+                check=True,
+                timeout=self.subprocess_timeout,
+                capture_output=True,
+                text=True,
+            )
             index_html = os.path.abspath(os.path.join(html_dir, "index.html"))
             print_status(f"Coverage HTML report: {index_html}", "SUCCESS")
         except subprocess.CalledProcessError as e:
-            print_status(f"Failed to generate HTML coverage report: {(e.stderr or '').strip()[-500:]}", "WARNING")
+            print_status(
+                f"Failed to generate HTML coverage report: {(e.stderr or '').strip()[-500:]}",
+                "WARNING",
+            )
         except subprocess.TimeoutExpired as e:
             print_status(f"Failed to generate HTML coverage report: {e}", "WARNING")
 
@@ -778,7 +887,9 @@ class LoggingBazelConfiguration:
         self.print_configuration_summary()
         self.config()
         if self.run_config and (self.run_build or self.run_tests or self.run_coverage):
-            print_status("Config requested: forcing clean build (bazel clean --expunge).", "INFO")
+            print_status(
+                "Config requested: forcing clean build (bazel clean --expunge).", "INFO"
+            )
             self.run_clean = True
         self.clean()
         if self.run_build or self.run_tests or self.run_coverage:
@@ -809,7 +920,10 @@ def parse_args(args: list[str]) -> list[str]:
             if bt in _BACKEND_NAMES:
                 processed.append(bt)
             else:
-                print_status(f"Invalid logging backend: {bt}. Valid: native, loguru, glog, spdlog", "ERROR")
+                print_status(
+                    f"Invalid logging backend: {bt}. Valid: native, loguru, glog, spdlog",
+                    "ERROR",
+                )
                 sys.exit(1)
             continue
         if arg.startswith("--sanitizer."):
@@ -821,7 +935,9 @@ def parse_args(args: list[str]) -> list[str]:
         if arg.startswith("--linker."):
             processed.append(f"linker.{arg.split('.', 1)[1].lower()}")
             continue
-        if re.search(r"[/\\]", arg) and re.search(r"[Cc]lang|[Gg][Cc][Cc]|[Gg]\+\+", arg):
+        if re.search(r"[/\\]", arg) and re.search(
+            r"[Cc]lang|[Gg][Cc][Cc]|[Gg]\+\+", arg
+        ):
             processed.append(arg)
             continue
         if "." in arg and not arg.startswith("--"):
@@ -862,13 +978,23 @@ def print_help() -> None:
     print("  cxx20 (default, from .bazelrc) | cxx23")
     print("\nLogging backend (mirrors CMake LOGGING_BACKEND; default loguru):")
     print("  native | loguru | glog | spdlog")
-    print("  --backend.native | --backend.loguru | --backend.glog | --backend.spdlog  (same, long form)")
+    print(
+        "  --backend.native | --backend.loguru | --backend.glog | --backend.spdlog  (same, long form)"
+    )
     print("\nFeature toggles (mirror CMake LOGGING_ENABLE_*):")
-    print("  nomagicenum    - --define=logging_enable_magic_enum=false (default: enabled)")
-    print("  nocxademangle  - --define=logging_enable_cxa_demangle=false (default: enabled, non-Windows)")
-    print("  portablefloat  - --define=logging_enable_portable_float_format=true (default: off)")
+    print(
+        "  nomagicenum    - --define=logging_enable_magic_enum=false (default: enabled)"
+    )
+    print(
+        "  nocxademangle  - --define=logging_enable_cxa_demangle=false (default: enabled, non-Windows)"
+    )
+    print(
+        "  portablefloat  - --define=logging_enable_portable_float_format=true (default: off)"
+    )
     print("  stdformat      - --define=logging_format_use_std=true (default: off)")
-    print("  logfatal       - --define=logging_default_exception_mode=log_fatal (default: throw)")
+    print(
+        "  logfatal       - --define=logging_default_exception_mode=log_fatal (default: throw)"
+    )
     print("\nLinking:")
     print("  shared         - --define=build_shared_libs=true")
     print("  static         - Bazel's own default (no define needed)")
@@ -891,12 +1017,21 @@ def print_help() -> None:
 
 
 def main() -> None:
+    from helpers.cli import dispatch_bazel
+
+    forwarded = dispatch_bazel(sys.argv[1:])
+    if forwarded is not None:
+        sys.exit(forwarded)
+
     if len(sys.argv) == 2 and sys.argv[1] == "--help":
         print_help()
         return
 
     if len(sys.argv) < 2:
-        print_status("No build configuration specified. Use --help for usage information.", "ERROR")
+        print_status(
+            "No build configuration specified. Use --help for usage information.",
+            "ERROR",
+        )
         sys.exit(1)
 
     try:
@@ -904,7 +1039,13 @@ def main() -> None:
         print_status(f"Starting Bazel build for {platform.system()}", "INFO")
         config = LoggingBazelConfiguration(arg_list)
 
-        if not (config.run_build or config.run_tests or config.run_clean or config.run_config or config.run_coverage):
+        if not (
+            config.run_build
+            or config.run_tests
+            or config.run_clean
+            or config.run_config
+            or config.run_coverage
+        ):
             config.run_build = True
 
         config.execute()
