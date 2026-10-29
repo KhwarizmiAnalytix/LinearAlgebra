@@ -908,3 +908,102 @@ jobs:
           name: coverage-${{ matrix.os }}-${{ matrix.backend }}
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Compiler cache: exercises LINALG_ENABLE_CACHE / LINALG_CACHE_BACKEND
+  # (ccache, sccache, buildcache) across Linux, macOS, and Windows.
+  # ---------------------------------------------------------------------------
+  cache:
+    name: Cache / ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-ccache
+            os: ubuntu-latest
+            backend: ccache
+          - name: linux-sccache
+            os: ubuntu-latest
+            backend: sccache
+          - name: linux-buildcache
+            os: ubuntu-latest
+            backend: buildcache
+          - name: macos-ccache
+            os: macos-latest
+            backend: ccache
+          - name: macos-sccache
+            os: macos-latest
+            backend: sccache
+          - name: macos-buildcache
+            os: macos-latest
+            backend: buildcache
+          - name: windows-ccache
+            os: windows-latest
+            backend: ccache
+          - name: windows-sccache
+            os: windows-latest
+            backend: sccache
+          - name: windows-buildcache
+            os: windows-latest
+            backend: buildcache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install ccache (Linux)
+        if: runner.os == 'Linux' && matrix.backend == 'ccache'
+        run: sudo apt-get install -y ccache
+
+      - name: Install ccache (macOS)
+        if: runner.os == 'macOS' && matrix.backend == 'ccache'
+        run: brew install ccache
+
+      - name: Install ccache (Windows)
+        if: runner.os == 'Windows' && matrix.backend == 'ccache'
+        run: choco install -y ccache
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        if: matrix.backend == 'sccache'
+        with:
+          version: v0.12.0
+
+      - name: Set BuildCache directory
+        if: matrix.backend == 'buildcache'
+        shell: bash
+        run: echo "BUILDCACHE_DIR=$RUNNER_TEMP/buildcache-data" >> "$GITHUB_ENV"
+
+      - name: Install BuildCache
+        if: matrix.backend == 'buildcache'
+        shell: bash
+        run: python3 .github/scripts/install_buildcache.py --install-prefix "$RUNNER_TEMP/buildcache-tool"
+
+      - name: Configure
+        shell: bash
+        run: |
+          extra=()
+          if [[ -n "${{ matrix.backend }}" ]]; then
+            extra+=("--cache=ON" "--cache-backend=${{ matrix.backend }}")
+          fi
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja \
+            --build-type=Release \
+            --cpu-backend=no \
+            --gpu-backend=none \
+            --testing=ON \
+            "${extra[@]}"
+
+      - name: Build
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --build-type Release --parallel=4
+
+      - name: Test
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build --build-type Release --test-timeout 300
