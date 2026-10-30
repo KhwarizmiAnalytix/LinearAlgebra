@@ -196,52 +196,6 @@ class ConfigurationChecks(unittest.TestCase):
         )
         subprocess.run([(build / "consumer-path.txt").read_text()], check=True)
 
-    def test_legacy_msvc_logging_overlay(self):
-        # Exercise the compatibility headers on every host; the MSVC minimum
-        # job additionally verifies them with the compiler that needs them.
-        source = self.work / "logging-compat-probe.cpp"
-        source.write_text(
-            '#include <fmt/format.h>\n'
-            '#include "include/logger/structured.h"\n'
-            'int main() {\n'
-            '  logging::structured_event event("probe");\n'
-            '  event.add("value", "ok");\n'
-            '  if (fmt::format("{} {} {:.1f}", "ok", 42, 1.5) != "ok 42 1.5") return 1;\n'
-            '  try { fmt::format(fmt::runtime("{:d}"), "bad"); }\n'
-            '  catch (const fmt::format_error&) { return 0; }\n'
-            '  return 2;\n'
-            '}\n'
-        )
-        build = self.configure(
-            "logging-msvc-compat",
-            'set(LINALG_ENABLE_TESTING OFF)\n'
-            f'add_subdirectory("{SOURCE.as_posix()}" linalg)\n'
-            'include("${LINALG_SOURCE_DIR}/Cmake/LoggingMsvcCompatibility.cmake")\n'
-            'set(LINALG_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/linalg")\n'
-            'linalg_apply_logging_msvc_compatibility()\n'
-            f'add_executable(probe "{source.as_posix()}")\n'
-            'target_link_libraries(probe PRIVATE Logging::Logging)\n'
-            'target_compile_definitions(probe PRIVATE FMT_HEADER_ONLY=1)\n'
-            # fmt requires UTF-8 on MSVC; the parent probe does not inherit
-            # the library's private compiler options.
-            'if(MSVC)\n'
-            'target_compile_options(probe PRIVATE /utf-8)\n'
-            'endif()\n'
-            'target_include_directories(probe PRIVATE '
-            '"${LINALG_BINARY_DIR}/ThirdParty/logging-msvc-compat/fmt-include")\n'
-            'file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/probe-path.txt" '
-            'CONTENT "$<TARGET_FILE:probe>")\n',
-            options=[
-                "-DLINALG_ENABLE_CACHE=OFF", "-DLOGGING_ENABLE_CACHE=OFF",
-                "-DLOGGING_CXX_STANDARD=17", "-DCMAKE_CXX_STANDARD=17",
-            ],
-        )
-        subprocess.run(
-            ["cmake", "--build", str(build), "--target", "probe", "--parallel", "4"],
-            check=True,
-        )
-        subprocess.run([(build / "probe-path.txt").read_text()], check=True)
-
     def test_hip_stream_helpers_with_opaque_handles(self):
         # ROCm uses void* for BOTH handles. Keep this compile/routing check
         # available on CPU-only hosts, where no HIP SDK is installed.

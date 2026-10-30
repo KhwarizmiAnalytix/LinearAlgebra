@@ -41,13 +41,13 @@ jobs:
         run: brew install ninja
 
       - name: Configure
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja --build-type=Release
+        run: python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja --build-type=Release
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --parallel=4
+        run: python3 "Scripts/setup.py" build --build-dir build --parallel=4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build
 
       - name: Configuration regression checks
         run: python3 Testing/CMake/check_configurations.py
@@ -67,13 +67,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ninja-build libopenblas-dev liblapacke-dev
       - name: Configure
         run: >-
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-eigen --generator Ninja --build-type=Release
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-eigen --generator Ninja --build-type=Release
           --benchmark=ON
           --blas=ON --lto-mode=off
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-eigen --parallel 2
+        run: python3 "Scripts/setup.py" build --build-dir build-eigen --parallel 2
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-eigen --test-label Unit
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-eigen --test-label Unit
       - name: Benchmark smoke checks
         run: |
           for operation in multiplication ludecomposition qrdecomposition choleskydecomposition svddecomposition eigen; do
@@ -95,11 +95,11 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-baseline --generator Ninja --preload-file .github/cmake/minimum-options.cmake
+        run: python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-baseline --generator Ninja --preload-file .github/cmake/minimum-options.cmake
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-baseline --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-baseline --parallel 4
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-baseline
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-baseline
 
   cmake-mkl:
     name: CMake (Linux, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
@@ -131,17 +131,17 @@ jobs:
 
       - name: Configure
         run: |
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-mkl --generator Ninja --build-type=Release \
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-mkl --generator Ninja --build-type=Release \
             --mkl=ON \
             --blas="$MKL_BLAS" --blas-vendor=OpenBLAS \
             --shared="$MKL_SHARED" \
             --prefix-path=/opt/intel/oneapi/mkl/latest/lib/cmake/mkl
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-mkl --parallel=4
+        run: python3 "Scripts/setup.py" build --build-dir build-mkl --parallel=4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-mkl
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-mkl
 
   cmake-mkl-windows:
     name: CMake (Windows, MKL, BLAS=${{ matrix.blas }}, shared=${{ matrix.shared }})
@@ -193,14 +193,14 @@ jobs:
       - name: Configure, build, and test both vendor interfaces
         shell: pwsh
         run: |
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-mkl --generator Ninja --build-type=Release `
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-mkl --generator Ninja --build-type=Release `
             --mkl=ON "--mkl-dir=$env:MKL_DIR" `
             "--blas=$env:MKL_BLAS" --blas-vendor=OpenBLAS `
             "--shared=$env:MKL_SHARED"
           if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
-          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-mkl --parallel 4
+          python3 "Scripts/setup.py" build --build-dir build-mkl --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-mkl
+          python3 "Scripts/setup.py" test --build-dir . --build-dir build-mkl
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
 
   cmake-blas:
@@ -232,21 +232,21 @@ jobs:
           echo "CMAKE_PREFIX_PATH=$(brew --install-prefix openblas)" >> "$GITHUB_ENV"
 
       - name: Configure
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-blas --generator Ninja --build-type=Release --blas=ON
+        run: python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-blas --generator Ninja --build-type=Release --blas=ON
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-blas --parallel=4
+        run: python3 "Scripts/setup.py" build --build-dir build-blas --parallel=4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-blas
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-blas
 
       - name: Explicit Accelerate with OpenBLAS installed (macOS)
         if: runner.os == 'macOS'
         run: |
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-accelerate --generator Ninja --build-type=Release \
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-accelerate --generator Ninja --build-type=Release \
             --blas=ON --blas-vendor=Apple
-          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-accelerate --parallel 4
-          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-accelerate
+          python3 "Scripts/setup.py" build --build-dir build-accelerate --parallel 4
+          python3 "Scripts/setup.py" test --build-dir . --build-dir build-accelerate
 
   cmake-valgrind:
     name: CTest Valgrind dashboard
@@ -256,9 +256,9 @@ jobs:
         with:
           submodules: recursive
       - run: sudo apt-get update && sudo apt-get install -y ninja-build valgrind
-      - run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-memcheck --generator Ninja --valgrind=ON
-      - run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-memcheck --parallel 4
-      - run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-memcheck --memcheck
+      - run: python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-memcheck --generator Ninja --valgrind=ON
+      - run: python3 "Scripts/setup.py" build --build-dir build-memcheck --parallel 4
+      - run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-memcheck --memcheck
 
   cmake-lu-pivoting:
     name: CMake (${{ matrix.os }}, LU pivoting)
@@ -281,13 +281,13 @@ jobs:
         run: brew install ninja
 
       - name: Configure
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-lupivot --generator Ninja --build-type=Release --lu-pivoting=ON
+        run: python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-lupivot --generator Ninja --build-type=Release --lu-pivoting=ON
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-lupivot --parallel=4
+        run: python3 "Scripts/setup.py" build --build-dir build-lupivot --parallel=4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-lupivot
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-lupivot
 
   sanitizer:
     name: Sanitizer (${{ matrix.os }}, ASan+UBSan)
@@ -311,15 +311,15 @@ jobs:
 
       - name: Configure
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-san --generator Ninja --build-type=Debug
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-san --generator Ninja --build-type=Debug
           --sanitizer=ON
           --sanitizer-types=address,undefined
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-san --parallel=4
+        run: python3 "Scripts/setup.py" build --build-dir build-san --parallel=4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-san
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-san
 
   cuda-compile:
     name: CUDA (Linux, BLAS=${{ matrix.blas }}, MKL=${{ matrix.mkl }}, examples=${{ matrix.examples }})
@@ -378,7 +378,7 @@ jobs:
         # see docs/backend_roadmap.md §7 on that remaining manual,
         # on-hardware check.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release
           --cublas=ON
           --lto-mode=off --cxx-standard=20
           --blas="$CUDA_BLAS" --blas-vendor=OpenBLAS
@@ -388,7 +388,7 @@ jobs:
           --cuda-architectures=75
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-cuda --parallel 4
 
   cuda-windows:
     name: CUDA (Windows compile-only)
@@ -413,11 +413,11 @@ jobs:
       - name: Configure and compile GPU targets without executing GPU workloads
         shell: pwsh
         run: |
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release `
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release `
             --cublas=ON --cuda-architectures=75 `
             --lto-mode=off --cxx-standard=20
           if ($LASTEXITCODE -ne 0) { throw 'CUDA configure failed' }
-          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
+          python3 "Scripts/setup.py" build --build-dir build-cuda --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'CUDA build failed' }
 
   hip-compile:
@@ -479,7 +479,7 @@ jobs:
         # docs/backend_roadmap.md §7 on that remaining manual, on-hardware
         # check.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-hip --generator Ninja --build-type=Release
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-hip --generator Ninja --build-type=Release
           --rocblas=ON
           --lto-mode=off --cxx-standard=20
           --blas="$HIP_BLAS" --blas-vendor=OpenBLAS
@@ -489,7 +489,7 @@ jobs:
           --hip-architectures=gfx1100
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-hip --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-hip --parallel 4
 
   metal-compile:
     name: Metal (macOS compile-only)
@@ -512,12 +512,12 @@ jobs:
         # Compile the Metal bridge and GPU tests without requiring a GPU on
         # the hosted runner. Runtime validation needs a Metal-capable host.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-metal --generator Ninja --build-type=Release
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-metal --generator Ninja --build-type=Release
           --metal=ON
           --lto-mode=off --cxx-standard=20
           --build-testing=ON --testing=ON --gtest=ON
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-metal --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-metal --parallel 4
 
   simd:
     name: SIMD (${{ matrix.backend }})
@@ -556,11 +556,11 @@ jobs:
           SIMD_BACKEND: ${{ matrix.backend }}
         shell: bash
         run: |
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-simd --generator Ninja --build-type=Release \
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-simd --generator Ninja --build-type=Release \
             --cpu-backend="$SIMD_BACKEND"
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-simd --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-simd --parallel 4
 
       - name: Test when the runner supports the ISA
         env:
@@ -582,7 +582,7 @@ jobs:
               exit 0
             fi
           done
-          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-simd
+          python3 "Scripts/setup.py" test --build-dir . --build-dir build-simd
 
   cuda-runtime:
     name: CUDA (GPU runtime)
@@ -610,14 +610,14 @@ jobs:
 
       - name: Configure
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
           --cublas=ON --cuda-architectures=native
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-gpu
 
   hip-runtime:
     name: HIP (GPU runtime)
@@ -646,15 +646,15 @@ jobs:
 
       - name: Configure
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
           --rocblas=ON --hip-architectures=native
           --prefix-path=/opt/rocm
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
+        run: python3 "Scripts/setup.py" build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build-gpu
 
   install-consumer:
     name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }}, ${{ matrix.instrumentation }})
@@ -707,30 +707,30 @@ jobs:
           elif [[ "$INSTRUMENTATION" == coverage ]]; then
             instrumentation_flags=(--coverage=ON)
           fi
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir ThirdParty/Logging --build-dir build-logging-install --generator Ninja \
+          python3 "Scripts/setup.py" config --compiler=default --source-dir ThirdParty/Logging --build-dir build-logging-install --generator Ninja \
             --build-type=Release --shared="$BUILD_SHARED" \
             --logging-testing=OFF --logging-benchmark=OFF \
             --logging-examples=OFF --install-prefix="$package_prefix" \
             --install-rpath="$runtime_origin"
-          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-logging-install --parallel 4
-          python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-logging-install
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-install --generator Ninja --build-type=Release \
+          python3 "Scripts/setup.py" build --build-dir build-logging-install --parallel 4
+          python3 "Scripts/setup.py" install --build-dir build-logging-install
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-install --generator Ninja --build-type=Release \
             --shared="$BUILD_SHARED" --testing=OFF \
             --system-logging=ON --prefix-path="$package_prefix" \
             --install-libdir=customlib --install-includedir=custominclude \
             --install-prefix="$package_prefix" --install-rpath="$runtime_origin/../lib" \
             "${instrumentation_flags[@]}"
-          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-install --parallel 4
-          python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-install
+          python3 "Scripts/setup.py" build --build-dir build-install --parallel 4
+          python3 "Scripts/setup.py" install --build-dir build-install
           mv "$package_prefix" "$RUNNER_TEMP/linalg-package-moved"
           package_prefix="$RUNNER_TEMP/linalg-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
           cp --test-filter Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/linalg-consumer" --build-dir "$RUNNER_TEMP/linalg-consumer-build" \
+          python3 "Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/linalg-consumer" --build-dir "$RUNNER_TEMP/linalg-consumer-build" \
             --generator Ninja --build-type=Release --prefix-path="$package_prefix" \
             --package-dir="$package_prefix/customlib/cmake/LinearAlgebra"
-          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir "$RUNNER_TEMP/linalg-consumer-build" --parallel 4
-          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir "$RUNNER_TEMP/linalg-consumer-build"
+          python3 "Scripts/setup.py" build --build-dir "$RUNNER_TEMP/linalg-consumer-build" --parallel 4
+          python3 "Scripts/setup.py" test --build-dir . --build-dir "$RUNNER_TEMP/linalg-consumer-build"
 
   bazel:
     name: Bazel (${{ matrix.os }})
@@ -758,7 +758,7 @@ jobs:
         # //:LinearAlgebra), not run as a test suite — CMake's equivalent
         # add_subdirectory(ThirdParty/Logging) likewise builds it with its
         # own testing disabled.
-        run: python3 "${{ github.workspace }}/Scripts/setup_bazel.py" test --compiler=default --compilation-mode=fastbuild --target=//Testing/...
+        run: python3 "Scripts/setup_bazel.py" test --compiler=default --compilation-mode=fastbuild --target=//Testing/...
 
   # ---------------------------------------------------------------------------
   # Coverage: gcc/gcov+lcov (Linux), Homebrew LLVM/clang (macOS), MSVC/OpenCppCoverage
@@ -835,7 +835,7 @@ jobs:
       - name: Configure (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja
           --build-type=Debug
           --compile-commands=ON
           --testing=ON
@@ -847,7 +847,7 @@ jobs:
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir . --build-dir build
+          python3 "Scripts/setup.py" config --compiler=default --generator=default --source-dir . --build-dir build
           --testing=ON
           --coverage=ON
 
@@ -874,19 +874,19 @@ jobs:
 
       - name: Build (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build
+        run: python3 "Scripts/setup.py" build --build-dir build
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --build-type Release
+        run: python3 "Scripts/setup.py" build --build-dir build --build-type Release
 
       - name: Test (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build
 
       - name: Test (Windows)
         if: matrix.os == 'windows-latest'
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build --build-type Release
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build --build-type Release
 
       - name: Collect coverage
         run: >
@@ -995,7 +995,7 @@ jobs:
           if [[ -n "${{ matrix.backend }}" ]]; then
             extra+=("--cache=ON" "--cache-backend=${{ matrix.backend }}")
           fi
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja \
+          python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja \
             --build-type=Release \
             --cpu-backend=no \
             --gpu-backend=none \
@@ -1003,7 +1003,7 @@ jobs:
             "${extra[@]}"
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --build-type Release --parallel=4
+        run: python3 "Scripts/setup.py" build --build-dir build --build-type Release --parallel=4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build --build-type Release --test-timeout 300
+        run: python3 "Scripts/setup.py" test --build-dir . --build-dir build --build-type Release --test-timeout 300
