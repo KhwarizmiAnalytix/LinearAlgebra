@@ -229,7 +229,7 @@ jobs:
         # Accelerate (GEMM/transpose only, no LAPACKE) instead.
         run: |
           brew install ninja openblas
-          echo "CMAKE_PREFIX_PATH=$(brew --install-prefix openblas)" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix openblas)" >> "$GITHUB_ENV"
 
       - name: Configure
         run: python3 "Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-blas --generator Ninja --build-type=Release --blas=ON
@@ -725,7 +725,7 @@ jobs:
           mv "$package_prefix" "$RUNNER_TEMP/linalg-package-moved"
           package_prefix="$RUNNER_TEMP/linalg-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
-          cp --test-filter Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
+          cp -R Testing/InstallConsumer "$RUNNER_TEMP/linalg-consumer"
           python3 "Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/linalg-consumer" --build-dir "$RUNNER_TEMP/linalg-consumer-build" \
             --generator Ninja --build-type=Release --prefix-path="$package_prefix" \
             --package-dir="$package_prefix/customlib/cmake/LinearAlgebra"
@@ -816,7 +816,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install ninja llvm
-          LLVM_PREFIX="$(brew --install-prefix llvm)"
+          LLVM_PREFIX="$(brew --prefix llvm)"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           echo "CC=${LLVM_PREFIX}/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=${LLVM_PREFIX}/bin/clang++" >> "$GITHUB_ENV"
@@ -948,10 +948,16 @@ jobs:
           - name: windows-buildcache
             os: windows-latest
             backend: buildcache
+    env:
+      CC: ${{ matrix.os == 'windows-latest' && 'cl' || (matrix.os == 'macos-latest' && 'clang' || 'gcc') }}
+      CXX: ${{ matrix.os == 'windows-latest' && 'cl' || (matrix.os == 'macos-latest' && 'clang++' || 'g++') }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
 
       - name: Install Ninja (Linux)
         if: runner.os == 'Linux'
@@ -986,7 +992,7 @@ jobs:
       - name: Install BuildCache
         if: matrix.backend == 'buildcache'
         shell: bash
-        run: python3 .github/scripts/install_buildcache.py --install-prefix "$RUNNER_TEMP/buildcache-tool"
+        run: python3 .github/scripts/install_buildcache.py --prefix "$RUNNER_TEMP/buildcache-tool"
 
       - name: Configure
         shell: bash

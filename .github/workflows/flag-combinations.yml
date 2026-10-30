@@ -103,7 +103,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install openblas blis icecream ccache
-          echo "CMAKE_PREFIX_PATH=$(brew --install-prefix openblas);$(brew --install-prefix blis)" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix openblas);$(brew --prefix blis)" >> "$GITHUB_ENV"
       - name: Install Windows launchers and OpenBLAS
         if: runner.os == 'Windows'
         shell: pwsh
@@ -124,7 +124,7 @@ jobs:
             ForEach-Object { $_.DirectoryName } | Select-Object -Unique | Out-File -Append $env:GITHUB_PATH
       - name: Build pinned buildcache for the selected platform
         shell: bash
-        run: python .github/scripts/install_buildcache.py --install-prefix "$RUNNER_TEMP/buildcache-tool"
+        run: python .github/scripts/install_buildcache.py --prefix "$RUNNER_TEMP/buildcache-tool"
       - uses: actions/download-artifact@v4
         with:
           name: flag-plan
