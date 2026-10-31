@@ -8,8 +8,8 @@
 common --enable_platform_specific_config
 
 # C++20 by default (mirrors LOGGING_CXX_STANDARD=20 in CMakeLists.txt).
-# MSVC takes /std:c++20, not -std=c++20 — unlike logging_copts()/xsigma_copts()
-# (bazel/xsigma.bzl), which already select() this per target, this applies to
+# MSVC takes /std:c++20, not -std=c++20 — unlike linear_algebra_copts()
+# (bazel/linear_algebra.bzl), which already select() this per target, this applies to
 # every target including third-party deps, so it must be split per OS too.
 build:linux --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
 build:macos --cxxopt=-std=c++20 --host_cxxopt=-std=c++20

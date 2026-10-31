@@ -1,10 +1,29 @@
-load("//bazel:xsigma.bzl", "xsigma_copts", "xsigma_defines", "xsigma_linkopts")
-
 # C++ standard for LinearAlgebra — mirrors CMake LINALG_CXX_STANDARD (default: 20)
 LINALG_CXX_STD = "c++20"
 
 def linear_algebra_copts():
-    return xsigma_copts(cxx_std = LINALG_CXX_STD)
+    return select({
+        "@platforms//os:windows": [
+            "/std:" + LINALG_CXX_STD,
+            "/Zc:__cplusplus",  # expose correct __cplusplus value (mirrors CMake /Zc:__cplusplus)
+            "/EHsc",            # structured exception handling
+            "/bigobj",          # large object files (mirrors CMake /bigobj)
+            "/utf-8",           # UTF-8 source/output encoding (mirrors CMake /utf-8)
+            "/wd4244",          # narrowing conversion (mirrors CMake /wd4244)
+            "/wd4267",          # size_t → int conversion (mirrors CMake /wd4267)
+            "/wd4715",          # not all control paths return (mirrors CMake /wd4715)
+            "/wd4018",          # signed/unsigned comparison (mirrors CMake /wd4018)
+            "/WX",              # warnings as errors (mirrors CMake /WX)
+        ],
+        "//conditions:default": [
+            "-std=" + LINALG_CXX_STD,
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-include",
+            "cstdlib",
+        ],
+    })
 
 def linear_algebra_defines():
     """Returns compile definitions for linear_algebra.
@@ -26,7 +45,17 @@ def linear_algebra_defines():
     they are simply left undefined here, which the #if sites that reference
     them treat as 0 — the same behavior as before this macro rename.
     """
-    defines = xsigma_defines()
+    # Windows CRT safety defines (mirrors CMake compiler_checks.cmake).
+    defines = select({
+        "@platforms//os:windows": [
+            "_CRT_SECURE_NO_DEPRECATE",
+            "_CRT_NONSTDC_NO_DEPRECATE",
+            "_CRT_SECURE_NO_WARNINGS",
+            "_SCL_SECURE_NO_DEPRECATE",
+            "_SCL_SECURE_NO_WARNINGS",
+        ],
+        "//conditions:default": [],
+    })
 
     defines += select({
         "//bazel:linalg_enable_mkl": ["LINALG_HAS_MKL=1"],
@@ -46,4 +75,14 @@ def linear_algebra_defines():
     return defines
 
 def linear_algebra_linkopts():
-    return xsigma_linkopts()
+    return select({
+        "@platforms//os:windows": [],
+        "@platforms//os:macos": [
+            "-undefined",
+            "dynamic_lookup",
+        ],
+        "//conditions:default": [
+            "-lpthread",
+            "-ldl",
+        ],
+    })
