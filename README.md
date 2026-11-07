@@ -71,7 +71,7 @@ reporting uses Logging's own `LOGGING_THROW`/`LOGGING_CHECK` directly (fmt-style
 | `matrix_operation/triangular_solver.h` | Multiple-right-hand-side triangular solve; upper/lower, transpose, and unit-diagonal modes; native SIMD/GEMM, BLAS/MKL/cuBLAS/hipBLAS TRSM, or Metal MPS |
 | `matrix_operation/inversion.h` | `matrix_invert` |
 | `matrix_operation/determinant.h` | `determinant` |
-| `matrix_operation/multiplication.h` | Row-major GEMM with optional operand transpose |
+| `matrix_operation/multiplication.h` | Row-major GEMM (`c = alpha * op(a) * op(b) + beta * c`) with optional operand transpose |
 | `matrix_operation/transpose.h` | In-place / out-of-place transpose |
 | `matrix_operation/svd_decomposition.h` | Singular value decomposition |
 | `matrix_operation/qr_decomposition.h` | Economy Householder QR (`A = Q*R`) |

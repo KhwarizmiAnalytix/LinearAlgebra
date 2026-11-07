@@ -666,6 +666,10 @@ template <typename value_t, linalg_int mr, linalg_int nr>
 // `result` may equal its own `c` in the square case, but that's a
 // relationship outside this function entirely -- blockA/blockB are always
 // arena scratch, never res).
+//
+// Computes res += alpha * blockA * blockB. As in Eigen's gebp_kernel, the
+// register accumulators hold the unscaled product and alpha is applied once
+// per result coefficient at the store (gebp_traits::acc: r = pmadd(c, alpha, r)).
 void gemm(  // NOLINT
     value_t* __restrict res,
     const value_t* __restrict blockA,
@@ -674,6 +678,7 @@ void gemm(  // NOLINT
     linalg_int       rows,
     linalg_int       depth,
     linalg_int       cols,
+    value_t          alpha,
     const linalg_int l1_cache,
     linalg_int       strideA = -1,
     linalg_int       strideB = -1,
@@ -690,6 +695,8 @@ void gemm(  // NOLINT
     {
         strideB = depth;
     }
+
+    const simd_t alphav = simd<value_t>::set(alpha);
 
     static constexpr linalg_int prefetch_res_offset = 32 / sizeof(value_t);
     static constexpr linalg_int lhs_3offset         = 3 * Traits::LhsProgress;
@@ -817,51 +824,51 @@ void gemm(  // NOLINT
 #undef EIGEN_GEBP_ONESTEP
                     simd_t R0;
                     R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::add(R0, C0);
+                    R0 = simd<value_t>::fma(C0, alphav, R0);
                     simd<value_t>::storeu(R0, r0);
 
                     R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C4);
+                    R0 = simd<value_t>::fma(C4, alphav, R0);
                     simd<value_t>::storeu(R0, r0 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r0 + 2 * Traits::size);
-                    R0 = simd<value_t>::add(R0, C8);
+                    R0 = simd<value_t>::fma(C8, alphav, R0);
                     simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
 
                     R0 = simd<value_t>::loadu(r1);
-                    R0 = simd<value_t>::add(R0, C1);
+                    R0 = simd<value_t>::fma(C1, alphav, R0);
                     simd<value_t>::storeu(R0, r1);
 
                     R0 = simd<value_t>::loadu(r1 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C5);
+                    R0 = simd<value_t>::fma(C5, alphav, R0);
                     simd<value_t>::storeu(R0, r1 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r1 + 2 * Traits::size);
-                    R0 = simd<value_t>::add(R0, C9);
+                    R0 = simd<value_t>::fma(C9, alphav, R0);
                     simd<value_t>::storeu(R0, r1 + 2 * Traits::size);
 
                     R0 = simd<value_t>::loadu(r2);
-                    R0 = simd<value_t>::add(R0, C2);
+                    R0 = simd<value_t>::fma(C2, alphav, R0);
                     simd<value_t>::storeu(R0, r2);
 
                     R0 = simd<value_t>::loadu(r2 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C6);
+                    R0 = simd<value_t>::fma(C6, alphav, R0);
                     simd<value_t>::storeu(R0, r2 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r2 + 2 * Traits::size);
-                    R0 = simd<value_t>::add(R0, C10);
+                    R0 = simd<value_t>::fma(C10, alphav, R0);
                     simd<value_t>::storeu(R0, r2 + 2 * Traits::size);
 
                     R0 = simd<value_t>::loadu(r3);
-                    R0 = simd<value_t>::add(R0, C3);
+                    R0 = simd<value_t>::fma(C3, alphav, R0);
                     simd<value_t>::storeu(R0, r3);
 
                     R0 = simd<value_t>::loadu(r3 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C7);
+                    R0 = simd<value_t>::fma(C7, alphav, R0);
                     simd<value_t>::storeu(R0, r3 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r3 + 2 * Traits::size);
-                    R0 = simd<value_t>::add(R0, C11);
+                    R0 = simd<value_t>::fma(C11, alphav, R0);
                     simd<value_t>::storeu(R0, r3 + 2 * Traits::size);
                 }
             }
@@ -927,15 +934,15 @@ void gemm(  // NOLINT
 #undef LINALG_GEMM_ONESTEP
                     simd_t R0;
                     R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::add(R0, C0);
+                    R0 = simd<value_t>::fma(C0, alphav, R0);
                     simd<value_t>::storeu(R0, r0);
 
                     R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C4);
+                    R0 = simd<value_t>::fma(C4, alphav, R0);
                     simd<value_t>::storeu(R0, r0 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r0 + 2 * Traits::size);
-                    R0 = simd<value_t>::add(R0, C8);
+                    R0 = simd<value_t>::fma(C8, alphav, R0);
                     simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
                 }
             }
@@ -1043,35 +1050,35 @@ void gemm(  // NOLINT
 
                     simd_t R0;
                     R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::add(R0, C0);
+                    R0 = simd<value_t>::fma(C0, alphav, R0);
                     simd<value_t>::storeu(R0, r0);
 
                     R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C4);
+                    R0 = simd<value_t>::fma(C4, alphav, R0);
                     simd<value_t>::storeu(R0, r0 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r1);
-                    R0 = simd<value_t>::add(R0, C1);
+                    R0 = simd<value_t>::fma(C1, alphav, R0);
                     simd<value_t>::storeu(R0, r1);
 
                     R0 = simd<value_t>::loadu(r1 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C5);
+                    R0 = simd<value_t>::fma(C5, alphav, R0);
                     simd<value_t>::storeu(R0, r1 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r2);
-                    R0 = simd<value_t>::add(R0, C2);
+                    R0 = simd<value_t>::fma(C2, alphav, R0);
                     simd<value_t>::storeu(R0, r2);
 
                     R0 = simd<value_t>::loadu(r2 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C6);
+                    R0 = simd<value_t>::fma(C6, alphav, R0);
                     simd<value_t>::storeu(R0, r2 + Traits::size);
 
                     R0 = simd<value_t>::loadu(r3);
-                    R0 = simd<value_t>::add(R0, C3);
+                    R0 = simd<value_t>::fma(C3, alphav, R0);
                     simd<value_t>::storeu(R0, r3);
 
                     R0 = simd<value_t>::loadu(r3 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C7);
+                    R0 = simd<value_t>::fma(C7, alphav, R0);
                     simd<value_t>::storeu(R0, r3 + Traits::size);
                 }
             }
@@ -1139,11 +1146,11 @@ void gemm(  // NOLINT
 
                     simd_t R0;
                     R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::add(R0, C0);
+                    R0 = simd<value_t>::fma(C0, alphav, R0);
                     simd<value_t>::storeu(R0, r0);
 
                     R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::add(R0, C4);
+                    R0 = simd<value_t>::fma(C4, alphav, R0);
                     simd<value_t>::storeu(R0, r0 + Traits::size);
                 }
             }
@@ -1244,19 +1251,19 @@ void gemm(  // NOLINT
 
                 simd_t R0;
                 R0 = simd<value_t>::loadu(r0);
-                R0 = simd<value_t>::add(R0, C0);
+                R0 = simd<value_t>::fma(C0, alphav, R0);
                 simd<value_t>::storeu(R0, r0);
 
                 R0 = simd<value_t>::loadu(r1);
-                R0 = simd<value_t>::add(R0, C1);
+                R0 = simd<value_t>::fma(C1, alphav, R0);
                 simd<value_t>::storeu(R0, r1);
 
                 R0 = simd<value_t>::loadu(r2);
-                R0 = simd<value_t>::add(R0, C2);
+                R0 = simd<value_t>::fma(C2, alphav, R0);
                 simd<value_t>::storeu(R0, r2);
 
                 R0 = simd<value_t>::loadu(r3);
-                R0 = simd<value_t>::add(R0, C3);
+                R0 = simd<value_t>::fma(C3, alphav, R0);
                 simd<value_t>::storeu(R0, r3);
             }
 
@@ -1318,7 +1325,7 @@ void gemm(  // NOLINT
 #undef LINALG_GEMM_ONESTEP
                 simd_t R0;
                 R0 = simd<value_t>::loadu(r0);
-                R0 = simd<value_t>::add(R0, C0);
+                R0 = simd<value_t>::fma(C0, alphav, R0);
                 simd<value_t>::storeu(R0, r0);
             }
         }
@@ -1420,7 +1427,8 @@ void gemm(  // NOLINT
                     {
                         using simd_half_t = typename simd<value_t>::simd_half_t;
                         simd_half_t R;
-                        R = simd<value_t>::gather_half(to, ldc);
+                        R                         = simd<value_t>::gather_half(to, ldc);
+                        const simd_half_t alphavh = simd<value_t>::set(&alpha);
                         if (depth - endk > 0)
                         {
                             // We have to handle the last row of the rhs which corresponds to a
@@ -1429,12 +1437,12 @@ void gemm(  // NOLINT
                             const auto b = simd<value_t>::set(blA);
                             auto       c = simd<value_t>::predux_downto4(C0);
                             c            = simd<value_t>::fma(a, b, c);
-                            R            = simd<value_t>::add(R, c);
+                            R            = simd<value_t>::fma(c, alphavh, R);
                         }
                         else
                         {
                             auto c = simd<value_t>::predux_downto4(C0);
-                            R      = simd<value_t>::add(R, c);
+                            R      = simd<value_t>::fma(c, alphavh, R);
                         }
                         simd<value_t>::scatter(R, ldc, to);
                     }
@@ -1442,7 +1450,7 @@ void gemm(  // NOLINT
                     {
                         simd_t R;
                         R = simd<value_t>::gather(to, ldc);
-                        R = simd<value_t>::add(R, C0);
+                        R = simd<value_t>::fma(C0, alphav, R);
                         simd<value_t>::scatter(R, ldc, to);
                     }
                 }
@@ -1472,10 +1480,10 @@ void gemm(  // NOLINT
                         }
                         blB += 4;
                     }
-                    element<value_t>(res, i, j2, ldc) += C0;
-                    element<value_t>(res, i, j2 + 1, ldc) += C1;
-                    element<value_t>(res, i, j2 + 2, ldc) += C2;
-                    element<value_t>(res, i, j2 + 3, ldc) += C3;
+                    element<value_t>(res, i, j2, ldc) += alpha * C0;
+                    element<value_t>(res, i, j2 + 1, ldc) += alpha * C1;
+                    element<value_t>(res, i, j2 + 2, ldc) += alpha * C2;
+                    element<value_t>(res, i, j2 + 3, ldc) += alpha * C3;
                 }
             }
         }
@@ -1496,7 +1504,7 @@ void gemm(  // NOLINT
                     const auto& B_0 = blB[k];
                     C0 += A0 * B_0;
                 }
-                element<value_t>(res, i, j2, ldc) += C0;
+                element<value_t>(res, i, j2, ldc) += alpha * C0;
             }
         }
     }
@@ -1529,16 +1537,52 @@ size_t matmul_scalar_workspace_size(linalg_int rows, linalg_int columns, linalg_
 #endif
 }
 
-// Inputs and output occupy distinct caller-owned buffers.
+// c <- beta * c over the rows x columns row-major view of c. As in BLAS ?gemm,
+// beta == 0 overwrites c rather than scaling it, so NaN/Inf left in an
+// uninitialized output cannot leak into the result, and beta == 1 is a no-op.
+template <typename value_t>
+void scale_output(value_t* c, linalg_int rows, linalg_int columns, linalg_int ldc, value_t beta)
+{
+    if (beta == value_t(1))
+    {
+        return;
+    }
+    for (linalg_int i = 0; i < rows; ++i)
+    {
+        value_t* c_i = c + i * ldc;
+        if (beta == value_t(0))
+        {
+            std::fill_n(c_i, columns, value_t(0));
+        }
+        else
+        {
+            for (linalg_int j = 0; j < columns; ++j)
+            {
+                c_i[j] *= beta;
+            }
+        }
+    }
+}
+
+// c = alpha * op(a) * op(b) + beta * c. Inputs and output occupy distinct
+// caller-owned buffers.
+//
+// Like Eigen's general_matrix_matrix_product, the kernels below only ever
+// accumulate (c += alpha * product), so beta is applied up front by
+// scale_output. Also as in Eigen, packing copies a and b verbatim and alpha
+// is applied in the micro-kernel's final store, so each result coefficient
+// is rounded as c + alpha * sum(a * b), matching Eigen's GEBP.
 template <typename value_t, bool transpose_a, bool transpose_b>
 void matrix_multiplication_seq(  // NOLINT
     linalg_int rows,
     linalg_int columns,
     linalg_int depth,
+    value_t    alpha,
     value_t const* __restrict a,
     linalg_int lda,
     value_t const* __restrict b,
     linalg_int ldb,
+    value_t    beta,
     value_t*   c,
     linalg_int ldc,
     void*      workspace,
@@ -1551,6 +1595,12 @@ void matrix_multiplication_seq(  // NOLINT
 #if LINALG_HAS_VECTORIZATION
     if (rows + columns + depth > 20)
     {
+        // Validate the workspace before c is touched, so a failed check
+        // leaves the caller's output unchanged.
+        LINALG_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(rows, columns, depth),
+            "multiplication: workspace_size too small");
+        scale_output(c, rows, columns, ldc, beta);
+
         // Compute C^T = op(B)^T * op(A)^T directly in row-major C's
         // storage. The packed kernel writes column-major, so swapping the
         // operands avoids a full output transpose and rectangular scratch.
@@ -1572,16 +1622,10 @@ void matrix_multiplication_seq(  // NOLINT
         const size_t count_a = static_cast<size_t>(mc) * static_cast<size_t>(kc);
         const size_t count_b = static_cast<size_t>(kc) * static_cast<size_t>(nc);
 
-        LINALG_CHECK(workspace_size >= matmul_scalar_workspace_size<value_t>(columns, rows, depth),
-            "multiplication: workspace_size too small");
         detail::workspace_arena arena(workspace, workspace_size);
         value_t*                block_A = arena.next<value_t>(count_a);
         value_t*                block_B = arena.next<value_t>(count_b);
         value_t*                result  = c;
-        for (linalg_int j = 0; j < columns; ++j)
-        {
-            std::fill_n(result + j * result_ld, rows, value_t(0));
-        }
 
         const bool pack_rhs_once = mc != rows && kc == depth && nc == columns;
 
@@ -1639,6 +1683,7 @@ void matrix_multiplication_seq(  // NOLINT
                         actual_mc,
                         actual_kc,
                         actual_nc,
+                        alpha,
                         l1_cache);
                 }
             }
@@ -1648,25 +1693,25 @@ void matrix_multiplication_seq(  // NOLINT
 #endif
     {
         using size_type = linalg_int;
-        // c_i/a_i/b_k/a_k/alpha/beta below are all safe to mark __restrict
+        // c_i/a_i/b_j/b_k/a_k below are all safe to mark __restrict
         // relative to each other: this scalar fallback (unlike the blocked
         // GEBP path above) never aliases c with anything else, and a/b/c
         // are three distinct caller-owned buffers per multiplication.h.
+        scale_output(c, rows, columns, ldc, beta);
         if constexpr (!transpose_a && !transpose_b)
         {
             for (size_type i = 0; i < rows; ++i)
             {
                 auto* __restrict c_i = c + i * ldc;
                 auto* __restrict a_i = a + i * lda;
-                std::fill_n(c_i, columns, static_cast<value_t>(0.));
 
                 for (size_type k = 0; k < depth; ++k)
                 {
                     auto* __restrict b_k = b + k * ldb;
-                    const auto alpha_ik  = a_i[k];
+                    const auto scale_ik  = alpha * a_i[k];
                     for (size_type j = 0; j < columns; ++j)
                     {
-                        c_i[j] += alpha_ik * b_k[j];
+                        c_i[j] += scale_ik * b_k[j];
                     }
                 }
             }
@@ -1674,21 +1719,17 @@ void matrix_multiplication_seq(  // NOLINT
         }
         else if constexpr (transpose_a && !transpose_b)
         {
-            for (size_type i = 0; i < rows; ++i)
-            {
-                std::fill_n(c + i * ldc, columns, value_t(0));
-            }
             for (size_type k = 0; k < depth; ++k)
             {
                 auto* __restrict b_k = b + k * ldb;
                 auto* __restrict a_k = a + k * lda;
                 for (size_type i = 0; i < rows; ++i)
                 {
-                    const auto alpha_ki  = a_k[i];
+                    const auto scale_ki  = alpha * a_k[i];
                     auto* __restrict c_i = c + i * ldc;
                     for (size_type j = 0; j < columns; ++j)
                     {
-                        c_i[j] += alpha_ki * b_k[j];
+                        c_i[j] += scale_ki * b_k[j];
                     }
                 }
             }
@@ -1696,189 +1737,142 @@ void matrix_multiplication_seq(  // NOLINT
         }
         else if constexpr (!transpose_a && transpose_b)
         {
-            // alpha (row i of a) is fixed for the whole j loop below, so
-            // it's hoisted out of it instead of being recomputed from
-            // i * lda on every j.
+            // Row i of a is fixed for the whole j loop below, so it's
+            // hoisted out of it instead of being recomputed from i * lda on
+            // every j.
             for (size_type i = 0; i < rows; ++i)
             {
-                auto* const __restrict c_i         = c + i * ldc;
-                const auto* const __restrict alpha = a + i * lda;
+                auto* const __restrict c_i       = c + i * ldc;
+                const auto* const __restrict a_i = a + i * lda;
                 for (size_type j = 0; j < columns; ++j)
                 {
-                    const auto* const __restrict beta = b + j * ldb;
-                    value_t c0                        = 0;
+                    const auto* const __restrict b_j = b + j * ldb;
+                    value_t c0                       = 0;
                     for (size_type k = 0; k < depth; ++k)
                     {
-                        c0 += alpha[k] * beta[k];
+                        c0 += a_i[k] * b_j[k];
                     }
-                    c_i[j] = c0;
+                    c_i[j] += alpha * c0;
                 }
             }
             return;
         }
         else
         {
-            // beta (row j of b) is fixed for the whole k loop below, so
-            // it's hoisted out of it instead of being recomputed from
-            // j * ldb on every k. a[k * lda + i] (column i of a) stays a
-            // per-element strided read: with both operands transposed,
-            // one of the two is necessarily non-contiguous here regardless
-            // of loop order, and this fallback (small/non-blocked matrices
-            // only -- see the blocked GEBP kernel above for the real hot
-            // path) isn't worth restructuring further for it.
+            // Row j of b is fixed for the whole k loop below, so it's
+            // hoisted out of it instead of being recomputed from j * ldb on
+            // every k. a[k * lda + i] (column i of a) stays a per-element
+            // strided read: with both operands transposed, one of the two
+            // is necessarily non-contiguous here regardless of loop order,
+            // and this fallback (small/non-blocked matrices only -- see the
+            // blocked GEBP kernel above for the real hot path) isn't worth
+            // restructuring further for it.
             for (size_type i = 0; i < rows; ++i)
             {
                 for (size_type j = 0; j < columns; ++j)
                 {
-                    const auto* const __restrict beta = b + j * ldb;
-                    value_t c0                        = 0;
+                    const auto* const __restrict b_j = b + j * ldb;
+                    value_t c0                       = 0;
                     for (size_type k = 0; k < depth; ++k)
                     {
-                        c0 += a[k * lda + i] * beta[k];
+                        c0 += a[k * lda + i] * b_j[k];
                     }
-                    c[i * ldc + j] = c0;
+                    c[i * ldc + j] += alpha * c0;
                 }
             }
             return;
         }
     }
 }
+
+template <typename value_t>
+void native_gemm(bool transpose_a,
+    bool              transpose_b,
+    linalg_int        rows,
+    linalg_int        columns,
+    linalg_int        depth,
+    value_t           alpha,
+    value_t const*    a,
+    linalg_int        lda,
+    value_t const*    b,
+    linalg_int        ldb,
+    value_t           beta,
+    value_t*          c,
+    linalg_int        ldc,
+    void*             workspace,
+    size_t            workspace_size)
+{
+    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
+    if (alpha == value_t(0))
+    {
+        // BLAS quick return: the product contributes nothing, so a and b
+        // are not read and c is only scaled.
+        scale_output(c, rows, columns, ldc, beta);
+        return;
+    }
+    if (transpose_a)
+    {
+        if (transpose_b)
+        {
+            matrix_multiplication_seq<value_t, true, true>(
+                rows, columns, depth, alpha, a, lda, b, ldb, beta, c, ldc, workspace, workspace_size);
+        }
+        else
+        {
+            matrix_multiplication_seq<value_t, true, false>(
+                rows, columns, depth, alpha, a, lda, b, ldb, beta, c, ldc, workspace, workspace_size);
+        }
+    }
+    else
+    {
+        if (transpose_b)
+        {
+            matrix_multiplication_seq<value_t, false, true>(
+                rows, columns, depth, alpha, a, lda, b, ldb, beta, c, ldc, workspace, workspace_size);
+        }
+        else
+        {
+            matrix_multiplication_seq<value_t, false, false>(
+                rows, columns, depth, alpha, a, lda, b, ldb, beta, c, ldc, workspace, workspace_size);
+        }
+    }
+}
 }  // namespace
-// C(i,j) =C[i*ldc + j] j belong to [0,columns] and i to [0,rows]
+// C(i,j) = C[i*ldc + j] with j in [0, columns) and i in [0, rows)
 template <>
 void multiplication<float, linalg_backend::NATIVE>::apply(bool transpose_a,
     bool                                                       transpose_b,
     linalg_int                                                 rows,
     linalg_int                                                 columns,
     linalg_int                                                 depth,
-    float const* __restrict a,
-    linalg_int lda,
-    float const* __restrict b,
-    linalg_int ldb,
-    float*     c,
-    linalg_int ldc,
-    void*      workspace,
-    size_t     workspace_size,
+    float                                                      alpha,
+    float const*                                               a,
+    linalg_int                                                 lda,
+    float const*                                               b,
+    linalg_int                                                 ldb,
+    float                                                      beta,
+    float*                                                     c,
+    linalg_int                                                 ldc,
+    void*                                                      workspace,
+    size_t                                                     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("multiplication/native<float>");
-    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
-#if LINALG_HAS_VECTORIZATION
-
-    if (transpose_a && transpose_b)
-    {
-        matrix_multiplication_seq<float, true, true>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (transpose_a && !transpose_b)
-    {
-        matrix_multiplication_seq<float, true, false>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (!transpose_a && transpose_b)
-    {
-        matrix_multiplication_seq<float, false, true>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (!transpose_a && !transpose_b)
-    {
-        matrix_multiplication_seq<float, false, false>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-#else
-    if (transpose_a && transpose_b)
-    {
-        matrix_multiplication_seq<float, true, true>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (transpose_a && !transpose_b)
-    {
-        matrix_multiplication_seq<float, true, false>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (!transpose_a && transpose_b)
-    {
-        matrix_multiplication_seq<float, false, true>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (!transpose_a && !transpose_b)
-    {
-        matrix_multiplication_seq<float, false, false>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-#endif
+    native_gemm(transpose_a,
+        transpose_b,
+        rows,
+        columns,
+        depth,
+        alpha,
+        a,
+        lda,
+        b,
+        ldb,
+        beta,
+        c,
+        ldc,
+        workspace,
+        workspace_size);
 }
 
 template <>
@@ -1887,74 +1881,34 @@ void multiplication<double, linalg_backend::NATIVE>::apply(bool transpose_a,
     linalg_int                                                  rows,
     linalg_int                                                  columns,
     linalg_int                                                  depth,
-    double const* __restrict a,
-    linalg_int lda,
-    double const* __restrict b,
-    linalg_int ldb,
-    double*    c,
-    linalg_int ldc,
-    void*      workspace,
-    size_t     workspace_size,
+    double                                                      alpha,
+    double const*                                               a,
+    linalg_int                                                  lda,
+    double const*                                               b,
+    linalg_int                                                  ldb,
+    double                                                      beta,
+    double*                                                     c,
+    linalg_int                                                  ldc,
+    void*                                                       workspace,
+    size_t                                                      workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("multiplication/native<double>");
-    check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
-    if (transpose_a && transpose_b)
-    {
-        matrix_multiplication_seq<double, true, true>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (transpose_a && !transpose_b)
-    {
-        matrix_multiplication_seq<double, true, false>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (!transpose_a && transpose_b)
-    {
-        matrix_multiplication_seq<double, false, true>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
-    if (!transpose_a && !transpose_b)
-    {
-        matrix_multiplication_seq<double, false, false>(static_cast<linalg_int>(rows),
-            static_cast<linalg_int>(columns),
-            static_cast<linalg_int>(depth),
-            a,
-            static_cast<linalg_int>(lda),
-            b,
-            static_cast<linalg_int>(ldb),
-            c,
-            static_cast<linalg_int>(ldc),
-            workspace,
-            workspace_size);
-    }
+    native_gemm(transpose_a,
+        transpose_b,
+        rows,
+        columns,
+        depth,
+        alpha,
+        a,
+        lda,
+        b,
+        ldb,
+        beta,
+        c,
+        ldc,
+        workspace,
+        workspace_size);
 }
 
 template <>

@@ -70,10 +70,12 @@ void multiplication<float, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
     linalg_int     rows,
     linalg_int     columns,
     linalg_int     depth,
+    float          alpha,
     const float*   a,
     linalg_int     lda,
     const float*   b,
     linalg_int     ldb,
+    float          beta,
     float*         c,
     linalg_int     ldc,
     void* /*workspace*/,
@@ -81,8 +83,6 @@ void multiplication<float, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
     void*          stream)
 {
     LINALG_SCOPE("multiplication/cuda_blas<float>");
-    const float alpha = 1.F;
-    const float beta  = 0.F;
     multiplication_impl(cublasSgemm, alpha, beta, transpose_a, transpose_b,
         rows, columns, depth, a, lda, b, ldb, c, ldc,
         static_cast<cudaStream_t>(stream));
@@ -94,10 +94,12 @@ void multiplication<double, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
     linalg_int     rows,
     linalg_int     columns,
     linalg_int     depth,
+    double         alpha,
     const double*  a,
     linalg_int     lda,
     const double*  b,
     linalg_int     ldb,
+    double         beta,
     double*        c,
     linalg_int     ldc,
     void* /*workspace*/,
@@ -105,8 +107,6 @@ void multiplication<double, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
     void*          stream)
 {
     LINALG_SCOPE("multiplication/cuda_blas<double>");
-    const double alpha = 1.;
-    const double beta  = 0.;
     multiplication_impl(cublasDgemm, alpha, beta, transpose_a, transpose_b,
         rows, columns, depth, a, lda, b, ldb, c, ldc,
         static_cast<cudaStream_t>(stream));

@@ -23,10 +23,12 @@ void multiplication_impl(bool transpose_a,
     linalg_int  rows,
     linalg_int  columns,
     linalg_int  depth,
+    float       alpha,
     const float* a,
     linalg_int  lda,
     const float* b,
     linalg_int  ldb,
+    float       beta,
     float*      c,
     linalg_int  ldc,
     void*       stream)
@@ -79,8 +81,8 @@ void multiplication_impl(bool transpose_a,
                                                  resultRows:static_cast<NSUInteger>(rows)
                                               resultColumns:static_cast<NSUInteger>(columns)
                                             interiorColumns:static_cast<NSUInteger>(depth)
-                                                      alpha:1.0
-                                                       beta:0.0];
+                                                      alpha:static_cast<double>(alpha)
+                                                       beta:static_cast<double>(beta)];
 
         id<MTLCommandQueue>  queue        = detail::metal_queue_from_stream(stream);
         id<MTLCommandBuffer> command_buf  = [queue commandBuffer];
@@ -97,10 +99,12 @@ void multiplication<float, linalg_backend::METAL_BLAS>::apply(bool transpose_a,
     linalg_int     rows,
     linalg_int     columns,
     linalg_int     depth,
+    float          alpha,
     const float*   a,
     linalg_int     lda,
     const float*   b,
     linalg_int     ldb,
+    float          beta,
     float*         c,
     linalg_int     ldc,
     void* /*workspace*/,
@@ -108,8 +112,20 @@ void multiplication<float, linalg_backend::METAL_BLAS>::apply(bool transpose_a,
     void*          stream)
 {
     LINALG_SCOPE("multiplication/metal_blas<float>");
-    multiplication_impl(
-        transpose_a, transpose_b, rows, columns, depth, a, lda, b, ldb, c, ldc, stream);
+    multiplication_impl(transpose_a,
+        transpose_b,
+        rows,
+        columns,
+        depth,
+        alpha,
+        a,
+        lda,
+        b,
+        ldb,
+        beta,
+        c,
+        ldc,
+        stream);
 }
 
 template <>
