@@ -52,6 +52,8 @@ PLATFORMS = {
 FOCUSED = {
     "LINALG_ENABLE_MKL": "ci.yml: cmake-mkl and cmake-mkl-windows (native and combined BLAS)",
     "LINALG_GPU_BACKEND": "ci.yml: cuda-compile, cuda-windows, hip-compile, and metal-compile; GPU runtime remains gated",
+    "LINALG_CUDA_ARCHITECTURES": "ci.yml: cuda-compile and cuda-windows; SM list exercised per-job alongside LINALG_GPU_BACKEND=cuda",
+    "LINALG_HIP_ARCHITECTURES": "ci.yml: hip-compile; gfxXXX list exercised per-job alongside LINALG_GPU_BACKEND=hip",
     "LINALG_BUILD_EXAMPLES": "ci.yml: CUDA/HIP + MKL + OpenBLAS example compilation",
     "LINALG_ENABLE_PROFILING": "check_tool_flags.py: available/missing Profiler target contracts",
     "LINALG_ENABLE_CLANGTIDY": "check_tool_flags.py: all developer-tool switch combinations",

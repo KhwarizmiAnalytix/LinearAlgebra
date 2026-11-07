@@ -81,6 +81,7 @@ bool lu_apply_impl(BufSizeFn buffer_size,
     linalg_int*              pivot,
     void*                    workspace,
     size_t                   workspace_size,
+    int*                     info,
     void*                    stream)
 {
     LINALG_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
@@ -133,6 +134,10 @@ bool lu_apply_impl(BufSizeFn buffer_size,
         "lu_decomposition: pivot write-back failed");
     LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "lu_decomposition: stream sync failed");
 
+    if (info != nullptr)
+    {
+        *info = host_info;
+    }
     return host_info == 0;
 }
 
@@ -144,6 +149,7 @@ bool lu_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* m,
     linalg_int*                                                       pivot,
     void*                                                             workspace,
     size_t                                                            workspace_size,
+    int*                                                              info,
     void*                                                             stream)
 {
     LINALG_SCOPE("lu_decomposition/cuda_blas<float>");
@@ -154,6 +160,7 @@ bool lu_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* m,
         pivot,
         workspace,
         workspace_size,
+        info,
         stream);
 }
 
@@ -163,6 +170,7 @@ bool lu_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* m,
     linalg_int*                                                        pivot,
     void*                                                              workspace,
     size_t                                                             workspace_size,
+    int*                                                               info,
     void*                                                              stream)
 {
     LINALG_SCOPE("lu_decomposition/cuda_blas<double>");
@@ -173,6 +181,7 @@ bool lu_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* m,
         pivot,
         workspace,
         workspace_size,
+        info,
         stream);
 }
 

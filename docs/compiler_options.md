@@ -379,7 +379,7 @@ Do not transfer CMake cache switches directly into Bazel commands or assume a
 Windows GNU-style compiler can consume the OS-selected MSVC flags. This report
 inspected Bazel source configuration; it did not resolve or compile Bazel actions.
 
-Sources: [.bazelrc](../.bazelrc), [shared Bazel helpers](../bazel/xsigma.bzl),
+Sources: [.bazelrc](../.bazelrc),
 [LinearAlgebra helpers](../bazel/linear_algebra.bzl),
 [Bazel setup](../Scripts/setup_bazel.py), [Bazel target](../BUILD.bazel).
 

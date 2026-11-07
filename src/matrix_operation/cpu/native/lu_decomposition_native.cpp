@@ -143,13 +143,25 @@ inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long
 // to touch yet, once per row per panel column.
 // m and pivot are __restrict: they're always two distinct caller-owned
 // buffers (lu_decomposition.h documents pivot as a separate output array).
+//
+// Zero pivots follow LAPACK's dgetf2 rather than stopping early: a pivot
+// is singular only when it is exactly zero (no tolerance, so a well-scaled
+// but tiny matrix such as 1e-8 * I is not flagged), the first such row
+// index is recorded in *first_zero_pivot (left untouched if it is already
+// set), and elimination simply skips that column. With pivoting on, an
+// exactly-zero pivot means the whole column at and below the diagonal is
+// zero, so every multiplier is zero and the skipped elimination would have
+// been a no-op: the result is still a complete A = P * L * U with a zero
+// on U's diagonal, the same as the BLAS/MKL backends' getrf. Without
+// pivoting the entries below a zero diagonal can be nonzero, so no LU
+// exists; the column is left unscaled and the status is reported.
 template <typename T>
-bool lu_panel_factor(T* __restrict m,
+void lu_panel_factor(T* __restrict m,
     linalg_long lda,
     linalg_long start,
     linalg_long width,
     LINALG_UNUSED linalg_int* __restrict pivot,
-    LINALG_UNUSED T tolerance)
+    linalg_int* __restrict first_zero_pivot)
 {
     using size_type = linalg_long;
 
@@ -171,13 +183,9 @@ bool lu_panel_factor(T* __restrict m,
                 imax = k;
             }
         }
-        if (maxA < tolerance)
-        {
-            return false;
-        }
+        pivot[i] = static_cast<linalg_int>(imax + 1);
         if (imax != i)
         {
-            pivot[i] = pivot[imax];
             // row_i_f and row_imax_f are safe to treat as non-aliasing
             // here: this branch only runs when imax != i.
             T* const __restrict row_imax_f = m + imax * lda;
@@ -189,19 +197,38 @@ bool lu_panel_factor(T* __restrict m,
 #endif
         // row_i_f[i] re-reads live memory (not a cached value), so this
         // correctly sees the post-swap diagonal when a swap happened above.
-        const auto norm         = static_cast<T>(1. / row_i_f[i]);
-        T* const __restrict l_i = row_i_f + start;
+        const T diag = row_i_f[i];
+        if (diag == T(0))
+        {
+            if (*first_zero_pivot < 0)
+            {
+                *first_zero_pivot = static_cast<linalg_int>(i);
+            }
+            continue;
+        }
+
+        // Same split as dgetf2: multiply by the reciprocal unless it would
+        // overflow (|diag| below the smallest normal), then divide instead.
+        const bool use_reciprocal = std::abs(diag) >= std::numeric_limits<T>::min();
+        const T    norm           = use_reciprocal ? static_cast<T>(T(1) / diag) : T(1);
+        T* const __restrict l_i   = row_i_f + start;
 
         // l_i (row i) and l_r (row r, r > i always) never alias, so
         // lu_axpy_sub's __restrict contract holds.
         for (size_type r = i + 1; r < lda; ++r)
         {
             T* const __restrict l_r = m + r * lda + start;
-            l_r[ii] *= norm;
+            if (use_reciprocal)
+            {
+                l_r[ii] *= norm;
+            }
+            else
+            {
+                l_r[ii] /= diag;
+            }
             lu_axpy_sub(l_r + ii + 1, l_i + ii + 1, l_r[ii], width - ii - 1);
         }
     }
-    return true;
 }
 
 #if LINALG_HAS_LU_PIVOTING
@@ -303,31 +330,26 @@ template <typename T>
 bool lu_decomposition_blocked_impl(T* __restrict m,
     linalg_long lda,
     linalg_int* __restrict pivot,
-    T      tolerance,
     void*  workspace,
-    size_t workspace_size)
+    size_t workspace_size,
+    int*   info)
 {
     using size_type = linalg_long;
 
-#if LINALG_HAS_LU_PIVOTING
+    // Identity pivots up front: with pivoting on, lu_panel_factor overwrites
+    // each entry; with it off, this is the (row-interchange-free) result
+    // callers receive, so pivot[] is never left uninitialized.
     for (size_type i = 0; i < lda; ++i)
     {
         pivot[i] = static_cast<linalg_int>(i + 1);
     }
-#endif
 
+    linalg_int first_zero_pivot = -1;
     for (size_type k = 0; k < lda; k += kLuBlockSize)
     {
         const size_type bs = std::min(kLuBlockSize, lda - k);
 
-#if LINALG_HAS_LU_PIVOTING
-        if (!lu_panel_factor(m, lda, k, bs, pivot, tolerance))
-        {
-            return false;
-        }
-#else
-        lu_panel_factor(m, lda, k, bs, pivot, tolerance);
-#endif
+        lu_panel_factor(m, lda, k, bs, pivot, &first_zero_pivot);
 
         const size_type rest = lda - k - bs;
         if (rest == 0)
@@ -399,7 +421,11 @@ bool lu_decomposition_blocked_impl(T* __restrict m,
             lu_axpy_sub(out_row, delta_row, static_cast<T>(1), rest);
         }
     }
-    return true;
+    if (info != nullptr)
+    {
+        *info = static_cast<int>(first_zero_pivot + 1);
+    }
+    return first_zero_pivot < 0;
 }
 
 }  // namespace
@@ -410,12 +436,12 @@ bool lu_decomposition<float, linalg_backend::NATIVE>::apply(float* __restrict m,
     linalg_int* __restrict pivot,
     void*  workspace,
     size_t workspace_size,
+    int*   info,
     void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<float>");
     check_lu_inputs(m, pivot, lda);
-    return lu_decomposition_blocked_impl(
-        m, lda, pivot, std::numeric_limits<float>::epsilon(), workspace, workspace_size);
+    return lu_decomposition_blocked_impl(m, lda, pivot, workspace, workspace_size, info);
 }
 
 template <>
@@ -424,12 +450,12 @@ bool lu_decomposition<double, linalg_backend::NATIVE>::apply(double* __restrict 
     linalg_int* __restrict pivot,
     void*  workspace,
     size_t workspace_size,
+    int*   info,
     void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/native<double>");
     check_lu_inputs(m, pivot, lda);
-    return lu_decomposition_blocked_impl(
-        m, lda, pivot, std::numeric_limits<double>::epsilon(), workspace, workspace_size);
+    return lu_decomposition_blocked_impl(m, lda, pivot, workspace, workspace_size, info);
 }
 
 template <> size_t lu_decomposition<float, linalg_backend::NATIVE>::workspace_size(linalg_int lda)

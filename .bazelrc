@@ -8,8 +8,8 @@
 common --enable_platform_specific_config
 
 # C++20 by default (mirrors LOGGING_CXX_STANDARD=20 in CMakeLists.txt).
-# MSVC takes /std:c++20, not -std=c++20 — unlike logging_copts()/xsigma_copts()
-# (bazel/xsigma.bzl), which already select() this per target, this applies to
+# MSVC takes /std:c++20, not -std=c++20 — unlike linear_algebra_copts()
+# (bazel/linear_algebra.bzl), which already select() this per target, this applies to
 # every target including third-party deps, so it must be split per OS too.
 build:linux --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
 build:macos --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
@@ -30,3 +30,32 @@ build:windows --copt=/IThirdParty/Logging
 # Backend selection examples:
 #   bazel build //:Logging --define=logging_backend=spdlog
 #   bazel build //:Logging --define=logging_backend=glog
+
+# GPU backend (LINALG_GPU_BACKEND). CUDA requires rules_cuda (MODULE.bazel)
+# and a CUDA toolkit; HIP requires a ROCm toolchain.
+#   bazel build //:LinearAlgebra --define=linalg_gpu_backend=cuda
+#   bazel build //:LinearAlgebra --define=linalg_gpu_backend=hip
+#
+# Override CUDA SM targets (otherwise uses the CUDA compiler default):
+#   bazel build //:LinearAlgebra --define=linalg_gpu_backend=cuda \
+#       --@rules_cuda//cuda:archs=sm_80,sm_86,sm_90
+#
+# CPU SIMD backend (LINALG_CPU_BACKEND). Enables SIMD compiler flags and
+# lifts LINALG_HAS_VECTORIZATION=1 / SCALARS_VECTORIZED=1 in Scalars.
+# x86-64: sse | avx | avx2 | avx512; AArch64: neon | sve
+# Bazel defaults to scalar (no); CMake uses host-aware defaults.
+#   bazel build //:LinearAlgebra --define=linalg_cpu_backend=avx2
+#   bazel build //:LinearAlgebra --define=linalg_cpu_backend=neon
+#
+# Combined GPU + CPU example (AVX2 host, CUDA GPU):
+#   bazel build //:LinearAlgebra \
+#       --define=linalg_gpu_backend=cuda \
+#       --define=linalg_cpu_backend=avx2
+
+# HIP device compilation uses ROCm Clang as Bazel's C/C++ toolchain.
+# Set the actual SDK root and compiler paths for your installation:
+#   bazel build //:LinearAlgebra --define=linalg_gpu_backend=hip \
+#       --repo_env=ROCM_PATH=/opt/rocm \
+#       --repo_env=CC=/opt/rocm/llvm/bin/clang \
+#       --repo_env=CXX=/opt/rocm/llvm/bin/clang++
+# On a headless machine also pass --copt=--offload-arch=gfx90a (or your GPU).

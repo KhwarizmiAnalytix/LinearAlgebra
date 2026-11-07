@@ -27,13 +27,20 @@ template <typename T, linalg_backend Backend> struct lu_decomposition
      * @param[out] workspace Caller-owned temporary buffer in host memory.
      * @param[in] workspace_size Size of workspace in bytes; must meet the size returned by
      *     workspace_size().
-     * @return True on success; false if factorization fails.
+     * @param[out] info Optional LAPACK getrf-style status; may be null. Zero on success, or the
+     *     1-based index of the first U diagonal entry that is exactly zero. As with getrf, a
+     *     zero pivot does not stop the factorization: m and pivot still hold a complete
+     *     factorization A = P * L * U, with U singular. Always host memory, written before
+     *     apply() returns; the CUDA_BLAS/ROCM_BLAS backends copy the device status to the host
+     *     and synchronize before returning.
+     * @return True if U is nonsingular (info == 0); false otherwise.
      */
     LINALG_API static bool apply(T* m,
         linalg_int                   lda,
         linalg_int*                  pivot,
         void*                        workspace,
         size_t                       workspace_size,
+        int*                         info   = nullptr,
         void*                        stream = nullptr);
 
     /**

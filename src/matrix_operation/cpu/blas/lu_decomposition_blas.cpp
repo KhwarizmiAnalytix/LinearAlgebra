@@ -60,8 +60,13 @@ size_t lu_blas_workspace_size(linalg_int lda)
 }  // namespace
 
 template <>
-bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(
-    float* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size, void* /*stream*/)
+bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
+    linalg_int lda,
+    linalg_int* pivot,
+    void*       workspace,
+    size_t      workspace_size,
+    int*        info,
+    void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<float>");
     check_lu_inputs(m, pivot, lda);
@@ -70,17 +75,26 @@ bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(
     const auto              n = static_cast<lapack_int>(lda);
     detail::workspace_arena arena(workspace, workspace_size);
     lapack_int*             ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto info = LINALG_BLAS_FUNCTION(LAPACKE_sgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
+    const auto lapack_info = LINALG_BLAS_FUNCTION(LAPACKE_sgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
     for (lapack_int i = 0; i < n; ++i)
     {
         pivot[i] = static_cast<linalg_int>(ipiv[i]);
     }
-    return info == 0;
+    if (info != nullptr)
+    {
+        *info = static_cast<int>(lapack_info);
+    }
+    return lapack_info == 0;
 }
 
 template <>
-bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(
-    double* m, linalg_int lda, linalg_int* pivot, void* workspace, size_t workspace_size, void* /*stream*/)
+bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
+    linalg_int lda,
+    linalg_int* pivot,
+    void*       workspace,
+    size_t      workspace_size,
+    int*        info,
+    void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<double>");
     check_lu_inputs(m, pivot, lda);
@@ -89,12 +103,16 @@ bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(
     const auto              n = static_cast<lapack_int>(lda);
     detail::workspace_arena arena(workspace, workspace_size);
     lapack_int*             ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto info = LINALG_BLAS_FUNCTION(LAPACKE_dgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
+    const auto lapack_info = LINALG_BLAS_FUNCTION(LAPACKE_dgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
     for (lapack_int i = 0; i < n; ++i)
     {
         pivot[i] = static_cast<linalg_int>(ipiv[i]);
     }
-    return info == 0;
+    if (info != nullptr)
+    {
+        *info = static_cast<int>(lapack_info);
+    }
+    return lapack_info == 0;
 }
 
 template <> size_t lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)

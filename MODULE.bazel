@@ -10,6 +10,28 @@ bazel_dep(name = "rules_pkg", version = "1.0.1")
 bazel_dep(name = "googletest", version = "1.16.0")
 bazel_dep(name = "google_benchmark", version = "1.9.1")
 
+# CUDA rules 0.3.0 use the rules_cc APIs required by Bazel 9.
+bazel_dep(name = "rules_cuda", version = "0.3.0")
+
+cuda = use_extension("@rules_cuda//cuda:extensions.bzl", "toolchain")
+cuda.toolkit(
+    name = "cuda",
+    toolkit_path = "",
+)
+use_repo(cuda, "cuda")
+
+rocm_repository = use_repo_rule("//bazel:rocm_repository.bzl", "rocm_repository")
+
+rocm_repository(name = "local_config_hip")
+
+# Installed KhwarizmiAnalytix/Profiler package (LINALG_ENABLE_PROFILING).
+# Lazily fetched: only resolved when Testing/Profile's cc_binary targets are
+# actually requested (target_compatible_with keeps them, and therefore this
+# repo, out of a plain `bazel build //...`).
+profiler_repository = use_repo_rule("//bazel:profiler_repository.bzl", "profiler_repository")
+
+profiler_repository(name = "linalg_profiler")
+
 # Logging library (vendored git submodule), wired as its own Bazel module
 # rather than a plain subdirectory — matches the sibling Solvers project.
 # Its default LOGURU backend's always-on deps (fmt, loguru) are resolved via
@@ -35,31 +57,34 @@ new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.
 
 new_local_repository(
     name = "eigen",
-    path = "ThirdParty/eigen",
     build_file = "//bazel:eigen.BUILD",
+    path = "ThirdParty/eigen",
 )
 
 new_local_repository(
     name = "fmt",
-    path = "ThirdParty/Logging/ThirdParty/fmt",
     build_file = "@xsigma_logging//ThirdParty:fmt.BUILD",
+    path = "ThirdParty/Logging/ThirdParty/fmt",
 )
+
 new_local_repository(
     name = "loguru",
-    path = "ThirdParty/Logging/ThirdParty/loguru",
     build_file = "@xsigma_logging//ThirdParty:loguru.BUILD",
+    path = "ThirdParty/Logging/ThirdParty/loguru",
 )
+
 new_local_repository(
     name = "spdlog",
-    path = "ThirdParty/Logging/ThirdParty/spdlog",
     build_file = "@xsigma_logging//ThirdParty:spdlog.BUILD",
+    path = "ThirdParty/Logging/ThirdParty/spdlog",
 )
 
 logging_vendor_deps = use_extension("@xsigma_logging//bazel:vendor_deps.bzl", "vendor_deps")
+
 override_repo(logging_vendor_deps, "fmt", "loguru", "spdlog")
 
 new_local_repository(
     name = "scalars",
-    path = "ThirdParty/Scalars",
     build_file = "//bazel:scalars.BUILD",
+    path = "ThirdParty/Scalars",
 )

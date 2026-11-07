@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_test")
-load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
+load("//bazel:linear_algebra.bzl", "linear_algebra_arch_copts", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_gpu_copts", "linear_algebra_linkopts")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -12,12 +12,12 @@ cc_test(
         allow_empty = True,
     ) + [
         "dense_matrix_test_helper.h",
-        "test_reporting.h",
-        "test_backend.h",
         "matrix_functions_test_cases.h",
+        "test_backend.h",
+        "test_reporting.h",
         "triangular_solver_test_cases.h",
     ],
-    copts = linear_algebra_copts(),
+    copts = linear_algebra_copts() + linear_algebra_arch_copts() + linear_algebra_gpu_copts(),
     defines = linear_algebra_defines() + [
         "LINALG_GOOGLE_TEST",
         "USE_GTEST",
@@ -30,7 +30,7 @@ cc_test(
     deps = [
         "//:LinearAlgebra",
         "//Testing:linearAlgebraTest_header",
-        "@eigen//:eigen",
+        "@eigen",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],

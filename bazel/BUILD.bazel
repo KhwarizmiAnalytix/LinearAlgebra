@@ -10,7 +10,6 @@ package(default_visibility = ["//visibility:public"])
 exports_files([
     "eigen.BUILD",
     "scalars.BUILD",
-    "xsigma.bzl",
     "linear_algebra.bzl",
 ])
 
@@ -33,3 +32,99 @@ config_setting(
     name = "linalg_lu_pivoting",
     define_values = {"linalg_lu_pivoting": "true"},
 )
+
+# Mirrors CMake's LINALG_DISPLAY_WIN32_WARNINGS (default OFF: MSVC
+# narrowing-conversion warnings suppressed). Checked by
+# src/matrix_operation/cpu/native/multiplication_native.cpp's
+# `#if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS` guard.
+config_setting(
+    name = "linalg_win32_warnings",
+    define_values = {"linalg_display_win32_warnings": "true"},
+)
+
+# Mirrors CMake's LINALG_ENABLE_PROFILING. Gates Testing/Profile's two
+# cc_binary targets, which depend on an installed KhwarizmiAnalytix/Profiler
+# package (see bazel/profiler_repository.bzl) rather than a vendored one —
+# target_compatible_with keeps `bazel build //...` from needing that package
+# (or fetching @linalg_profiler at all) unless this is set.
+config_setting(
+    name = "linalg_enable_profiling",
+    define_values = {"linalg_enable_profiling": "true"},
+)
+
+# GPU backend selectors — mirror CMake's LINALG_GPU_BACKEND=cuda/hip.
+# Usage:
+#   bazel build //:LinearAlgebra --define=linalg_gpu_backend=cuda
+#   bazel build //:LinearAlgebra --define=linalg_gpu_backend=hip
+# The CUDA backend requires rules_cuda (see MODULE.bazel) and a CUDA
+# toolchain; HIP uses the ROCm Clang C++ toolchain (see .bazelrc).
+# Device kernels are compiled separately from the host bridge .cpp files.
+config_setting(
+    name = "linalg_gpu_cuda",
+    define_values = {"linalg_gpu_backend": "cuda"},
+)
+
+config_setting(
+    name = "linalg_gpu_cuda_windows",
+    constraint_values = ["@platforms//os:windows"],
+    define_values = {"linalg_gpu_backend": "cuda"},
+)
+
+config_setting(
+    name = "linalg_gpu_hip",
+    define_values = {"linalg_gpu_backend": "hip"},
+)
+
+# CPU SIMD backend selectors — mirror CMake's LINALG_CPU_BACKEND values.
+# Usage:
+#   bazel build //:LinearAlgebra --define=linalg_cpu_backend=avx2
+# The selected backend controls LINALG_HAS_VECTORIZATION and the SIMD
+# compiler flags forwarded to Scalars (see bazel/scalars.BUILD).
+config_setting(
+    name = "linalg_cpu_no",
+    define_values = {"linalg_cpu_backend": "no"},
+)
+
+config_setting(
+    name = "linalg_cpu_sse",
+    define_values = {"linalg_cpu_backend": "sse"},
+)
+
+config_setting(
+    name = "linalg_cpu_avx",
+    define_values = {"linalg_cpu_backend": "avx"},
+)
+
+config_setting(
+    name = "linalg_cpu_avx2",
+    define_values = {"linalg_cpu_backend": "avx2"},
+)
+
+config_setting(
+    name = "linalg_cpu_avx512",
+    define_values = {"linalg_cpu_backend": "avx512"},
+)
+
+config_setting(
+    name = "linalg_cpu_neon",
+    define_values = {"linalg_cpu_backend": "neon"},
+)
+
+config_setting(
+    name = "linalg_cpu_sve",
+    define_values = {"linalg_cpu_backend": "sve"},
+)
+
+[
+    config_setting(
+        name = "linalg_cpu_" + backend + "_windows",
+        constraint_values = ["@platforms//os:windows"],
+        define_values = {"linalg_cpu_backend": backend},
+    )
+    for backend in [
+        "sse",
+        "avx",
+        "avx2",
+        "avx512",
+    ]
+]

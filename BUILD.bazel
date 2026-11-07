@@ -3,10 +3,12 @@
 # files under the mirrored src/ tree (e.g.
 # src/matrix_operation/cpu/native/lu_decomposition_native.cpp).
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cuda//cuda:defs.bzl", "cuda_library")
 load("@rules_pkg//pkg:install.bzl", "pkg_install")
 load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
 load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
-load("//bazel:linear_algebra.bzl", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_linkopts")
+load("//bazel:hip.bzl", "hip_library")
+load("//bazel:linear_algebra.bzl", "linear_algebra_arch_copts", "linear_algebra_copts", "linear_algebra_defines", "linear_algebra_gpu_copts", "linear_algebra_linkopts")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -25,12 +27,11 @@ package(default_visibility = ["//visibility:public"])
 # Combined MKL/BLAS builds also need LINALG_BLAS_RUNTIME_PATH defined as a
 # string naming an independent shared provider (and optionally
 # LINALG_LAPACKE_RUNTIME_PATH for a separate LAPACKE provider), plus libdl on ELF.
-# CMake configures these paths automatically. LINALG_HAS_CUBLAS / LINALG_HAS_ROCBLAS
-# (and their helper macros) have no Bazel toggle at all — CMake is this repo's
-# primary, exercised build system for the mkl / blas_lapack backends and the
-# cuBLAS/cuSOLVER (src/matrix_operation/gpu/cublas/) and hipBLAS/hipSOLVER
-# (src/matrix_operation/gpu/hipblas/) GPU backends, mutually exclusive, plus
-# include/matrix_operation/multiplication_batched.h, not part of this glob.
+# CMake configures these paths automatically.
+#
+# GPU bridge .cpp files use the host toolchain. Device kernels are compiled
+# separately and supply SDK headers and libraries through their dependencies.
+# HIP builds require the ROCm Clang C++ toolchain; see .bazelrc.
 
 filegroup(
     name = "linear_algebra_hdrs",
@@ -45,7 +46,20 @@ filegroup(
             "src/matrix_operation/cpu/blas/*.h",
         ],
         allow_empty = True,
-    ),
+    ) + select({
+        # GPU backend headers — cublas/ and hipblas/ each have internal .h files
+        # used only by their own bridge .cpp sources. Include them in the hdrs
+        # filegroup so the cc_library sandbox sees them when compiling the srcs.
+        "//bazel:linalg_gpu_cuda": glob(
+            ["src/matrix_operation/gpu/cublas/*.h"],
+            allow_empty = True,
+        ),
+        "//bazel:linalg_gpu_hip": glob(
+            ["src/matrix_operation/gpu/hipblas/*.h"],
+            allow_empty = True,
+        ),
+        "//conditions:default": [],
+    }),
 )
 
 filegroup(
@@ -58,10 +72,26 @@ filegroup(
         ],
         allow_empty = True,
     ) + select({
-        "//bazel:linalg_enable_mkl": glob(["src/matrix_operation/cpu/mkl/*.cpp"], allow_empty = True),
+        "//bazel:linalg_enable_mkl": glob(
+            ["src/matrix_operation/cpu/mkl/*.cpp"],
+            allow_empty = True,
+        ),
         "//conditions:default": [],
     }) + select({
-        "//bazel:linalg_enable_blas": glob(["src/matrix_operation/cpu/blas/*.cpp"], allow_empty = True),
+        "//bazel:linalg_enable_blas": glob(
+            ["src/matrix_operation/cpu/blas/*.cpp"],
+            allow_empty = True,
+        ),
+        "//conditions:default": [],
+    }) + select({
+        "//bazel:linalg_gpu_cuda": glob(
+            ["src/matrix_operation/gpu/cublas/*.cpp"],
+            allow_empty = True,
+        ),
+        "//bazel:linalg_gpu_hip": glob(
+            ["src/matrix_operation/gpu/hipblas/*.cpp"],
+            allow_empty = True,
+        ),
         "//conditions:default": [],
     }),
 )
@@ -70,25 +100,33 @@ cc_library(
     name = "linear_algebra_lib",
     srcs = [":linear_algebra_srcs"],
     hdrs = [":linear_algebra_hdrs"],
-    copts = linear_algebra_copts(),
+    copts = linear_algebra_copts() + linear_algebra_arch_copts() + linear_algebra_gpu_copts(),
     defines = linear_algebra_defines() + select({
         "//bazel:shared_libs": ["LINALG_SHARED_DEFINE"],
         "//conditions:default": ["LINALG_STATIC_DEFINE"],
-    }),
-    local_defines = select({
-        "//bazel:shared_libs": ["LINALG_BUILDING_DLL"],
-        "//conditions:default": [],
     }),
     linkopts = linear_algebra_linkopts(),
     linkstatic = select({
         "//bazel:shared_libs": False,
         "//conditions:default": True,
     }),
+    local_defines = select({
+        "//bazel:shared_libs": ["LINALG_BUILDING_DLL"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
     # Exception reporting (LOGGING_CHECK/LOGGING_THROW, see CLAUDE.md) is
     # implemented in ThirdParty/Logging, wired as its own Bazel module
     # (bazel_dep + local_path_override in MODULE.bazel, matching the sibling
     # Solvers project) rather than a plain subdirectory of this workspace.
-    deps = ["@xsigma_logging//:Logging", "@scalars//:scalars"],
+    deps = [
+        "@scalars",
+        "@xsigma_logging//:Logging",
+    ] + select({
+        "//bazel:linalg_gpu_cuda": [":linear_algebra_cuda_kernels"],
+        "//bazel:linalg_gpu_hip": [":linear_algebra_hip_kernels"],
+        "//conditions:default": [],
+    }),
     # Commit b09f66e replaced a PyTorch-style dispatch_stub function-pointer
     # registry (each backend self-registering via a static initializer, with
     # no other translation unit calling into it directly) with the current
@@ -101,13 +139,68 @@ cc_library(
     # verified against every Bazel consumer) rather than because the old
     # whole-archive-link workaround still applies.
     alwayslink = True,
-    visibility = ["//visibility:public"],
 )
 
 cc_library(
     name = "LinearAlgebra",
-    deps = [":linear_algebra_lib"],
     visibility = ["//visibility:public"],
+    deps = [":linear_algebra_lib"],
+)
+
+# Device libraries are incompatible when their backend is disabled, so
+# wildcard CPU builds do not analyze or compile either GPU toolchain.
+cuda_library(
+    name = "linear_algebra_cuda_kernels",
+    srcs = glob(["src/matrix_operation/gpu/cublas/*.cu"]),
+    hdrs = [":linear_algebra_hdrs"],
+    copts = ["-std=c++20"] + select({
+        "@rules_cuda//cuda:compiler_is_nvcc": ["--expt-relaxed-constexpr"],
+        "//conditions:default": [],
+    }),
+    defines = linear_algebra_defines() + select({
+        "//bazel:shared_libs": ["LINALG_SHARED_DEFINE"],
+        "//conditions:default": ["LINALG_STATIC_DEFINE"],
+    }),
+    host_copts = linear_algebra_arch_copts() + select({
+        "@platforms//os:windows": ["/Zc:preprocessor"],
+        "//conditions:default": ["-fPIC"],
+    }),
+    local_defines = select({
+        "//bazel:shared_libs": ["LINALG_BUILDING_DLL"],
+        "//conditions:default": [],
+    }),
+    target_compatible_with = select({
+        "//bazel:linalg_gpu_cuda": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "@cuda//:cublas",
+        "@cuda//:cusolver",
+        "@scalars",
+        "@xsigma_logging//:Logging",
+    ],
+)
+
+hip_library(
+    name = "linear_algebra_hip_kernels",
+    srcs = glob(["src/matrix_operation/gpu/hipblas/*.hip"]),
+    hdrs = [":linear_algebra_hdrs"],
+    copts = linear_algebra_copts() + linear_algebra_arch_copts(),
+    defines = linear_algebra_defines() + select({
+        "//bazel:shared_libs": ["LINALG_SHARED_DEFINE"],
+        "//conditions:default": ["LINALG_STATIC_DEFINE"],
+    }),
+    enabled = "//bazel:linalg_gpu_hip",
+    local_defines = select({
+        "//bazel:shared_libs": ["LINALG_BUILDING_DLL"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "@local_config_hip//:hipblas",
+        "@local_config_hip//:hipsolver",
+        "@scalars",
+        "@xsigma_logging//:Logging",
+    ],
 )
 
 # =============================================================================
@@ -121,7 +214,11 @@ cc_library(
 pkg_files(
     name = "linear_algebra_installed_hdrs",
     srcs = glob(
-        ["include/**/*.h", "include/**/*.hxx", "include/**/*.hpp"],
+        [
+            "include/**/*.h",
+            "include/**/*.hxx",
+            "include/**/*.hpp",
+        ],
         allow_empty = True,
     ),
     prefix = "include/LinearAlgebra/include",
@@ -130,7 +227,14 @@ pkg_files(
 
 pkg_files(
     name = "linear_algebra_installed_libs",
-    srcs = [":linear_algebra_lib", "@scalars//:scalars"],
+    srcs = [
+        ":linear_algebra_lib",
+        "@scalars",
+    ] + select({
+        "//bazel:linalg_gpu_cuda": [":linear_algebra_cuda_kernels"],
+        "//bazel:linalg_gpu_hip": [":linear_algebra_hip_kernels"],
+        "//conditions:default": [],
+    }),
     prefix = "lib",
 )
 

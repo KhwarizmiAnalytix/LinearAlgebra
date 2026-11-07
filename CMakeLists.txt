@@ -496,31 +496,11 @@ endif()
 # inversion/determinant, trace), so `enable_language(CUDA)` and an nvcc
 # toolchain are only required — and only enabled — when LINALG_GPU_BACKEND=cuda;
 # plain CPU builds remain free of any CUDA toolchain requirement.
+# Architecture detection, host-compiler forwarding, and WIN32/clang-GNU link
+# workarounds are handled by Cmake/cuda.cmake; linalg_apply_cuda_flags() is
+# called after add_library() below.
 if(LINALG_GPU_BACKEND STREQUAL "cuda")
-    find_package(CUDAToolkit REQUIRED)
-    if(NOT DEFINED CMAKE_CUDA_STANDARD)
-        set(CMAKE_CUDA_STANDARD ${LINALG_CXX_STANDARD})
-        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    endif()
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES native)
-    endif()
-    enable_language(CUDA)
-    if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
-                                                            STREQUAL "GNU"
-    )
-        # Mixed CXX/CUDA targets link with clang++. CMake's CUDA runtime
-        # options are bare cudadevrt/cudart names, which the MSVC linker
-        # frontend turns into *.lib. The GNU driver treats those as input
-        # files instead of searching the CUDA library directory.
-        set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_SHARED
-            "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib" "${CUDAToolkit_LIBRARY_DIR}/cudart.lib"
-        )
-        set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_STATIC
-            "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib"
-            "${CUDAToolkit_LIBRARY_DIR}/cudart_static.lib"
-        )
-    endif()
+    include("${LINALG_SOURCE_DIR}/Cmake/cuda.cmake")
     list(APPEND LINALG_DEPENDENCY_LIBS CUDA::cudart CUDA::cublas CUDA::cusolver)
 endif()
 
@@ -533,18 +513,11 @@ endif()
 # counterparts), so `enable_language(HIP)` and a ROCm toolchain are only
 # required — and only enabled — when LINALG_GPU_BACKEND=hip; plain CPU/CUDA
 # builds remain free of any ROCm toolchain requirement.
+# ROCm prefix discovery, architecture detection, and hip::device CXX-flag
+# stripping are handled by Cmake/hip.cmake; linalg_apply_hip_flags() is
+# called after add_library() below.
 if(LINALG_GPU_BACKEND STREQUAL "hip")
-    find_package(hip CONFIG REQUIRED)
-    find_package(hipblas CONFIG REQUIRED)
-    find_package(hipsolver CONFIG REQUIRED)
-    if(NOT DEFINED CMAKE_HIP_STANDARD)
-        set(CMAKE_HIP_STANDARD ${LINALG_CXX_STANDARD})
-        set(CMAKE_HIP_STANDARD_REQUIRED ON)
-    endif()
-    enable_language(HIP)
-    # CMake's HIP language supplies device compilation/linking for .hip files.
-    # hip::device instead injects -x hip/--hip-link into ordinary C++ sources
-    # and consumers, which may use GCC rather than ROCm's Clang.
+    include("${LINALG_SOURCE_DIR}/Cmake/hip.cmake")
     list(APPEND LINALG_DEPENDENCY_LIBS hip::host roc::hipblas roc::hipsolver)
 endif()
 
@@ -653,10 +626,6 @@ if(NOT TARGET Logging::Logging)
             )
         endfunction()
         linalg_add_logging()
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND MSVC_VERSION LESS 1920)
-            include("${LINALG_SOURCE_DIR}/Cmake/LoggingMsvcCompatibility.cmake")
-            linalg_apply_logging_msvc_compatibility()
-        endif()
         set(_linalg_owns_logging ON)
     endif()
 endif()
@@ -862,22 +831,10 @@ set_target_properties(
 )
 linalg_apply_platform_compile_flags(LinearAlgebra)
 if(LINALG_GPU_BACKEND STREQUAL "cuda")
-    # Scalars' arithmetic operators are constexpr. Allow NVCC device kernels
-    # to call them without exposing the dependency's host/device dispatch here.
-    target_compile_options(
-        LinearAlgebra PRIVATE $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>
-    )
-    # CUDA 13.x CCCL headers require the conforming MSVC preprocessor, both
-    # for host-side CXX TUs that include CUDA headers (e.g. <cuda_runtime.h>)
-    # and for .cu TUs' own host-compiler pass: NVCC invokes cl.exe for that
-    # pass too, so it needs the same flag forwarded via -Xcompiler.
-    if(MSVC)
-        target_compile_options(
-            LinearAlgebra
-            PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
-                    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
-        )
-    endif()
+    linalg_apply_cuda_flags(LinearAlgebra)
+endif()
+if(LINALG_GPU_BACKEND STREQUAL "hip")
+    linalg_apply_hip_flags(LinearAlgebra)
 endif()
 
 # Include roots: repo root → "include/matrix_operation/lu_decomposition.h",
