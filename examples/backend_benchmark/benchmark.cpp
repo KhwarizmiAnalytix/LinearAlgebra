@@ -323,7 +323,7 @@ void run_case(std::ofstream& csv, int m, int n, int k, bool ta = false, bool tb 
             if constexpr (gpu)
             {
                 ok = linalg::lu_decomposition<T, B>::apply(
-                    ap, n, dpivot.get(), wsp, bytes, stream.get());
+                    ap, n, dpivot.get(), wsp, bytes, nullptr, stream.get());
             }
             else
             {

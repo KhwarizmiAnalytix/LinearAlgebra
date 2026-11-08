@@ -225,6 +225,7 @@ dense_matrix<value_t> lu_reconstruct(const dense_matrix<value_t>& A, int& info, 
         L(i, i) = 1;
         for (std::size_t j = 0; j < n; ++j)
         {
+            EXPECT_TRUE(std::isfinite(a1(i, j)));
             if (j < i)
             {
                 L(i, j) = a1(i, j);
@@ -300,7 +301,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu_zero_pi
 
 // Only an exactly-zero pivot is singular: a perfectly conditioned matrix at
 // a tiny scale (formerly rejected by an absolute epsilon threshold in the
-// native backend) and a subnormal pivot must both factor successfully.
+// native backend) must factor successfully on every backend.
 template <typename value_t, linalg::linalg_backend Backend> void test_lu_small_scale()
 {
     int  info = -1;
@@ -312,9 +313,19 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu_small_s
     EXPECT_EQ(info, 0);
     EXPECT_TRUE(ok);
     EXPECT_LE(hmax_abs_diff(R, SI), s * std::numeric_limits<value_t>::epsilon());
+}
+
+template <typename value_t, linalg::linalg_backend Backend> void test_lu_subnormal_pivot()
+{
+    int  info = -1;
+    bool ok   = false;
 
     // [[t, 1], [t/2, 1]] with t subnormal: 1/t overflows, so the multiplier
-    // must come from a division. Skipped where subnormals are flushed.
+    // must stay finite. Vendor kernels may underflow subnormal intermediates,
+    // so allow reconstruction residuals below the smallest normal value.
+    // lu_reconstruct checks that the factors are finite to catch reciprocal
+    // overflow even if NaNs would be ignored by hmax_abs_diff's fmax.
+    // Skipped where subnormals are flushed.
     const value_t t = std::ldexp(value_t(1), std::numeric_limits<value_t>::min_exponent - 4);
     if (t != value_t(0) && t < std::numeric_limits<value_t>::min())
     {
@@ -326,7 +337,7 @@ template <typename value_t, linalg::linalg_backend Backend> void test_lu_small_s
         const auto RT = lu_reconstruct<value_t, Backend>(T2, info, ok);
         EXPECT_EQ(info, 0);
         EXPECT_TRUE(ok);
-        EXPECT_EQ(hmax_abs_diff(RT, T2), value_t(0));
+        EXPECT_LT(hmax_abs_diff(RT, T2), std::numeric_limits<value_t>::min());
     }
 }
 }  // namespace
@@ -341,6 +352,17 @@ TEST(Math, LUDecompositionZeroPivot)
             test_lu_zero_pivot<double, Backend>();
             test_lu_small_scale<float, Backend>();
             test_lu_small_scale<double, Backend>();
+        });
+}
+
+TEST(Math, LUDecompositionSubnormalPivot)
+{
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_lu_subnormal_pivot<float, Backend>();
+            test_lu_subnormal_pivot<double, Backend>();
         });
 }
 

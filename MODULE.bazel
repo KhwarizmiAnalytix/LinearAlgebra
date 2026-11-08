@@ -38,11 +38,11 @@ profiler_repository(name = "linalg_profiler")
 # Logging's own MODULE.bazel; magic_enum is overridden here too so it comes
 # from the vendored copy instead of Bazel Central Registry (glog/gflags stay
 # on BCR but are never fetched since nothing selects the glog backend).
-bazel_dep(name = "xsigma_logging", version = "1.0.0")
+bazel_dep(name = "logging", version = "1.0.0", repo_name = "xsigma_logging")
 bazel_dep(name = "magic_enum", version = "0.9.8")
 
 local_path_override(
-    module_name = "xsigma_logging",
+    module_name = "logging",
     path = "ThirdParty/Logging",
 )
 
@@ -51,8 +51,8 @@ local_path_override(
     path = "ThirdParty/Logging/ThirdParty/magic_enum",
 )
 
-# Resolve vendor paths relative to this workspace. Logging's extension records
-# absolute paths in the shared lockfile, which cannot be reused on CI runners.
+# Resolve vendor paths relative to this workspace so the repositories use
+# the checked-out submodules on both developer machines and CI runners.
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
 new_local_repository(
@@ -63,19 +63,19 @@ new_local_repository(
 
 new_local_repository(
     name = "fmt",
-    build_file = "@xsigma_logging//ThirdParty:fmt.BUILD",
+    build_file = "@xsigma_logging//bazel:fmt.BUILD",
     path = "ThirdParty/Logging/ThirdParty/fmt",
 )
 
 new_local_repository(
     name = "loguru",
-    build_file = "@xsigma_logging//ThirdParty:loguru.BUILD",
+    build_file = "@xsigma_logging//bazel:loguru.BUILD",
     path = "ThirdParty/Logging/ThirdParty/loguru",
 )
 
 new_local_repository(
     name = "spdlog",
-    build_file = "@xsigma_logging//ThirdParty:spdlog.BUILD",
+    build_file = "@xsigma_logging//bazel:spdlog.BUILD",
     path = "ThirdParty/Logging/ThirdParty/spdlog",
 )
 
