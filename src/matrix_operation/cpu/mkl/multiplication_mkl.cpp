@@ -2,6 +2,8 @@
 
 #include "include/matrix_operation/multiplication.h"
 
+#include <algorithm>
+
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
 
@@ -33,6 +35,34 @@ static void check_matmul_inputs(const void* a,
         "multiplication::apply: rows/columns/depth/lda/ldb/ldc must be positive");
 }
 
+// alpha == 0 must make the product a no-op without reading a or b (see the BLAS
+// contract documented on multiplication<T, Backend>::apply). Some MKL small-matrix
+// kernels skip that quick-return internally and let 0 * NaN poison c, so this backend
+// enforces the contract itself rather than trusting the vendor call for every size.
+template <typename value_t>
+static void scale_output(value_t* c, linalg_int rows, linalg_int columns, linalg_int ldc, value_t beta)
+{
+    if (beta == value_t(1))
+    {
+        return;
+    }
+    for (linalg_int i = 0; i < rows; ++i)
+    {
+        value_t* c_i = c + i * ldc;
+        if (beta == value_t(0))
+        {
+            std::fill_n(c_i, columns, value_t(0));
+        }
+        else
+        {
+            for (linalg_int j = 0; j < columns; ++j)
+            {
+                c_i[j] *= beta;
+            }
+        }
+    }
+}
+
 template <>
 void multiplication<float, linalg_backend::MKL>::apply(bool transpose_a,
     bool                                                    transpose_b,
@@ -53,6 +83,11 @@ void multiplication<float, linalg_backend::MKL>::apply(bool transpose_a,
 {
     LINALG_SCOPE("multiplication/mkl<float>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
+    if (alpha == 0.0f)
+    {
+        scale_output(c, rows, columns, ldc, beta);
+        return;
+    }
     cblas_sgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
@@ -89,6 +124,11 @@ void multiplication<double, linalg_backend::MKL>::apply(bool transpose_a,
 {
     LINALG_SCOPE("multiplication/mkl<double>");
     check_matmul_inputs(a, b, c, rows, columns, depth, lda, ldb, ldc);
+    if (alpha == 0.0)
+    {
+        scale_output(c, rows, columns, ldc, beta);
+        return;
+    }
     cblas_dgemm(CblasRowMajor,
         transpose_a ? CblasTrans : CblasNoTrans,
         transpose_b ? CblasTrans : CblasNoTrans,
