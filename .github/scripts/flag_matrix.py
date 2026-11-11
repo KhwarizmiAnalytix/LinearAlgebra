@@ -145,6 +145,13 @@ def valid(partial, platform=None):
     ):
         # Debug + C++23 + Scalars system package compilation exceeds 90-minute timeout
         return False
+    if (
+        partial.get("LINALG_CXX_STANDARD") == "23"
+        and partial.get("LINALG_LTO_MODE", "off") not in ("off", "thin")
+    ):
+        # C++23 + LTO (full/ipo/auto) compilation is extremely slow, taking 40+ minutes
+        # even for Release builds; thin LTO is acceptable in CI.
+        return False
     return True
 
 
