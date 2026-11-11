@@ -164,6 +164,16 @@ class FlagMatrixChecks(unittest.TestCase):
         self.assertTrue(
             matrix.valid({"LINALG_ENABLE_BLIS": "ON", "LINALG_ENABLE_BLAS": "OFF"})
         )
+        avx512_cxx23 = {"LINALG_CPU_BACKEND": "avx512", "LINALG_CXX_STANDARD": "23"}
+        self.assertFalse(matrix.valid(avx512_cxx23, "windows-msvc"))
+        self.assertTrue(
+            matrix.valid({**avx512_cxx23, "LINALG_CXX_STANDARD": "20"}, "windows-msvc")
+        )
+        self.assertTrue(
+            matrix.valid({**avx512_cxx23, "LINALG_CPU_BACKEND": "avx2"}, "windows-msvc")
+        )
+        self.assertTrue(matrix.valid(avx512_cxx23, "linux-clang"))
+        self.assertTrue(matrix.valid(avx512_cxx23, "windows-clang"))
 
     def test_scalars_package_backend_follows_the_bundled_selection(self):
         spec = importlib.util.spec_from_file_location(

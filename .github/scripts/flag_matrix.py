@@ -152,6 +152,15 @@ def valid(partial, platform=None):
         # C++23 + LTO (full/ipo/auto) compilation is extremely slow, taking 40+ minutes
         # even for Release builds; thin LTO is acceptable in CI.
         return False
+    if (
+        platform == "windows-msvc"
+        and partial.get("LINALG_CPU_BACKEND") == "avx512"
+        and partial.get("LINALG_CXX_STANDARD") == "23"
+    ):
+        # MSVC AVX512 + C++23 compiles Scalars and LinearAlgebra in two passes;
+        # the combined build exceeds the 90-minute job timeout.
+        # avx512 + C++20 and other backends + C++23 remain covered.
+        return False
     return True
 
 
