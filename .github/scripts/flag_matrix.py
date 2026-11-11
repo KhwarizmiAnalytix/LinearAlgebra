@@ -138,6 +138,13 @@ def valid(partial, platform=None):
     ):
         # LLVM's linker cannot consume GCC LTO objects.
         return False
+    if (
+        partial.get("CMAKE_BUILD_TYPE") == "Debug"
+        and partial.get("LINALG_CXX_STANDARD") == "23"
+        and partial.get("LINALG_USE_SYSTEM_SCALARS") == "ON"
+    ):
+        # Debug + C++23 + Scalars system package compilation exceeds 90-minute timeout
+        return False
     return True
 
 
