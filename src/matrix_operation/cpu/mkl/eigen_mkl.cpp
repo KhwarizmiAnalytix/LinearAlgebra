@@ -14,6 +14,7 @@
 // MKL specializations for eigen.h (the native backend lives in
 // eigen.cpp). The build compiles this file only when LINALG_ENABLE_MKL is
 // on; the #if below is kept as a second guard.
+
 namespace linalg
 {
 
