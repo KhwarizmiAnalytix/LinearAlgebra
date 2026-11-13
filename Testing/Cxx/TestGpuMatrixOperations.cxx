@@ -287,7 +287,7 @@ dense_matrix<value_t> spd_matrix(std::size_t n, std::default_random_engine& gen)
 template <typename value_t> void linear_solver_gpu_test(linalg::linear_solver_type type)
 {
     constexpr auto tol = GpuTolerance<value_t>::value;
-    const int      n   = 37;
+    const int      n   = 1024;
 
     std::default_random_engine generator;
     auto                       A      = spd_matrix<value_t>((std::size_t)n, generator);
@@ -351,7 +351,7 @@ TEST(MathGpu, DeviceMemoryAllocation)
 
 TEST(MathGpu, MatrixMultiplication)
 {
-    const int rows = 37, columns = 53, depth = 29;
+    const int rows = 256, columns = 128, depth = 128;
 
     matrix_multiplication_gpu_test<float>(rows, columns, depth, false, false);
     matrix_multiplication_gpu_test<float>(rows, columns, depth, true, false);
