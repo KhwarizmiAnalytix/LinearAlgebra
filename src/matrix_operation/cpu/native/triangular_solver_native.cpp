@@ -8,6 +8,7 @@
 #include "src/common/triangular_solver_checks.h"
 #if LINALG_HAS_VECTORIZATION
 #include <backend/simd.h>
+using scalars::simd;
 #endif
 
 namespace linalg

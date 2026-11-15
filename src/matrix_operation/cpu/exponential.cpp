@@ -11,6 +11,7 @@
 #include "include/matrix_operation/norm.h"
 #if LINALG_HAS_VECTORIZATION
 #include <backend/simd.h>
+using scalars::simd;
 #endif
 
 #include "include/common/linalg_profiler.h"

@@ -6,6 +6,7 @@
 #include <cmath>
 #if LINALG_HAS_VECTORIZATION
 #include <backend/simd.h>
+using scalars::simd;
 #endif
 
 namespace linalg
