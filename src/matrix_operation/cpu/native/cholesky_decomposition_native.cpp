@@ -54,7 +54,7 @@ namespace
 template <typename T> inline T cholesky_dot(const T* x, const T* y, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
 
     typename P::simd_t acc0, acc1, acc2, acc3;
@@ -171,7 +171,7 @@ void cholesky_trailing_update(
     linalg_int n, linalg_int depth, const T* panel, linalg_int lda, T* trailing)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     alignas(64) T        packed[kCholeskyBlockSize * kCholeskyBlockSize];
     for (linalg_int first = 0; first < n; first += kCholeskyBlockSize)

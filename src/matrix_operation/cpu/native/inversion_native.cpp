@@ -82,7 +82,7 @@ template <typename T>
 inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
 
     typename P::simd_t va;
@@ -147,7 +147,7 @@ inline void inv_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_int
 template <typename T> inline T invert_dot(const T* x, const T* y, linalg_int len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
 
     typename P::simd_t acc0, acc1, acc2, acc3;
@@ -309,7 +309,7 @@ void lu_invert(T* __restrict m,
 // old interleaved column-by-column recurrence whose two reductions read a
 // strided matrix column (m[k * lda + j], stride lda) and so could not be
 // vectorized against a contiguous row without a per-element gather
-// (simd<T>::gather is itself a scalar loop -- see Scalars SIMD --
+// (scalars::simd<T>::gather is itself a scalar loop -- see Scalars SIMD --
 // so routing through it would add indirection without adding real SIMD
 // throughput):
 //

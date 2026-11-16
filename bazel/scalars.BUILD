@@ -7,7 +7,6 @@ cc_library(
     name = "scalars",
     srcs = [
         "src/core/scalar_type.cpp",
-        "src/math/complex_math.cpp",
         "src/math/normal_cdf.cpp",
     ],
     hdrs = glob(["include/**/*.h"]),

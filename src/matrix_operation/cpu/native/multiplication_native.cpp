@@ -101,8 +101,8 @@ inline const cpu_cache_sizes& cached_cpu_cache_sizes()
 
 template <typename value_t, bool vectorizable = true> struct gemm_traits
 {
-    static constexpr linalg_int size = simd<value_t>::size;
-    // vectorizable ? simd<value_t>::size : 1;
+    static constexpr linalg_int size = scalars::simd<value_t>::size;
+    // vectorizable ? scalars::simd<value_t>::size : 1;
 
     static constexpr linalg_int number_of_registers = (2 * sizeof(void*));
 
@@ -273,8 +273,8 @@ void pack_lhs(  // NOLINT
     linalg_int stride = 0,
     linalg_int offset = 0)
 {
-    using simd_t                           = typename simd<value_t>::simd_t;
-    static constexpr linalg_int PacketSize = simd<value_t>::size;
+    using simd_t                           = typename scalars::simd<value_t>::simd_t;
+    static constexpr linalg_int PacketSize = scalars::simd<value_t>::size;
 
     linalg_int count = 0;
 
@@ -311,13 +311,13 @@ void pack_lhs(  // NOLINT
                     // each one, then reach the others by plain pointer addition.
                     const value_t* col = &element<value_t, ColMajor>(data, i, k, lda);
 
-                    simd<value_t>::copy(col + 0 * PacketSize, block_A + count);
+                    scalars::simd<value_t>::copy(col + 0 * PacketSize, block_A + count);
                     count += PacketSize;
 
-                    simd<value_t>::copy(col + 1 * PacketSize, block_A + count);
+                    scalars::simd<value_t>::copy(col + 1 * PacketSize, block_A + count);
                     count += PacketSize;
 
-                    simd<value_t>::copy(col + 2 * PacketSize, block_A + count);
+                    scalars::simd<value_t>::copy(col + 2 * PacketSize, block_A + count);
                     count += PacketSize;
                 }
                 if (PanelMode)
@@ -342,10 +342,10 @@ void pack_lhs(  // NOLINT
                     // multiplication shared by both packets.
                     const value_t* col = &element<value_t, ColMajor>(data, i, k, lda);
 
-                    simd<value_t>::copy(col + 0 * PacketSize, block_A + count);
+                    scalars::simd<value_t>::copy(col + 0 * PacketSize, block_A + count);
                     count += PacketSize;
 
-                    simd<value_t>::copy(col + 1 * PacketSize, block_A + count);
+                    scalars::simd<value_t>::copy(col + 1 * PacketSize, block_A + count);
                     count += PacketSize;
                 }
                 if (PanelMode)
@@ -366,7 +366,7 @@ void pack_lhs(  // NOLINT
 
                 for (linalg_int k = 0; k < depth; k++)
                 {
-                    simd<value_t>::copy(
+                    scalars::simd<value_t>::copy(
                         &element<value_t, ColMajor>(data, i, k, lda), block_A + count);
                     count += PacketSize;
                 }
@@ -447,15 +447,15 @@ void pack_lhs(  // NOLINT
                             const value_t* row = &element<value_t, ColMajor>(data, i + m, k, lda);
                             for (linalg_int p = 0; p < PacketSize; ++p)
                             {
-                                tmp[p] = simd<value_t>::loadu(row);
+                                tmp[p] = scalars::simd<value_t>::loadu(row);
                                 row += lda;
                             }
 
-                            simd<value_t>::template ptranspose<PacketSize>(tmp);
+                            scalars::simd<value_t>::template ptranspose<PacketSize>(tmp);
 
                             for (linalg_int p = 0; p < PacketSize; ++p)
                             {
-                                simd<value_t>::storeu(tmp[p], block_A + count + m + (pack)*p);
+                                scalars::simd<value_t>::storeu(tmp[p], block_A + count + m + (pack)*p);
                             }
                         }
                         count += PacketSize * pack;
@@ -522,7 +522,7 @@ void pack_rhs(  // NOLINT
     linalg_int stride = 0,
     linalg_int offset = 0)
 {
-    using simd_t = typename simd<value_t>::simd_t;
+    using simd_t = typename scalars::simd<value_t>::simd_t;
 
     const linalg_int packet_cols4 = nr >= 4 ? (cols / 4) * 4 : 0;
     const linalg_int peeled_k     = (depth / PacketSize) * PacketSize;
@@ -552,16 +552,16 @@ void pack_rhs(  // NOLINT
                     for (; k < peeled_k; k += PacketSize)
                     {
                         simd_t tmp[4];  // NOLINT
-                        tmp[0] = simd<value_t>::loadu(dm0 + k);
-                        tmp[1] = simd<value_t>::loadu(dm1 + k);
-                        tmp[2] = simd<value_t>::loadu(dm2 + k);
-                        tmp[3] = simd<value_t>::loadu(dm3 + k);
+                        tmp[0] = scalars::simd<value_t>::loadu(dm0 + k);
+                        tmp[1] = scalars::simd<value_t>::loadu(dm1 + k);
+                        tmp[2] = scalars::simd<value_t>::loadu(dm2 + k);
+                        tmp[3] = scalars::simd<value_t>::loadu(dm3 + k);
 
-                        simd<value_t>::template ptranspose<nr>(tmp);
+                        scalars::simd<value_t>::template ptranspose<nr>(tmp);
 
                         for (int r = 0; r < 4; ++r)
                         {
-                            simd<value_t>::storeu(tmp[r], blockB + count);
+                            scalars::simd<value_t>::storeu(tmp[r], blockB + count);
                             count += PacketSize;
                         }
                     }
@@ -617,8 +617,8 @@ void pack_rhs(  // NOLINT
                     if constexpr (PacketSize == 4)
                     {
                         simd_t A;
-                        A = simd<value_t>::loadu(&element<value_t, ColMajor>(data, k, j2, ldb));
-                        simd<value_t>::storeu(A, blockB + count);
+                        A = scalars::simd<value_t>::loadu(&element<value_t, ColMajor>(data, k, j2, ldb));
+                        scalars::simd<value_t>::storeu(A, blockB + count);
                         count += PacketSize;
                     }
                     else
@@ -686,7 +686,7 @@ void gemm(  // NOLINT
     linalg_int       offsetB = 0)  // NOLINT
 {
     using Traits = gemm_traits<value_t>;
-    using simd_t = typename simd<value_t>::simd_t;
+    using simd_t = typename scalars::simd<value_t>::simd_t;
     if (strideA == -1)
     {
         strideA = depth;
@@ -696,7 +696,7 @@ void gemm(  // NOLINT
         strideB = depth;
     }
 
-    const simd_t alphav = simd<value_t>::set(alpha);
+    const simd_t alphav = scalars::simd<value_t>::set(alpha);
 
     static constexpr linalg_int prefetch_res_offset = 32 / sizeof(value_t);
     static constexpr linalg_int lhs_3offset         = 3 * Traits::LhsProgress;
@@ -735,36 +735,36 @@ void gemm(  // NOLINT
                     // stored into 3 x nr registers.
 
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_3offset)];
-                    simd<value_t>::prefetch(&blA[0]);
+                    scalars::simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
                     simd_t C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11;  // NOLINT
-                    C0  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C1  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C2  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C3  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C4  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C5  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C6  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C7  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C8  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C9  = simd<value_t>::set(static_cast<value_t>(0.));
-                    C10 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C11 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C0  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C1  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C2  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C3  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C4  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C5  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C6  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C7  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C8  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C9  = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C10 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C11 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                     auto* r0 = &element<value_t>(res, i, j2, ldc);
                     auto* r1 = &element<value_t>(res, i, j2 + 1, ldc);
                     auto* r2 = &element<value_t>(res, i, j2 + 2, ldc);
                     auto* r3 = &element<value_t>(res, i, j2 + 3, ldc);
 
-                    simd<value_t>::prefetch(r0);
-                    simd<value_t>::prefetch(r1);
-                    simd<value_t>::prefetch(r2);
-                    simd<value_t>::prefetch(r3);
+                    scalars::simd<value_t>::prefetch(r0);
+                    scalars::simd<value_t>::prefetch(r1);
+                    scalars::simd<value_t>::prefetch(r2);
+                    scalars::simd<value_t>::prefetch(r3);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
-                    simd<value_t>::prefetch(&blB[0]);
+                    scalars::simd<value_t>::prefetch(&blB[0]);
                     simd_t A0;
                     simd_t A1;
 
@@ -776,29 +776,29 @@ void gemm(  // NOLINT
 #define EIGEN_GEBP_ONESTEP(K)                                                                      \
     do                                                                                             \
     {                                                                                              \
-        simd<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                       \
-        A0  = simd<value_t>::loadu(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                     \
-        A1  = simd<value_t>::loadu(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                     \
-        A2  = simd<value_t>::loadu(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                     \
-        B_0 = simd<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress));                    \
-        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
-        C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
-        C8  = simd<value_t>::fma(A2, B_0, C8);                                                     \
-        B_0 = simd<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress));                    \
-        C1  = simd<value_t>::fma(A0, B_0, C1);                                                     \
-        C5  = simd<value_t>::fma(A1, B_0, C5);                                                     \
-        C9  = simd<value_t>::fma(A2, B_0, C9);                                                     \
-        B_0 = simd<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress));                    \
-        C2  = simd<value_t>::fma(A0, B_0, C2);                                                     \
-        C6  = simd<value_t>::fma(A1, B_0, C6);                                                     \
-        C10 = simd<value_t>::fma(A2, B_0, C10);                                                    \
-        B_0 = simd<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress));                    \
-        C3  = simd<value_t>::fma(A0, B_0, C3);                                                     \
-        C7  = simd<value_t>::fma(A1, B_0, C7);                                                     \
-        C11 = simd<value_t>::fma(A2, B_0, C11);                                                    \
+        scalars::simd<value_t>::prefetch(blA + (3 * (K) + 16) * Traits::LhsProgress);                       \
+        A0  = scalars::simd<value_t>::loadu(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A1  = scalars::simd<value_t>::loadu(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A2  = scalars::simd<value_t>::loadu(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                     \
+        B_0 = scalars::simd<value_t>::set(*(blB + (0 + 4 * (K)) * Traits::RhsProgress));                    \
+        C0  = scalars::simd<value_t>::fma(A0, B_0, C0);                                                     \
+        C4  = scalars::simd<value_t>::fma(A1, B_0, C4);                                                     \
+        C8  = scalars::simd<value_t>::fma(A2, B_0, C8);                                                     \
+        B_0 = scalars::simd<value_t>::set(*(blB + (1 + 4 * (K)) * Traits::RhsProgress));                    \
+        C1  = scalars::simd<value_t>::fma(A0, B_0, C1);                                                     \
+        C5  = scalars::simd<value_t>::fma(A1, B_0, C5);                                                     \
+        C9  = scalars::simd<value_t>::fma(A2, B_0, C9);                                                     \
+        B_0 = scalars::simd<value_t>::set(*(blB + (2 + 4 * (K)) * Traits::RhsProgress));                    \
+        C2  = scalars::simd<value_t>::fma(A0, B_0, C2);                                                     \
+        C6  = scalars::simd<value_t>::fma(A1, B_0, C6);                                                     \
+        C10 = scalars::simd<value_t>::fma(A2, B_0, C10);                                                    \
+        B_0 = scalars::simd<value_t>::set(*(blB + (3 + 4 * (K)) * Traits::RhsProgress));                    \
+        C3  = scalars::simd<value_t>::fma(A0, B_0, C3);                                                     \
+        C7  = scalars::simd<value_t>::fma(A1, B_0, C7);                                                     \
+        C11 = scalars::simd<value_t>::fma(A2, B_0, C11);                                                    \
     } while (false)
 
-                        simd<value_t>::prefetch(blB);
+                        scalars::simd<value_t>::prefetch(blB);
                         EIGEN_GEBP_ONESTEP(0);
                         EIGEN_GEBP_ONESTEP(1);
                         EIGEN_GEBP_ONESTEP(2);
@@ -823,53 +823,53 @@ void gemm(  // NOLINT
 
 #undef EIGEN_GEBP_ONESTEP
                     simd_t R0;
-                    R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::fma(C0, alphav, R0);
-                    simd<value_t>::storeu(R0, r0);
+                    R0 = scalars::simd<value_t>::loadu(r0);
+                    R0 = scalars::simd<value_t>::fma(C0, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0);
 
-                    R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::fma(C4, alphav, R0);
-                    simd<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C4, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r0 + 2 * Traits::size);
-                    R0 = simd<value_t>::fma(C8, alphav, R0);
-                    simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r0 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C8, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
 
-                    R0 = simd<value_t>::loadu(r1);
-                    R0 = simd<value_t>::fma(C1, alphav, R0);
-                    simd<value_t>::storeu(R0, r1);
+                    R0 = scalars::simd<value_t>::loadu(r1);
+                    R0 = scalars::simd<value_t>::fma(C1, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r1);
 
-                    R0 = simd<value_t>::loadu(r1 + Traits::size);
-                    R0 = simd<value_t>::fma(C5, alphav, R0);
-                    simd<value_t>::storeu(R0, r1 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r1 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C5, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r1 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r1 + 2 * Traits::size);
-                    R0 = simd<value_t>::fma(C9, alphav, R0);
-                    simd<value_t>::storeu(R0, r1 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r1 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C9, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r1 + 2 * Traits::size);
 
-                    R0 = simd<value_t>::loadu(r2);
-                    R0 = simd<value_t>::fma(C2, alphav, R0);
-                    simd<value_t>::storeu(R0, r2);
+                    R0 = scalars::simd<value_t>::loadu(r2);
+                    R0 = scalars::simd<value_t>::fma(C2, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r2);
 
-                    R0 = simd<value_t>::loadu(r2 + Traits::size);
-                    R0 = simd<value_t>::fma(C6, alphav, R0);
-                    simd<value_t>::storeu(R0, r2 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r2 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C6, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r2 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r2 + 2 * Traits::size);
-                    R0 = simd<value_t>::fma(C10, alphav, R0);
-                    simd<value_t>::storeu(R0, r2 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r2 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C10, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r2 + 2 * Traits::size);
 
-                    R0 = simd<value_t>::loadu(r3);
-                    R0 = simd<value_t>::fma(C3, alphav, R0);
-                    simd<value_t>::storeu(R0, r3);
+                    R0 = scalars::simd<value_t>::loadu(r3);
+                    R0 = scalars::simd<value_t>::fma(C3, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r3);
 
-                    R0 = simd<value_t>::loadu(r3 + Traits::size);
-                    R0 = simd<value_t>::fma(C7, alphav, R0);
-                    simd<value_t>::storeu(R0, r3 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r3 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C7, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r3 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r3 + 2 * Traits::size);
-                    R0 = simd<value_t>::fma(C11, alphav, R0);
-                    simd<value_t>::storeu(R0, r3 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r3 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C11, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r3 + 2 * Traits::size);
                 }
             }
 
@@ -880,16 +880,16 @@ void gemm(  // NOLINT
                 {
                     // One column at a time
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_3offset)];
-                    simd<value_t>::prefetch(&blA[0]);
+                    scalars::simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
                     simd_t C0, C4, C8;  // NOLINT
-                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C4 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C8 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C0 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C4 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C8 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                     auto* r0 = &element<value_t>(res, i, j2, ldc);
-                    simd<value_t>::prefetch(r0);
+                    scalars::simd<value_t>::prefetch(r0);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
@@ -901,13 +901,13 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        A0  = simd<value_t>::loadu(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                     \
-        A1  = simd<value_t>::loadu(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                     \
-        A2  = simd<value_t>::loadu(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                     \
-        B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
-        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
-        C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
-        C8  = simd<value_t>::fma(A2, B_0, C8);                                                     \
+        A0  = scalars::simd<value_t>::loadu(&blA[(0 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A1  = scalars::simd<value_t>::loadu(&blA[(1 + 3 * (K)) * Traits::LhsProgress]);                     \
+        A2  = scalars::simd<value_t>::loadu(&blA[(2 + 3 * (K)) * Traits::LhsProgress]);                     \
+        B_0 = scalars::simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
+        C0  = scalars::simd<value_t>::fma(A0, B_0, C0);                                                     \
+        C4  = scalars::simd<value_t>::fma(A1, B_0, C4);                                                     \
+        C8  = scalars::simd<value_t>::fma(A2, B_0, C8);                                                     \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -933,17 +933,17 @@ void gemm(  // NOLINT
                     }
 #undef LINALG_GEMM_ONESTEP
                     simd_t R0;
-                    R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::fma(C0, alphav, R0);
-                    simd<value_t>::storeu(R0, r0);
+                    R0 = scalars::simd<value_t>::loadu(r0);
+                    R0 = scalars::simd<value_t>::fma(C0, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0);
 
-                    R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::fma(C4, alphav, R0);
-                    simd<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C4, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r0 + 2 * Traits::size);
-                    R0 = simd<value_t>::fma(C8, alphav, R0);
-                    simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r0 + 2 * Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C8, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0 + 2 * Traits::size);
                 }
             }
         }
@@ -968,32 +968,32 @@ void gemm(  // NOLINT
                     // stored into 2 x nr registers.
 
                     const value_t* blA = &blockA[i * strideA + offsetA * lhs_2offset];
-                    simd<value_t>::prefetch(&blA[0]);
+                    scalars::simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
                     simd_t C0, C1, C2, C3, C4, C5, C6, C7;  // NOLINT
-                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C1 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C2 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C3 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C4 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C5 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C6 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C7 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C0 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C1 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C2 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C3 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C4 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C5 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C6 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C7 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                     value_t* r0 = &element<value_t>(res, i, j2, ldc);
                     value_t* r1 = &element<value_t>(res, i, j2 + 1, ldc);
                     value_t* r2 = &element<value_t>(res, i, j2 + 2, ldc);
                     value_t* r3 = &element<value_t>(res, i, j2 + 3, ldc);
 
-                    simd<value_t>::prefetch(r0 + prefetch_res_offset);
-                    simd<value_t>::prefetch(r1 + prefetch_res_offset);
-                    simd<value_t>::prefetch(r2 + prefetch_res_offset);
-                    simd<value_t>::prefetch(r3 + prefetch_res_offset);
+                    scalars::simd<value_t>::prefetch(r0 + prefetch_res_offset);
+                    scalars::simd<value_t>::prefetch(r1 + prefetch_res_offset);
+                    scalars::simd<value_t>::prefetch(r2 + prefetch_res_offset);
+                    scalars::simd<value_t>::prefetch(r3 + prefetch_res_offset);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
-                    simd<value_t>::prefetch(&blB[0]);
+                    scalars::simd<value_t>::prefetch(&blB[0]);
                     simd_t A0;
                     simd_t A1;
 
@@ -1007,26 +1007,26 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        A0               = simd<value_t>::loadu(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);        \
-        A1               = simd<value_t>::loadu(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);        \
+        A0               = scalars::simd<value_t>::loadu(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);        \
+        A1               = scalars::simd<value_t>::loadu(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);        \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
-        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
-        C0 = simd<value_t>::fma(A0, B_0, C0);                                                      \
-        C4 = simd<value_t>::fma(A1, B_0, C4);                                                      \
-        C1 = simd<value_t>::fma(A0, B1, C1);                                                       \
-        C5 = simd<value_t>::fma(A1, B1, C5);                                                       \
-        C2 = simd<value_t>::fma(A0, B2, C2);                                                       \
-        C6 = simd<value_t>::fma(A1, B2, C6);                                                       \
-        C3 = simd<value_t>::fma(A0, B3, C3);                                                       \
-        C7 = simd<value_t>::fma(A1, B3, C7);                                                       \
+        scalars::simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
+        C0 = scalars::simd<value_t>::fma(A0, B_0, C0);                                                      \
+        C4 = scalars::simd<value_t>::fma(A1, B_0, C4);                                                      \
+        C1 = scalars::simd<value_t>::fma(A0, B1, C1);                                                       \
+        C5 = scalars::simd<value_t>::fma(A1, B1, C5);                                                       \
+        C2 = scalars::simd<value_t>::fma(A0, B2, C2);                                                       \
+        C6 = scalars::simd<value_t>::fma(A1, B2, C6);                                                       \
+        C3 = scalars::simd<value_t>::fma(A0, B3, C3);                                                       \
+        C7 = scalars::simd<value_t>::fma(A1, B3, C7);                                                       \
     } while (false)
 
-                        simd<value_t>::prefetch(blB + (48 + 0));
+                        scalars::simd<value_t>::prefetch(blB + (48 + 0));
                         LINALG_GEMM_ONESTEP(0);
                         LINALG_GEMM_ONESTEP(1);
                         LINALG_GEMM_ONESTEP(2);
                         LINALG_GEMM_ONESTEP(3);
-                        simd<value_t>::prefetch(blB + (48 + 16));
+                        scalars::simd<value_t>::prefetch(blB + (48 + 16));
                         LINALG_GEMM_ONESTEP(4);
                         LINALG_GEMM_ONESTEP(5);
                         LINALG_GEMM_ONESTEP(6);
@@ -1049,37 +1049,37 @@ void gemm(  // NOLINT
 #undef LINALG_GEMM_ONESTEP
 
                     simd_t R0;
-                    R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::fma(C0, alphav, R0);
-                    simd<value_t>::storeu(R0, r0);
+                    R0 = scalars::simd<value_t>::loadu(r0);
+                    R0 = scalars::simd<value_t>::fma(C0, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0);
 
-                    R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::fma(C4, alphav, R0);
-                    simd<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C4, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r1);
-                    R0 = simd<value_t>::fma(C1, alphav, R0);
-                    simd<value_t>::storeu(R0, r1);
+                    R0 = scalars::simd<value_t>::loadu(r1);
+                    R0 = scalars::simd<value_t>::fma(C1, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r1);
 
-                    R0 = simd<value_t>::loadu(r1 + Traits::size);
-                    R0 = simd<value_t>::fma(C5, alphav, R0);
-                    simd<value_t>::storeu(R0, r1 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r1 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C5, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r1 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r2);
-                    R0 = simd<value_t>::fma(C2, alphav, R0);
-                    simd<value_t>::storeu(R0, r2);
+                    R0 = scalars::simd<value_t>::loadu(r2);
+                    R0 = scalars::simd<value_t>::fma(C2, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r2);
 
-                    R0 = simd<value_t>::loadu(r2 + Traits::size);
-                    R0 = simd<value_t>::fma(C6, alphav, R0);
-                    simd<value_t>::storeu(R0, r2 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r2 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C6, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r2 + Traits::size);
 
-                    R0 = simd<value_t>::loadu(r3);
-                    R0 = simd<value_t>::fma(C3, alphav, R0);
-                    simd<value_t>::storeu(R0, r3);
+                    R0 = scalars::simd<value_t>::loadu(r3);
+                    R0 = scalars::simd<value_t>::fma(C3, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r3);
 
-                    R0 = simd<value_t>::loadu(r3 + Traits::size);
-                    R0 = simd<value_t>::fma(C7, alphav, R0);
-                    simd<value_t>::storeu(R0, r3 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r3 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C7, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r3 + Traits::size);
                 }
             }
 
@@ -1090,16 +1090,16 @@ void gemm(  // NOLINT
                 {
                     // One column at a time
                     const value_t* blA = &blockA[i * strideA + offsetA * (lhs_2offset)];
-                    simd<value_t>::prefetch(&blA[0]);
+                    scalars::simd<value_t>::prefetch(&blA[0]);
 
                     // gets res block as register
                     simd_t C0;
                     simd_t C4;
-                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C4 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C0 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C4 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                     auto* r0 = &element<value_t>(res, i, j2, ldc);
-                    simd<value_t>::prefetch(r0 + prefetch_res_offset);
+                    scalars::simd<value_t>::prefetch(r0 + prefetch_res_offset);
 
                     // performs "inner" products
                     const value_t* blB = &blockB[j2 * strideB + offsetB];
@@ -1114,11 +1114,11 @@ void gemm(  // NOLINT
 #define LINALG_GEMM_ONESTEP(K)                                                                     \
     do                                                                                             \
     {                                                                                              \
-        A0  = simd<value_t>::loadu(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);                     \
-        A1  = simd<value_t>::loadu(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);                     \
-        B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
-        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
-        C4  = simd<value_t>::fma(A1, B_0, C4);                                                     \
+        A0  = scalars::simd<value_t>::loadu(&blA[(0 + 2 * (K)) * Traits::LhsProgress]);                     \
+        A1  = scalars::simd<value_t>::loadu(&blA[(1 + 2 * (K)) * Traits::LhsProgress]);                     \
+        B_0 = scalars::simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
+        C0  = scalars::simd<value_t>::fma(A0, B_0, C0);                                                     \
+        C4  = scalars::simd<value_t>::fma(A1, B_0, C4);                                                     \
     } while (false)
 
                         LINALG_GEMM_ONESTEP(0);
@@ -1145,13 +1145,13 @@ void gemm(  // NOLINT
 #undef LINALG_GEMM_ONESTEP
 
                     simd_t R0;
-                    R0 = simd<value_t>::loadu(r0);
-                    R0 = simd<value_t>::fma(C0, alphav, R0);
-                    simd<value_t>::storeu(R0, r0);
+                    R0 = scalars::simd<value_t>::loadu(r0);
+                    R0 = scalars::simd<value_t>::fma(C0, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0);
 
-                    R0 = simd<value_t>::loadu(r0 + Traits::size);
-                    R0 = simd<value_t>::fma(C4, alphav, R0);
-                    simd<value_t>::storeu(R0, r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::loadu(r0 + Traits::size);
+                    R0 = scalars::simd<value_t>::fma(C4, alphav, R0);
+                    scalars::simd<value_t>::storeu(R0, r0 + Traits::size);
                 }
             }
         }
@@ -1169,31 +1169,31 @@ void gemm(  // NOLINT
                 // stored into 1 x nr registers.
 
                 const value_t* blA = &blockA[i * strideA + offsetA * (1 * Traits::LhsProgress)];
-                simd<value_t>::prefetch(&blA[0]);
+                scalars::simd<value_t>::prefetch(&blA[0]);
 
                 // gets res block as register
                 simd_t C0;
                 simd_t C1;
                 simd_t C2;
                 simd_t C3;
-                C0 = simd<value_t>::set(static_cast<value_t>(0.));
-                C1 = simd<value_t>::set(static_cast<value_t>(0.));
-                C2 = simd<value_t>::set(static_cast<value_t>(0.));
-                C3 = simd<value_t>::set(static_cast<value_t>(0.));
+                C0 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                C1 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                C2 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                C3 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                 auto* r0 = &element<value_t>(res, i, j2, ldc);
                 auto* r1 = &element<value_t>(res, i, j2 + 1, ldc);
                 auto* r2 = &element<value_t>(res, i, j2 + 2, ldc);
                 auto* r3 = &element<value_t>(res, i, j2 + 3, ldc);
 
-                simd<value_t>::prefetch(r0 + prefetch_res_offset);
-                simd<value_t>::prefetch(r1 + prefetch_res_offset);
-                simd<value_t>::prefetch(r2 + prefetch_res_offset);
-                simd<value_t>::prefetch(r3 + prefetch_res_offset);
+                scalars::simd<value_t>::prefetch(r0 + prefetch_res_offset);
+                scalars::simd<value_t>::prefetch(r1 + prefetch_res_offset);
+                scalars::simd<value_t>::prefetch(r2 + prefetch_res_offset);
+                scalars::simd<value_t>::prefetch(r3 + prefetch_res_offset);
 
                 // performs "inner" products
                 const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
-                simd<value_t>::prefetch(&blB[0]);
+                scalars::simd<value_t>::prefetch(&blB[0]);
                 simd_t A0;
 
                 for (linalg_int k = 0; k < peeled_kc; k += pk)
@@ -1209,23 +1209,23 @@ void gemm(  // NOLINT
     {                                                                                              \
         (void)0;                                                                                   \
         (void)0;                                                                                   \
-        A0               = simd<value_t>::loadu(&blA[(0 + 1 * (K)) * Traits::LhsProgress]);        \
+        A0               = scalars::simd<value_t>::loadu(&blA[(0 + 1 * (K)) * Traits::LhsProgress]);        \
         const auto b_ptr = &blB[(0 + 4 * (K)) * Traits::RhsProgress];                              \
-        simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
-        C0 = simd<value_t>::fma(A0, B_0, C0);                                                      \
-        C1 = simd<value_t>::fma(A0, B1, C1);                                                       \
-        C2 = simd<value_t>::fma(A0, B2, C2);                                                       \
-        C3 = simd<value_t>::fma(A0, B3, C3);                                                       \
+        scalars::simd<value_t>::broadcast(b_ptr, B_0, B1, B2, B3);                                          \
+        C0 = scalars::simd<value_t>::fma(A0, B_0, C0);                                                      \
+        C1 = scalars::simd<value_t>::fma(A0, B1, C1);                                                       \
+        C2 = scalars::simd<value_t>::fma(A0, B2, C2);                                                       \
+        C3 = scalars::simd<value_t>::fma(A0, B3, C3);                                                       \
         (void)0;                                                                                   \
     } while (false)
 
-                    simd<value_t>::prefetch(blB + (48 + 0));
+                    scalars::simd<value_t>::prefetch(blB + (48 + 0));
                     LINALG_GEMM_ONESTEP(0);
                     LINALG_GEMM_ONESTEP(1);
                     LINALG_GEMM_ONESTEP(2);
                     LINALG_GEMM_ONESTEP(3);
 
-                    simd<value_t>::prefetch(blB + (48 + 16));
+                    scalars::simd<value_t>::prefetch(blB + (48 + 16));
                     LINALG_GEMM_ONESTEP(4);
                     LINALG_GEMM_ONESTEP(5);
                     LINALG_GEMM_ONESTEP(6);
@@ -1250,21 +1250,21 @@ void gemm(  // NOLINT
 #undef LINALG_GEMM_ONESTEP
 
                 simd_t R0;
-                R0 = simd<value_t>::loadu(r0);
-                R0 = simd<value_t>::fma(C0, alphav, R0);
-                simd<value_t>::storeu(R0, r0);
+                R0 = scalars::simd<value_t>::loadu(r0);
+                R0 = scalars::simd<value_t>::fma(C0, alphav, R0);
+                scalars::simd<value_t>::storeu(R0, r0);
 
-                R0 = simd<value_t>::loadu(r1);
-                R0 = simd<value_t>::fma(C1, alphav, R0);
-                simd<value_t>::storeu(R0, r1);
+                R0 = scalars::simd<value_t>::loadu(r1);
+                R0 = scalars::simd<value_t>::fma(C1, alphav, R0);
+                scalars::simd<value_t>::storeu(R0, r1);
 
-                R0 = simd<value_t>::loadu(r2);
-                R0 = simd<value_t>::fma(C2, alphav, R0);
-                simd<value_t>::storeu(R0, r2);
+                R0 = scalars::simd<value_t>::loadu(r2);
+                R0 = scalars::simd<value_t>::fma(C2, alphav, R0);
+                scalars::simd<value_t>::storeu(R0, r2);
 
-                R0 = simd<value_t>::loadu(r3);
-                R0 = simd<value_t>::fma(C3, alphav, R0);
-                simd<value_t>::storeu(R0, r3);
+                R0 = scalars::simd<value_t>::loadu(r3);
+                R0 = scalars::simd<value_t>::fma(C3, alphav, R0);
+                scalars::simd<value_t>::storeu(R0, r3);
             }
 
             // Deal with remaining columns of the rhs
@@ -1272,11 +1272,11 @@ void gemm(  // NOLINT
             {
                 // One column at a time
                 const value_t* blA = &blockA[i * strideA + offsetA * (1 * Traits::LhsProgress)];
-                simd<value_t>::prefetch(&blA[0]);
+                scalars::simd<value_t>::prefetch(&blA[0]);
 
                 // gets res block as register
                 simd_t C0;
-                C0 = simd<value_t>::set(static_cast<value_t>(0.));
+                C0 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                 auto* r0 = &element<value_t>(res, i, j2, ldc);
                 // performs "inner" products
@@ -1293,9 +1293,9 @@ void gemm(  // NOLINT
     {                                                                                              \
         (void)0;                                                                                   \
         (void)0;                                                                                   \
-        A0  = simd<value_t>::loadu(&blA[(0 + (K)) * Traits::LhsProgress]);                         \
-        B_0 = simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
-        C0  = simd<value_t>::fma(A0, B_0, C0);                                                     \
+        A0  = scalars::simd<value_t>::loadu(&blA[(0 + (K)) * Traits::LhsProgress]);                         \
+        B_0 = scalars::simd<value_t>::set(blB[(0 + (K)) * Traits::RhsProgress]);                            \
+        C0  = scalars::simd<value_t>::fma(A0, B_0, C0);                                                     \
         (void)0;                                                                                   \
     } while (false);
 
@@ -1324,9 +1324,9 @@ void gemm(  // NOLINT
                 }
 #undef LINALG_GEMM_ONESTEP
                 simd_t R0;
-                R0 = simd<value_t>::loadu(r0);
-                R0 = simd<value_t>::fma(C0, alphav, R0);
-                simd<value_t>::storeu(R0, r0);
+                R0 = scalars::simd<value_t>::loadu(r0);
+                R0 = scalars::simd<value_t>::fma(C0, alphav, R0);
+                scalars::simd<value_t>::storeu(R0, r0);
             }
         }
     }
@@ -1340,13 +1340,13 @@ void gemm(  // NOLINT
             for (linalg_int i = peeled_mc1; i < rows; i += 1)
             {
                 const value_t* blA = &blockA[i * strideA + offsetA];
-                simd<value_t>::prefetch(&blA[0]);
+                scalars::simd<value_t>::prefetch(&blA[0]);
                 const value_t* blB = &blockB[j2 * strideB + offsetB * nr];
 
                 // The following piece of code won't work for 512 bit registers
                 // Moreover, if LhsProgress==8 it assumes that there is a half tmp of the
                 // same size as nr (which is currently 4) for the return type.
-                static constexpr linalg_int packet_half_size = simd<value_t>::half_size;
+                static constexpr linalg_int packet_half_size = scalars::simd<value_t>::half_size;
                 if constexpr ((Traits::LhsProgress % 4) == 0 && (Traits::LhsProgress <= 8) &&
                               (Traits::LhsProgress != 8 || packet_half_size == nr))
                 {
@@ -1356,21 +1356,21 @@ void gemm(  // NOLINT
                     {
                         if constexpr (Traits::LhsProgress == 4)
                         {
-                            return simd<value_t>::set(*ptr);
+                            return scalars::simd<value_t>::set(*ptr);
                         }
                         else
                         {
-                            return simd<value_t>::ploadquad(ptr);
+                            return scalars::simd<value_t>::ploadquad(ptr);
                         }
                     };
                     simd_t C0;
                     simd_t C1;
                     simd_t C2;
                     simd_t C3;
-                    C0 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C1 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C2 = simd<value_t>::set(static_cast<value_t>(0.));
-                    C3 = simd<value_t>::set(static_cast<value_t>(0.));
+                    C0 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C1 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C2 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
+                    C3 = scalars::simd<value_t>::set(static_cast<value_t>(0.));
 
                     const linalg_int spk   = std::max<linalg_int>(1, Traits::LhsProgress / 4);
                     const linalg_int endk  = (depth / spk) * spk;
@@ -1384,28 +1384,28 @@ void gemm(  // NOLINT
                         simd_t B_0;
                         simd_t B_1;
 
-                        A0  = simd<value_t>::loadu(blB);
-                        A1  = simd<value_t>::loadu(blB + Traits::LhsProgress);
+                        A0  = scalars::simd<value_t>::loadu(blB);
+                        A1  = scalars::simd<value_t>::loadu(blB + Traits::LhsProgress);
                         B_0 = load_lhs(blA + 0 * spk);
                         B_1 = load_lhs(blA + 1 * spk);
-                        C0  = simd<value_t>::fma(A0, B_0, C0);
-                        C1  = simd<value_t>::fma(A1, B_1, C1);
+                        C0  = scalars::simd<value_t>::fma(A0, B_0, C0);
+                        C1  = scalars::simd<value_t>::fma(A1, B_1, C1);
 
-                        A0  = simd<value_t>::loadu(blB + lhs_2offset);
-                        A1  = simd<value_t>::loadu(blB + lhs_3offset);
+                        A0  = scalars::simd<value_t>::loadu(blB + lhs_2offset);
+                        A1  = scalars::simd<value_t>::loadu(blB + lhs_3offset);
                         B_0 = load_lhs(blA + 2 * spk);
                         B_1 = load_lhs(blA + 3 * spk);
-                        C2  = simd<value_t>::fma(A0, B_0, C2);
-                        C3  = simd<value_t>::fma(A1, B_1, C3);
+                        C2  = scalars::simd<value_t>::fma(A0, B_0, C2);
+                        C3  = scalars::simd<value_t>::fma(A1, B_1, C3);
 
                         blB += 4 * Traits::LhsProgress;
                         blA += 4 * spk;
                     }
-                    C0 = simd<value_t>::add(C0, C1);
-                    C2 = simd<value_t>::add(C2, C3);
-                    C0 = simd<value_t>::add(C0, C2);
-                    /* C0 = simd<value_t>::add(
-                         simd<value_t>::add(C0, C1), simd<value_t>::add(C2,
+                    C0 = scalars::simd<value_t>::add(C0, C1);
+                    C2 = scalars::simd<value_t>::add(C2, C3);
+                    C0 = scalars::simd<value_t>::add(C0, C2);
+                    /* C0 = scalars::simd<value_t>::add(
+                         scalars::simd<value_t>::add(C0, C1), scalars::simd<value_t>::add(C2,
                        C3));*/
 
                     for (; k < endk; k += spk)
@@ -1413,9 +1413,9 @@ void gemm(  // NOLINT
                         simd_t A0;
                         simd_t B_0;
 
-                        A0  = simd<value_t>::loadu(blB);
+                        A0  = scalars::simd<value_t>::loadu(blB);
                         B_0 = load_lhs(blA);
-                        C0  = simd<value_t>::fma(A0, B_0, C0);
+                        C0  = scalars::simd<value_t>::fma(A0, B_0, C0);
 
                         blB += Traits::LhsProgress;
                         blA += spk;
@@ -1425,33 +1425,33 @@ void gemm(  // NOLINT
 
                     if constexpr (Traits::LhsProgress == 8)
                     {
-                        using simd_half_t = typename simd<value_t>::simd_half_t;
+                        using simd_half_t = typename scalars::simd<value_t>::simd_half_t;
                         simd_half_t R;
-                        R                         = simd<value_t>::gather_half(to, ldc);
-                        const simd_half_t alphavh = simd<value_t>::set(&alpha);
+                        R                         = scalars::simd<value_t>::gather_half(to, ldc);
+                        const simd_half_t alphavh = scalars::simd<value_t>::set(&alpha);
                         if (depth - endk > 0)
                         {
                             // We have to handle the last row of the rhs which corresponds to a
                             // half-tmp
-                            const auto a = simd<value_t>::loadu_half(blB);
-                            const auto b = simd<value_t>::set(blA);
-                            auto       c = simd<value_t>::predux_downto4(C0);
-                            c            = simd<value_t>::fma(a, b, c);
-                            R            = simd<value_t>::fma(c, alphavh, R);
+                            const auto a = scalars::simd<value_t>::loadu_half(blB);
+                            const auto b = scalars::simd<value_t>::set(blA);
+                            auto       c = scalars::simd<value_t>::predux_downto4(C0);
+                            c            = scalars::simd<value_t>::fma(a, b, c);
+                            R            = scalars::simd<value_t>::fma(c, alphavh, R);
                         }
                         else
                         {
-                            auto c = simd<value_t>::predux_downto4(C0);
-                            R      = simd<value_t>::fma(c, alphavh, R);
+                            auto c = scalars::simd<value_t>::predux_downto4(C0);
+                            R      = scalars::simd<value_t>::fma(c, alphavh, R);
                         }
-                        simd<value_t>::scatter(R, ldc, to);
+                        scalars::simd<value_t>::scatter(R, ldc, to);
                     }
                     else
                     {
                         simd_t R;
-                        R = simd<value_t>::gather(to, ldc);
-                        R = simd<value_t>::fma(C0, alphav, R);
-                        simd<value_t>::scatter(R, ldc, to);
+                        R = scalars::simd<value_t>::gather(to, ldc);
+                        R = scalars::simd<value_t>::fma(C0, alphav, R);
+                        scalars::simd<value_t>::scatter(R, ldc, to);
                     }
                 }
                 else  // scalar path
@@ -1494,7 +1494,7 @@ void gemm(  // NOLINT
             for (linalg_int i = peeled_mc1; i < rows; i++)
             {
                 const value_t* blA = &blockA[i * strideA + offsetA];
-                simd<value_t>::prefetch(&blA[0]);
+                scalars::simd<value_t>::prefetch(&blA[0]);
                 // gets a 1 x 1 res block as registers
                 value_t        C0  = 0.;
                 const value_t* blB = &blockB[j2 * strideB + offsetB];
@@ -1665,7 +1665,7 @@ void matrix_multiplication_seq(  // NOLINT
                     {
                         pack_rhs<value_t,
                             gemm_traits<value_t>::nr,
-                            simd<value_t>::size,
+                            scalars::simd<value_t>::size,
                             !transpose_a,
                             false>(block_B,
                             &element<value_t, !transpose_a>(rhs, k, j, rhs_ld),

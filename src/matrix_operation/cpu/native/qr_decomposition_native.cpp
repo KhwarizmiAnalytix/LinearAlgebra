@@ -15,7 +15,7 @@ namespace
 template <typename T> inline void qr_axpy(T* y, const T* x, T alpha, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = simd<T>;
+    using P                     = scalars::simd<T>;
     constexpr linalg_long width = P::size;
 
     typename P::simd_t pa;

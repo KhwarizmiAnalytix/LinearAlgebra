@@ -61,7 +61,7 @@ template <typename T>
 inline T svd_dot(const T* __restrict x, const T* __restrict y, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = simd<T>;
+    using P                     = scalars::simd<T>;
     constexpr linalg_long width = P::size;
 
     typename P::simd_t acc0, acc1, acc2, acc3;
@@ -134,7 +134,7 @@ template <typename T>
 inline void svd_axpy(T* __restrict y, const T* __restrict x, T alpha, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = simd<T>;
+    using P                     = scalars::simd<T>;
     constexpr linalg_long width = P::size;
 
     typename P::simd_t pa;
@@ -178,7 +178,7 @@ inline void svd_axpy(T* __restrict y, const T* __restrict x, T alpha, linalg_lon
 // elements each), unlike GivensR's column pair below, so this is
 // vectorized via ::simd<T>: each lane independently computes the
 // same 2x2 rotation per lane -- out0 = c*S0 - s*S1, out1 = s*S0 + c*S1 --
-// expressed as two fma's per output since simd<T> has no standalone
+// expressed as two fma's per output since scalars::simd<T> has no standalone
 // multiply (only fma/add), matching the rest of this file's idiom.
 template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLINT
 {
@@ -192,7 +192,7 @@ template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, 
     T* const __restrict row_m1 = row_m + dim[1];
 
 #if LINALG_HAS_VECTORIZATION
-    using P                     = simd<T>;
+    using P                     = scalars::simd<T>;
     constexpr linalg_long width = P::size;
 
     typename P::simd_t vc, vs, vnegs, vzero;
@@ -240,7 +240,7 @@ template <class T> void GivensL(T* S_, const linalg_long dim[2], linalg_long m, 
 // column m and m + 1 -- instead of recomputing i * dim[1] twice per
 // iteration. Left scalar, unlike GivensL above: each row only ever touches
 // two elements here (columns m and m + 1), so there is no same-row run of
-// contiguous elements for simd<T> to load/store over -- vectorizing
+// contiguous elements for scalars::simd<T> to load/store over -- vectorizing
 // would mean gathering across the `dim[0]` rows instead, a different and
 // more involved transformation not worth it for this O(dim[0]) step.
 template <class T> void GivensR(T* S_, const linalg_long dim[2], linalg_long m, T a, T b)  // NOLINT

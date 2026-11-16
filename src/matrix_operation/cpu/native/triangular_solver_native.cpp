@@ -21,7 +21,7 @@ template <typename T> void subtract_row(T* y, const T* x, T scale, linalg_int co
 {
     linalg_int j = 0;
 #if LINALG_HAS_VECTORIZATION
-    using P = simd<T>;
+    using P = scalars::simd<T>;
     typename P::simd_t alpha;
     alpha = P::set(-scale);
     for (; j + P::size <= count; j += P::size)
@@ -113,7 +113,7 @@ void solve(bool upper,
                 const T    diagonal = coefficient(i, i);
                 linalg_int j        = 0;
 #if LINALG_HAS_VECTORIZATION
-                using P = simd<T>;
+                using P = scalars::simd<T>;
                 typename P::simd_t d;
                 d = P::set(diagonal);
                 for (; j + P::size <= nrhs; j += P::size)

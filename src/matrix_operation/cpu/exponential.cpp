@@ -57,7 +57,7 @@ template <> struct mexp_theta<double>
 template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     linalg_int           i     = 0;
     for (; i + width <= count; i += width)
@@ -77,7 +77,7 @@ template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 template <typename T> void zero_n(T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     typename P::simd_t   z;
     z            = P::set(T(0));
@@ -95,13 +95,13 @@ template <typename T> void zero_n(T* dst, linalg_int count)
 #endif
 }
 
-// dst[0..count) *= c. simd<T> exposes fma/add but no standalone multiply, so this uses fma
+// dst[0..count) *= c. scalars::simd<T> exposes fma/add but no standalone multiply, so this uses fma
 // against a zero accumulator (d*c + 0 == d*c) rather than introducing a multiply-only
 // primitive for this one call site.
 template <typename T> void scale_n(T* dst, linalg_int count, T c)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     typename P::simd_t   cv;
     typename P::simd_t   zero_v;
@@ -131,7 +131,7 @@ template <typename T> void scale_n(T* dst, linalg_int count, T c)
 template <typename T> void add_scaled_n(T* dst, const T* src, linalg_int count, T c)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     typename P::simd_t   cv;
     cv           = P::set(c);
@@ -172,13 +172,13 @@ template <typename T> void add_scaled(T* dst, const T* src, linalg_int n, T c)
 }
 
 // dst += c * I, n x n and tightly packed. The diagonal is strided (n + 1 elements apart), so
-// this vectorizes via simd<T>::gather/scatter — the same strided-access primitives
+// this vectorizes via scalars::simd<T>::gather/scatter — the same strided-access primitives
 // multiplication.cpp's GEBP kernel uses for its column-strided store into C — rather than
-// simd<T>::loadu/storeu, which require contiguous lanes.
+// scalars::simd<T>::loadu/storeu, which require contiguous lanes.
 template <typename T> void add_scaled_identity(T* dst, linalg_int n, T c)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = simd<T>;
+    using P                     = scalars::simd<T>;
     constexpr linalg_int width  = P::size;
     const linalg_int     stride = n + 1;
     typename P::simd_t   cv;

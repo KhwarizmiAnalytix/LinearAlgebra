@@ -70,7 +70,7 @@ template <typename T>
 inline void lu_axpy_sub(T* __restrict y, const T* __restrict x, T a, linalg_long len)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                     = simd<T>;
+    using P                     = scalars::simd<T>;
     constexpr linalg_long width = P::size;
 
     typename P::simd_t va;

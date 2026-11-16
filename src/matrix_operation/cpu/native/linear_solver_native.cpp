@@ -42,7 +42,7 @@ template <typename T> T lu_dot(const T* a, const T* b, linalg_int count)
 {
     linalg_int j = 0;
 #if LINALG_HAS_VECTORIZATION
-    using P = simd<T>;
+    using P = scalars::simd<T>;
     // Independent accumulators hide FMA latency across the contiguous row dot product.
     typename P::simd_t sum0, sum1, sum2, sum3;
     sum0 = P::set(T(0));

@@ -104,7 +104,7 @@ void pseudo_inverse_impl(linalg_long rows,
     T* const W = bufs.A_copy;
 #if LINALG_HAS_VECTORIZATION
     {
-        using P                   = simd<T>;
+        using P                   = scalars::simd<T>;
         constexpr linalg_long vpw = static_cast<linalg_long>(P::size);
         typename P::simd_t    zero_v;
         zero_v = P::set(T(0));
@@ -148,7 +148,7 @@ void pseudo_inverse_impl(linalg_long rows,
 #if LINALG_HAS_VECTORIZATION
         {
             const T* W_col                   = W + c;
-            using P                          = simd<T>;
+            using P                          = scalars::simd<T>;
             constexpr linalg_long vpw        = static_cast<linalg_long>(P::size);
             const linalg_int      col_stride = static_cast<linalg_int>(columns);
             for (linalg_long r = 0; r < rows; ++r)

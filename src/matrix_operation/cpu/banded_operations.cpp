@@ -32,7 +32,7 @@ void decomposition(std::vector<T>& output, size_t outer_dim, size_t dim, size_t 
         LINALG_SCOPE("banded/decomposition/3");
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = simd<T>;
+        using P                = scalars::simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
         // Same row-vs-lag reasoning as solve_decomposed above: the boundary row has no
         // recurrence at all (always safe to pack), but the main loop's lag is exactly
@@ -208,7 +208,7 @@ void decomposition(std::vector<T>& output, size_t outer_dim, size_t dim, size_t 
         const auto two_inner_dim = 2 * inner_dim;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = simd<T>;
+        using P                = scalars::simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
         // Phase 1 has no recurrence (always safe). Phases 2 and 3 read lags of inner_dim and
         // two_inner_dim, both >= inner_dim, so width <= inner_dim is the safety condition for
@@ -662,7 +662,7 @@ void solve_decomposed(std::vector<T>& x,
         auto const* __restrict itr2 = itr1 + stride;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = simd<T>;
+        using P                = scalars::simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
         // Lanes 0..inner_dim-1 within a row are independent interleaved systems (see the
         // layout note in banded_operations.h); the only recurrence is row-to-row, at a fixed
@@ -802,7 +802,7 @@ void solve_decomposed(std::vector<T>& x,
         }
 
 #if LINALG_HAS_VECTORIZATION
-        using P             = simd<T>;
+        using P             = scalars::simd<T>;
         constexpr int width = P::size;
         // Same safety condition as the 3-band case above: a packet is only safe across a
         // recurrence lag of inner_dim (or two_inner_dim, which is always >= inner_dim) when
@@ -1062,7 +1062,7 @@ void multiply(std::vector<T>& result,
         const auto stride = outer_dim * n;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = simd<T>;
+        using P                = scalars::simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
 
         typename P::simd_t vzero, vtm;
@@ -1185,7 +1185,7 @@ void multiply(std::vector<T>& result,
         const auto stride        = outer_dim * n;
 
 #if LINALG_HAS_VECTORIZATION
-        using P                = simd<T>;
+        using P                = scalars::simd<T>;
         constexpr size_t width = static_cast<size_t>(P::size);
 
         typename P::simd_t vzero, vtm;
@@ -1544,7 +1544,7 @@ void decomposition_aad(std::vector<T>& output_aad,
     const auto stride = outer_dim * n;
 
 #if LINALG_HAS_VECTORIZATION
-    using P                  = simd<T>;
+    using P                  = scalars::simd<T>;
     constexpr size_t   width = static_cast<size_t>(P::size);
     typename P::simd_t vzero, vnegone;
     vzero   = P::set(T{0});
@@ -1765,7 +1765,7 @@ void solve_decomposed_vectorised(std::vector<T>& x,
     auto const* __restrict itr2 = itr1 + stride;
 
 #if LINALG_HAS_VECTORIZATION
-    using P                = simd<T>;
+    using P                = scalars::simd<T>;
     constexpr size_t width = static_cast<size_t>(P::size);
 #endif
 
@@ -1859,7 +1859,7 @@ void solve_decomposed_aad(std::vector<T>& decomposed_aad,
     // outer loop and l the (vectorized) inner one; this is a pure loop-nest transpose of two
     // independent axes, so it changes nothing about per-l correctness.
 #if LINALG_HAS_VECTORIZATION
-    using P                                = simd<T>;
+    using P                                = scalars::simd<T>;
     constexpr size_t   width               = static_cast<size_t>(P::size);
     const bool         can_vectorize_outer = width <= outer_dim;
     const linalg_int   gstride             = static_cast<linalg_int>(n);
@@ -2024,7 +2024,7 @@ void solve_decomposed_aad(std::vector<T>& x_aad,
     auto const* __restrict band2 = band1 + stride;
 
 #if LINALG_HAS_VECTORIZATION
-    using P                                = simd<T>;
+    using P                                = scalars::simd<T>;
     constexpr size_t   width               = static_cast<size_t>(P::size);
     const bool         can_vectorize_outer = width <= outer_dim;
     const linalg_int   gstride             = static_cast<linalg_int>(n);
@@ -2143,7 +2143,7 @@ void multiply_aad(std::vector<T>& mat_aad,
     auto* __restrict in_aad_p  = in_aad.data();
 
 #if LINALG_HAS_VECTORIZATION
-    using P                                = simd<T>;
+    using P                                = scalars::simd<T>;
     constexpr size_t   width               = static_cast<size_t>(P::size);
     const bool         can_vectorize_outer = width <= outer_dim;
     const linalg_int   gstride             = static_cast<linalg_int>(n);

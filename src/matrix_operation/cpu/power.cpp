@@ -25,7 +25,7 @@ namespace
 template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     linalg_int           i     = 0;
     for (; i + width <= count; i += width)
@@ -45,7 +45,7 @@ template <typename T> void copy_n(const T* src, T* dst, linalg_int count)
 template <typename T> void zero_n(T* dst, linalg_int count)
 {
 #if LINALG_HAS_VECTORIZATION
-    using P                    = simd<T>;
+    using P                    = scalars::simd<T>;
     constexpr linalg_int width = P::size;
     typename P::simd_t   z;
     z            = P::set(T(0));
