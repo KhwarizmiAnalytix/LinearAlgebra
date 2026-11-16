@@ -23,11 +23,8 @@ namespace detail
 
 // Same checks as eigen.cpp; each backend translation unit keeps its own
 // internal-linkage copy so linking several backends cannot clash.
-static void check_symmetric_eigen_inputs(const void* eigenvectors,
-    const void*                                      eigenvalues,
-    linalg_int                                       n,
-    linalg_int                                       lda,
-    linalg_int                                       ldv)
+static void check_symmetric_eigen_inputs(
+    const void* eigenvectors, const void* eigenvalues, linalg_int n, linalg_int lda, linalg_int ldv)
 {
     LINALG_CHECK(eigenvalues != nullptr && eigenvectors != nullptr,
         "symmetric_eigen_backend::apply: eigenvalues and eigenvectors must not be null");
@@ -38,10 +35,10 @@ static void check_symmetric_eigen_inputs(const void* eigenvectors,
 static void check_general_eigen_inputs(const void* eigenvectors,
     const void*                                    eigenvalues_real,
     const void*                                    eigenvalues_imag,
-    bool                                            compute_eigenvectors,
-    linalg_int                                      n,
-    linalg_int                                      lda,
-    linalg_int                                      ldv)
+    bool                                           compute_eigenvectors,
+    linalg_int                                     n,
+    linalg_int                                     lda,
+    linalg_int                                     ldv)
 {
     LINALG_CHECK(
         eigenvectors != nullptr && eigenvalues_real != nullptr && eigenvalues_imag != nullptr,
@@ -64,69 +61,80 @@ template <typename T>
 size_t general_eigen_mkl_workspace_size(linalg_int n, bool compute_eigenvectors)
 {
 
-        return 0;
+    return 0;
 }
 }  // namespace
 
 template <>
 bool symmetric_eigen_backend<float, linalg_backend::MKL>::apply(float* eigenvectors,
-    linalg_int                                                            n,
-    linalg_int                                                            /*lda*/,
-    float*                                                                eigenvalues,
-    linalg_int                                                            ldv,
-    void*                                                                 workspace,
-    size_t                                                                workspace_size,
+    linalg_int                                                         n,
+    linalg_int /*lda*/,
+    float*     eigenvalues,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("eigen/mkl<float>");
     detail::check_symmetric_eigen_inputs(eigenvectors, eigenvalues, n, ldv, ldv);
     LINALG_CHECK(workspace_size >= symmetric_eigen_mkl_workspace_size<float>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
-    auto info = LAPACKE_ssyevd(LAPACK_ROW_MAJOR, 'V', 'L', n, eigenvectors, ldv, eigenvalues);  // NOLINT
+    auto info =
+        LAPACKE_ssyevd(LAPACK_ROW_MAJOR, 'V', 'L', n, eigenvectors, ldv, eigenvalues);  // NOLINT
     return info == 0;
 }
 
 template <>
 bool symmetric_eigen_backend<double, linalg_backend::MKL>::apply(double* eigenvectors,
-    linalg_int                                                              n,
-    linalg_int                                                              /*lda*/,
-    double*                                                                 eigenvalues,
-    linalg_int                                                              ldv,
-    void*                                                                   workspace,
-    size_t                                                                  workspace_size,
+    linalg_int                                                           n,
+    linalg_int /*lda*/,
+    double*    eigenvalues,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("eigen/mkl<double>");
     detail::check_symmetric_eigen_inputs(eigenvectors, eigenvalues, n, ldv, ldv);
     LINALG_CHECK(workspace_size >= symmetric_eigen_mkl_workspace_size<double>(n),
         "symmetric_eigenvalue_decomposition: workspace_size too small");
-    auto info = LAPACKE_dsyevd(LAPACK_ROW_MAJOR, 'V', 'L', n, eigenvectors, ldv, eigenvalues);  // NOLINT
+    auto info =
+        LAPACKE_dsyevd(LAPACK_ROW_MAJOR, 'V', 'L', n, eigenvectors, ldv, eigenvalues);  // NOLINT
     return info == 0;
 }
 
 template <>
 bool general_eigen_backend<float, linalg_backend::MKL>::apply(float* eigenvectors,
-    linalg_int                                                          n,
-    linalg_int                                                          /*lda*/,
-    float*                                                              eigenvalues_real,
-    float*                                                              eigenvalues_imag,
-    bool                                                                compute_eigenvectors,
-    linalg_int                                                          ldv,
-    void*                                                                workspace,
-    size_t                                                               workspace_size,
+    linalg_int                                                       n,
+    linalg_int /*lda*/,
+    float*     eigenvalues_real,
+    float*     eigenvalues_imag,
+    bool       compute_eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/mkl<float>");
     detail::check_general_eigen_inputs(
         eigenvectors, eigenvalues_real, eigenvalues_imag, compute_eigenvectors, n, ldv, ldv);
-    LINALG_CHECK(
-        workspace_size >= general_eigen_mkl_workspace_size<float>(n, compute_eigenvectors),
+    LINALG_CHECK(workspace_size >= general_eigen_mkl_workspace_size<float>(n, compute_eigenvectors),
         "eigen: workspace_size too small");
     if (!compute_eigenvectors)
     {
         linalg_int info = LAPACKE_sgeev(  // NOLINT
-            LAPACK_ROW_MAJOR, 'N', 'N', n, eigenvectors, ldv, eigenvalues_real, eigenvalues_imag,
-            nullptr, n, nullptr, n);
+            LAPACK_ROW_MAJOR,
+            'N',
+            'N',
+            n,
+            eigenvectors,
+            ldv,
+            eigenvalues_real,
+            eigenvalues_imag,
+            nullptr,
+            n,
+            nullptr,
+            n);
         return info == 0;
     }
     // sgeev cannot alias the input matrix with the right-eigenvector output; compute
@@ -149,14 +157,14 @@ bool general_eigen_backend<float, linalg_backend::MKL>::apply(float* eigenvector
 
 template <>
 bool general_eigen_backend<double, linalg_backend::MKL>::apply(double* eigenvectors,
-    linalg_int                                                            n,
-    linalg_int                                                            /*lda*/,
-    double*                                                               eigenvalues_real,
-    double*                                                               eigenvalues_imag,
-    bool                                                                  compute_eigenvectors,
-    linalg_int                                                            ldv,
-    void*                                                                 workspace,
-    size_t                                                                workspace_size,
+    linalg_int                                                         n,
+    linalg_int /*lda*/,
+    double*    eigenvalues_real,
+    double*    eigenvalues_imag,
+    bool       compute_eigenvectors,
+    linalg_int ldv,
+    void*      workspace,
+    size_t     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("general_eigen/mkl<double>");
@@ -168,8 +176,18 @@ bool general_eigen_backend<double, linalg_backend::MKL>::apply(double* eigenvect
     if (!compute_eigenvectors)
     {
         linalg_int info = LAPACKE_dgeev(  // NOLINT
-            LAPACK_ROW_MAJOR, 'N', 'N', n, eigenvectors, ldv, eigenvalues_real, eigenvalues_imag,
-            nullptr, n, nullptr, n);
+            LAPACK_ROW_MAJOR,
+            'N',
+            'N',
+            n,
+            eigenvectors,
+            ldv,
+            eigenvalues_real,
+            eigenvalues_imag,
+            nullptr,
+            n,
+            nullptr,
+            n);
         return info == 0;
     }
     // dgeev cannot alias the input matrix with the right-eigenvector output; compute
