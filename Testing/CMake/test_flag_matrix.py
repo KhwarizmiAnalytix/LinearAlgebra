@@ -164,16 +164,36 @@ class FlagMatrixChecks(unittest.TestCase):
         self.assertTrue(
             matrix.valid({"LINALG_ENABLE_BLIS": "ON", "LINALG_ENABLE_BLAS": "OFF"})
         )
-        avx512_cxx23 = {"LINALG_CPU_BACKEND": "avx512", "LINALG_CXX_STANDARD": "23"}
-        self.assertFalse(matrix.valid(avx512_cxx23, "windows-msvc"))
+        avx512_bench = {
+            "LINALG_CPU_BACKEND": "avx512",
+            "LINALG_ENABLE_BENCHMARK": "ON",
+            "CMAKE_BUILD_TYPE": "Release",
+        }
+        for build_type in ("Release", "MinSizeRel", "RelWithDebInfo"):
+            self.assertFalse(
+                matrix.valid(
+                    {**avx512_bench, "CMAKE_BUILD_TYPE": build_type}, "windows-msvc"
+                )
+            )
         self.assertTrue(
-            matrix.valid({**avx512_cxx23, "LINALG_CXX_STANDARD": "20"}, "windows-msvc")
+            matrix.valid({**avx512_bench, "CMAKE_BUILD_TYPE": "Debug"}, "windows-msvc")
         )
         self.assertTrue(
-            matrix.valid({**avx512_cxx23, "LINALG_CPU_BACKEND": "avx2"}, "windows-msvc")
+            matrix.valid(
+                {**avx512_bench, "LINALG_ENABLE_BENCHMARK": "OFF"}, "windows-msvc"
+            )
         )
-        self.assertTrue(matrix.valid(avx512_cxx23, "linux-clang"))
-        self.assertTrue(matrix.valid(avx512_cxx23, "windows-clang"))
+        self.assertTrue(
+            matrix.valid({**avx512_bench, "LINALG_CPU_BACKEND": "avx2"}, "windows-msvc")
+        )
+        self.assertTrue(
+            matrix.valid(
+                {"LINALG_CPU_BACKEND": "avx512", "LINALG_CXX_STANDARD": "23"},
+                "windows-msvc",
+            )
+        )
+        self.assertTrue(matrix.valid(avx512_bench, "linux-clang"))
+        self.assertTrue(matrix.valid(avx512_bench, "windows-clang"))
 
     def test_scalars_package_backend_follows_the_bundled_selection(self):
         spec = importlib.util.spec_from_file_location(

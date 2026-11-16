@@ -155,11 +155,15 @@ def valid(partial, platform=None):
     if (
         platform == "windows-msvc"
         and partial.get("LINALG_CPU_BACKEND") == "avx512"
-        and partial.get("LINALG_CXX_STANDARD") == "23"
+        and partial.get("LINALG_ENABLE_BENCHMARK") == "ON"
+        and partial.get("CMAKE_BUILD_TYPE")
+        in ("Release", "MinSizeRel", "RelWithDebInfo")
     ):
-        # MSVC AVX512 + C++23 compiles Scalars and LinearAlgebra in two passes;
-        # the combined build exceeds the 90-minute job timeout.
-        # avx512 + C++20 and other backends + C++23 remain covered.
+        # Every Testing/Benchmark target compiles Eigen's dense decompositions as a
+        # reference; MSVC's optimizer needs 20-60 minutes per case for that code
+        # under /arch:AVX512, independent of the C++ standard and LTO mode, so the
+        # shard exceeds the 90-minute job timeout. The library and tests remain
+        # covered with avx512, and benchmarks remain covered with other backends.
         return False
     return True
 
