@@ -22,21 +22,96 @@
 #endif
 namespace linalg_schur
 {
+#if defined(__CUDACC__) || defined(__HIPCC__)
+LINALG_INLINE float atan2(float lhs, float rhs)
+{
+    return ::atan2f(lhs, rhs);
+}
+LINALG_INLINE double atan2(double lhs, double rhs)
+{
+    return ::atan2(lhs, rhs);
+}
+LINALG_INLINE float exp(float value)
+{
+    return ::expf(value);
+}
+LINALG_INLINE double exp(double value)
+{
+    return ::exp(value);
+}
+LINALG_INLINE float fabs(float value)
+{
+    return ::fabsf(value);
+}
+LINALG_INLINE double fabs(double value)
+{
+    return ::fabs(value);
+}
+LINALG_INLINE float fmax(float lhs, float rhs)
+{
+    return ::fmaxf(lhs, rhs);
+}
+LINALG_INLINE double fmax(double lhs, double rhs)
+{
+    return ::fmax(lhs, rhs);
+}
+LINALG_INLINE float fmin(float lhs, float rhs)
+{
+    return ::fminf(lhs, rhs);
+}
+LINALG_INLINE double fmin(double lhs, double rhs)
+{
+    return ::fmin(lhs, rhs);
+}
+LINALG_INLINE float hypot(float lhs, float rhs)
+{
+    return ::hypotf(lhs, rhs);
+}
+LINALG_INLINE double hypot(double lhs, double rhs)
+{
+    return ::hypot(lhs, rhs);
+}
+LINALG_INLINE float log(float value)
+{
+    return ::logf(value);
+}
+LINALG_INLINE double log(double value)
+{
+    return ::log(value);
+}
+LINALG_INLINE float sin(float value)
+{
+    return ::sinf(value);
+}
+LINALG_INLINE double sin(double value)
+{
+    return ::sin(value);
+}
+LINALG_INLINE float sqrt(float value)
+{
+    return ::sqrtf(value);
+}
+LINALG_INLINE double sqrt(double value)
+{
+    return ::sqrt(value);
+}
+#else
 using std::atan2;
 using std::exp;
 using std::fabs;
 using std::fmax;
 using std::fmin;
 using std::hypot;
+using std::log;
+using std::sin;
+using std::sqrt;
+#endif
 #if defined(__CUDACC__) || defined(__HIPCC__)
 // MSVC's std::isfinite template is host-only; use the GPU runtime overloads.
 using ::isfinite;
 #else
 using std::isfinite;
 #endif
-using std::log;
-using std::sin;
-using std::sqrt;
 }  // namespace linalg_schur
 #endif
 
