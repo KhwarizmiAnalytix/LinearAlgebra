@@ -67,12 +67,16 @@ if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_F
     string(APPEND CMAKE_CXX_FLAGS " /Zc:__cplusplus")
     # Treat warnings as errors set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX") Disable C4244: conversion
     # warnings
+    # C4834: ThirdParty/Scalars/include/types/complex.h discards the return value
+    # of std::frexp intentionally (only the exponent output-argument is needed).
+    # MSVC marks std::frexp [[nodiscard]] since VS 2022 17.x, so suppress the
+    # warning globally rather than patching the vendored header.
     message(
         STATUS
-            "  MSVC: disabling conversion/truncation/signed warnings (/wd4244 /wd4267 /wd4715 /wd4018)"
+            "  MSVC: disabling conversion/truncation/signed/nodiscard warnings (/wd4244 /wd4267 /wd4715 /wd4018 /wd4834)"
     )
-    string(APPEND CMAKE_CXX_FLAGS " /wd4244 /wd4267 /wd4715 /wd4018")
-    string(APPEND CMAKE_C_FLAGS " /wd4244 /wd4267 /wd4715 /wd4018")
+    string(APPEND CMAKE_CXX_FLAGS " /wd4244 /wd4267 /wd4715 /wd4018 /wd4834")
+    string(APPEND CMAKE_C_FLAGS " /wd4244 /wd4267 /wd4715 /wd4018 /wd4834")
 
     # Enable /MP flag for Visual Studio
     set(CMAKE_CXX_MP_FLAG ON CACHE BOOL "Build with /MP flag enabled")
