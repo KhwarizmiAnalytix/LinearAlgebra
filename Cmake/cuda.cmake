@@ -148,11 +148,13 @@ function(linalg_apply_cuda_flags target)
         ${target} PRIVATE $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>
     )
 
+    # MSVC is also true for clang++ (GNU driver) because nvcc simulates MSVC,
+    # so gate the CXX flag on the cl-style frontend (cl.exe / clang-cl).
     if(MSVC)
         target_compile_options(
             ${target}
             PRIVATE
-                $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+                $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<STREQUAL:${CMAKE_CXX_COMPILER_FRONTEND_VARIANT},MSVC>>:/Zc:preprocessor>
                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
         )
     endif()
