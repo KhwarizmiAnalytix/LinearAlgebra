@@ -2,19 +2,19 @@
 
 #include "include/matrix_operation/linear_solver.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp.
-#include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
+#include <complex>  // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 #elif defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
+#pragma warning(disable : 4190)  // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
 #endif
 #include <lapacke.h>
 #if defined(__clang__)
@@ -66,7 +66,8 @@ template <typename T> size_t solver_blas_workspace_size(linalg_int lda, linear_s
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        arena.next<unsigned char>(lu_decomposition<T, linalg_backend::BLAS_LAPACKE>::workspace_size(lda));
+        arena.next<unsigned char>(
+            lu_decomposition<T, linalg_backend::BLAS_LAPACKE>::workspace_size(lda));
         arena.next<lapack_int>(static_cast<size_t>(lda));
         break;
     case linear_solver_type::LU_UPFRONT_LINEAR_SOLVER:
@@ -82,12 +83,12 @@ template <typename T> size_t solver_blas_workspace_size(linalg_int lda, linear_s
 
 template <>
 void linear_solver<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
-    linalg_int*                                                        pivot,
-    linalg_int                                                         lda,
-    float*                                                             x,
-    linear_solver_type                                                 type,
-    void*                                                              workspace,
-    size_t                                                             workspace_size,
+    linalg_int*                                                       pivot,
+    linalg_int                                                        lda,
+    float*                                                            x,
+    linear_solver_type                                                type,
+    void*                                                             workspace,
+    size_t                                                            workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/blas_lapacke<float>");
@@ -100,11 +101,14 @@ void linear_solver<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(lda));
+        auto* lu_ws = arena.next<unsigned char>(
+            lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(lda));
         auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
-        if (lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(lda)))
+        if (lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(m,
+                lda,
+                pivot,
+                lu_ws,
+                lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(lda)))
         {
             to_lapack_pivots(pivot, lda, ipiv);
             LINALG_BLAS_FUNCTION(LAPACKE_sgetrs)(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);
@@ -133,12 +137,12 @@ void linear_solver<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
 
 template <>
 void linear_solver<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
-    linalg_int*                                                          pivot,
-    linalg_int                                                           lda,
-    double*                                                              x,
-    linear_solver_type                                                   type,
-    void*                                                                workspace,
-    size_t                                                               workspace_size,
+    linalg_int*                                                         pivot,
+    linalg_int                                                          lda,
+    double*                                                             x,
+    linear_solver_type                                                  type,
+    void*                                                               workspace,
+    size_t                                                              workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/blas_lapacke<double>");
@@ -151,11 +155,14 @@ void linear_solver<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(lda));
+        auto* lu_ws = arena.next<unsigned char>(
+            lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(lda));
         auto* ipiv = arena.next<lapack_int>(static_cast<size_t>(lda));
-        if (lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(lda)))
+        if (lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(m,
+                lda,
+                pivot,
+                lu_ws,
+                lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(lda)))
         {
             to_lapack_pivots(pivot, lda, ipiv);
             LINALG_BLAS_FUNCTION(LAPACKE_dgetrs)(LAPACK_ROW_MAJOR, 'N', n, 1, m, n, ipiv, x, 1);

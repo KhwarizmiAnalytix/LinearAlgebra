@@ -4,12 +4,12 @@
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
 
-#include "include/matrix_operation/svd_decomposition.h"
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/svd_decomposition.h"
 
 namespace linalg
 {
@@ -22,12 +22,32 @@ namespace detail
 {
 size_t svd_on_device_workspace_size(const float*, linalg_long rows, linalg_long columns);
 size_t svd_on_device_workspace_size(const double*, linalg_long rows, linalg_long columns);
-void svd_on_device(linalg_long rows, linalg_long columns, const float* A, linalg_long lda,
-    float* S, float* U, linalg_long ldu, float* VT, linalg_long ldv,
-    int* info, void* workspace, size_t workspace_size, cudaStream_t stream);
-void svd_on_device(linalg_long rows, linalg_long columns, const double* A, linalg_long lda,
-    double* S, double* U, linalg_long ldu, double* VT, linalg_long ldv,
-    int* info, void* workspace, size_t workspace_size, cudaStream_t stream);
+void   svd_on_device(linalg_long rows,
+    linalg_long                columns,
+    const float*               A,
+    linalg_long                lda,
+    float*                     S,
+    float*                     U,
+    linalg_long                ldu,
+    float*                     VT,
+    linalg_long                ldv,
+    int*                       info,
+    void*                      workspace,
+    size_t                     workspace_size,
+    cudaStream_t               stream);
+void   svd_on_device(linalg_long rows,
+    linalg_long                columns,
+    const double*              A,
+    linalg_long                lda,
+    double*                    S,
+    double*                    U,
+    linalg_long                ldu,
+    double*                    VT,
+    linalg_long                ldv,
+    int*                       info,
+    void*                      workspace,
+    size_t                     workspace_size,
+    cudaStream_t               stream);
 }  // namespace detail
 
 namespace
@@ -36,8 +56,7 @@ namespace
 // svd_core's own five scratch buffers (sized for whatever (r, c) it is
 // actually invoked with — see svd_plan below for how the two possible
 // invocations, direct or rows<columns-swapped, are both accounted for).
-template <typename T>
-struct svd_core_layout
+template <typename T> struct svd_core_layout
 {
     T* a_work;
     T* u_work;
@@ -53,19 +72,18 @@ svd_core_layout<T> svd_core_plan(detail::workspace_arena& arena, int r, int c, i
     const auto         rc = static_cast<size_t>(r) * static_cast<size_t>(c);
     const auto         rk = static_cast<size_t>(r) * static_cast<size_t>(k);
     const auto         kc = static_cast<size_t>(k) * static_cast<size_t>(c);
-    p.a_work  = arena.next<T>(rc);
-    p.u_work  = arena.next<T>(rk);
-    p.vt_work = arena.next<T>(kc);
-    p.work    = arena.next<T>(static_cast<size_t>(lwork));
-    p.rwork   = arena.next<T>(static_cast<size_t>(std::max(1, k - 1)));
+    p.a_work              = arena.next<T>(rc);
+    p.u_work              = arena.next<T>(rk);
+    p.vt_work             = arena.next<T>(kc);
+    p.work                = arena.next<T>(static_cast<size_t>(lwork));
+    p.rwork               = arena.next<T>(static_cast<size_t>(std::max(1, k - 1)));
     return p;
 }
 
 // Everything svd_impl needs: svd_core's own buffers (above), one shared
 // transpose scratch buffer, and — only on the rows < columns path — the
 // extra at/u_prime/vt_prime buffers.
-template <typename T>
-struct svd_layout
+template <typename T> struct svd_layout
 {
     svd_core_layout<T> core;
     T*                 transpose_scratch;
@@ -84,14 +102,13 @@ svd_layout<T> svd_plan(detail::workspace_arena& arena, int rows, int columns, in
     }
     else
     {
-        p.core     = svd_core_plan<T>(arena, columns, rows, rows, lwork);
+        p.core        = svd_core_plan<T>(arena, columns, rows, rows, lwork);
         const auto rc = static_cast<size_t>(rows) * static_cast<size_t>(columns);
-        p.at           = arena.next<T>(rc);
-        p.u_prime      = arena.next<T>(static_cast<size_t>(columns) * static_cast<size_t>(rows));
-        p.vt_prime     = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(rows));
+        p.at          = arena.next<T>(rc);
+        p.u_prime     = arena.next<T>(static_cast<size_t>(columns) * static_cast<size_t>(rows));
+        p.vt_prime    = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(rows));
     }
-    p.transpose_scratch =
-        arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
+    p.transpose_scratch = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(columns));
     return p;
 }
 
@@ -117,14 +134,14 @@ size_t svd_workspace_size_impl(BufferSizeFn buffer_size, linalg_long rows, linal
 // Row-major buffers; detail::transpose_device handles the column-/row-major
 // reinterpretation — same identity used throughout lu_decomposition, qr, etc.
 template <typename T, typename GesvdFn>
-void svd_core(GesvdFn gesvd,
-    linalg_long       rows,
-    linalg_long       columns,
-    const T*          A,
-    T*                S,
-    T*                U,
-    T*                VT,
-    int*              info,
+void svd_core(GesvdFn         gesvd,
+    linalg_long               rows,
+    linalg_long               columns,
+    const T*                  A,
+    T*                        S,
+    T*                        U,
+    T*                        VT,
+    int*                      info,
     const svd_core_layout<T>& bufs,
     T*                        transpose_scratch,
     int                       lwork,
@@ -147,17 +164,33 @@ void svd_core(GesvdFn gesvd,
         "cudaMemcpyAsync failed");
     detail::transpose_device(rows, columns, bufs.a_work, transpose_scratch, stream);
 
-    const auto status = gesvd(handle, 'S', 'S', r, c, bufs.a_work, r, S, bufs.u_work, r,
-        bufs.vt_work, k, bufs.work, lwork, bufs.rwork, info);
-    LINALG_CHECK(status == CUSOLVER_STATUS_SUCCESS,
-        "cusolverDn*gesvd failed", static_cast<int>(status));
+    const auto status = gesvd(handle,
+        'S',
+        'S',
+        r,
+        c,
+        bufs.a_work,
+        r,
+        S,
+        bufs.u_work,
+        r,
+        bufs.vt_work,
+        k,
+        bufs.work,
+        lwork,
+        bufs.rwork,
+        info);
+    LINALG_CHECK(
+        status == CUSOLVER_STATUS_SUCCESS, "cusolverDn*gesvd failed", static_cast<int>(status));
 
-    LINALG_CHECK(cudaMemcpyAsync(U, bufs.u_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(
+        cudaMemcpyAsync(U, bufs.u_work, sizeof(T) * rk, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
     detail::transpose_device(static_cast<linalg_long>(k), rows, U, transpose_scratch, stream);
 
-    LINALG_CHECK(cudaMemcpyAsync(VT, bufs.vt_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream) ==
+    LINALG_CHECK(
+        cudaMemcpyAsync(VT, bufs.vt_work, sizeof(T) * kc, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
     detail::transpose_device(columns, static_cast<linalg_long>(k), VT, transpose_scratch, stream);
@@ -165,25 +198,24 @@ void svd_core(GesvdFn gesvd,
 
 template <typename T, typename BufferSizeFn, typename GesvdFn>
 void svd_impl(BufferSizeFn buffer_size,
-    GesvdFn      gesvd,
-    linalg_long  rows,
-    linalg_long  columns,
-    const T*     A,
-    linalg_long  lda,
-    T*           S,
-    T*           U,
-    linalg_long  ldu,
-    T*           VT,
-    linalg_long  ldv,
-    int*         info,
-    void*        workspace,
-    size_t       workspace_size,
-    cudaStream_t stream)
+    GesvdFn                gesvd,
+    linalg_long            rows,
+    linalg_long            columns,
+    const T*               A,
+    linalg_long            lda,
+    T*                     S,
+    T*                     U,
+    linalg_long            ldu,
+    T*                     VT,
+    linalg_long            ldv,
+    int*                   info,
+    void*                  workspace,
+    size_t                 workspace_size,
+    cudaStream_t           stream)
 {
     LINALG_CHECK(A != nullptr && S != nullptr && U != nullptr && VT != nullptr && info != nullptr,
         "svd_decomposition: A, S, U, VT, and info must not be null");
-    LINALG_CHECK(rows != 0 && columns != 0,
-        "svd_decomposition: rows and columns must be positive");
+    LINALG_CHECK(rows != 0 && columns != 0, "svd_decomposition: rows and columns must be positive");
 
     const auto r = detail::checked_narrow<int>(rows);
     const auto c = detail::checked_narrow<int>(columns);
@@ -196,20 +228,30 @@ void svd_impl(BufferSizeFn buffer_size,
         "(lda == columns, ldu == min(rows, columns), ldv == columns)");
 
     auto       handle = detail::cusolver_handle_for_current_device();
-    const auto eff_r   = (r >= c) ? r : c;
-    const auto eff_c   = (r >= c) ? c : r;
-    int        lwork   = 0;
+    const auto eff_r  = (r >= c) ? r : c;
+    const auto eff_c  = (r >= c) ? c : r;
+    int        lwork  = 0;
     LINALG_CHECK(buffer_size(handle, eff_r, eff_c, &lwork) == CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*gesvd_bufferSize failed");
 
     LINALG_CHECK(workspace_size >= svd_workspace_size_impl<T>(buffer_size, rows, columns),
         "svd_decomposition: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = svd_plan<T>(arena, r, c, lwork);
+    const auto              bufs = svd_plan<T>(arena, r, c, lwork);
 
     if (r >= c)
     {
-        svd_core(gesvd, rows, columns, A, S, U, VT, info, bufs.core, bufs.transpose_scratch, lwork,
+        svd_core(gesvd,
+            rows,
+            columns,
+            A,
+            S,
+            U,
+            VT,
+            info,
+            bufs.core,
+            bufs.transpose_scratch,
+            lwork,
             stream);
         return;
     }
@@ -217,22 +259,33 @@ void svd_impl(BufferSizeFn buffer_size,
     // rows < columns: factor A^T (columns x rows, m' >= n') instead.
     // A = (A^T)^T = (U' S' VT')^T => U = VT'^T, VT = U'^T, S = S'.
     const auto rc = static_cast<size_t>(r) * static_cast<size_t>(c);
-    LINALG_CHECK(
-        cudaMemcpyAsync(bufs.at, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) == cudaSuccess,
+    LINALG_CHECK(cudaMemcpyAsync(bufs.at, A, sizeof(T) * rc, cudaMemcpyDeviceToDevice, stream) ==
+                     cudaSuccess,
         "cudaMemcpyAsync failed");
     detail::transpose_device(rows, columns, bufs.at, bufs.transpose_scratch, stream);
 
     const auto ck = static_cast<size_t>(c) * static_cast<size_t>(k);
     const auto kr = static_cast<size_t>(k) * static_cast<size_t>(r);
 
-    svd_core(gesvd, columns, rows, bufs.at, S, bufs.u_prime, bufs.vt_prime, info, bufs.core,
-        bufs.transpose_scratch, lwork, stream);
+    svd_core(gesvd,
+        columns,
+        rows,
+        bufs.at,
+        S,
+        bufs.u_prime,
+        bufs.vt_prime,
+        info,
+        bufs.core,
+        bufs.transpose_scratch,
+        lwork,
+        stream);
 
     LINALG_CHECK(
         cudaMemcpyAsync(VT, bufs.u_prime, sizeof(T) * ck, cudaMemcpyDeviceToDevice, stream) ==
             cudaSuccess,
         "cudaMemcpyAsync failed");
-    detail::transpose_device(columns, static_cast<linalg_long>(k), VT, bufs.transpose_scratch, stream);
+    detail::transpose_device(
+        columns, static_cast<linalg_long>(k), VT, bufs.transpose_scratch, stream);
 
     LINALG_CHECK(
         cudaMemcpyAsync(U, bufs.vt_prime, sizeof(T) * kr, cudaMemcpyDeviceToDevice, stream) ==
@@ -246,17 +299,17 @@ void svd_impl(BufferSizeFn buffer_size,
 // inspecting it if needed.
 template <typename T>
 void svd_apply(linalg_long rows,
-    linalg_long  columns,
-    T*           A,
-    linalg_long  lda,
-    T*           S,
-    T*           U,
-    linalg_long  ldu,
-    T*           VT,
-    linalg_long  ldv,
-    void*        workspace,
-    size_t       workspace_size,
-    void*        stream)
+    linalg_long            columns,
+    T*                     A,
+    linalg_long            lda,
+    T*                     S,
+    T*                     U,
+    linalg_long            ldu,
+    T*                     VT,
+    linalg_long            ldv,
+    void*                  workspace,
+    size_t                 workspace_size,
+    void*                  stream)
 {
     LINALG_CHECK(lda == columns && ldu == std::min(rows, columns) && ldv == columns,
         "svd_decomposition<cuda_blas>: lda/ldu/ldv must be tightly packed "
@@ -264,9 +317,20 @@ void svd_apply(linalg_long rows,
     const auto base =
         detail::svd_on_device_workspace_size(static_cast<const T*>(nullptr), rows, columns);
     detail::workspace_arena arena(workspace, workspace_size);
-    int*  dev_info = arena.next<int>(1, alignof(int));
-    void* gpu_ws   = arena.next<unsigned char>(base);
-    detail::svd_on_device(rows, columns, A, lda, S, U, ldu, VT, ldv, dev_info, gpu_ws, base,
+    int*                    dev_info = arena.next<int>(1, alignof(int));
+    void*                   gpu_ws   = arena.next<unsigned char>(base);
+    detail::svd_on_device(rows,
+        columns,
+        A,
+        lda,
+        S,
+        U,
+        ldu,
+        VT,
+        ldv,
+        dev_info,
+        gpu_ws,
+        base,
         static_cast<cudaStream_t>(stream));
 }
 
@@ -290,56 +354,82 @@ size_t svd_on_device_workspace_size(const double*, linalg_long rows, linalg_long
 }
 
 void svd_on_device(linalg_long rows,
-    linalg_long              columns,
+    linalg_long                columns,
     const float*               A,
-    linalg_long              lda,
+    linalg_long                lda,
     float*                     S,
     float*                     U,
-    linalg_long              ldu,
+    linalg_long                ldu,
     float*                     VT,
-    linalg_long              ldv,
+    linalg_long                ldv,
     int*                       info,
     void*                      workspace,
     size_t                     workspace_size,
     cudaStream_t               stream)
 {
-    svd_impl(cusolverDnSgesvd_bufferSize, cusolverDnSgesvd,
-        rows, columns, A, lda, S, U, ldu, VT, ldv, info, workspace, workspace_size, stream);
+    svd_impl(cusolverDnSgesvd_bufferSize,
+        cusolverDnSgesvd,
+        rows,
+        columns,
+        A,
+        lda,
+        S,
+        U,
+        ldu,
+        VT,
+        ldv,
+        info,
+        workspace,
+        workspace_size,
+        stream);
 }
 
 void svd_on_device(linalg_long rows,
-    linalg_long              columns,
+    linalg_long                columns,
     const double*              A,
-    linalg_long              lda,
+    linalg_long                lda,
     double*                    S,
     double*                    U,
-    linalg_long              ldu,
+    linalg_long                ldu,
     double*                    VT,
-    linalg_long              ldv,
+    linalg_long                ldv,
     int*                       info,
     void*                      workspace,
     size_t                     workspace_size,
     cudaStream_t               stream)
 {
-    svd_impl(cusolverDnDgesvd_bufferSize, cusolverDnDgesvd,
-        rows, columns, A, lda, S, U, ldu, VT, ldv, info, workspace, workspace_size, stream);
+    svd_impl(cusolverDnDgesvd_bufferSize,
+        cusolverDnDgesvd,
+        rows,
+        columns,
+        A,
+        lda,
+        S,
+        U,
+        ldu,
+        VT,
+        ldv,
+        info,
+        workspace,
+        workspace_size,
+        stream);
 }
 
 }  // namespace detail
 
 template <>
 void svd_decomposition<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
-    linalg_long  columns,
-    float*       A,
-    linalg_long  lda,
-    float*       S,
-    float*       U,
-    linalg_long  ldu,
-    float*       VT,
-    linalg_long  ldv,
-    void*        workspace,
-    size_t       workspace_size,
-    void*        stream)
+    linalg_long                                                             columns,
+    float*                                                                  A,
+    linalg_long                                                             lda,
+    float*                                                                  S,
+    float*                                                                  U,
+    linalg_long                                                             ldu,
+    float*                                                                  VT,
+    linalg_long                                                             ldv,
+    void*                                                                   workspace,
+    size_t                                                                  workspace_size,
+    void*                                                                   stream)
 {
     LINALG_SCOPE("svd_decomposition/cuda_blas<float>");
     svd_apply(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size, stream);
@@ -347,17 +437,17 @@ void svd_decomposition<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows
 
 template <>
 void svd_decomposition<double, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
-    linalg_long  columns,
-    double*      A,
-    linalg_long  lda,
-    double*      S,
-    double*      U,
-    linalg_long  ldu,
-    double*      VT,
-    linalg_long  ldv,
-    void*        workspace,
-    size_t       workspace_size,
-    void*        stream)
+    linalg_long                                                              columns,
+    double*                                                                  A,
+    linalg_long                                                              lda,
+    double*                                                                  S,
+    double*                                                                  U,
+    linalg_long                                                              ldu,
+    double*                                                                  VT,
+    linalg_long                                                              ldv,
+    void*                                                                    workspace,
+    size_t                                                                   workspace_size,
+    void*                                                                    stream)
 {
     LINALG_SCOPE("svd_decomposition/cuda_blas<double>");
     svd_apply(rows, columns, A, lda, S, U, ldu, VT, ldv, workspace, workspace_size, stream);
@@ -367,7 +457,8 @@ template <>
 size_t svd_decomposition<float, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    const auto base = detail::svd_on_device_workspace_size(static_cast<const float*>(nullptr), rows, columns);
+    const auto base =
+        detail::svd_on_device_workspace_size(static_cast<const float*>(nullptr), rows, columns);
     detail::workspace_arena arena;
     arena.next<int>(1, alignof(int));
     arena.next<unsigned char>(base);
@@ -378,7 +469,8 @@ template <>
 size_t svd_decomposition<double, linalg_backend::CUDA_BLAS>::workspace_size(
     linalg_long rows, linalg_long columns)
 {
-    const auto base = detail::svd_on_device_workspace_size(static_cast<const double*>(nullptr), rows, columns);
+    const auto base =
+        detail::svd_on_device_workspace_size(static_cast<const double*>(nullptr), rows, columns);
     detail::workspace_arena arena;
     arena.next<int>(1, alignof(int));
     arena.next<unsigned char>(base);

@@ -19,13 +19,16 @@ namespace linalg
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
     LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
-    LINALG_CHECK(
-        rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
+    LINALG_CHECK(rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
 }
 
 template <>
-void transpose<float, linalg_backend::MKL>::apply(
-    linalg_long rows, linalg_long columns, float* m, void* /*workspace*/, size_t /*workspace_size*/, void* /*stream*/)
+void transpose<float, linalg_backend::MKL>::apply(linalg_long rows,
+    linalg_long                                               columns,
+    float*                                                    m,
+    void* /*workspace*/,
+    size_t /*workspace_size*/,
+    void* /*stream*/)
 {
     LINALG_SCOPE("transpose/mkl<float>");
     check_transpose_inputs(m, rows, columns);
@@ -34,8 +37,8 @@ void transpose<float, linalg_backend::MKL>::apply(
 
 template <>
 void transpose<double, linalg_backend::MKL>::apply(linalg_long rows,
-    linalg_long                                                        columns,
-    double*                                                            m,
+    linalg_long                                                columns,
+    double*                                                    m,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     void* /*stream*/)
@@ -46,15 +49,13 @@ void transpose<double, linalg_backend::MKL>::apply(linalg_long rows,
 }
 
 template <>
-size_t transpose<float, linalg_backend::MKL>::workspace_size(
-    linalg_long rows, linalg_long columns)
+size_t transpose<float, linalg_backend::MKL>::workspace_size(linalg_long rows, linalg_long columns)
 {
     return 0;
 }
 
 template <>
-size_t transpose<double, linalg_backend::MKL>::workspace_size(
-    linalg_long rows, linalg_long columns)
+size_t transpose<double, linalg_backend::MKL>::workspace_size(linalg_long rows, linalg_long columns)
 {
     return 0;
 }

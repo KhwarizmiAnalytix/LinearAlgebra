@@ -29,8 +29,8 @@ static void check_lu_inputs(const void* m, const void* pivot, linalg_int lda)
 // caller's pivot buffer is passed straight through to getrf.
 template <>
 bool lu_decomposition<float, linalg_backend::MKL>::apply(float* m,
-    linalg_int lda,
-    linalg_int* pivot,
+    linalg_int                                                  lda,
+    linalg_int*                                                 pivot,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,
@@ -48,8 +48,8 @@ bool lu_decomposition<float, linalg_backend::MKL>::apply(float* m,
 
 template <>
 bool lu_decomposition<double, linalg_backend::MKL>::apply(double* m,
-    linalg_int lda,
-    linalg_int* pivot,
+    linalg_int                                                    lda,
+    linalg_int*                                                   pivot,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,

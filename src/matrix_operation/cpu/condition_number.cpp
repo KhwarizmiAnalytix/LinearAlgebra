@@ -5,9 +5,9 @@
 #include <cstring>
 #include <limits>
 
+#include "include/common/linalg_checks.h"
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/svd_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 #include "include/common/linalg_profiler.h"
 
@@ -45,8 +45,7 @@ singular_values_layout<T> singular_values_plan(detail::workspace_arena& arena,
 template <typename T, linalg_backend Backend>
 size_t singular_values_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
-    const auto svd_bytes =
-        linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
+    const auto svd_bytes = linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     singular_values_plan<T>(arena, rows, columns, svd_bytes);
     return arena.total_size();
@@ -60,9 +59,8 @@ T* singular_values(const T* A,
     void*                   workspace,
     size_t                  workspace_size)
 {
-    const linalg_long k = std::min(rows, columns);
-    const auto        svd_bytes =
-        linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
+    const linalg_long k  = std::min(rows, columns);
+    const auto svd_bytes = linalg::svd_decomposition<T, Backend>::workspace_size(rows, columns);
 
     const size_t needed = singular_values_workspace_size_impl<T, Backend>(rows, columns);
     LINALG_CHECK(workspace_size >= needed, "condition_number: workspace_size too small");
@@ -71,8 +69,8 @@ T* singular_values(const T* A,
 
     for (linalg_long i = 0; i < rows; ++i)
     {
-        std::memcpy(bufs.A_copy + i * columns, A + i * lda,
-                    static_cast<size_t>(columns) * sizeof(T));
+        std::memcpy(
+            bufs.A_copy + i * columns, A + i * lda, static_cast<size_t>(columns) * sizeof(T));
     }
 
     linalg::svd_decomposition<T, Backend>::apply(rows,
@@ -120,11 +118,11 @@ T matrix_condition_number_impl(const T* A,
 
 template <>
 float condition_number<float, linalg_backend::NATIVE>::apply(const float* A,
-    linalg_long                                                                          rows,
-    linalg_long                                                                          columns,
-    linalg_long                                                                          lda,
-    void*                                                                                workspace,
-    size_t workspace_size,
+    linalg_long                                                           rows,
+    linalg_long                                                           columns,
+    linalg_long                                                           lda,
+    void*                                                                 workspace,
+    size_t                                                                workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/native<float>");
@@ -137,11 +135,11 @@ float condition_number<float, linalg_backend::NATIVE>::apply(const float* A,
 
 template <>
 double condition_number<double, linalg_backend::NATIVE>::apply(const double* A,
-    linalg_long                                                                             rows,
-    linalg_long                                                                             columns,
-    linalg_long                                                                             lda,
-    void*  workspace,
-    size_t workspace_size,
+    linalg_long                                                              rows,
+    linalg_long                                                              columns,
+    linalg_long                                                              lda,
+    void*                                                                    workspace,
+    size_t                                                                   workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/native<double>");
@@ -170,11 +168,11 @@ size_t condition_number<double, linalg_backend::NATIVE>::workspace_size(
 
 template <>
 float condition_number<float, linalg_backend::BLAS_LAPACKE>::apply(const float* A,
-    linalg_long                                                                              rows,
-    linalg_long                                                                              columns,
-    linalg_long                                                                              lda,
-    void*                                                                                    workspace,
-    size_t workspace_size,
+    linalg_long                                                                 rows,
+    linalg_long                                                                 columns,
+    linalg_long                                                                 lda,
+    void*                                                                       workspace,
+    size_t                                                                      workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/blas_lapacke<float>");
@@ -187,11 +185,11 @@ float condition_number<float, linalg_backend::BLAS_LAPACKE>::apply(const float* 
 
 template <>
 double condition_number<double, linalg_backend::BLAS_LAPACKE>::apply(const double* A,
-    linalg_long                                                                               rows,
-    linalg_long                                                                               columns,
-    linalg_long                                                                               lda,
-    void*  workspace,
-    size_t workspace_size,
+    linalg_long                                                                    rows,
+    linalg_long                                                                    columns,
+    linalg_long                                                                    lda,
+    void*                                                                          workspace,
+    size_t                                                                         workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/blas_lapacke<double>");
@@ -222,11 +220,11 @@ size_t condition_number<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
 
 template <>
 float condition_number<float, linalg_backend::MKL>::apply(const float* A,
-    linalg_long                                                                   rows,
-    linalg_long                                                                   columns,
-    linalg_long                                                                   lda,
-    void*                                                                         workspace,
-    size_t                                                                        workspace_size,
+    linalg_long                                                        rows,
+    linalg_long                                                        columns,
+    linalg_long                                                        lda,
+    void*                                                              workspace,
+    size_t                                                             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/mkl<float>");
@@ -239,11 +237,11 @@ float condition_number<float, linalg_backend::MKL>::apply(const float* A,
 
 template <>
 double condition_number<double, linalg_backend::MKL>::apply(const double* A,
-    linalg_long                                                                    rows,
-    linalg_long                                                                    columns,
-    linalg_long                                                                    lda,
-    void*  workspace,
-    size_t workspace_size,
+    linalg_long                                                           rows,
+    linalg_long                                                           columns,
+    linalg_long                                                           lda,
+    void*                                                                 workspace,
+    size_t                                                                workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("condition_number/mkl<double>");

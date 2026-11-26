@@ -60,8 +60,7 @@ template <typename T, linalg_backend Backend> struct norm
      * @return Required size of the caller-owned host buffer in bytes; zero if no buffer is
      * needed.
      */
-    LINALG_API static size_t workspace_size(
-        linalg_long rows, linalg_long columns, norm_type type);
+    LINALG_API static size_t workspace_size(linalg_long rows, linalg_long columns, norm_type type);
 };
 
 }  // namespace linalg

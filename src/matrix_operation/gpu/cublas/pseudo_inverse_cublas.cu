@@ -6,12 +6,12 @@
 #include <cuda_runtime_api.h>
 #include <limits>
 
-#include "include/matrix_operation/pseudo_inverse.h"
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/pseudo_inverse.h"
 
 // Combines U (rows x k row-major), S (length k), VT (k x columns row-major)
 // into Ainv = V * diag(S+) * U^T (columns x rows row-major), one thread per
@@ -61,12 +61,32 @@ namespace detail
 {
 size_t svd_on_device_workspace_size(const float*, linalg_long rows, linalg_long columns);
 size_t svd_on_device_workspace_size(const double*, linalg_long rows, linalg_long columns);
-void svd_on_device(linalg_long rows, linalg_long columns, const float* A, linalg_long lda,
-    float* S, float* U, linalg_long ldu, float* VT, linalg_long ldv,
-    int* info, void* workspace, size_t workspace_size, cudaStream_t stream);
-void svd_on_device(linalg_long rows, linalg_long columns, const double* A, linalg_long lda,
-    double* S, double* U, linalg_long ldu, double* VT, linalg_long ldv,
-    int* info, void* workspace, size_t workspace_size, cudaStream_t stream);
+void   svd_on_device(linalg_long rows,
+    linalg_long                columns,
+    const float*               A,
+    linalg_long                lda,
+    float*                     S,
+    float*                     U,
+    linalg_long                ldu,
+    float*                     VT,
+    linalg_long                ldv,
+    int*                       info,
+    void*                      workspace,
+    size_t                     workspace_size,
+    cudaStream_t               stream);
+void   svd_on_device(linalg_long rows,
+    linalg_long                columns,
+    const double*              A,
+    linalg_long                lda,
+    double*                    S,
+    double*                    U,
+    linalg_long                ldu,
+    double*                    VT,
+    linalg_long                ldv,
+    int*                       info,
+    void*                      workspace,
+    size_t                     workspace_size,
+    cudaStream_t               stream);
 }  // namespace detail
 
 namespace
@@ -78,8 +98,7 @@ dim3 grid_2d(int width, int height, dim3 block)
         (static_cast<unsigned>(height) + block.y - 1) / block.y);
 }
 
-template <typename T>
-struct pseudo_inverse_layout
+template <typename T> struct pseudo_inverse_layout
 {
     T*             S;
     T*             U;
@@ -104,10 +123,10 @@ pseudo_inverse_layout<T> pseudo_inverse_plan(
 template <typename T>
 size_t pseudo_inverse_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
-    const auto r            = detail::checked_narrow<int>(rows);
-    const auto c            = detail::checked_narrow<int>(columns);
-    const auto k            = std::min(r, c);
-    const auto svd_bytes    =
+    const auto r = detail::checked_narrow<int>(rows);
+    const auto c = detail::checked_narrow<int>(columns);
+    const auto k = std::min(r, c);
+    const auto svd_bytes =
         detail::svd_on_device_workspace_size(static_cast<const T*>(nullptr), rows, columns);
     detail::workspace_arena arena;
     pseudo_inverse_plan<T>(arena, r, c, k, svd_bytes);
@@ -138,22 +157,32 @@ void pseudo_inverse_impl(linalg_long rows,
     const auto c = detail::checked_narrow<int>(columns);
     if (detail::checked_narrow<int>(lda) != c || detail::checked_narrow<int>(ldai) != r)
     {
-        LINALG_THROW(
-            "pseudo_inverse<cuda_blas> requires tightly packed lda/ldai "
-            "(lda == columns, ldai == rows)");
+        LINALG_THROW("pseudo_inverse<cuda_blas> requires tightly packed lda/ldai "
+                     "(lda == columns, ldai == rows)");
     }
 
-    const auto k         = std::min(r, c);
+    const auto k = std::min(r, c);
     const auto svd_bytes =
         detail::svd_on_device_workspace_size(static_cast<const T*>(nullptr), rows, columns);
 
     LINALG_CHECK(workspace_size >= pseudo_inverse_workspace_size_impl<T>(rows, columns),
         "pseudo_inverse: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = pseudo_inverse_plan<T>(arena, r, c, k, svd_bytes);
+    const auto              bufs = pseudo_inverse_plan<T>(arena, r, c, k, svd_bytes);
 
-    detail::svd_on_device(rows, columns, A, columns, bufs.S, bufs.U, static_cast<linalg_long>(k),
-        bufs.VT, columns, bufs.svd_info, bufs.svd_workspace, svd_bytes, stream);
+    detail::svd_on_device(rows,
+        columns,
+        A,
+        columns,
+        bufs.S,
+        bufs.U,
+        static_cast<linalg_long>(k),
+        bufs.VT,
+        columns,
+        bufs.svd_info,
+        bufs.svd_workspace,
+        svd_bytes,
+        stream);
 
     const dim3 block(16, 16);
     pinv_combine_kernel<T><<<grid_2d(c, r, block), block, 0, stream>>>(bufs.U,
@@ -173,15 +202,15 @@ void pseudo_inverse_impl(linalg_long rows,
 
 template <>
 void pseudo_inverse<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
-    linalg_long   columns,
-    const float*  A,
-    linalg_long   lda,
-    float*        Ainv,
-    linalg_long   ldai,
-    float         tol,
-    void*         workspace,
-    size_t        workspace_size,
-    void*         stream)
+    linalg_long                                                          columns,
+    const float*                                                         A,
+    linalg_long                                                          lda,
+    float*                                                               Ainv,
+    linalg_long                                                          ldai,
+    float                                                                tol,
+    void*                                                                workspace,
+    size_t                                                               workspace_size,
+    void*                                                                stream)
 {
     LINALG_SCOPE("pseudo_inverse/cuda_blas<float>");
     pseudo_inverse_impl(rows,
@@ -198,15 +227,15 @@ void pseudo_inverse<float, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
 
 template <>
 void pseudo_inverse<double, linalg_backend::CUDA_BLAS>::apply(linalg_long rows,
-    linalg_long    columns,
-    const double*  A,
-    linalg_long    lda,
-    double*        Ainv,
-    linalg_long    ldai,
-    double         tol,
-    void*          workspace,
-    size_t         workspace_size,
-    void*          stream)
+    linalg_long                                                           columns,
+    const double*                                                         A,
+    linalg_long                                                           lda,
+    double*                                                               Ainv,
+    linalg_long                                                           ldai,
+    double                                                                tol,
+    void*                                                                 workspace,
+    size_t                                                                workspace_size,
+    void*                                                                 stream)
 {
     LINALG_SCOPE("pseudo_inverse/cuda_blas<double>");
     pseudo_inverse_impl(rows,

@@ -28,17 +28,17 @@ namespace linalg
  *                    synchronizing before reading @p c on the host.
  */
 LINALG_API void batched_matrix_multiplication(linalg_int dim,
-    linalg_int                                            count,
-    const float*                                          a,
-    const float*                                          b,
-    float*                                                c,
-    void*                                                 stream = nullptr);
+    linalg_int                                           count,
+    const float*                                         a,
+    const float*                                         b,
+    float*                                               c,
+    void*                                                stream = nullptr);
 
 LINALG_API void batched_matrix_multiplication(linalg_int dim,
-    linalg_int                                            count,
-    const double*                                         a,
-    const double*                                         b,
-    double*                                               c,
-    void*                                                 stream = nullptr);
+    linalg_int                                           count,
+    const double*                                        a,
+    const double*                                        b,
+    double*                                              c,
+    void*                                                stream = nullptr);
 
 }  // namespace linalg

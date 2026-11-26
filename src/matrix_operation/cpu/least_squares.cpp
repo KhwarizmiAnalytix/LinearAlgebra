@@ -1,8 +1,8 @@
 #include "include/matrix_operation/least_squares.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/common/workspace_arena.h"
 #include "include/matrix_operation/pseudo_inverse.h"
-#include "include/common/linalg_checks.h"
 
 #include "include/common/linalg_profiler.h"
 
@@ -30,8 +30,7 @@ least_squares_layout<T> least_squares_plan(detail::workspace_arena& arena,
 template <typename T, linalg_backend Backend>
 size_t least_squares_workspace_size_impl(linalg_long rows, linalg_long columns)
 {
-    const auto pinv_bytes =
-        pseudo_inverse<T, Backend>::workspace_size(rows, columns);
+    const auto              pinv_bytes = pseudo_inverse<T, Backend>::workspace_size(rows, columns);
     detail::workspace_arena arena;
     least_squares_plan<T>(arena, rows, columns, pinv_bytes);
     return arena.total_size();
@@ -50,9 +49,8 @@ void least_squares_solve_impl(linalg_long rows,
     void*                                 workspace,
     size_t                                workspace_size)
 {
-    const auto pinv_bytes =
-        pseudo_inverse<T, Backend>::workspace_size(rows, columns);
-    const size_t needed = least_squares_workspace_size_impl<T, Backend>(rows, columns);
+    const auto   pinv_bytes = pseudo_inverse<T, Backend>::workspace_size(rows, columns);
+    const size_t needed     = least_squares_workspace_size_impl<T, Backend>(rows, columns);
     LINALG_CHECK(workspace_size >= needed, "least_squares_solve: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = least_squares_plan<T>(arena, rows, columns, pinv_bytes);
@@ -71,8 +69,8 @@ void least_squares_solve_impl(linalg_long rows,
     // X (columns x nrhs) = Ainv (columns x rows) * B (rows x nrhs).
     for (linalg_long i = 0; i < columns; ++i)
     {
-        const T*       Ainv_row = bufs.Ainv + i * rows;
-        T* const       X_row    = X + i * ldx;
+        const T* Ainv_row = bufs.Ainv + i * rows;
+        T* const X_row    = X + i * ldx;
         for (linalg_long j = 0; j < nrhs; ++j)
         {
             T sum = T(0);
@@ -87,16 +85,16 @@ void least_squares_solve_impl(linalg_long rows,
 
 template <>
 void least_squares<float, linalg_backend::NATIVE>::apply(linalg_long rows,
-    linalg_long                                                              columns,
-    linalg_long                                                              nrhs,
-    const float*                                                             A,
-    linalg_long                                                              lda,
-    const float*                                                             B,
-    linalg_long                                                              ldb,
-    float*                                                                   X,
-    linalg_long                                                              ldx,
-    void*                                                                    workspace,
-    size_t                                                                   workspace_size,
+    linalg_long                                                      columns,
+    linalg_long                                                      nrhs,
+    const float*                                                     A,
+    linalg_long                                                      lda,
+    const float*                                                     B,
+    linalg_long                                                      ldb,
+    float*                                                           X,
+    linalg_long                                                      ldx,
+    void*                                                            workspace,
+    size_t                                                           workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/native<float>");
@@ -110,16 +108,16 @@ void least_squares<float, linalg_backend::NATIVE>::apply(linalg_long rows,
 
 template <>
 void least_squares<double, linalg_backend::NATIVE>::apply(linalg_long rows,
-    linalg_long                                                               columns,
-    linalg_long                                                               nrhs,
-    const double*                                                             A,
-    linalg_long                                                               lda,
-    const double*                                                             B,
-    linalg_long                                                               ldb,
-    double*                                                                   X,
-    linalg_long                                                               ldx,
-    void*                                                                     workspace,
-    size_t                                                                    workspace_size,
+    linalg_long                                                       columns,
+    linalg_long                                                       nrhs,
+    const double*                                                     A,
+    linalg_long                                                       lda,
+    const double*                                                     B,
+    linalg_long                                                       ldb,
+    double*                                                           X,
+    linalg_long                                                       ldx,
+    void*                                                             workspace,
+    size_t                                                            workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/native<double>");
@@ -149,16 +147,16 @@ size_t least_squares<double, linalg_backend::NATIVE>::workspace_size(
 
 template <>
 void least_squares<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
-    linalg_long                                                                       columns,
-    linalg_long                                                                       nrhs,
-    const float*                                                                      A,
-    linalg_long                                                                       lda,
-    const float*                                                                      B,
-    linalg_long                                                                       ldb,
-    float*                                                                            X,
-    linalg_long                                                                       ldx,
-    void*                                                                             workspace,
-    size_t                                                                            workspace_size,
+    linalg_long                                                            columns,
+    linalg_long                                                            nrhs,
+    const float*                                                           A,
+    linalg_long                                                            lda,
+    const float*                                                           B,
+    linalg_long                                                            ldb,
+    float*                                                                 X,
+    linalg_long                                                            ldx,
+    void*                                                                  workspace,
+    size_t                                                                 workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/blas_lapacke<float>");
@@ -172,16 +170,16 @@ void least_squares<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
 
 template <>
 void least_squares<double, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
-    linalg_long                                                                        columns,
-    linalg_long                                                                        nrhs,
-    const double*                                                                      A,
-    linalg_long                                                                        lda,
-    const double*                                                                      B,
-    linalg_long                                                                        ldb,
-    double*                                                                            X,
-    linalg_long                                                                        ldx,
-    void*                                                                              workspace,
-    size_t                                                                             workspace_size,
+    linalg_long                                                             columns,
+    linalg_long                                                             nrhs,
+    const double*                                                           A,
+    linalg_long                                                             lda,
+    const double*                                                           B,
+    linalg_long                                                             ldb,
+    double*                                                                 X,
+    linalg_long                                                             ldx,
+    void*                                                                   workspace,
+    size_t                                                                  workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/blas_lapacke<double>");
@@ -213,16 +211,16 @@ size_t least_squares<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
 
 template <>
 void least_squares<float, linalg_backend::MKL>::apply(linalg_long rows,
-    linalg_long                                                              columns,
-    linalg_long                                                              nrhs,
-    const float*                                                             A,
-    linalg_long                                                              lda,
-    const float*                                                             B,
-    linalg_long                                                              ldb,
-    float*                                                                   X,
-    linalg_long                                                              ldx,
-    void*                                                                    workspace,
-    size_t                                                                   workspace_size,
+    linalg_long                                                   columns,
+    linalg_long                                                   nrhs,
+    const float*                                                  A,
+    linalg_long                                                   lda,
+    const float*                                                  B,
+    linalg_long                                                   ldb,
+    float*                                                        X,
+    linalg_long                                                   ldx,
+    void*                                                         workspace,
+    size_t                                                        workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/mkl<float>");
@@ -236,16 +234,16 @@ void least_squares<float, linalg_backend::MKL>::apply(linalg_long rows,
 
 template <>
 void least_squares<double, linalg_backend::MKL>::apply(linalg_long rows,
-    linalg_long                                                               columns,
-    linalg_long                                                               nrhs,
-    const double*                                                             A,
-    linalg_long                                                               lda,
-    const double*                                                             B,
-    linalg_long                                                               ldb,
-    double*                                                                   X,
-    linalg_long                                                               ldx,
-    void*                                                                     workspace,
-    size_t                                                                    workspace_size,
+    linalg_long                                                    columns,
+    linalg_long                                                    nrhs,
+    const double*                                                  A,
+    linalg_long                                                    lda,
+    const double*                                                  B,
+    linalg_long                                                    ldb,
+    double*                                                        X,
+    linalg_long                                                    ldx,
+    void*                                                          workspace,
+    size_t                                                         workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("least_squares/mkl<double>");

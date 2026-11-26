@@ -2,8 +2,8 @@
 
 #include "include/matrix_operation/transpose.h"
 
-#include "include/common/narrow.h"
 #include "include/common/linalg_checks.h"
+#include "include/common/narrow.h"
 
 #include "include/common/workspace_arena.h"
 
@@ -29,8 +29,7 @@ namespace linalg
 static void check_transpose_inputs(const void* m, linalg_long rows, linalg_long columns)
 {
     LINALG_CHECK(m != nullptr, "transpose::apply: m must not be null");
-    LINALG_CHECK(
-        rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
+    LINALG_CHECK(rows != 0 && columns != 0, "transpose::apply: rows and columns must be positive");
 }
 
 // No vendor-neutral CBLAS extension performs an in-place transpose (MKL's
@@ -51,8 +50,12 @@ size_t transpose_blas_workspace_size_impl(linalg_long rows, linalg_long columns)
 }
 
 template <>
-void transpose<float, linalg_backend::BLAS_LAPACKE>::apply(
-    linalg_long rows, linalg_long columns, float* m, void* workspace, size_t workspace_size, void* /*stream*/)
+void transpose<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
+    linalg_long                                                        columns,
+    float*                                                             m,
+    void*                                                              workspace,
+    size_t                                                             workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("transpose/blas_lapacke<float>");
     check_transpose_inputs(m, rows, columns);
@@ -82,8 +85,12 @@ void transpose<float, linalg_backend::BLAS_LAPACKE>::apply(
 }
 
 template <>
-void transpose<double, linalg_backend::BLAS_LAPACKE>::apply(
-    linalg_long rows, linalg_long columns, double* m, void* workspace, size_t workspace_size, void* /*stream*/)
+void transpose<double, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
+    linalg_long                                                         columns,
+    double*                                                             m,
+    void*                                                               workspace,
+    size_t                                                              workspace_size,
+    void* /*stream*/)
 {
     LINALG_SCOPE("transpose/blas_lapacke<double>");
     check_transpose_inputs(m, rows, columns);

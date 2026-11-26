@@ -136,7 +136,9 @@ void pseudo_inverse_impl(linalg_long rows,
         const T* VT_row = bufs.VT + i * columns;
         T*       W_row  = W + i * columns;
         for (linalg_long c = 0; c < columns; ++c)
+        {
             W_row[c] = inv_s * VT_row[c];
+        }
     }
 #endif
 
@@ -178,7 +180,9 @@ void pseudo_inverse_impl(linalg_long rows,
             const T* const U_row = bufs.U + r * k;
             T              sum   = T(0);
             for (linalg_long i = 0; i < k; ++i)
+            {
                 sum += W[i * columns + c] * U_row[i];
+            }
             Ainv_col[r] = sum;
         }
 #endif

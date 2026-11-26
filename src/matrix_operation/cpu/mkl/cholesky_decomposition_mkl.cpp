@@ -50,8 +50,8 @@ bool cholesky_decomposition<float, linalg_backend::MKL>::apply(float* C,
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::MKL>::apply(double* C,
-    linalg_int                                                         lda,
-    cholesky_decomposition_enum                                        type,
+    linalg_int                                                          lda,
+    cholesky_decomposition_enum                                         type,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,
@@ -88,14 +88,16 @@ template <>
 bool cholesky_decomposition<float, linalg_backend::MKL>::apply_aad(
     float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
-    return cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(
+        C_aad, C, lda, type, A_aad);
 }
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::MKL>::apply_aad(
     double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
-    return cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(
+        C_aad, C, lda, type, A_aad);
 }
 
 }  // namespace linalg

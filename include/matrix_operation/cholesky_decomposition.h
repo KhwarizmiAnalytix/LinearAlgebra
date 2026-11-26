@@ -15,7 +15,7 @@ namespace linalg
 enum class cholesky_decomposition_enum : char
 {
     LOWER_TRIANGULAR = 'L',  ///< Compute the lower factor L in A = L * L^T.
-    UPPER_TRIANGULAR = 'U'  ///< Compute the upper factor U in A = U^T * U.
+    UPPER_TRIANGULAR = 'U'   ///< Compute the upper factor U in A = U^T * U.
 };
 
 /**

@@ -4,12 +4,12 @@
 #include <cusolverDn.h>
 #include <vector>
 
-#include "include/matrix_operation/lu_decomposition.h"
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/lu_decomposition.h"
 
 namespace linalg
 {
@@ -23,8 +23,7 @@ namespace
 // widening and info check happen host-side after one synchronizing
 // round-trip, matching the primary (Backend-templated) template's bool-
 // returning, host-synchronous signature exactly (see rank_cublas.cu).
-template <typename T>
-struct lu_decomposition_layout
+template <typename T> struct lu_decomposition_layout
 {
     T*   workspace;
     T*   transpose_scratch;
@@ -33,8 +32,7 @@ struct lu_decomposition_layout
 };
 
 template <typename T>
-lu_decomposition_layout<T> lu_decomposition_plan(
-    detail::workspace_arena& arena, int lwork, int n)
+lu_decomposition_layout<T> lu_decomposition_plan(detail::workspace_arena& arena, int lwork, int n)
 {
     lu_decomposition_layout<T> p;
     p.workspace         = arena.next<T>(static_cast<size_t>(lwork));
@@ -58,17 +56,14 @@ size_t lu_ws_size_impl(BufSizeFn buffer_size, linalg_int lda)
     return arena.total_size();
 }
 
-template <typename T>
-size_t lu_ws_size(linalg_int lda);
+template <typename T> size_t lu_ws_size(linalg_int lda);
 
-template <>
-size_t lu_ws_size<float>(linalg_int lda)
+template <> size_t lu_ws_size<float>(linalg_int lda)
 {
     return lu_ws_size_impl<float>(cusolverDnSgetrf_bufferSize, lda);
 }
 
-template <>
-size_t lu_ws_size<double>(linalg_int lda)
+template <> size_t lu_ws_size<double>(linalg_int lda)
 {
     return lu_ws_size_impl<double>(cusolverDnDgetrf_bufferSize, lda);
 }
@@ -84,11 +79,12 @@ bool lu_apply_impl(BufSizeFn buffer_size,
     int*                     info,
     void*                    stream)
 {
-    LINALG_CHECK(m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
+    LINALG_CHECK(
+        m != nullptr && pivot != nullptr, "lu_decomposition: m and pivot must not be null");
     LINALG_CHECK(lda > 0, "lu_decomposition: lda must be positive", lda);
     const auto stream_t = static_cast<cudaStream_t>(stream);
-    const auto n      = detail::checked_narrow<int>(lda);
-    auto       handle = detail::cusolver_handle_for_current_device();
+    const auto n        = detail::checked_narrow<int>(lda);
+    auto       handle   = detail::cusolver_handle_for_current_device();
     detail::set_stream(handle, stream_t);
 
     int lwork = 0;
@@ -98,7 +94,7 @@ bool lu_apply_impl(BufSizeFn buffer_size,
         "lu_decomposition: workspace_size too small");
 
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = lu_decomposition_plan<T>(arena, lwork, n);
+    const auto              bufs = lu_decomposition_plan<T>(arena, lwork, n);
 
     // cuSOLVER is column-major: transposing the row-major buffer first
     // (detail::transpose_device, transpose_cublas.cpp) makes its column-major
@@ -108,31 +104,40 @@ bool lu_apply_impl(BufSizeFn buffer_size,
     // afterward converts cuSOLVER's column-major packed output into the
     // row-major packed layout callers expect.
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream_t);
-    LINALG_CHECK(
-        getrf(handle, n, n, m, n, bufs.workspace, bufs.dev_ipiv, bufs.dev_info) ==
-            CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(getrf(handle, n, n, m, n, bufs.workspace, bufs.dev_ipiv, bufs.dev_info) ==
+                     CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*getrf failed");
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream_t);
 
     std::vector<int> host_ipiv(static_cast<size_t>(n));
-    int               host_info = 0;
-    LINALG_CHECK(cudaMemcpyAsync(host_ipiv.data(), bufs.dev_ipiv, sizeof(int) * static_cast<size_t>(n),
-                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
-        "lu_decomposition: pivot copy failed");
-    LINALG_CHECK(cudaMemcpyAsync(&host_info, bufs.dev_info, sizeof(int), cudaMemcpyDeviceToHost,
+    int              host_info = 0;
+    LINALG_CHECK(cudaMemcpyAsync(host_ipiv.data(),
+                     bufs.dev_ipiv,
+                     sizeof(int) * static_cast<size_t>(n),
+                     cudaMemcpyDeviceToHost,
                      stream_t) == cudaSuccess,
+        "lu_decomposition: pivot copy failed");
+    LINALG_CHECK(
+        cudaMemcpyAsync(&host_info, bufs.dev_info, sizeof(int), cudaMemcpyDeviceToHost, stream_t) ==
+            cudaSuccess,
         "lu_decomposition: info copy failed");
-    LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "lu_decomposition: stream sync failed");
+    LINALG_CHECK(
+        cudaStreamSynchronize(stream_t) == cudaSuccess, "lu_decomposition: stream sync failed");
 
     std::vector<linalg_int> host_pivot(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i)
     {
-        host_pivot[static_cast<size_t>(i)] = static_cast<linalg_int>(host_ipiv[static_cast<size_t>(i)]);
+        host_pivot[static_cast<size_t>(i)] =
+            static_cast<linalg_int>(host_ipiv[static_cast<size_t>(i)]);
     }
-    LINALG_CHECK(cudaMemcpyAsync(pivot, host_pivot.data(), sizeof(linalg_int) * static_cast<size_t>(n),
-                     cudaMemcpyHostToDevice, stream_t) == cudaSuccess,
+    LINALG_CHECK(cudaMemcpyAsync(pivot,
+                     host_pivot.data(),
+                     sizeof(linalg_int) * static_cast<size_t>(n),
+                     cudaMemcpyHostToDevice,
+                     stream_t) == cudaSuccess,
         "lu_decomposition: pivot write-back failed");
-    LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "lu_decomposition: stream sync failed");
+    LINALG_CHECK(
+        cudaStreamSynchronize(stream_t) == cudaSuccess, "lu_decomposition: stream sync failed");
 
     if (info != nullptr)
     {
@@ -166,12 +171,12 @@ bool lu_decomposition<float, linalg_backend::CUDA_BLAS>::apply(float* m,
 
 template <>
 bool lu_decomposition<double, linalg_backend::CUDA_BLAS>::apply(double* m,
-    linalg_int                                                         lda,
-    linalg_int*                                                        pivot,
-    void*                                                              workspace,
-    size_t                                                             workspace_size,
-    int*                                                               info,
-    void*                                                              stream)
+    linalg_int                                                          lda,
+    linalg_int*                                                         pivot,
+    void*                                                               workspace,
+    size_t                                                              workspace_size,
+    int*                                                                info,
+    void*                                                               stream)
 {
     LINALG_SCOPE("lu_decomposition/cuda_blas<double>");
     return lu_apply_impl(cusolverDnDgetrf_bufferSize,

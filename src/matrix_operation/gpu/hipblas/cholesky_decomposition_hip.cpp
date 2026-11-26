@@ -3,12 +3,12 @@
 #include <hip/hip_runtime_api.h>
 #include <hipsolver/hipsolver.h>
 
-#include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/common/hip_handle.h"
 #include "include/common/hip_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/cholesky_decomposition.h"
 
 namespace linalg
 {
@@ -22,15 +22,13 @@ hipblasFillMode_t to_fill_mode(cholesky_decomposition_enum type)
     // UPPER-triangular factor of the same matrix (and vice versa), so the
     // fill mode is flipped relative to the CPU (LAPACKE row-major) backend.
     return type == cholesky_decomposition_enum::LOWER_TRIANGULAR ? HIPBLAS_FILL_MODE_UPPER
-                                                                  : HIPBLAS_FILL_MODE_LOWER;
+                                                                 : HIPBLAS_FILL_MODE_LOWER;
 }
 
 // Workspace contains only potrf scratch; status is caller-owned device memory.
-template <typename T>
-size_t cholesky_ws_size(linalg_int lda, cholesky_decomposition_enum type);
+template <typename T> size_t cholesky_ws_size(linalg_int lda, cholesky_decomposition_enum type);
 
-template <>
-size_t cholesky_ws_size<float>(linalg_int lda, cholesky_decomposition_enum type)
+template <> size_t cholesky_ws_size<float>(linalg_int lda, cholesky_decomposition_enum type)
 {
     LINALG_CHECK(lda > 0, "cholesky_decomposition_workspace_size: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
@@ -44,8 +42,7 @@ size_t cholesky_ws_size<float>(linalg_int lda, cholesky_decomposition_enum type)
     return arena.total_size();
 }
 
-template <>
-size_t cholesky_ws_size<double>(linalg_int lda, cholesky_decomposition_enum type)
+template <> size_t cholesky_ws_size<double>(linalg_int lda, cholesky_decomposition_enum type)
 {
     LINALG_CHECK(lda > 0, "cholesky_decomposition_workspace_size: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
@@ -87,17 +84,17 @@ void cholesky_apply<float>(float* C,
     const auto fill = to_fill_mode(type);
 
     int lwork = 0;
-    LINALG_CHECK(!(hipsolverDnSpotrf_bufferSize(handle, fill, n, C, n, &lwork) !=
-                     HIPSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(
+        !(hipsolverDnSpotrf_bufferSize(handle, fill, n, C, n, &lwork) != HIPSOLVER_STATUS_SUCCESS),
         "hipsolverDnSpotrf_bufferSize failed");
     LINALG_CHECK(workspace_size >= cholesky_ws_size<float>(lda, type),
         "cholesky_decomposition: workspace_size too small");
 
     detail::workspace_arena arena(workspace, workspace_size);
-    float*                  ws_buf   = arena.next<float>(static_cast<size_t>(lwork));
+    float*                  ws_buf = arena.next<float>(static_cast<size_t>(lwork));
 
-    LINALG_CHECK(
-        !(hipsolverDnSpotrf(handle, fill, n, C, n, ws_buf, lwork, info) != HIPSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(!(hipsolverDnSpotrf(handle, fill, n, C, n, ws_buf, lwork, info) !=
+                     HIPSOLVER_STATUS_SUCCESS),
         "hipsolverDnSpotrf failed");
 }
 
@@ -120,17 +117,17 @@ void cholesky_apply<double>(double* C,
     const auto fill = to_fill_mode(type);
 
     int lwork = 0;
-    LINALG_CHECK(!(hipsolverDnDpotrf_bufferSize(handle, fill, n, C, n, &lwork) !=
-                     HIPSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(
+        !(hipsolverDnDpotrf_bufferSize(handle, fill, n, C, n, &lwork) != HIPSOLVER_STATUS_SUCCESS),
         "hipsolverDnDpotrf_bufferSize failed");
     LINALG_CHECK(workspace_size >= cholesky_ws_size<double>(lda, type),
         "cholesky_decomposition: workspace_size too small");
 
     detail::workspace_arena arena(workspace, workspace_size);
-    double*                 ws_buf   = arena.next<double>(static_cast<size_t>(lwork));
+    double*                 ws_buf = arena.next<double>(static_cast<size_t>(lwork));
 
-    LINALG_CHECK(
-        !(hipsolverDnDpotrf(handle, fill, n, C, n, ws_buf, lwork, info) != HIPSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(!(hipsolverDnDpotrf(handle, fill, n, C, n, ws_buf, lwork, info) !=
+                     HIPSOLVER_STATUS_SUCCESS),
         "hipsolverDnDpotrf failed");
 }
 

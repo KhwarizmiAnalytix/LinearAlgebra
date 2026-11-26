@@ -3,22 +3,21 @@
 #include <cuda_runtime.h>
 #include <cusolverDn.h>
 
-#include "include/matrix_operation/determinant.h"
-#include "include/matrix_operation/inversion.h"
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
 #include "include/common/workspace_arena.h"
+#include "include/matrix_operation/determinant.h"
+#include "include/matrix_operation/inversion.h"
 
 // File-scope (not namespaced) __global__ templates: only ever launched from
 // this translation unit (same pattern as inversion_gpu.cu).
 
 // Identity is symmetric, so a flat row-major fill is correct whichever way
 // the result is later read (row- or column-major).
-template <typename scalar_t>
-static __global__ void fill_identity_kernel(int n, scalar_t* out)
+template <typename scalar_t> static __global__ void fill_identity_kernel(int n, scalar_t* out)
 {
     const int row = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
     const int col = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -93,8 +92,7 @@ dim3 square_grid(int n, dim3 block)
 
 // ---- Inversion buffer layouts ----
 
-template <typename T>
-struct lu_invert_layout
+template <typename T> struct lu_invert_layout
 {
     T*   workspace;
     int* dev_ipiv;
@@ -113,8 +111,7 @@ lu_invert_layout<T> lu_invert_plan(detail::workspace_arena& arena, int lwork, in
     return p;
 }
 
-template <typename T>
-struct cholesky_invert_layout
+template <typename T> struct cholesky_invert_layout
 {
     T* workspace;
     T* identity;
@@ -152,8 +149,8 @@ size_t cholesky_invert_workspace_size_impl(BufferSizeFn buffer_size, linalg_int 
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto fill   = CUBLAS_FILL_MODE_UPPER;
     int        lwork  = 0;
-    LINALG_CHECK(
-        buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) ==
+                     CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*potrf_bufferSize failed");
     detail::workspace_arena arena;
     cholesky_invert_plan<T>(arena, lwork, n);
@@ -162,8 +159,7 @@ size_t cholesky_invert_workspace_size_impl(BufferSizeFn buffer_size, linalg_int 
 
 // ---- Determinant buffer layouts ----
 
-template <typename T>
-struct lu_determinant_layout
+template <typename T> struct lu_determinant_layout
 {
     T*   workspace;
     int* dev_ipiv;
@@ -184,8 +180,7 @@ lu_determinant_layout<T> lu_determinant_plan(detail::workspace_arena& arena, int
     return p;
 }
 
-template <typename T>
-struct cholesky_determinant_layout
+template <typename T> struct cholesky_determinant_layout
 {
     T*   workspace;
     int* dev_info;
@@ -223,8 +218,8 @@ size_t cholesky_determinant_workspace_size_impl(BufferSizeFn buffer_size, linalg
     auto       handle = detail::cusolver_handle_for_current_device();
     const auto fill   = CUBLAS_FILL_MODE_UPPER;
     int        lwork  = 0;
-    LINALG_CHECK(
-        buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == CUSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) ==
+                     CUSOLVER_STATUS_SUCCESS,
         "cusolverDn*potrf_bufferSize failed");
     detail::workspace_arena arena;
     cholesky_determinant_plan<T>(arena, lwork);
@@ -233,11 +228,9 @@ size_t cholesky_determinant_workspace_size_impl(BufferSizeFn buffer_size, linalg
 
 // Returns the internal GPU workspace size for a given inversion type.
 // The struct workspace_size() adds an info slot on top.
-template <typename T>
-size_t gpu_invert_base(linalg_int lda, linear_solver_type type);
+template <typename T> size_t gpu_invert_base(linalg_int lda, linear_solver_type type);
 
-template <>
-size_t gpu_invert_base<float>(linalg_int lda, linear_solver_type type)
+template <> size_t gpu_invert_base<float>(linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
@@ -252,8 +245,7 @@ size_t gpu_invert_base<float>(linalg_int lda, linear_solver_type type)
     }
 }
 
-template <>
-size_t gpu_invert_base<double>(linalg_int lda, linear_solver_type type)
+template <> size_t gpu_invert_base<double>(linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
@@ -268,11 +260,9 @@ size_t gpu_invert_base<double>(linalg_int lda, linear_solver_type type)
     }
 }
 
-template <typename T>
-size_t gpu_determinant_base(linalg_int lda, linear_solver_type type);
+template <typename T> size_t gpu_determinant_base(linalg_int lda, linear_solver_type type);
 
-template <>
-size_t gpu_determinant_base<float>(linalg_int lda, linear_solver_type type)
+template <> size_t gpu_determinant_base<float>(linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
@@ -286,8 +276,7 @@ size_t gpu_determinant_base<float>(linalg_int lda, linear_solver_type type)
     LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
-template <>
-size_t gpu_determinant_base<double>(linalg_int lda, linear_solver_type type)
+template <> size_t gpu_determinant_base<double>(linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
@@ -301,19 +290,17 @@ size_t gpu_determinant_base<double>(linalg_int lda, linear_solver_type type)
     LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
-template <typename T>
-size_t inversion_ws_size(linalg_int lda, linear_solver_type type)
+template <typename T> size_t inversion_ws_size(linalg_int lda, linear_solver_type type)
 {
     LINALG_CHECK(lda > 0, "inversion_workspace_size: lda must be positive", lda);
-    const auto gpu_base = gpu_invert_base<T>(lda, type);
+    const auto              gpu_base = gpu_invert_base<T>(lda, type);
     detail::workspace_arena arena;
     arena.next<int>(1, alignof(int));
     arena.next<unsigned char>(gpu_base);
     return arena.total_size();
 }
 
-template <typename T>
-size_t determinant_ws_size(linalg_int lda, linear_solver_type type)
+template <typename T> size_t determinant_ws_size(linalg_int lda, linear_solver_type type)
 {
     LINALG_CHECK(lda > 0, "determinant_workspace_size: lda must be positive", lda);
     return gpu_determinant_base<T>(lda, type);
@@ -345,7 +332,7 @@ void lu_invert(BufferSizeFn buffer_size,
     lu_invert_plan<T>(sizing, lwork, n);
     LINALG_CHECK(workspace_size >= sizing.total_size(), "lu_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = lu_invert_plan<T>(arena, lwork, n);
+    const auto              bufs = lu_invert_plan<T>(arena, lwork, n);
 
     const dim3 block(16, 16);
     fill_identity_kernel<T><<<square_grid(n, block), block, 0, stream>>>(n, bufs.identity);
@@ -404,10 +391,10 @@ void cholesky_invert(BufferSizeFn buffer_size,
 
     detail::workspace_arena sizing;
     cholesky_invert_plan<T>(sizing, lwork, n);
-    LINALG_CHECK(workspace_size >= sizing.total_size(),
-        "cholesky_invert: workspace_size too small");
+    LINALG_CHECK(
+        workspace_size >= sizing.total_size(), "cholesky_invert: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = cholesky_invert_plan<T>(arena, lwork, n);
+    const auto              bufs = cholesky_invert_plan<T>(arena, lwork, n);
 
     const dim3 block(16, 16);
     fill_identity_kernel<T><<<square_grid(n, block), block, 0, stream>>>(n, bufs.identity);
@@ -457,10 +444,9 @@ T lu_determinant(BufferSizeFn buffer_size,
 
     detail::workspace_arena sizing;
     lu_determinant_plan<T>(sizing, lwork, n);
-    LINALG_CHECK(workspace_size >= sizing.total_size(),
-        "lu_determinant: workspace_size too small");
+    LINALG_CHECK(workspace_size >= sizing.total_size(), "lu_determinant: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = lu_determinant_plan<T>(arena, lwork, n);
+    const auto              bufs = lu_determinant_plan<T>(arena, lwork, n);
 
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 
@@ -470,12 +456,14 @@ T lu_determinant(BufferSizeFn buffer_size,
         LINALG_THROW("cusolverDn*getrf failed");
     }
 
-    lu_determinant_kernel<T><<<1, 1, 0, stream>>>(m, bufs.dev_ipiv, n, bufs.dev_info, bufs.dev_result);
+    lu_determinant_kernel<T>
+        <<<1, 1, 0, stream>>>(m, bufs.dev_ipiv, n, bufs.dev_info, bufs.dev_result);
     LINALG_CHECK(cudaGetLastError() == cudaSuccess, "determinant kernel launch failed");
 
     T host_result = T(0);
-    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.dev_result, sizeof(T), cudaMemcpyDeviceToHost,
-                     stream) == cudaSuccess,
+    LINALG_CHECK(
+        cudaMemcpyAsync(&host_result, bufs.dev_result, sizeof(T), cudaMemcpyDeviceToHost, stream) ==
+            cudaSuccess,
         "determinant: result copy failed");
     LINALG_CHECK(cudaStreamSynchronize(stream) == cudaSuccess, "determinant: stream sync failed");
     return host_result;
@@ -503,10 +491,10 @@ T cholesky_determinant(BufferSizeFn buffer_size,
 
     detail::workspace_arena sizing;
     cholesky_determinant_plan<T>(sizing, lwork);
-    LINALG_CHECK(workspace_size >= sizing.total_size(),
-        "cholesky_determinant: workspace_size too small");
+    LINALG_CHECK(
+        workspace_size >= sizing.total_size(), "cholesky_determinant: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = cholesky_determinant_plan<T>(arena, lwork);
+    const auto              bufs = cholesky_determinant_plan<T>(arena, lwork);
 
     const auto status = potrf(handle, fill, n, m, n, bufs.workspace, lwork, bufs.dev_info);
     if (status != CUSOLVER_STATUS_SUCCESS)
@@ -518,27 +506,33 @@ T cholesky_determinant(BufferSizeFn buffer_size,
     LINALG_CHECK(cudaGetLastError() == cudaSuccess, "determinant kernel launch failed");
 
     T host_result = T(0);
-    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.dev_result, sizeof(T), cudaMemcpyDeviceToHost,
-                     stream) == cudaSuccess,
+    LINALG_CHECK(
+        cudaMemcpyAsync(&host_result, bufs.dev_result, sizeof(T), cudaMemcpyDeviceToHost, stream) ==
+            cudaSuccess,
         "determinant: result copy failed");
     LINALG_CHECK(cudaStreamSynchronize(stream) == cudaSuccess, "determinant: stream sync failed");
     return host_result;
 }
 
-template <typename T, typename BufSizeLuFn, typename GetrfFn, typename GetrsFn,
-    typename BufSizeChFn, typename PotrfFn, typename PotrsFn>
+template <typename T,
+    typename BufSizeLuFn,
+    typename GetrfFn,
+    typename GetrsFn,
+    typename BufSizeChFn,
+    typename PotrfFn,
+    typename PotrsFn>
 void inversion_apply(BufSizeLuFn buf_size_lu,
-    GetrfFn     getrf,
-    GetrsFn     getrs,
-    BufSizeChFn buf_size_ch,
-    PotrfFn     potrf,
-    PotrsFn     potrs,
-    T*          m,
-    linalg_int  lda,
-    linear_solver_type type,
-    void*       workspace,
-    size_t      workspace_size,
-    void*       stream)
+    GetrfFn                      getrf,
+    GetrsFn                      getrs,
+    BufSizeChFn                  buf_size_ch,
+    PotrfFn                      potrf,
+    PotrsFn                      potrs,
+    T*                           m,
+    linalg_int                   lda,
+    linear_solver_type           type,
+    void*                        workspace,
+    size_t                       workspace_size,
+    void*                        stream)
 {
     if (m == nullptr)
     {
@@ -548,11 +542,11 @@ void inversion_apply(BufSizeLuFn buf_size_lu,
     {
         LINALG_THROW("inversion: lda must be positive", lda);
     }
-    const auto stream_t = static_cast<cudaStream_t>(stream);
-    const auto gpu_base = gpu_invert_base<T>(lda, type);
+    const auto              stream_t = static_cast<cudaStream_t>(stream);
+    const auto              gpu_base = gpu_invert_base<T>(lda, type);
     detail::workspace_arena arena(workspace, workspace_size);
-    int*  dev_info = arena.next<int>(1, alignof(int));
-    void* gpu_ws   = arena.next<unsigned char>(gpu_base);
+    int*                    dev_info = arena.next<int>(1, alignof(int));
+    void*                   gpu_ws   = arena.next<unsigned char>(gpu_base);
 
     switch (type)
     {
@@ -562,8 +556,7 @@ void inversion_apply(BufSizeLuFn buf_size_lu,
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        cholesky_invert(buf_size_ch, potrf, potrs, m, lda, dev_info, gpu_ws, gpu_base,
-            stream_t);
+        cholesky_invert(buf_size_ch, potrf, potrs, m, lda, dev_info, gpu_ws, gpu_base, stream_t);
         break;
     default:
         LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
@@ -615,7 +608,7 @@ T determinant_apply(BufSizeLuFn buf_size_lu,
 
 template <>
 void inversion<float, linalg_backend::CUDA_BLAS>::apply(float* m,
-    linalg_int*        /*pivot*/,
+    linalg_int* /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
     void*              workspace,
@@ -623,14 +616,23 @@ void inversion<float, linalg_backend::CUDA_BLAS>::apply(float* m,
     void*              stream)
 {
     LINALG_SCOPE("inversion/cuda_blas<float>");
-    inversion_apply(cusolverDnSgetrf_bufferSize, cusolverDnSgetrf, cusolverDnSgetrs,
-        cusolverDnSpotrf_bufferSize, cusolverDnSpotrf, cusolverDnSpotrs,
-        m, lda, type, workspace, workspace_size, stream);
+    inversion_apply(cusolverDnSgetrf_bufferSize,
+        cusolverDnSgetrf,
+        cusolverDnSgetrs,
+        cusolverDnSpotrf_bufferSize,
+        cusolverDnSpotrf,
+        cusolverDnSpotrs,
+        m,
+        lda,
+        type,
+        workspace,
+        workspace_size,
+        stream);
 }
 
 template <>
 void inversion<double, linalg_backend::CUDA_BLAS>::apply(double* m,
-    linalg_int*        /*pivot*/,
+    linalg_int* /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
     void*              workspace,
@@ -638,9 +640,18 @@ void inversion<double, linalg_backend::CUDA_BLAS>::apply(double* m,
     void*              stream)
 {
     LINALG_SCOPE("inversion/cuda_blas<double>");
-    inversion_apply(cusolverDnDgetrf_bufferSize, cusolverDnDgetrf, cusolverDnDgetrs,
-        cusolverDnDpotrf_bufferSize, cusolverDnDpotrf, cusolverDnDpotrs,
-        m, lda, type, workspace, workspace_size, stream);
+    inversion_apply(cusolverDnDgetrf_bufferSize,
+        cusolverDnDgetrf,
+        cusolverDnDgetrs,
+        cusolverDnDpotrf_bufferSize,
+        cusolverDnDpotrf,
+        cusolverDnDpotrs,
+        m,
+        lda,
+        type,
+        workspace,
+        workspace_size,
+        stream);
 }
 
 template <>
@@ -661,7 +672,7 @@ size_t inversion<double, linalg_backend::CUDA_BLAS>::workspace_size(
 
 template <>
 float determinant<float, linalg_backend::CUDA_BLAS>::apply(float* m,
-    linalg_int*                                                   /*pivot*/,
+    linalg_int* /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
     void*              workspace,
@@ -683,7 +694,7 @@ float determinant<float, linalg_backend::CUDA_BLAS>::apply(float* m,
 
 template <>
 double determinant<double, linalg_backend::CUDA_BLAS>::apply(double* m,
-    linalg_int*                                                    /*pivot*/,
+    linalg_int* /*pivot*/,
     linalg_int         lda,
     linear_solver_type type,
     void*              workspace,

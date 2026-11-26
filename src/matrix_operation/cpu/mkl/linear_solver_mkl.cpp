@@ -2,9 +2,9 @@
 
 #include "include/matrix_operation/linear_solver.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 #include <mkl.h>
 
@@ -26,12 +26,12 @@ static void check_solver_inputs(const void* m, const void* x, linalg_int lda)
 
 template <>
 void linear_solver<float, linalg_backend::MKL>::apply(float* m,
-    linalg_int*                                               pivot,
-    linalg_int                                                lda,
-    float*                                                    x,
-    linear_solver_type                                        type,
-    void*                                                     workspace,
-    size_t                                                    workspace_size,
+    linalg_int*                                              pivot,
+    linalg_int                                               lda,
+    float*                                                   x,
+    linear_solver_type                                       type,
+    void*                                                    workspace,
+    size_t                                                   workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/mkl<float>");
@@ -39,7 +39,8 @@ void linear_solver<float, linalg_backend::MKL>::apply(float* m,
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_decomposition<float, linalg_backend::MKL>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<float, linalg_backend::MKL>::apply(
+                m, lda, pivot, workspace, workspace_size))
         {
             LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
         }
@@ -62,12 +63,12 @@ void linear_solver<float, linalg_backend::MKL>::apply(float* m,
 
 template <>
 void linear_solver<double, linalg_backend::MKL>::apply(double* m,
-    linalg_int*                                                 pivot,
-    linalg_int                                                  lda,
-    double*                                                     x,
-    linear_solver_type                                          type,
-    void*                                                       workspace,
-    size_t                                                      workspace_size,
+    linalg_int*                                                pivot,
+    linalg_int                                                 lda,
+    double*                                                    x,
+    linear_solver_type                                         type,
+    void*                                                      workspace,
+    size_t                                                     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("linear_solver/mkl<double>");
@@ -75,7 +76,8 @@ void linear_solver<double, linalg_backend::MKL>::apply(double* m,
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
-        if (lu_decomposition<double, linalg_backend::MKL>::apply(m, lda, pivot, workspace, workspace_size))
+        if (lu_decomposition<double, linalg_backend::MKL>::apply(
+                m, lda, pivot, workspace, workspace_size))
         {
             LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', lda, 1, m, lda, pivot, x, 1);
         }

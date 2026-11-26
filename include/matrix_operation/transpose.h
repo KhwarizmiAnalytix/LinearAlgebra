@@ -28,11 +28,11 @@ template <typename T, linalg_backend Backend> struct transpose
      *     workspace_size().
      */
     LINALG_API static void apply(linalg_long rows,
-        linalg_long                             columns,
-        T*                                      m,
-        void*                                   workspace,
-        size_t                                  workspace_size,
-        void*                                   stream = nullptr);
+        linalg_long                          columns,
+        T*                                   m,
+        void*                                workspace,
+        size_t                               workspace_size,
+        void*                                stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

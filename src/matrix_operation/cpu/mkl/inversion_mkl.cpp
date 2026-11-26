@@ -2,9 +2,9 @@
 
 #include "include/matrix_operation/inversion.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 #include <mkl.h>
 
@@ -71,11 +71,11 @@ size_t invert_mkl_workspace_size_impl(
 
 template <>
 void inversion<float, linalg_backend::MKL>::apply(float* m,
-    linalg_int*                                               pivot,
-    linalg_int                                                lda,
-    linear_solver_type                                        type,
-    void*                                                     workspace,
-    size_t                                                    workspace_size,
+    linalg_int*                                          pivot,
+    linalg_int                                           lda,
+    linear_solver_type                                   type,
+    void*                                                workspace,
+    size_t                                               workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("inversion/mkl<float>");
@@ -92,11 +92,14 @@ void inversion<float, linalg_backend::MKL>::apply(float* m,
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda));
+        auto* lu_ws = arena.next<unsigned char>(
+            lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda));
         auto* work = arena.next<float>(static_cast<size_t>(lwork));
-        if (lu_decomposition<float, linalg_backend::MKL>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda)))
+        if (lu_decomposition<float, linalg_backend::MKL>::apply(m,
+                lda,
+                pivot,
+                lu_ws,
+                lu_decomposition<float, linalg_backend::MKL>::workspace_size(lda)))
         {
             LAPACKE_sgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
         }
@@ -125,11 +128,11 @@ void inversion<float, linalg_backend::MKL>::apply(float* m,
 
 template <>
 void inversion<double, linalg_backend::MKL>::apply(double* m,
-    linalg_int*                                                 pivot,
-    linalg_int                                                  lda,
-    linear_solver_type                                          type,
-    void*                                                       workspace,
-    size_t                                                      workspace_size,
+    linalg_int*                                            pivot,
+    linalg_int                                             lda,
+    linear_solver_type                                     type,
+    void*                                                  workspace,
+    size_t                                                 workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("inversion/mkl<double>");
@@ -146,11 +149,14 @@ void inversion<double, linalg_backend::MKL>::apply(double* m,
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        auto* lu_ws =
-            arena.next<unsigned char>(lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda));
+        auto* lu_ws = arena.next<unsigned char>(
+            lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda));
         auto* work = arena.next<double>(static_cast<size_t>(lwork));
-        if (lu_decomposition<double, linalg_backend::MKL>::apply(
-                m, lda, pivot, lu_ws, lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda)))
+        if (lu_decomposition<double, linalg_backend::MKL>::apply(m,
+                lda,
+                pivot,
+                lu_ws,
+                lu_decomposition<double, linalg_backend::MKL>::workspace_size(lda)))
         {
             LAPACKE_dgetri_work(LAPACK_ROW_MAJOR, n, m, n, pivot, work, lwork);
         }

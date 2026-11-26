@@ -9,13 +9,13 @@
 // LAPACKE-dependent — see CMakeLists.txt and
 // cholesky_decomposition.cpp: Apple's Accelerate framework has no LAPACKE
 // wrapper, so this file only compiles when real lapacke.h exists.
-#include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
+#include <complex>  // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 #elif defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
+#pragma warning(disable : 4190)  // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
 #endif
 #include <lapacke.h>
 #if defined(__clang__)
@@ -61,11 +61,11 @@ size_t lu_blas_workspace_size(linalg_int lda)
 
 template <>
 bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
-    linalg_int lda,
-    linalg_int* pivot,
-    void*       workspace,
-    size_t      workspace_size,
-    int*        info,
+    linalg_int                                                           lda,
+    linalg_int*                                                          pivot,
+    void*                                                                workspace,
+    size_t                                                               workspace_size,
+    int*                                                                 info,
     void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<float>");
@@ -75,7 +75,8 @@ bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
     const auto              n = static_cast<lapack_int>(lda);
     detail::workspace_arena arena(workspace, workspace_size);
     lapack_int*             ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto lapack_info = LINALG_BLAS_FUNCTION(LAPACKE_sgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
+    const auto              lapack_info =
+        LINALG_BLAS_FUNCTION(LAPACKE_sgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
     for (lapack_int i = 0; i < n; ++i)
     {
         pivot[i] = static_cast<linalg_int>(ipiv[i]);
@@ -89,11 +90,11 @@ bool lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* m,
 
 template <>
 bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
-    linalg_int lda,
-    linalg_int* pivot,
-    void*       workspace,
-    size_t      workspace_size,
-    int*        info,
+    linalg_int                                                             lda,
+    linalg_int*                                                            pivot,
+    void*                                                                  workspace,
+    size_t                                                                 workspace_size,
+    int*                                                                   info,
     void* /*stream*/)
 {
     LINALG_SCOPE("lu_decomposition/blas_lapacke<double>");
@@ -103,7 +104,8 @@ bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
     const auto              n = static_cast<lapack_int>(lda);
     detail::workspace_arena arena(workspace, workspace_size);
     lapack_int*             ipiv = arena.next<lapack_int>(static_cast<size_t>(n));
-    const auto lapack_info = LINALG_BLAS_FUNCTION(LAPACKE_dgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
+    const auto              lapack_info =
+        LINALG_BLAS_FUNCTION(LAPACKE_dgetrf)(LAPACK_ROW_MAJOR, n, n, m, n, ipiv);
     for (lapack_int i = 0; i < n; ++i)
     {
         pivot[i] = static_cast<linalg_int>(ipiv[i]);
@@ -115,12 +117,14 @@ bool lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(double* m,
     return lapack_info == 0;
 }
 
-template <> size_t lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)
+template <>
+size_t lu_decomposition<float, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)
 {
     return lu_blas_workspace_size(lda);
 }
 
-template <> size_t lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)
+template <>
+size_t lu_decomposition<double, linalg_backend::BLAS_LAPACKE>::workspace_size(linalg_int lda)
 {
     return lu_blas_workspace_size(lda);
 }

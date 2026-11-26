@@ -26,7 +26,9 @@ __global__ void schur_decomposition_kernel(const T* a,
     T                                               epsilon)
 {
     if (!linalg_schur::decompose_real(a, n, lda, sr, si, lds, qr, qi, ldq, workspace, epsilon))
+    {
         linalg_schur::poison_schur(n, sr, si, lds, qr, qi, ldq);
+    }
 }
 
 template <typename T>

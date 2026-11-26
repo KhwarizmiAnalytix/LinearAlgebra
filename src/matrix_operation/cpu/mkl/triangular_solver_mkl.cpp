@@ -27,7 +27,9 @@ void triangular_solver<float, linalg_backend::MKL>::apply(bool upper,
     LINALG_FUNCTION();
     detail::check_triangular_arguments(a, b, x, n, nrhs, lda, ldb, ldx);
     for (linalg_int i = 0; i < n; ++i)
+    {
         std::copy_n(b + i * ldb, nrhs, x + i * ldx);
+    }
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -75,7 +77,9 @@ void triangular_solver<double, linalg_backend::MKL>::apply(bool upper,
     LINALG_FUNCTION();
     detail::check_triangular_arguments(a, b, x, n, nrhs, lda, ldb, ldx);
     for (linalg_int i = 0; i < n; ++i)
+    {
         std::copy_n(b + i * ldb, nrhs, x + i * ldx);
+    }
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

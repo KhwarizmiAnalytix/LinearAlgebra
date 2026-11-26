@@ -14,9 +14,9 @@ namespace linalg
  */
 enum class linear_solver_type : std::uint8_t
 {
-    LU_LINEAR_SOLVER               = 1,  ///< Factor the matrix using LU before the operation.
-    LU_UPFRONT_LINEAR_SOLVER       = 2,  ///< Reuse existing LU factors and pivots.
-    CHOLESKY_LINEAR_SOLVER         = 3,  ///< Factor the matrix using lower Cholesky before the operation.
+    LU_LINEAR_SOLVER         = 1,  ///< Factor the matrix using LU before the operation.
+    LU_UPFRONT_LINEAR_SOLVER = 2,  ///< Reuse existing LU factors and pivots.
+    CHOLESKY_LINEAR_SOLVER   = 3,  ///< Factor the matrix using lower Cholesky before the operation.
     CHOLESKY_UPFRONT_LINEAR_SOLVER = 4,  ///< Reuse an existing lower Cholesky factor.
 };
 

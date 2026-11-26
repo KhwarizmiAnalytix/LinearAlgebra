@@ -2,9 +2,9 @@
 
 #include <cuda_runtime.h>
 
-#include "include/matrix_operation/multiplication_batched.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/multiplication_batched.h"
 
 // One thread per output element, one z-block of the launch grid per matrix.
 // C[row][col] = sum_k A[row][k] * B[k][col], all row-major. File-scope
@@ -46,11 +46,11 @@ namespace
 
 template <typename scalar_t>
 void launch_batched(linalg_int dim,
-    linalg_int         count,
-    const scalar_t*      a,
-    const scalar_t*      b,
-    scalar_t*            c,
-    cudaStream_t         stream)
+    linalg_int                 count,
+    const scalar_t*            a,
+    const scalar_t*            b,
+    scalar_t*                  c,
+    cudaStream_t               stream)
 {
     if (a == nullptr || b == nullptr || c == nullptr)
     {
@@ -76,22 +76,14 @@ void launch_batched(linalg_int dim,
 
 }  // namespace
 
-void batched_matrix_multiplication(linalg_int dim,
-    linalg_int                                count,
-    const float*                              a,
-    const float*                              b,
-    float*                                    c,
-    void*                                     stream)
+void batched_matrix_multiplication(
+    linalg_int dim, linalg_int count, const float* a, const float* b, float* c, void* stream)
 {
     launch_batched(dim, count, a, b, c, static_cast<cudaStream_t>(stream));
 }
 
-void batched_matrix_multiplication(linalg_int dim,
-    linalg_int                                count,
-    const double*                             a,
-    const double*                             b,
-    double*                                   c,
-    void*                                     stream)
+void batched_matrix_multiplication(
+    linalg_int dim, linalg_int count, const double* a, const double* b, double* c, void* stream)
 {
     launch_batched(dim, count, a, b, c, static_cast<cudaStream_t>(stream));
 }

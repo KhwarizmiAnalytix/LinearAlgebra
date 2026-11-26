@@ -7,12 +7,12 @@
 #include <limits>
 #include <math_constants.h>
 
-#include "include/matrix_operation/condition_number.h"
-#include "include/matrix_operation/rank.h"
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/condition_number.h"
+#include "include/matrix_operation/rank.h"
 
 namespace linalg
 {
@@ -22,12 +22,32 @@ namespace detail
 {
 size_t svd_on_device_workspace_size(const float*, linalg_long rows, linalg_long columns);
 size_t svd_on_device_workspace_size(const double*, linalg_long rows, linalg_long columns);
-void svd_on_device(linalg_long rows, linalg_long columns, const float* A, linalg_long lda,
-    float* S, float* U, linalg_long ldu, float* VT, linalg_long ldv,
-    int* info, void* workspace, size_t workspace_size, cudaStream_t stream);
-void svd_on_device(linalg_long rows, linalg_long columns, const double* A, linalg_long lda,
-    double* S, double* U, linalg_long ldu, double* VT, linalg_long ldv,
-    int* info, void* workspace, size_t workspace_size, cudaStream_t stream);
+void   svd_on_device(linalg_long rows,
+    linalg_long                columns,
+    const float*               A,
+    linalg_long                lda,
+    float*                     S,
+    float*                     U,
+    linalg_long                ldu,
+    float*                     VT,
+    linalg_long                ldv,
+    int*                       info,
+    void*                      workspace,
+    size_t                     workspace_size,
+    cudaStream_t               stream);
+void   svd_on_device(linalg_long rows,
+    linalg_long                columns,
+    const double*              A,
+    linalg_long                lda,
+    double*                    S,
+    double*                    U,
+    linalg_long                ldu,
+    double*                    VT,
+    linalg_long                ldv,
+    int*                       info,
+    void*                      workspace,
+    size_t                     workspace_size,
+    cudaStream_t               stream);
 }  // namespace detail
 
 namespace
@@ -35,23 +55,19 @@ namespace
 
 // The Windows INFINITY macro is ((float)(1e+300)). nvcc warns that this
 // literal does not fit in float or double. CUDART_INF_* are device infinities.
-template <typename T>
-__device__ T device_infinity();
+template <typename T> __device__ T device_infinity();
 
-template <>
-__device__ float device_infinity<float>()
+template <> __device__ float device_infinity<float>()
 {
     return CUDART_INF_F;
 }
 
-template <>
-__device__ double device_infinity<double>()
+template <> __device__ double device_infinity<double>()
 {
     return CUDART_INF;
 }
 
-template <typename T>
-struct singular_values_layout
+template <typename T> struct singular_values_layout
 {
     T*             S;
     T*             U;
@@ -63,11 +79,12 @@ struct singular_values_layout
 };
 
 template <typename T>
-singular_values_layout<T> singular_values_plan(
-    detail::workspace_arena& arena, linalg_long rows, linalg_long columns,
-    size_t svd_workspace_bytes)
+singular_values_layout<T> singular_values_plan(detail::workspace_arena& arena,
+    linalg_long                                                         rows,
+    linalg_long                                                         columns,
+    size_t                                                              svd_workspace_bytes)
 {
-    const auto k = std::min(rows, columns);
+    const auto                k = std::min(rows, columns);
     singular_values_layout<T> p;
     p.S                = arena.next<T>(static_cast<size_t>(k));
     p.U                = arena.next<T>(static_cast<size_t>(rows) * static_cast<size_t>(k));
@@ -101,13 +118,19 @@ static __global__ void singular_values_reduce(const T* S,
     T*                                                 condition_result)
 {
     if (threadIdx.x != 0 || blockIdx.x != 0)
+    {
         return;
+    }
     if (*info != 0)
     {
         if (rank_result)
+        {
             *rank_result = static_cast<linalg_long>(-1);
+        }
         if (condition_result)
+        {
             *condition_result = T(NAN);
+        }
         return;
     }
     // cuSOLVER gesvd returns singular values in descending order.
@@ -116,12 +139,18 @@ static __global__ void singular_values_reduce(const T* S,
         const T cutoff    = tol >= T(0) ? tol : T(rows > columns ? rows : columns) * S[0] * epsilon;
         linalg_long count = 0;
         for (int i = 0; i < k; ++i)
+        {
             if (S[i] > cutoff)
+            {
                 ++count;
+            }
+        }
         *rank_result = count;
     }
     if (condition_result)
+    {
         *condition_result = S[k - 1] == T(0) ? device_infinity<T>() : S[0] / S[k - 1];
+    }
 }
 
 template <typename T>
@@ -129,7 +158,7 @@ singular_values_layout<T> reduce_singular_values(const T* A,
     linalg_long                                           rows,
     linalg_long                                           columns,
     linalg_long                                           lda,
-    T                                                      tol,
+    T                                                     tol,
     void*                                                 workspace,
     size_t                                                workspace_size,
     cudaStream_t                                          stream)
@@ -144,8 +173,19 @@ singular_values_layout<T> reduce_singular_values(const T* A,
         "rank/condition_number: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
     const auto              bufs = singular_values_plan<T>(arena, rows, columns, svd_bytes);
-    detail::svd_on_device(rows, columns, A, columns, bufs.S, bufs.U, k, bufs.VT, columns,
-        bufs.info, bufs.svd_workspace, svd_bytes, stream);
+    detail::svd_on_device(rows,
+        columns,
+        A,
+        columns,
+        bufs.S,
+        bufs.U,
+        k,
+        bufs.VT,
+        columns,
+        bufs.info,
+        bufs.svd_workspace,
+        svd_bytes,
+        stream);
     singular_values_reduce<T><<<1, 1, 0, stream>>>(bufs.S,
         detail::checked_narrow<int>(k),
         rows,
@@ -179,11 +219,14 @@ linalg_long rank<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
 {
     LINALG_SCOPE("rank/cuda_blas<float>");
     const auto stream_t = static_cast<cudaStream_t>(stream);
-    const auto bufs      = reduce_singular_values(A, rows, columns, lda, tol, workspace,
-        workspace_size, stream_t);
+    const auto bufs =
+        reduce_singular_values(A, rows, columns, lda, tol, workspace, workspace_size, stream_t);
     linalg_long host_result = 0;
-    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.rank_result, sizeof(linalg_long),
-                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+    LINALG_CHECK(cudaMemcpyAsync(&host_result,
+                     bufs.rank_result,
+                     sizeof(linalg_long),
+                     cudaMemcpyDeviceToHost,
+                     stream_t) == cudaSuccess,
         "rank: result copy failed");
     LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "rank: stream sync failed");
     return host_result;
@@ -191,29 +234,31 @@ linalg_long rank<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
 
 template <>
 linalg_long rank<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
-    linalg_long                                                         rows,
-    linalg_long                                                         columns,
-    linalg_long                                                         lda,
-    double                                                              tol,
-    void*                                                               workspace,
-    size_t                                                              workspace_size,
-    void*                                                               stream)
+    linalg_long                                                          rows,
+    linalg_long                                                          columns,
+    linalg_long                                                          lda,
+    double                                                               tol,
+    void*                                                                workspace,
+    size_t                                                               workspace_size,
+    void*                                                                stream)
 {
     LINALG_SCOPE("rank/cuda_blas<double>");
     const auto stream_t = static_cast<cudaStream_t>(stream);
-    const auto bufs      = reduce_singular_values(A, rows, columns, lda, tol, workspace,
-        workspace_size, stream_t);
+    const auto bufs =
+        reduce_singular_values(A, rows, columns, lda, tol, workspace, workspace_size, stream_t);
     linalg_long host_result = 0;
-    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.rank_result, sizeof(linalg_long),
-                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+    LINALG_CHECK(cudaMemcpyAsync(&host_result,
+                     bufs.rank_result,
+                     sizeof(linalg_long),
+                     cudaMemcpyDeviceToHost,
+                     stream_t) == cudaSuccess,
         "rank: result copy failed");
     LINALG_CHECK(cudaStreamSynchronize(stream_t) == cudaSuccess, "rank: stream sync failed");
     return host_result;
 }
 
 template <>
-size_t rank<float, linalg_backend::CUDA_BLAS>::workspace_size(
-    linalg_long rows, linalg_long columns)
+size_t rank<float, linalg_backend::CUDA_BLAS>::workspace_size(linalg_long rows, linalg_long columns)
 {
     return singular_values_workspace_size_impl<float>(rows, columns);
 }
@@ -233,20 +278,22 @@ size_t rank<double, linalg_backend::CUDA_BLAS>::workspace_size(
 
 template <>
 float condition_number<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
-    linalg_long                                                            rows,
-    linalg_long                                                            columns,
-    linalg_long                                                            lda,
-    void*                                                                  workspace,
-    size_t                                                                 workspace_size,
-    void*                                                                  stream)
+    linalg_long                                                              rows,
+    linalg_long                                                              columns,
+    linalg_long                                                              lda,
+    void*                                                                    workspace,
+    size_t                                                                   workspace_size,
+    void*                                                                    stream)
 {
     LINALG_SCOPE("condition_number/cuda_blas<float>");
     const auto stream_t = static_cast<cudaStream_t>(stream);
-    const auto bufs      = reduce_singular_values(A, rows, columns, lda, float(-1), workspace,
-        workspace_size, stream_t);
+    const auto bufs     = reduce_singular_values(
+        A, rows, columns, lda, float(-1), workspace, workspace_size, stream_t);
     float host_result = 0;
-    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.condition_result, sizeof(float),
-                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+    LINALG_CHECK(
+        cudaMemcpyAsync(
+            &host_result, bufs.condition_result, sizeof(float), cudaMemcpyDeviceToHost, stream_t) ==
+            cudaSuccess,
         "condition_number: result copy failed");
     LINALG_CHECK(
         cudaStreamSynchronize(stream_t) == cudaSuccess, "condition_number: stream sync failed");
@@ -255,20 +302,23 @@ float condition_number<float, linalg_backend::CUDA_BLAS>::apply(const float* A,
 
 template <>
 double condition_number<double, linalg_backend::CUDA_BLAS>::apply(const double* A,
-    linalg_long                                                              rows,
-    linalg_long                                                              columns,
-    linalg_long                                                              lda,
-    void*                                                                    workspace,
-    size_t                                                                   workspace_size,
-    void*                                                                    stream)
+    linalg_long                                                                 rows,
+    linalg_long                                                                 columns,
+    linalg_long                                                                 lda,
+    void*                                                                       workspace,
+    size_t                                                                      workspace_size,
+    void*                                                                       stream)
 {
     LINALG_SCOPE("condition_number/cuda_blas<double>");
     const auto stream_t = static_cast<cudaStream_t>(stream);
-    const auto bufs      = reduce_singular_values(A, rows, columns, lda, double(-1), workspace,
-        workspace_size, stream_t);
+    const auto bufs     = reduce_singular_values(
+        A, rows, columns, lda, double(-1), workspace, workspace_size, stream_t);
     double host_result = 0;
-    LINALG_CHECK(cudaMemcpyAsync(&host_result, bufs.condition_result, sizeof(double),
-                     cudaMemcpyDeviceToHost, stream_t) == cudaSuccess,
+    LINALG_CHECK(cudaMemcpyAsync(&host_result,
+                     bufs.condition_result,
+                     sizeof(double),
+                     cudaMemcpyDeviceToHost,
+                     stream_t) == cudaSuccess,
         "condition_number: result copy failed");
     LINALG_CHECK(
         cudaStreamSynchronize(stream_t) == cudaSuccess, "condition_number: stream sync failed");

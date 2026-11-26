@@ -36,12 +36,12 @@ template <typename T, linalg_backend Backend> struct lu_decomposition
      * @return True if U is nonsingular (info == 0); false otherwise.
      */
     LINALG_API static bool apply(T* m,
-        linalg_int                   lda,
-        linalg_int*                  pivot,
-        void*                        workspace,
-        size_t                       workspace_size,
-        int*                         info   = nullptr,
-        void*                        stream = nullptr);
+        linalg_int                  lda,
+        linalg_int*                 pivot,
+        void*                       workspace,
+        size_t                      workspace_size,
+        int*                        info   = nullptr,
+        void*                       stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

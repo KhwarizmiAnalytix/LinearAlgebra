@@ -3,10 +3,10 @@
 #include <cuda_runtime_api.h>
 #include <vector>
 
-#include "include/matrix_operation/trace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/trace.h"
 
 namespace linalg
 {
@@ -16,8 +16,7 @@ namespace
 // `A` is row-major n x n, tightly packed (lda == n), so the diagonal entries
 // sit at stride n+1; a single strided D2H copy reads them all directly,
 // needing neither a kernel launch nor device scratch for the result.
-template <typename T>
-T trace_impl(const T* A, linalg_int n, linalg_int lda, void* stream)
+template <typename T> T trace_impl(const T* A, linalg_int n, linalg_int lda, void* stream)
 {
     if (A == nullptr)
     {

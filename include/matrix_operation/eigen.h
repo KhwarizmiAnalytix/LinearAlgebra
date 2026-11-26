@@ -33,14 +33,14 @@ template <typename T, linalg_backend Backend> struct symmetric_eigen_backend
      *     workspace_size().
      * @return True on success; false if the iteration does not converge.
      */
-    LINALG_API static bool apply(T*         eigenvectors,
-        linalg_int                           n,
-        linalg_int                           lda,
-        T*                                   eigenvalues,
-        linalg_int                           ldv,
-        void*                                workspace,
-        size_t                               workspace_size,
-        void*                                stream = nullptr);
+    LINALG_API static bool apply(T* eigenvectors,
+        linalg_int                  n,
+        linalg_int                  lda,
+        T*                          eigenvalues,
+        linalg_int                  ldv,
+        void*                       workspace,
+        size_t                      workspace_size,
+        void*                       stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.
@@ -87,16 +87,16 @@ template <typename T, linalg_backend Backend> struct general_eigen_backend
      * @note Computing eigenvectors for complex eigenvalues may be unsupported and can raise an
      * exception.
      */
-    LINALG_API static bool apply(T*         eigenvectors,
-        linalg_int                           n,
-        linalg_int                           lda,
-        T*                                   eigenvalues_real,
-        T*                                   eigenvalues_imag,
-        bool                                 compute_eigenvectors,
-        linalg_int                           ldv,
-        void*                                workspace,
-        size_t                               workspace_size,
-        void*                                stream = nullptr);
+    LINALG_API static bool apply(T* eigenvectors,
+        linalg_int                  n,
+        linalg_int                  lda,
+        T*                          eigenvalues_real,
+        T*                          eigenvalues_imag,
+        bool                        compute_eigenvectors,
+        linalg_int                  ldv,
+        void*                       workspace,
+        size_t                      workspace_size,
+        void*                       stream = nullptr);
 
     /**
      * @brief Returns the temporary storage required for this operation.

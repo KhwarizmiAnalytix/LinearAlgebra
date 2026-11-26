@@ -1,8 +1,8 @@
 #include "include/matrix_operation/determinant.h"
 
+#include "include/common/linalg_checks.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/lu_decomposition.h"
-#include "include/common/linalg_checks.h"
 
 #include "include/common/linalg_profiler.h"
 
@@ -54,18 +54,19 @@ size_t matrix_determinant_workspace_size_helper(linalg_int lda, linear_solver_ty
 // from the matrix m).
 template <typename T, linalg_backend Backend>
 T matrix_determinant_helper(T* __restrict m,
-    linalg_int* __restrict     pivot,
-    linalg_int                 lda,
-    linear_solver_type         type,
-    void*                      workspace,
-    size_t                     workspace_size)
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size)
 {
     T ret = 0.;
     switch (type)
     {
     case linear_solver_type::LU_LINEAR_SOLVER:
     {
-        LINALG_CHECK(workspace_size >= (matrix_determinant_workspace_size_helper<T, Backend>(lda, type)),
+        LINALG_CHECK(
+            workspace_size >= (matrix_determinant_workspace_size_helper<T, Backend>(lda, type)),
             "determinant: workspace_size too small");
         if (lu_decomposition<T, Backend>::apply(m, lda, pivot, workspace, workspace_size))
         {
@@ -110,32 +111,34 @@ size_t determinant<double, linalg_backend::NATIVE>::workspace_size(
 
 template <>
 float determinant<float, linalg_backend::NATIVE>::apply(float* __restrict m,
-    linalg_int* __restrict                                                    pivot,
-    linalg_int                                                                lda,
-    linear_solver_type                                                        type,
-    void*                                                                     workspace,
-    size_t                                                                    workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("determinant/native<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
-    return matrix_determinant_helper<float, linalg_backend::NATIVE>(m, pivot, lda, type, workspace, workspace_size);
+    return matrix_determinant_helper<float, linalg_backend::NATIVE>(
+        m, pivot, lda, type, workspace, workspace_size);
 }
 
 template <>
 double determinant<double, linalg_backend::NATIVE>::apply(double* __restrict m,
-    linalg_int* __restrict                                                       pivot,
-    linalg_int                                                                   lda,
-    linear_solver_type                                                           type,
-    void*                                                                        workspace,
-    size_t                                                                       workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("determinant/native<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
-    return matrix_determinant_helper<double, linalg_backend::NATIVE>(m, pivot, lda, type, workspace, workspace_size);
+    return matrix_determinant_helper<double, linalg_backend::NATIVE>(
+        m, pivot, lda, type, workspace, workspace_size);
 }
 
 #if LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -151,37 +154,40 @@ template <>
 size_t determinant<double, linalg_backend::BLAS_LAPACKE>::workspace_size(
     linalg_int lda, linear_solver_type type)
 {
-    return matrix_determinant_workspace_size_helper<double, linalg_backend::BLAS_LAPACKE>(lda, type);
+    return matrix_determinant_workspace_size_helper<double, linalg_backend::BLAS_LAPACKE>(
+        lda, type);
 }
 
 template <>
 float determinant<float, linalg_backend::BLAS_LAPACKE>::apply(float* __restrict m,
-    linalg_int* __restrict                                                           pivot,
-    linalg_int                                                                       lda,
-    linear_solver_type                                                               type,
-    void*                                                                            workspace,
-    size_t                                                                           workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("determinant/blas_lapacke<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
-    return matrix_determinant_helper<float, linalg_backend::BLAS_LAPACKE>(m, pivot, lda, type, workspace, workspace_size);
+    return matrix_determinant_helper<float, linalg_backend::BLAS_LAPACKE>(
+        m, pivot, lda, type, workspace, workspace_size);
 }
 
 template <>
 double determinant<double, linalg_backend::BLAS_LAPACKE>::apply(double* __restrict m,
-    linalg_int* __restrict                                                              pivot,
-    linalg_int                                                                          lda,
-    linear_solver_type                                                                  type,
-    void*                                                                               workspace,
-    size_t                                                                              workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("determinant/blas_lapacke<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
-    return matrix_determinant_helper<double, linalg_backend::BLAS_LAPACKE>(m, pivot, lda, type, workspace, workspace_size);
+    return matrix_determinant_helper<double, linalg_backend::BLAS_LAPACKE>(
+        m, pivot, lda, type, workspace, workspace_size);
 }
 
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE
@@ -204,32 +210,34 @@ size_t determinant<double, linalg_backend::MKL>::workspace_size(
 
 template <>
 float determinant<float, linalg_backend::MKL>::apply(float* __restrict m,
-    linalg_int* __restrict                                                  pivot,
-    linalg_int                                                              lda,
-    linear_solver_type                                                      type,
-    void*                                                                   workspace,
-    size_t                                                                  workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("determinant/mkl<float>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
-    return matrix_determinant_helper<float, linalg_backend::MKL>(m, pivot, lda, type, workspace, workspace_size);
+    return matrix_determinant_helper<float, linalg_backend::MKL>(
+        m, pivot, lda, type, workspace, workspace_size);
 }
 
 template <>
 double determinant<double, linalg_backend::MKL>::apply(double* __restrict m,
-    linalg_int* __restrict                                                     pivot,
-    linalg_int                                                                 lda,
-    linear_solver_type                                                         type,
-    void*                                                                      workspace,
-    size_t                                                                     workspace_size,
+    linalg_int* __restrict pivot,
+    linalg_int         lda,
+    linear_solver_type type,
+    void*              workspace,
+    size_t             workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("determinant/mkl<double>");
     LINALG_CHECK(m != nullptr, "determinant::apply: m must not be null");
     LINALG_CHECK(lda > 0, "determinant::apply: lda must be positive", lda);
-    return matrix_determinant_helper<double, linalg_backend::MKL>(m, pivot, lda, type, workspace, workspace_size);
+    return matrix_determinant_helper<double, linalg_backend::MKL>(
+        m, pivot, lda, type, workspace, workspace_size);
 }
 
 #endif  // LINALG_HAS_MKL

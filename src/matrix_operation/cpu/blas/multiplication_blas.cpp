@@ -4,8 +4,8 @@
 
 #include <algorithm>
 
-#include "include/common/narrow.h"
 #include "include/common/linalg_checks.h"
+#include "include/common/narrow.h"
 
 #if LINALG_HAS_ACCELERATE
 #include <Accelerate/Accelerate.h>
@@ -46,7 +46,8 @@ static void check_matmul_inputs(const void* a,
 // kernels skip that quick-return internally and let 0 * NaN poison c, so this backend
 // enforces the contract itself rather than trusting the vendor call for every size.
 template <typename value_t>
-static void scale_output(value_t* c, linalg_int rows, linalg_int columns, linalg_int ldc, value_t beta)
+static void scale_output(
+    value_t* c, linalg_int rows, linalg_int columns, linalg_int ldc, value_t beta)
 {
     if (beta == value_t(1))
     {

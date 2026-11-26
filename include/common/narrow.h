@@ -16,15 +16,15 @@ namespace linalg
 namespace detail
 {
 
-template <typename To, typename From>
-To checked_narrow(From value)
+template <typename To, typename From> To checked_narrow(From value)
 {
     static_assert(std::is_integral<From>::value && std::is_integral<To>::value,
         "checked_narrow requires integral types");
 
     const auto narrowed = static_cast<To>(value);
     LINALG_CHECK(static_cast<From>(narrowed) == value,
-        "checked_narrow: value {} does not fit in target type", value);
+        "checked_narrow: value {} does not fit in target type",
+        value);
     return narrowed;
 }
 

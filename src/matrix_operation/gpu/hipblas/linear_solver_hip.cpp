@@ -3,13 +3,13 @@
 #include <hip/hip_runtime_api.h>
 #include <hipsolver/hipsolver.h>
 
-#include "include/matrix_operation/linear_solver.h"
 #include "include/common/hip_handle.h"
 #include "include/common/hip_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
 #include "include/common/workspace_arena.h"
+#include "include/matrix_operation/linear_solver.h"
 
 // The GPU linear_solver manages pivots internally; the struct's `pivot`
 // parameter is unused for this backend.
@@ -18,8 +18,7 @@ namespace linalg
 namespace
 {
 
-template <typename T>
-struct lu_solve_layout
+template <typename T> struct lu_solve_layout
 {
     T*   workspace;
     int* dev_ipiv;
@@ -50,8 +49,7 @@ size_t lu_solve_workspace_size_impl(BufferSizeFn buffer_size, linalg_int lda)
     return arena.total_size();
 }
 
-template <typename T>
-T* cholesky_solve_plan(detail::workspace_arena& arena, int lwork)
+template <typename T> T* cholesky_solve_plan(detail::workspace_arena& arena, int lwork)
 {
     return arena.next<T>(static_cast<size_t>(lwork));
 }
@@ -63,8 +61,8 @@ size_t cholesky_solve_workspace_size_impl(BufferSizeFn buffer_size, linalg_int l
     auto       handle = detail::hipsolver_handle_for_current_device();
     const auto fill   = HIPBLAS_FILL_MODE_UPPER;
     int        lwork  = 0;
-    LINALG_CHECK(
-        buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) == HIPSOLVER_STATUS_SUCCESS,
+    LINALG_CHECK(buffer_size(handle, fill, n, static_cast<T*>(nullptr), n, &lwork) ==
+                     HIPSOLVER_STATUS_SUCCESS,
         "hipsolverDn*potrf_bufferSize failed");
     detail::workspace_arena arena;
     cholesky_solve_plan<T>(arena, lwork);
@@ -73,11 +71,9 @@ size_t cholesky_solve_workspace_size_impl(BufferSizeFn buffer_size, linalg_int l
 
 // Returns the internal GPU workspace bytes (without the info slot) for a
 // given scalar type and solver type.
-template <typename T>
-size_t gpu_ls_base(linalg_int lda, linear_solver_type type);
+template <typename T> size_t gpu_ls_base(linalg_int lda, linear_solver_type type);
 
-template <>
-size_t gpu_ls_base<float>(linalg_int lda, linear_solver_type type)
+template <> size_t gpu_ls_base<float>(linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
@@ -91,8 +87,7 @@ size_t gpu_ls_base<float>(linalg_int lda, linear_solver_type type)
     LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
-template <>
-size_t gpu_ls_base<double>(linalg_int lda, linear_solver_type type)
+template <> size_t gpu_ls_base<double>(linalg_int lda, linear_solver_type type)
 {
     switch (type)
     {
@@ -106,11 +101,10 @@ size_t gpu_ls_base<double>(linalg_int lda, linear_solver_type type)
     LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
 }
 
-template <typename T>
-size_t linear_solver_ws_size(linalg_int lda, linear_solver_type type)
+template <typename T> size_t linear_solver_ws_size(linalg_int lda, linear_solver_type type)
 {
     LINALG_CHECK(lda > 0, "linear_solver_workspace_size: lda must be positive", lda);
-    const auto gpu_base = gpu_ls_base<T>(lda, type);
+    const auto              gpu_base = gpu_ls_base<T>(lda, type);
     detail::workspace_arena arena;
     arena.next<int>(1, alignof(int));
     arena.next<unsigned char>(gpu_base);
@@ -146,7 +140,7 @@ void lu_solve(BufferSizeFn buffer_size,
     LINALG_CHECK(workspace_size >= lu_solve_workspace_size_impl<T>(buffer_size, lda),
         "lu_solve: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    const auto               bufs = lu_solve_plan<T>(arena, lwork, n);
+    const auto              bufs = lu_solve_plan<T>(arena, lwork, n);
 
     detail::transpose_device(lda, lda, m, bufs.transpose_scratch, stream);
 
@@ -185,7 +179,7 @@ void cholesky_solve(BufferSizeFn buffer_size,
     LINALG_CHECK(workspace_size >= cholesky_solve_workspace_size_impl<T>(buffer_size, lda),
         "cholesky_solve: workspace_size too small");
     detail::workspace_arena arena(workspace, workspace_size);
-    T*                       workspace_buf = cholesky_solve_plan<T>(arena, lwork);
+    T*                      workspace_buf = cholesky_solve_plan<T>(arena, lwork);
 
     auto status = potrf(handle, fill, n, m, n, workspace_buf, lwork, info);
     if (status == HIPSOLVER_STATUS_SUCCESS)
@@ -196,21 +190,26 @@ void cholesky_solve(BufferSizeFn buffer_size,
     LINALG_CHECK(!(status != HIPSOLVER_STATUS_SUCCESS), "hipsolverDn*potrf/potrs failed");
 }
 
-template <typename T, typename BufSizeLuFn, typename GetrfFn, typename GetrsFn,
-    typename BufSizeChFn, typename PotrfFn, typename PotrsFn>
+template <typename T,
+    typename BufSizeLuFn,
+    typename GetrfFn,
+    typename GetrsFn,
+    typename BufSizeChFn,
+    typename PotrfFn,
+    typename PotrsFn>
 void linear_solver_apply(BufSizeLuFn buf_size_lu,
-    GetrfFn     getrf,
-    GetrsFn     getrs,
-    BufSizeChFn buf_size_ch,
-    PotrfFn     potrf,
-    PotrsFn     potrs,
-    T*          m,
-    linalg_int  lda,
-    T*          x,
-    linear_solver_type type,
-    void*       workspace,
-    size_t      workspace_size,
-    void*       stream)
+    GetrfFn                          getrf,
+    GetrsFn                          getrs,
+    BufSizeChFn                      buf_size_ch,
+    PotrfFn                          potrf,
+    PotrsFn                          potrs,
+    T*                               m,
+    linalg_int                       lda,
+    T*                               x,
+    linear_solver_type               type,
+    void*                            workspace,
+    size_t                           workspace_size,
+    void*                            stream)
 {
     LINALG_CHECK(m != nullptr && x != nullptr, "linear_solver: m and x must not be null");
     LINALG_CHECK(lda > 0, "linear_solver: lda must be positive", lda);
@@ -218,10 +217,10 @@ void linear_solver_apply(BufSizeLuFn buf_size_lu,
 
     // Workspace layout: one int (dev_info) first, then the hipSOLVER buffer.
     // The total was computed by linear_solver_ws_size<T> and includes both.
-    const auto gpu_base = gpu_ls_base<T>(lda, type);
+    const auto              gpu_base = gpu_ls_base<T>(lda, type);
     detail::workspace_arena arena(workspace, workspace_size);
-    int*  dev_info = arena.next<int>(1, alignof(int));
-    void* gpu_ws   = arena.next<unsigned char>(gpu_base);
+    int*                    dev_info = arena.next<int>(1, alignof(int));
+    void*                   gpu_ws   = arena.next<unsigned char>(gpu_base);
 
     switch (type)
     {
@@ -231,8 +230,7 @@ void linear_solver_apply(BufSizeLuFn buf_size_lu,
         break;
     case linear_solver_type::CHOLESKY_LINEAR_SOLVER:
     case linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER:
-        cholesky_solve(buf_size_ch, potrf, potrs, m, lda, x, dev_info, gpu_ws, gpu_base,
-            stream_t);
+        cholesky_solve(buf_size_ch, potrf, potrs, m, lda, x, dev_info, gpu_ws, gpu_base, stream_t);
         break;
     default:
         LINALG_THROW("unsupported linear_solver_type", static_cast<linalg_int>(type));
@@ -243,7 +241,7 @@ void linear_solver_apply(BufSizeLuFn buf_size_lu,
 
 template <>
 void linear_solver<float, linalg_backend::ROCM_BLAS>::apply(float* m,
-    linalg_int*        /*pivot*/,
+    linalg_int* /*pivot*/,
     linalg_int         lda,
     float*             x,
     linear_solver_type type,
@@ -252,14 +250,24 @@ void linear_solver<float, linalg_backend::ROCM_BLAS>::apply(float* m,
     void*              stream)
 {
     LINALG_SCOPE("linear_solver/rocm_blas<float>");
-    linear_solver_apply(hipsolverDnSgetrf_bufferSize, hipsolverDnSgetrf, hipsolverDnSgetrs,
-        hipsolverDnSpotrf_bufferSize, hipsolverDnSpotrf, hipsolverDnSpotrs,
-        m, lda, x, type, workspace, workspace_size, stream);
+    linear_solver_apply(hipsolverDnSgetrf_bufferSize,
+        hipsolverDnSgetrf,
+        hipsolverDnSgetrs,
+        hipsolverDnSpotrf_bufferSize,
+        hipsolverDnSpotrf,
+        hipsolverDnSpotrs,
+        m,
+        lda,
+        x,
+        type,
+        workspace,
+        workspace_size,
+        stream);
 }
 
 template <>
 void linear_solver<double, linalg_backend::ROCM_BLAS>::apply(double* m,
-    linalg_int*        /*pivot*/,
+    linalg_int* /*pivot*/,
     linalg_int         lda,
     double*            x,
     linear_solver_type type,
@@ -268,9 +276,19 @@ void linear_solver<double, linalg_backend::ROCM_BLAS>::apply(double* m,
     void*              stream)
 {
     LINALG_SCOPE("linear_solver/rocm_blas<double>");
-    linear_solver_apply(hipsolverDnDgetrf_bufferSize, hipsolverDnDgetrf, hipsolverDnDgetrs,
-        hipsolverDnDpotrf_bufferSize, hipsolverDnDpotrf, hipsolverDnDpotrs,
-        m, lda, x, type, workspace, workspace_size, stream);
+    linear_solver_apply(hipsolverDnDgetrf_bufferSize,
+        hipsolverDnDgetrf,
+        hipsolverDnDgetrs,
+        hipsolverDnDpotrf_bufferSize,
+        hipsolverDnDpotrf,
+        hipsolverDnDpotrs,
+        m,
+        lda,
+        x,
+        type,
+        workspace,
+        workspace_size,
+        stream);
 }
 
 template <>

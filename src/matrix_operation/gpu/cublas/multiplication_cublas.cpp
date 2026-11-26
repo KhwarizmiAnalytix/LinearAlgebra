@@ -2,11 +2,11 @@
 
 #include <cublas_v2.h>
 
-#include "include/matrix_operation/multiplication.h"
 #include "include/common/cuda_handle.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/multiplication.h"
 
 namespace linalg
 {
@@ -22,20 +22,20 @@ namespace
 // leading dimension — no extra copies or kernels needed.
 template <typename T, typename GemmFn>
 void multiplication_impl(GemmFn gemm,
-    const T  alpha,
-    const T  beta,
-    bool     transpose_a,
-    bool     transpose_b,
-    linalg_int rows,
-    linalg_int columns,
-    linalg_int depth,
-    const T*   a,
-    linalg_int lda,
-    const T*   b,
-    linalg_int ldb,
-    T*         c,
-    linalg_int ldc,
-    cudaStream_t stream)
+    const T                     alpha,
+    const T                     beta,
+    bool                        transpose_a,
+    bool                        transpose_b,
+    linalg_int                  rows,
+    linalg_int                  columns,
+    linalg_int                  depth,
+    const T*                    a,
+    linalg_int                  lda,
+    const T*                    b,
+    linalg_int                  ldb,
+    T*                          c,
+    linalg_int                  ldc,
+    cudaStream_t                stream)
 {
     LINALG_CHECK(a != nullptr && b != nullptr && c != nullptr,
         "multiplication: a, b, and c must not be null");
@@ -66,49 +66,73 @@ void multiplication_impl(GemmFn gemm,
 
 template <>
 void multiplication<float, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
-    bool           transpose_b,
-    linalg_int     rows,
-    linalg_int     columns,
-    linalg_int     depth,
-    float          alpha,
-    const float*   a,
-    linalg_int     lda,
-    const float*   b,
-    linalg_int     ldb,
-    float          beta,
-    float*         c,
-    linalg_int     ldc,
+    bool                                                          transpose_b,
+    linalg_int                                                    rows,
+    linalg_int                                                    columns,
+    linalg_int                                                    depth,
+    float                                                         alpha,
+    const float*                                                  a,
+    linalg_int                                                    lda,
+    const float*                                                  b,
+    linalg_int                                                    ldb,
+    float                                                         beta,
+    float*                                                        c,
+    linalg_int                                                    ldc,
     void* /*workspace*/,
     size_t /*workspace_size*/,
-    void*          stream)
+    void* stream)
 {
     LINALG_SCOPE("multiplication/cuda_blas<float>");
-    multiplication_impl(cublasSgemm, alpha, beta, transpose_a, transpose_b,
-        rows, columns, depth, a, lda, b, ldb, c, ldc,
+    multiplication_impl(cublasSgemm,
+        alpha,
+        beta,
+        transpose_a,
+        transpose_b,
+        rows,
+        columns,
+        depth,
+        a,
+        lda,
+        b,
+        ldb,
+        c,
+        ldc,
         static_cast<cudaStream_t>(stream));
 }
 
 template <>
 void multiplication<double, linalg_backend::CUDA_BLAS>::apply(bool transpose_a,
-    bool           transpose_b,
-    linalg_int     rows,
-    linalg_int     columns,
-    linalg_int     depth,
-    double         alpha,
-    const double*  a,
-    linalg_int     lda,
-    const double*  b,
-    linalg_int     ldb,
-    double         beta,
-    double*        c,
-    linalg_int     ldc,
+    bool                                                           transpose_b,
+    linalg_int                                                     rows,
+    linalg_int                                                     columns,
+    linalg_int                                                     depth,
+    double                                                         alpha,
+    const double*                                                  a,
+    linalg_int                                                     lda,
+    const double*                                                  b,
+    linalg_int                                                     ldb,
+    double                                                         beta,
+    double*                                                        c,
+    linalg_int                                                     ldc,
     void* /*workspace*/,
     size_t /*workspace_size*/,
-    void*          stream)
+    void* stream)
 {
     LINALG_SCOPE("multiplication/cuda_blas<double>");
-    multiplication_impl(cublasDgemm, alpha, beta, transpose_a, transpose_b,
-        rows, columns, depth, a, lda, b, ldb, c, ldc,
+    multiplication_impl(cublasDgemm,
+        alpha,
+        beta,
+        transpose_a,
+        transpose_b,
+        rows,
+        columns,
+        depth,
+        a,
+        lda,
+        b,
+        ldb,
+        c,
+        ldc,
         static_cast<cudaStream_t>(stream));
 }
 

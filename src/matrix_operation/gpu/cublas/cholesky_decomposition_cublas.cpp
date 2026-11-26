@@ -3,12 +3,12 @@
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
 
-#include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/common/cuda_handle.h"
 #include "include/common/cuda_workspace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/cholesky_decomposition.h"
 
 namespace linalg
 {
@@ -26,11 +26,9 @@ cublasFillMode_t to_fill_mode(cholesky_decomposition_enum type)
 }
 
 // Workspace contains only potrf scratch; status is caller-owned device memory.
-template <typename T>
-size_t cholesky_ws_size(linalg_int lda, cholesky_decomposition_enum type);
+template <typename T> size_t cholesky_ws_size(linalg_int lda, cholesky_decomposition_enum type);
 
-template <>
-size_t cholesky_ws_size<float>(linalg_int lda, cholesky_decomposition_enum type)
+template <> size_t cholesky_ws_size<float>(linalg_int lda, cholesky_decomposition_enum type)
 {
     LINALG_CHECK(lda > 0, "cholesky_decomposition_workspace_size: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
@@ -44,8 +42,7 @@ size_t cholesky_ws_size<float>(linalg_int lda, cholesky_decomposition_enum type)
     return arena.total_size();
 }
 
-template <>
-size_t cholesky_ws_size<double>(linalg_int lda, cholesky_decomposition_enum type)
+template <> size_t cholesky_ws_size<double>(linalg_int lda, cholesky_decomposition_enum type)
 {
     LINALG_CHECK(lda > 0, "cholesky_decomposition_workspace_size: lda must be positive", lda);
     const auto n      = detail::checked_narrow<int>(lda);
@@ -87,14 +84,14 @@ void cholesky_apply<float>(float* C,
     const auto fill = to_fill_mode(type);
 
     int lwork = 0;
-    LINALG_CHECK(!(cusolverDnSpotrf_bufferSize(handle, fill, n, C, n, &lwork) !=
-                     CUSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(
+        !(cusolverDnSpotrf_bufferSize(handle, fill, n, C, n, &lwork) != CUSOLVER_STATUS_SUCCESS),
         "cusolverDnSpotrf_bufferSize failed");
     LINALG_CHECK(workspace_size >= cholesky_ws_size<float>(lda, type),
         "cholesky_decomposition: workspace_size too small");
 
     detail::workspace_arena arena(workspace, workspace_size);
-    float*                  ws_buf   = arena.next<float>(static_cast<size_t>(lwork));
+    float*                  ws_buf = arena.next<float>(static_cast<size_t>(lwork));
 
     LINALG_CHECK(
         !(cusolverDnSpotrf(handle, fill, n, C, n, ws_buf, lwork, info) != CUSOLVER_STATUS_SUCCESS),
@@ -120,14 +117,14 @@ void cholesky_apply<double>(double* C,
     const auto fill = to_fill_mode(type);
 
     int lwork = 0;
-    LINALG_CHECK(!(cusolverDnDpotrf_bufferSize(handle, fill, n, C, n, &lwork) !=
-                     CUSOLVER_STATUS_SUCCESS),
+    LINALG_CHECK(
+        !(cusolverDnDpotrf_bufferSize(handle, fill, n, C, n, &lwork) != CUSOLVER_STATUS_SUCCESS),
         "cusolverDnDpotrf_bufferSize failed");
     LINALG_CHECK(workspace_size >= cholesky_ws_size<double>(lda, type),
         "cholesky_decomposition: workspace_size too small");
 
     detail::workspace_arena arena(workspace, workspace_size);
-    double*                 ws_buf   = arena.next<double>(static_cast<size_t>(lwork));
+    double*                 ws_buf = arena.next<double>(static_cast<size_t>(lwork));
 
     LINALG_CHECK(
         !(cusolverDnDpotrf(handle, fill, n, C, n, ws_buf, lwork, info) != CUSOLVER_STATUS_SUCCESS),

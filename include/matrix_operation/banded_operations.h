@@ -33,10 +33,7 @@ namespace linalg::banded_operations
  * @param[in] inner_dim Number of interleaved independent systems in each group.
  */
 template <typename T, int BandCount>
-void decomposition(std::vector<T>& output,
-    size_t                         outer_dim,
-    size_t                         dim,
-    size_t                         inner_dim);
+void decomposition(std::vector<T>& output, size_t outer_dim, size_t dim, size_t inner_dim);
 
 /**
  * @brief Solves the factored systems in place.
@@ -50,10 +47,10 @@ void decomposition(std::vector<T>& output,
  */
 template <typename T, int BandCount>
 void solve_decomposed(std::vector<T>& x,
-    const std::vector<T>&            decomposed,
-    size_t                           outer_dim,
-    size_t                           dim,
-    size_t                           inner_dim);
+    const std::vector<T>&             decomposed,
+    size_t                            outer_dim,
+    size_t                            dim,
+    size_t                            inner_dim);
 
 /**
  * @brief Accumulates result += time_multiplier * mat * in.
@@ -190,8 +187,7 @@ void multiply_aad(std::vector<T>& mat_aad,
  * @param[in,out] U      Array of n - 1 upper-diagonal entries; modified during elimination.
  * @throws std::invalid_argument If n is less than 3.
  */
-template <typename T>
-void solve_banded(T* output, size_t n, T const* L, T const* D, T* U)
+template <typename T> void solve_banded(T* output, size_t n, T const* L, T const* D, T* U)
 {
     if (n <= 2)
     {

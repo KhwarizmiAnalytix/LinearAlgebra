@@ -37,18 +37,17 @@ inline void cpuinfo_cach(
 
     l1 = l1d_cache ? static_cast<std::ptrdiff_t>(l1d_cache->size) : std::ptrdiff_t{32} * 1024;
     l2 = l2_cache ? static_cast<std::ptrdiff_t>(l2_cache->size) : std::ptrdiff_t{256} * 1024;
-    l3 = l3_cache ? static_cast<std::ptrdiff_t>(l3_cache->size)
-                  : std::ptrdiff_t{8} * 1024 * 1024;
+    l3 = l3_cache ? static_cast<std::ptrdiff_t>(l3_cache->size) : std::ptrdiff_t{8} * 1024 * 1024;
     l3_count = static_cast<std::ptrdiff_t>(cpuinfo_get_l3_caches_count());
     if (l3_count == 0)
     {
         l3_count = 1;  // no L3 domain reported (e.g. some ARM/mobile parts)
     }
 #else
-    l1       = std::ptrdiff_t{32} * 1024;         // 32 KiB L1 data cache (conservative default)
-    l2       = std::ptrdiff_t{256} * 1024;        // 256 KiB L2 cache (conservative default)
-    l3       = std::ptrdiff_t{8} * 1024 * 1024;   // 8 MiB L3 cache (conservative default)
-    l3_count = 1;                                 // one L3 domain (conservative default)
+    l1       = std::ptrdiff_t{32} * 1024;        // 32 KiB L1 data cache (conservative default)
+    l2       = std::ptrdiff_t{256} * 1024;       // 256 KiB L2 cache (conservative default)
+    l3       = std::ptrdiff_t{8} * 1024 * 1024;  // 8 MiB L3 cache (conservative default)
+    l3_count = 1;                                // one L3 domain (conservative default)
 #endif
 }
 

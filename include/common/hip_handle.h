@@ -119,10 +119,10 @@ private:
 // that needs detail::transpose_device includes this header (already a dependency
 // for the hipBLAS/hipSOLVER handle accessors above), so this is the natural single
 // declaration point — no extra header is required.
-void transpose_device(linalg_long rows, linalg_long columns,
-    float* m, float* scratch, hipStream_t stream);
-void transpose_device(linalg_long rows, linalg_long columns,
-    double* m, double* scratch, hipStream_t stream);
+void transpose_device(
+    linalg_long rows, linalg_long columns, float* m, float* scratch, hipStream_t stream);
+void transpose_device(
+    linalg_long rows, linalg_long columns, double* m, double* scratch, hipStream_t stream);
 
 }  // namespace detail
 }  // namespace linalg

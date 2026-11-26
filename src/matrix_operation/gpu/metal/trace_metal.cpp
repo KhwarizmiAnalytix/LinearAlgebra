@@ -1,9 +1,9 @@
 #if LINALG_HAS_METAL
 
-#include "include/matrix_operation/trace.h"
 #include "include/common/linalg_checks.h"
 #include "include/common/linalg_profiler.h"
 #include "include/common/narrow.h"
+#include "include/matrix_operation/trace.h"
 
 // Plain C++, not Objective-C++: trace only touches the n diagonal entries
 // of an n x n matrix, so -- exactly like trace_cublas.cu/trace_hip.hip,

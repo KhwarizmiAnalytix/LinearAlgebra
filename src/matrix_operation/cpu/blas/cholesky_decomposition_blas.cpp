@@ -3,19 +3,19 @@
 #include "include/matrix_operation/cholesky_decomposition.h"
 
 #include "include/common/backend.h"
-#include "include/common/narrow.h"
 #include "include/common/linalg_checks.h"
+#include "include/common/narrow.h"
 
 // LAPACKE-dependent (see CMakeLists.txt): Apple's Accelerate framework ships
 // CBLAS but not the LAPACKE row-major C wrapper, so this block only compiles
 // when a real lapacke.h was found.
-#include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
+#include <complex>  // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 #elif defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
+#pragma warning(disable : 4190)  // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
 #endif
 #include <lapacke.h>
 #if defined(__clang__)
@@ -50,7 +50,7 @@ static void check_cholesky_inputs(const void* C, linalg_int lda)
 static void check_cholesky_type(cholesky_decomposition_enum type)
 {
     LINALG_CHECK(type == cholesky_decomposition_enum::LOWER_TRIANGULAR ||
-            type == cholesky_decomposition_enum::UPPER_TRIANGULAR,
+                     type == cholesky_decomposition_enum::UPPER_TRIANGULAR,
         "cholesky_decomposition::apply: Unsupported enum type!");
 }
 
@@ -58,8 +58,8 @@ static void check_cholesky_type(cholesky_decomposition_enum type)
 
 template <>
 bool cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* C,
-    linalg_int                                                                lda,
-    cholesky_decomposition_enum                                               type,
+    linalg_int                                                                 lda,
+    cholesky_decomposition_enum                                                type,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,
@@ -68,7 +68,7 @@ bool cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* C
     LINALG_SCOPE("cholesky_decomposition/blas_lapacke<float>");
     detail::check_cholesky_inputs(C, lda);
     detail::check_cholesky_type(type);
-    const auto n       = detail::checked_narrow<int>(lda);
+    const auto n = detail::checked_narrow<int>(lda);
     const int  lapacke_info =
         LINALG_BLAS_FUNCTION(LAPACKE_spotrf)(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n);
     if (info != nullptr)
@@ -80,8 +80,8 @@ bool cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(float* C
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(double* C,
-    linalg_int                                                                 lda,
-    cholesky_decomposition_enum                                                type,
+    linalg_int                                                                   lda,
+    cholesky_decomposition_enum                                                  type,
     void* /*workspace*/,
     size_t /*workspace_size*/,
     int* info,
@@ -90,7 +90,7 @@ bool cholesky_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(double*
     LINALG_SCOPE("cholesky_decomposition/blas_lapacke<double>");
     detail::check_cholesky_inputs(C, lda);
     detail::check_cholesky_type(type);
-    const auto n       = detail::checked_narrow<int>(lda);
+    const auto n = detail::checked_narrow<int>(lda);
     const int  lapacke_info =
         LINALG_BLAS_FUNCTION(LAPACKE_dpotrf)(LAPACK_ROW_MAJOR, static_cast<char>(type), n, C, n);
     if (info != nullptr)
@@ -120,14 +120,16 @@ template <>
 bool cholesky_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply_aad(
     float* C_aad, const float* C, linalg_int lda, cholesky_decomposition_enum type, float* A_aad)
 {
-    return cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<float, linalg_backend::NATIVE>::apply_aad(
+        C_aad, C, lda, type, A_aad);
 }
 
 template <>
 bool cholesky_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply_aad(
     double* C_aad, const double* C, linalg_int lda, cholesky_decomposition_enum type, double* A_aad)
 {
-    return cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(C_aad, C, lda, type, A_aad);
+    return cholesky_decomposition<double, linalg_backend::NATIVE>::apply_aad(
+        C_aad, C, lda, type, A_aad);
 }
 }  // namespace linalg
 #endif  // LINALG_HAS_BLAS && LINALG_HAS_LAPACKE

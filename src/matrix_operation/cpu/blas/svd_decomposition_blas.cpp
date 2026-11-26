@@ -7,13 +7,13 @@
 #include "include/common/workspace_arena.h"
 
 #include <algorithm>
-#include <complex>   // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
+#include <complex>  // needed by OpenBLAS lapack.h on MSVC (no _Complex support)
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 #elif defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable: 4190) // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
+#pragma warning(disable : 4190)  // C-linkage returning std::complex<> (OpenBLAS lapacke.h)
 #endif
 #include <lapacke.h>
 #if defined(__clang__)
@@ -189,22 +189,22 @@ void svd_lapacke_impl(GesvdWorkFn gesvd_work,
 
 template <>
 void svd_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
-    linalg_long                                                          columns,
-    float*                                                               A,
-    linalg_long                                                          lda,
-    float*                                                               S,
-    float*                                                               U,
-    linalg_long                                                          ldu,
-    float*                                                               VT,
-    linalg_long                                                          ldv,
-    void*                                                                workspace,
-    size_t                                                               workspace_size,
+    linalg_long                                                                columns,
+    float*                                                                     A,
+    linalg_long                                                                lda,
+    float*                                                                     S,
+    float*                                                                     U,
+    linalg_long                                                                ldu,
+    float*                                                                     VT,
+    linalg_long                                                                ldv,
+    void*                                                                      workspace,
+    size_t                                                                     workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/blas_lapacke<float>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
-    const auto r     = static_cast<lapack_int>(rows);
-    const auto c     = static_cast<lapack_int>(columns);
+    const auto r = static_cast<lapack_int>(rows);
+    const auto c = static_cast<lapack_int>(columns);
     const auto lwork =
         svd_lwork<float>(LINALG_BLAS_FUNCTION(LAPACKE_sgesvd_work), r, c, rows > columns);
     LINALG_CHECK(workspace_size >= svd_workspace_size_impl<float>(
@@ -254,22 +254,22 @@ void svd_decomposition<float, linalg_backend::BLAS_LAPACKE>::apply(linalg_long r
 
 template <>
 void svd_decomposition<double, linalg_backend::BLAS_LAPACKE>::apply(linalg_long rows,
-    linalg_long                                                           columns,
-    double*                                                               A,
-    linalg_long                                                           lda,
-    double*                                                               S,
-    double*                                                               U,
-    linalg_long                                                           ldu,
-    double*                                                               VT,
-    linalg_long                                                           ldv,
-    void*                                                                 workspace,
-    size_t                                                                workspace_size,
+    linalg_long                                                                 columns,
+    double*                                                                     A,
+    linalg_long                                                                 lda,
+    double*                                                                     S,
+    double*                                                                     U,
+    linalg_long                                                                 ldu,
+    double*                                                                     VT,
+    linalg_long                                                                 ldv,
+    void*                                                                       workspace,
+    size_t                                                                      workspace_size,
     void* /*stream*/)
 {
     LINALG_SCOPE("svd_decomposition/blas_lapacke<double>");
     check_svd_inputs(A, S, U, VT, rows, columns, lda, ldu, ldv);
-    const auto r     = static_cast<lapack_int>(rows);
-    const auto c     = static_cast<lapack_int>(columns);
+    const auto r = static_cast<lapack_int>(rows);
+    const auto c = static_cast<lapack_int>(columns);
     const auto lwork =
         svd_lwork<double>(LINALG_BLAS_FUNCTION(LAPACKE_dgesvd_work), r, c, rows > columns);
     LINALG_CHECK(workspace_size >= svd_workspace_size_impl<double>(

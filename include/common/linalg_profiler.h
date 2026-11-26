@@ -22,7 +22,7 @@
 #if LINALG_HAS_PROFILER
 #include "profiler.h"
 #define LINALG_SCOPE(name) PROFILER_SCOPE(name)
-#define LINALG_FUNCTION()  PROFILER_FUNCTION()
+#define LINALG_FUNCTION() PROFILER_FUNCTION()
 #else
 #define LINALG_SCOPE(name) /* no-op: Profiler not linked */
 #define LINALG_FUNCTION()  /* no-op: Profiler not linked */

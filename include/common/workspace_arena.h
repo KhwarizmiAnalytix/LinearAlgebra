@@ -50,8 +50,7 @@ public:
     // rather than something larger: CPU ops routinely carve many small
     // buffers (a handful of `T`s each), so an unnecessarily large default
     // would pad every one of them for no benefit on host memory.
-    template <typename T>
-    T* next(size_t count, size_t alignment = 64)
+    template <typename T> T* next(size_t count, size_t alignment = 64)
     {
         const size_t aligned_offset = (offset_ + alignment - 1) / alignment * alignment;
         const size_t bytes          = sizeof(T) * count;
