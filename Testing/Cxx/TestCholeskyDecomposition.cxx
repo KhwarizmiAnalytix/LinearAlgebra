@@ -62,8 +62,9 @@ void expect_difference(const char* method,
 
     if (passed)
     {
-        LOGGING_LOG_INFO("[PASS]\nmethod tested={}\ncheck={}\ndetails={}\nexpected={}, actual={}, "
-                         "difference={}, tolerance={}",
+        LOGGING_LOG(TRACE,
+            "[PASS]\nmethod tested={}\ncheck={}\ndetails={}\nexpected={}, actual={}, "
+            "difference={}, tolerance={}",
             method,
             check,
             details,
@@ -353,10 +354,11 @@ template <typename value_t, linalg::linalg_backend Backend> void test_cholesky(s
                              ", size=1x1, triangle=invalid";
         if (threw)
         {
-            LOGGING_LOG_INFO("[PASS]\nmethod tested=linalg::cholesky_decomposition\n"
-                             "check=reject invalid triangle\n"
-                             "details={}\nexpected=exception, actual=exception, "
-                             "difference=n/a, tolerance=n/a",
+            LOGGING_LOG(TRACE,
+                "[PASS]\nmethod tested=linalg::cholesky_decomposition\n"
+                "check=reject invalid triangle\n"
+                "details={}\nexpected=exception, actual=exception, "
+                "difference=n/a, tolerance=n/a",
                 details);
         }
         else

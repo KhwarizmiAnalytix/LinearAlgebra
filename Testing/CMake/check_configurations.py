@@ -136,6 +136,45 @@ class ConfigurationChecks(unittest.TestCase):
                         check=True,
                     )
 
+    def test_cpu_suite_honors_ctest_timeout(self):
+        build = self.configure(
+            "cpu-suite-timeout",
+            "enable_testing()\n"
+            "set(LINALG_ENABLE_GTEST ON)\n"
+            "add_library(gtest_main INTERFACE IMPORTED)\n"
+            "add_library(Gtest::gtest INTERFACE IMPORTED)\n"
+            "add_library(Gtest::gtest_main INTERFACE IMPORTED)\n"
+            "add_library(Eigen3::Eigen INTERFACE IMPORTED)\n"
+            "add_library(LinearAlgebra::LinearAlgebra INTERFACE IMPORTED)\n"
+            'set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")\n'
+            f'add_subdirectory("{SOURCE.as_posix()}/Testing/Cxx" tests)\n'
+            'file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int main() { return 0; }\\n")\n'
+            "set_property(TARGET LinearAlgebraCxxTests PROPERTY SOURCES "
+            '"${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")\n',
+        )
+        subprocess.run(
+            ["cmake", "--build", str(build), "--target", "LinearAlgebraCxxTests"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        result = subprocess.run(
+            [
+                "ctest",
+                "--test-dir",
+                str(build),
+                "--verbose",
+                "--timeout",
+                "7",
+                "-R",
+                "^LinearAlgebraCxxTests$",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn("Test timeout computed to be: 7", result.stdout)
+
     def test_eigen_dependency_boundaries(self):
         self.configure(
             "eigen-always-available",

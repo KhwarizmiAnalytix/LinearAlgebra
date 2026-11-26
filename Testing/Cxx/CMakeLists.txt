@@ -41,7 +41,8 @@ if(LINALG_ENABLE_GTEST)
              WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     )
 
-    set_tests_properties(LinearAlgebraCxxTests PROPERTIES TIMEOUT 120 LABELS "LinearAlgebra;Unit")
+    # Leave the suite timeout to CTest/the caller (setup.py --test-timeout).
+    set_tests_properties(LinearAlgebraCxxTests PROPERTIES LABELS "LinearAlgebra;Unit")
 
     if(LINALG_ENABLE_CUBLAS)
         add_test(NAME LinearAlgebraCudaTests COMMAND LinearAlgebraCxxTests --gtest_filter=MathGpu.*

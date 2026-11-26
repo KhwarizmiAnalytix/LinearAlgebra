@@ -99,12 +99,20 @@ inline ::testing::AssertionResult report(const char* check,
     const std::string&                               actual,
     const std::string&                               difference)
 {
+    // Element-wise checks can execute thousands of times in a single test.
+    // Keep successful checks available at trace level without flooding CI.
+    if (passed && !logging::should_log(logging::logger_verbosity_enum::VERBOSITY_TRACE,
+                      logging::logger::get_current_verbosity_cutoff()))
+    {
+        return ::testing::AssertionSuccess();
+    }
+
     const std::string message =
         std::string("method tested/check=") + check + "\ndetails: test=" + current_test_name() +
         "\nexpected=" + expected + ", actual=" + actual + ", difference=" + difference;
     if (passed)
     {
-        LOGGING_LOG_INFO("[PASS] {}\n{}", check, message);
+        LOGGING_LOG(TRACE, "[PASS] {}\n{}", check, message);
         return ::testing::AssertionSuccess();
     }
 

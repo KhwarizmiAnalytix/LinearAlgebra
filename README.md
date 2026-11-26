@@ -404,6 +404,11 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
+The CPU suite uses CTest's timeout, including `Scripts/setup.py test --test-timeout 300`.
+Successful assertion details use Logging's trace level; GoogleTest's per-test summaries
+and detailed failure messages remain enabled at the default verbosity. This keeps
+element-wise matrix checks from flooding CI output.
+
 Enable the MKL backend with `-DLINALG_ENABLE_MKL=ON` (requires Intel oneMKL
 discoverable by `find_package(MKL)`), the vendor-neutral BLAS backend with
 `-DLINALG_ENABLE_BLAS=ON`, the NVIDIA GPU backend with
