@@ -66,6 +66,27 @@ function(linalg_add_dependency_subdirectory source_dir binary_dir)
     endif()
 endfunction()
 
+# -----------------------------------------------------------------------------
+# linalg_check_dependency_linkage: one copy of each sibling library per process
+# -----------------------------------------------------------------------------
+# Sibling libraries (Logging, Scalars) are added once, by the top-level
+# project, and every nested project links that same target. A static copy
+# linked into a shared LinearAlgebra would be duplicated in every shared
+# library that also links it, each with its own global state. Reject that at
+# configure time: build the dependency shared, or build everything static.
+function(linalg_check_dependency_linkage target)
+    get_target_property(_linalg_dep_type "${target}" TYPE)
+    if(BUILD_SHARED_LIBS AND _linalg_dep_type STREQUAL "STATIC_LIBRARY")
+        message(
+            FATAL_ERROR
+                "${target} is a static library, but LinearAlgebra is shared "
+                "(BUILD_SHARED_LIBS=ON). Every shared library linking it would carry its "
+                "own copy. Build ${target} shared in the project that provides it, or "
+                "configure with BUILD_SHARED_LIBS=OFF."
+        )
+    endif()
+endfunction()
+
 # CMAKE_CURRENT_LIST_DIR = this file's directory (<repo>/Cmake) regardless of
 # the including directory's scope.
 get_filename_component(_linalg_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)

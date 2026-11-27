@@ -579,6 +579,15 @@ endif()
 option(LINALG_USE_SYSTEM_LOGGING "Resolve Logging from an installed config package" OFF)
 include("${LINALG_SOURCE_DIR}/Cmake/LinearAlgebraDependencies.cmake")
 set(_linalg_owns_logging OFF)
+# A host that defines xsigma_add_logging() owns Logging. Ask it first so the
+# nested ThirdParty/Logging copy is never added, whatever order the host adds
+# its dependencies in.
+if(NOT TARGET Logging::Logging AND COMMAND xsigma_add_logging)
+    xsigma_add_logging()
+    if(NOT TARGET Logging::Logging)
+        message(FATAL_ERROR "xsigma_add_logging() did not provide Logging::Logging")
+    endif()
+endif()
 if(NOT TARGET Logging::Logging)
     if(LINALG_USE_SYSTEM_LOGGING)
         find_package(Logging CONFIG REQUIRED)
@@ -638,6 +647,7 @@ if(_linalg_owns_logging
     list(TRANSFORM _linalg_logging_libraries REPLACE "^dbghelp$" "-ldbghelp")
     set_property(TARGET Logging PROPERTY LINK_LIBRARIES "${_linalg_logging_libraries}")
 endif()
+linalg_check_dependency_linkage(Logging::Logging)
 # Keep the in-tree target out of this export set, and link the separately
 # installed Logging package for consumers (including static library users).
 list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>
@@ -646,6 +656,14 @@ list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Logging::Logging>
 
 # --- Scalars (required complex arithmetic and CPU SIMD) ---
 option(LINALG_USE_SYSTEM_SCALARS "Resolve Scalars from an installed config package" OFF)
+# Same ownership rule as Logging: a host's xsigma_add_scalars() wins over the
+# nested ThirdParty/Scalars copy.
+if(NOT TARGET Scalars::Scalars AND COMMAND xsigma_add_scalars)
+    xsigma_add_scalars()
+    if(NOT TARGET Scalars::Scalars)
+        message(FATAL_ERROR "xsigma_add_scalars() did not provide Scalars::Scalars")
+    endif()
+endif()
 if(NOT TARGET Scalars::Scalars)
     if(LINALG_USE_SYSTEM_SCALARS)
         find_package(Scalars CONFIG REQUIRED)
@@ -688,6 +706,7 @@ if(NOT TARGET Scalars::Scalars)
         linalg_add_scalars()
     endif()
 endif()
+linalg_check_dependency_linkage(Scalars::Scalars)
 list(APPEND LINALG_DEPENDENCY_LIBS $<BUILD_INTERFACE:Scalars::Scalars>
      $<INSTALL_INTERFACE:Scalars::Scalars>
 )
