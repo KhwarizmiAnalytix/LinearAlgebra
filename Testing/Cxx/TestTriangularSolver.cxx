@@ -33,6 +33,8 @@ template <typename T, linalg::linalg_backend Backend> void solver_cases()
             SCOPED_TRACE(upper);
             SCOPED_TRACE(transpose);
             SCOPED_TRACE(unit);
+            // NOLINTNEXTLINE(performance-unnecessary-copy-initialization): exercise owning copy
+            // semantics and reference counts, not aliasing.
             const auto     original_a = a, original_b = b;
             const auto     bytes = Solver::workspace_size(n, nrhs);
             std::vector<T> scratch((bytes + sizeof(T) - 1) / sizeof(T) + 8, T(-123));
@@ -61,7 +63,9 @@ template <typename T, linalg::linalg_backend Backend> void solver_cases()
                         error, std::fabs(double(result[i * ldx + j] - expected[i * ldx + j])));
                 }
                 for (int j = nrhs; j < ldx; ++j)
+                {
                     padding = padding && result[i * ldx + j] == T(-123);
+                }
             }
             EXPECT_TRUE(finite);
             EXPECT_TRUE(padding);
@@ -69,7 +73,9 @@ template <typename T, linalg::linalg_backend Backend> void solver_cases()
             EXPECT_EQ(std::memcmp(a.data(), original_a.data(), a.size() * sizeof(T)), 0);
             EXPECT_EQ(b, original_b);
             for (size_t i = (bytes + sizeof(T) - 1) / sizeof(T); i < scratch.size(); ++i)
+            {
                 EXPECT_EQ(scratch[i], T(-123));
+            }
         });
 }
 

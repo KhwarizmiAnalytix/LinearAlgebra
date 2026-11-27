@@ -91,9 +91,7 @@ option(LINALG_ENABLE_BLIS "Enable BLIS as the CBLAS/LAPACKE provider" OFF)
 # same batched_matrix_multiplication symbols (multiplication_batched.h is not
 # backend-templated), so enabling more than one would be a duplicate-symbol
 # link error.
-set(LINALG_GPU_BACKEND "none"
-    CACHE STRING "GPU backend for LinearAlgebra: none, cuda, hip, metal"
-)
+set(LINALG_GPU_BACKEND "none" CACHE STRING "GPU backend for LinearAlgebra: none, cuda, hip, metal")
 set_property(CACHE LINALG_GPU_BACKEND PROPERTY STRINGS none cuda hip metal)
 # CI, examples, and the configuration regression tests still pass the boolean
 # switches that LINALG_GPU_BACKEND replaced. Honor one of them when the
@@ -110,16 +108,13 @@ if(LINALG_ENABLE_METAL)
 endif()
 list(LENGTH _linalg_legacy_gpus _linalg_legacy_gpu_count)
 if(_linalg_legacy_gpu_count GREATER 1)
-    message(
-        FATAL_ERROR
-            "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL "
-            "are mutually exclusive"
+    message(FATAL_ERROR "LINALG_ENABLE_CUBLAS, LINALG_ENABLE_ROCBLAS, and LINALG_ENABLE_METAL "
+                        "are mutually exclusive"
     )
 elseif(_linalg_legacy_gpu_count EQUAL 1)
     list(GET _linalg_legacy_gpus 0 _linalg_legacy_gpu)
     if(LINALG_GPU_BACKEND STREQUAL "none")
-        set(LINALG_GPU_BACKEND
-            "${_linalg_legacy_gpu}"
+        set(LINALG_GPU_BACKEND "${_linalg_legacy_gpu}"
             CACHE STRING "GPU backend for LinearAlgebra: none, cuda, hip, metal" FORCE
         )
     elseif(NOT LINALG_GPU_BACKEND STREQUAL "${_linalg_legacy_gpu}")
@@ -134,10 +129,8 @@ unset(_linalg_legacy_gpus)
 unset(_linalg_legacy_gpu_count)
 unset(_linalg_legacy_gpu)
 if(NOT LINALG_GPU_BACKEND MATCHES "^(none|cuda|hip|metal)$")
-    message(
-        FATAL_ERROR
-            "LINALG_GPU_BACKEND must be one of: none, cuda, hip, metal "
-            "(got '${LINALG_GPU_BACKEND}')"
+    message(FATAL_ERROR "LINALG_GPU_BACKEND must be one of: none, cuda, hip, metal "
+                        "(got '${LINALG_GPU_BACKEND}')"
     )
 endif()
 if(LINALG_GPU_BACKEND STREQUAL "metal" AND NOT APPLE)
@@ -887,19 +880,18 @@ if(LINALG_ENABLE_BLAS AND MSVC)
 endif()
 target_compile_definitions(
     LinearAlgebra
-    PUBLIC
-        "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
-        "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
-        "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
-        "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
-        "LINALG_HAS_CUBLAS=$<STREQUAL:${LINALG_GPU_BACKEND},cuda>"
-        "LINALG_HAS_ROCBLAS=$<STREQUAL:${LINALG_GPU_BACKEND},hip>"
-        "LINALG_HAS_METAL=$<STREQUAL:${LINALG_GPU_BACKEND},metal>"
-        "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
-        "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
-        "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
-        "LINALG_HAS_VECTORIZATION=$<NOT:$<STREQUAL:${LINALG_CPU_BACKEND},no>>"
-        "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
+    PUBLIC "LINALG_HAS_MKL=$<BOOL:${LINALG_ENABLE_MKL}>"
+           "LINALG_HAS_BLAS=$<BOOL:${LINALG_ENABLE_BLAS}>"
+           "LINALG_HAS_LAPACKE=$<BOOL:${LINALG_BLAS_HAS_LAPACKE}>"
+           "LINALG_HAS_ACCELERATE=$<BOOL:${LINALG_BLAS_USE_ACCELERATE}>"
+           "LINALG_HAS_CUBLAS=$<STREQUAL:${LINALG_GPU_BACKEND},cuda>"
+           "LINALG_HAS_ROCBLAS=$<STREQUAL:${LINALG_GPU_BACKEND},hip>"
+           "LINALG_HAS_METAL=$<STREQUAL:${LINALG_GPU_BACKEND},metal>"
+           "LINALG_HAS_CPUINFO=$<BOOL:${LINALG_HAS_CPUINFO}>"
+           "LINALG_HAS_PROFILER=$<BOOL:${LINALG_HAS_PROFILER}>"
+           "LINALG_HAS_LU_PIVOTING=$<BOOL:${LINALG_LU_PIVOTING}>"
+           "LINALG_HAS_VECTORIZATION=$<NOT:$<STREQUAL:${LINALG_CPU_BACKEND},no>>"
+           "LINALG_HAS_WIN32_WARNINGS=$<BOOL:${LINALG_DISPLAY_WIN32_WARNINGS}>"
 )
 
 if(LINALG_ENABLE_CLANGTIDY)

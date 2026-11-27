@@ -3,9 +3,9 @@
 #include <limits>
 #include <vector>
 
-#include "gtest/gtest.h"
-#include "test_reporting.h"
 #include "include/matrix_operation/banded_operations.h"
+#include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -49,8 +49,8 @@ TEST(BandedOperations5, DecompositionWrongSize)
 
     std::vector<double> output(10, 1.0);
 
-    EXPECT_THROW((decomposition<double, 5>(output, outer_dim, dim, inner_dim)),
-        std::invalid_argument);
+    EXPECT_THROW(
+        (decomposition<double, 5>(output, outer_dim, dim, inner_dim)), std::invalid_argument);
 }
 
 TEST(BandedOperations5, SolveDecomposedBasic)

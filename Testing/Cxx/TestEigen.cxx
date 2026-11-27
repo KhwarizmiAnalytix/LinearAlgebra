@@ -11,8 +11,8 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/qr_decomposition.h"
 #include "test_backend.h"
-#include "gtest/gtest.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -371,7 +371,8 @@ template <typename value_t>
 std::vector<std::pair<value_t, value_t>> sorted_spectrum(const eigen_result<value_t>& r)
 {
     std::vector<std::pair<value_t, value_t>> s;
-    for (std::size_t i = 0; i < r.evals.size(); i++)
+    s.reserve(r.evals.size());
+for (std::size_t i = 0; i < r.evals.size(); i++)
     {
         s.emplace_back(r.evals[i], r.ei[i]);
     }
@@ -512,7 +513,7 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
         [&](auto backend)
         {
             constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-            using B = decltype(backend);
+            using B                                  = decltype(backend);
 
             double er[2];
             double ei[2];
@@ -524,9 +525,8 @@ TEST(Math, GeneralEigenvalueDecompositionComplexEigenvectorThrows)
             // fallback, which has no complex arithmetic, throws for this case.
             if (Backend == linalg::linalg_backend::NATIVE)
             {
-                EXPECT_THROW(
-                    (linalg::general_eigen_backend<double, B::value>::apply(
-                        evecs, 2, 2, er, ei, true, 2, eigen_ws.data(), eigen_ws.size())),
+                EXPECT_THROW((linalg::general_eigen_backend<double, B::value>::apply(
+                                 evecs, 2, 2, er, ei, true, 2, eigen_ws.data(), eigen_ws.size())),
                     std::exception);
             }
             else

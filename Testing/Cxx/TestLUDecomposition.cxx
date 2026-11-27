@@ -11,8 +11,8 @@
 #include "include/matrix_operation/linear_solver.h"
 #include "include/matrix_operation/lu_decomposition.h"
 #include "test_backend.h"
-#include "gtest/gtest.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {

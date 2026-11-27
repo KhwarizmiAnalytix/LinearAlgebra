@@ -3,9 +3,9 @@
 #include <limits>
 #include <vector>
 
-#include "gtest/gtest.h"
-#include "test_reporting.h"
 #include "include/matrix_operation/banded_operations.h"
+#include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -41,11 +41,11 @@ TEST(BandedOperations, TridiagonalDecompositionAndSolve)
 
 TEST(BandedOperations, TridiagonalMultiply)
 {
-    const size_t outer_dim      = 2;
-    const size_t dim            = 4;
-    const size_t inner_dim      = 3;
-    const size_t n              = dim * inner_dim;
-    const size_t stride         = outer_dim * n;
+    const size_t outer_dim       = 2;
+    const size_t dim             = 4;
+    const size_t inner_dim       = 3;
+    const size_t n               = dim * inner_dim;
+    const size_t stride          = outer_dim * n;
     double       time_multiplier = 1.0;
 
     std::vector<double> result(stride, 0.0);
@@ -90,11 +90,11 @@ TEST(BandedOperations, PentadiagonalDecompositionAndSolve)
 
 TEST(BandedOperations, PentadiagonalMultiply)
 {
-    const size_t outer_dim      = 2;
-    const size_t dim            = 4;
-    const size_t inner_dim      = 3;
-    const size_t n              = dim * inner_dim;
-    const size_t stride         = outer_dim * n;
+    const size_t outer_dim       = 2;
+    const size_t dim             = 4;
+    const size_t inner_dim       = 3;
+    const size_t n               = dim * inner_dim;
+    const size_t stride          = outer_dim * n;
     double       time_multiplier = 0.5;
 
     std::vector<double> result(stride, 0.0);
@@ -179,8 +179,8 @@ TEST(BandedOperations, TridiagonalWrongSize)
 
     std::vector<double> decomposed(2 * stride);
 
-    EXPECT_THROW((decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim)),
-        std::invalid_argument);
+    EXPECT_THROW(
+        (decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim)), std::invalid_argument);
 }
 
 TEST(BandedOperations, PentadiagonalWrongSize)
@@ -191,8 +191,8 @@ TEST(BandedOperations, PentadiagonalWrongSize)
 
     std::vector<double> decomposed(3);
 
-    EXPECT_THROW((decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim)),
-        std::invalid_argument);
+    EXPECT_THROW(
+        (decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim)), std::invalid_argument);
 }
 
 }  // namespace

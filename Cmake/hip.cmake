@@ -26,9 +26,8 @@ include_guard(GLOBAL)
 
 if(WIN32)
     message(
-        FATAL_ERROR
-            "LINALG_GPU_BACKEND=hip is not supported on Windows (HIP/ROCm is Unix-only). "
-            "Use LINALG_GPU_BACKEND=cuda on Windows, or build on Linux for HIP."
+        FATAL_ERROR "LINALG_GPU_BACKEND=hip is not supported on Windows (HIP/ROCm is Unix-only). "
+                    "Use LINALG_GPU_BACKEND=cuda on Windows, or build on Linux for HIP."
     )
 endif()
 
@@ -49,9 +48,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/rocm_prefix.cmake")
 # LINALG_CUDA_ARCHITECTURES / CMAKE_CUDA_ARCHITECTURES parallel.
 # ---------------------------------------------------------------------------
 if(NOT DEFINED LINALG_HIP_ARCHITECTURES)
-    if(DEFINED CMAKE_HIP_ARCHITECTURES
-       AND CMAKE_HIP_ARCHITECTURES
-       AND NOT CMAKE_HIP_ARCHITECTURES STREQUAL "native"
+    if(DEFINED CMAKE_HIP_ARCHITECTURES AND CMAKE_HIP_ARCHITECTURES AND NOT CMAKE_HIP_ARCHITECTURES
+                                                                       STREQUAL "native"
     )
         set(LINALG_HIP_ARCHITECTURES "${CMAKE_HIP_ARCHITECTURES}"
             CACHE STRING "HIP GPU architecture list for LinearAlgebra (gfxXXX)"
@@ -73,9 +71,12 @@ linalg_setup_rocm_prefix()
 # CMake's HIP language requires ROCm Clang directly, never the hipcc wrapper.
 # Respect an explicit compiler or HIPCXX before probing the discovered SDK.
 if(NOT CMAKE_HIP_COMPILER AND NOT DEFINED ENV{HIPCXX} AND LINALG_ROCM_PREFIX)
-    find_program(_linalg_hip_clang NAMES clang++
+    find_program(
+        _linalg_hip_clang
+        NAMES clang++
         PATHS "${LINALG_ROCM_PREFIX}/llvm/bin" "${LINALG_ROCM_PREFIX}/bin"
-        NO_DEFAULT_PATH NO_CACHE)
+        NO_DEFAULT_PATH NO_CACHE
+    )
     if(_linalg_hip_clang)
         set(CMAKE_HIP_COMPILER "${_linalg_hip_clang}" CACHE FILEPATH "HIP compiler")
     endif()
@@ -116,8 +117,15 @@ function(_linalg_drop_hip_cxx_device_flags target)
     if(NOT TARGET "${target}")
         return()
     endif()
-    foreach(_prop IN ITEMS INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_LIBRARIES INTERFACE_LINK_OPTIONS)
-        get_property(_prop_set TARGET "${target}" PROPERTY "${_prop}" SET)
+    foreach(_prop IN ITEMS INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_LIBRARIES
+                           INTERFACE_LINK_OPTIONS
+    )
+        get_property(
+            _prop_set
+            TARGET "${target}"
+            PROPERTY "${_prop}"
+            SET
+        )
         if(NOT _prop_set)
             continue()
         endif()
@@ -140,7 +148,8 @@ function(_linalg_drop_hip_cxx_device_flags target)
                     endif()
                 endif()
             endif()
-            if(NOT _poison AND _opt MATCHES "--offload-arch|--hip-link|-xhip|-x[ ;]hip|SHELL:-x;hip"
+            if(NOT _poison AND _opt MATCHES
+                               "--offload-arch|--hip-link|-xhip|-x[ ;]hip|SHELL:-x;hip"
             )
                 set(_poison 1)
             endif()
@@ -201,10 +210,8 @@ message(
 # ---------------------------------------------------------------------------
 function(linalg_apply_hip_flags target)
     set_target_properties(
-        ${target}
-        PROPERTIES HIP_STANDARD ${LINALG_CXX_STANDARD}
-                   HIP_STANDARD_REQUIRED ON
-                   HIP_ARCHITECTURES "${LINALG_HIP_ARCHITECTURES}"
+        ${target} PROPERTIES HIP_STANDARD ${LINALG_CXX_STANDARD} HIP_STANDARD_REQUIRED ON
+                             HIP_ARCHITECTURES "${LINALG_HIP_ARCHITECTURES}"
     )
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:HIP>:-ffast-math>)
     if(TARGET hip::host)

@@ -834,8 +834,9 @@ class LinearAlgebraBazelConfiguration:
             else "C++20 (default)",
         )
 
-        print(f"\n{COLOR_CYAN}LinearAlgebra backends "
-              f"(real Bazel --define=):{COLOR_RESET}")
+        print(
+            f"\n{COLOR_CYAN}LinearAlgebra backends (real Bazel --define=):{COLOR_RESET}"
+        )
         self._pf("Shared libs", self._on_off(self.shared_libs))
         self._pf("MKL", self._on_off(self.enable_mkl))
         self._pf(
@@ -855,8 +856,10 @@ class LinearAlgebraBazelConfiguration:
         self._pf("CPU SIMD backend", (self.cpu_backend or "no").upper())
         self._pf("Profiling", self._on_off(self.enable_profiling))
 
-        print(f"\n{COLOR_CYAN}Logging module (Bazel flags, forwarded to "
-              f"@xsigma_logging):{COLOR_RESET}")
+        print(
+            f"\n{COLOR_CYAN}Logging module (Bazel flags, forwarded to "
+            f"@xsigma_logging):{COLOR_RESET}"
+        )
         self._pf("Backend", (self.logging_backend or "loguru").upper())
         self._pf("Magic enum", self._on_off(not self.disable_magic_enum))
         self._pf("Cxa demangle", self._on_off(not self.disable_cxa_demangle))
@@ -864,8 +867,10 @@ class LinearAlgebraBazelConfiguration:
         self._pf("Std format", self._on_off(self.std_format))
         self._pf("Exception mode", (self.exception_mode or "throw").upper())
 
-        print(f"\n{COLOR_CYAN}Compiler/linker-level flags (--copt/--linkopt/"
-              f"--repo_env, no --define):{COLOR_RESET}")
+        print(
+            f"\n{COLOR_CYAN}Compiler/linker-level flags (--copt/--linkopt/"
+            f"--repo_env, no --define):{COLOR_RESET}"
+        )
         self._pf("Coverage", self._on_off(self.run_coverage))
         self._pf("Testing", self._on_off(self.run_tests))
         self._pf("Gtest", self._on_off(True))
@@ -877,8 +882,10 @@ class LinearAlgebraBazelConfiguration:
         self._pf("Cache backend", (self.cache_backend or "none").upper())
         self._pf("Icecc", self._on_off(self.icecc))
 
-        print(f"\n{COLOR_CYAN}CMake-only (Scripts/setup.py), no Bazel equivalent "
-              f"in this repo:{COLOR_RESET}")
+        print(
+            f"\n{COLOR_CYAN}CMake-only (Scripts/setup.py), no Bazel equivalent "
+            f"in this repo:{COLOR_RESET}"
+        )
         self._pf("Examples", self._na() if self.examples else self._on_off(False))
         self._pf("Clang-tidy", self._na() if self.clangtidy else self._on_off(False))
         self._pf("Fix", self._na() if self.fix else self._on_off(False))
@@ -1152,15 +1159,12 @@ class LinearAlgebraBazelConfiguration:
         profraw_files = self._find_recent_profraw_files(since)
         if not profraw_files:
             print_status(
-                "No .profraw files found from this coverage run; "
-                f"{fallback_suffix}",
+                f"No .profraw files found from this coverage run; {fallback_suffix}",
                 "WARNING",
             )
             return None
 
-        binaries = [
-            b for b in self._find_coverage_test_binaries() if os.path.isfile(b)
-        ]
+        binaries = [b for b in self._find_coverage_test_binaries() if os.path.isfile(b)]
         if not binaries:
             print_status(
                 "Could not resolve test binaries for llvm-cov -object; "
@@ -1416,8 +1420,7 @@ def print_help() -> None:
     )
     print("\nLogging feature toggles (mirror CMake LOGGING_ENABLE_*):")
     print(
-        "  nomagicenum    - --define=logging_enable_magic_enum=false "
-        "(default: enabled)"
+        "  nomagicenum    - --define=logging_enable_magic_enum=false (default: enabled)"
     )
     print(
         "  nocxademangle  - --define=logging_enable_cxa_demangle=false "
@@ -1495,15 +1498,13 @@ def print_help() -> None:
     print("  clean          - Clean build artifacts")
     print("\nCMake-only (Scripts/setup.py), not wired to Bazel in this repo:")
     print(
-        "  metal | gpu.metal | examples | cppcheck | clangtidy | fix | iwyu | "
-        "spell |"
+        "  metal | gpu.metal | examples | cppcheck | clangtidy | fix | iwyu | spell |"
     )
     print("  valgrind | usesystemlogging | usesystemscalars | enableexternal")
     print("\nFlag parity with .github/scripts/flag_matrix.py:")
     print("  See this script's module docstring for the full three-bucket breakdown")
     print(
-        "  (source-gating --define=, raw compiler/linker flags, "
-        "genuinely CMake-only)."
+        "  (source-gating --define=, raw compiler/linker flags, genuinely CMake-only)."
     )
     print("\nEquivalent to CMake setup.py:")
     print("  CMake:  python setup.py config.build.test.release")

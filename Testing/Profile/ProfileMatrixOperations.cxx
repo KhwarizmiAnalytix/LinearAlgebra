@@ -22,6 +22,7 @@
 
 #include "include/common/backend.h"
 #include "include/common/types.h"
+#include "include/matrix_operation/banded_operations.h"
 #include "include/matrix_operation/cholesky_decomposition.h"
 #include "include/matrix_operation/condition_number.h"
 #include "include/matrix_operation/determinant.h"
@@ -33,7 +34,6 @@
 #include "include/matrix_operation/lu_decomposition.h"
 #include "include/matrix_operation/multiplication.h"
 #include "include/matrix_operation/norm.h"
-#include "include/matrix_operation/banded_operations.h"
 #include "include/matrix_operation/power.h"
 #include "include/matrix_operation/pseudo_inverse.h"
 #include "include/matrix_operation/qr_decomposition.h"
@@ -69,10 +69,9 @@ std::vector<T> make_random_matrix(std::size_t rows, std::size_t cols, unsigned s
 }
 
 // Returns a symmetric positive-definite n x n matrix: B * B^T + n * I.
-template <typename T>
-std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
+template <typename T> std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
 {
-    auto           B = make_random_matrix<T>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), seed);
+    auto B = make_random_matrix<T>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), seed);
     std::vector<T> A(static_cast<std::size_t>(n * n), T(0));
     for (linalg_int i = 0; i < n; ++i)
     {
@@ -81,8 +80,8 @@ std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
             T sum = T(0);
             for (linalg_int k = 0; k < n; ++k)
             {
-                sum += B[static_cast<std::size_t>(i * n + k)] *
-                       B[static_cast<std::size_t>(j * n + k)];
+                sum +=
+                    B[static_cast<std::size_t>(i * n + k)] * B[static_cast<std::size_t>(j * n + k)];
             }
             A[static_cast<std::size_t>(i * n + j)] = sum;
         }
@@ -106,11 +105,12 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // multiplication --------------------------------------------------------
     {
         PROFILER_SCOPE("multiplication");
-        auto a = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        auto b = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
+        auto a =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto b = make_random_matrix<double>(
+            static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
         std::vector<double> c(static_cast<std::size_t>(n * n));
-        const auto          ws =
-            linalg::multiplication<double, Backend>::workspace_size(n, n, n);
+        const auto          ws = linalg::multiplication<double, Backend>::workspace_size(n, n, n);
         std::vector<unsigned char> workspace(ws);
         linalg::multiplication<double, Backend>::apply(
             false, false, n, n, n, a.data(), n, b.data(), n, c.data(), n, workspace.data(), ws);
@@ -120,14 +120,19 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     {
         PROFILER_SCOPE("cholesky_decomposition");
         auto A = make_spd_matrix<double>(n);
-        linalg::cholesky_decomposition<double, Backend>::apply(
-            A.data(), n, linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR, nullptr, 0, nullptr);
+        linalg::cholesky_decomposition<double, Backend>::apply(A.data(),
+            n,
+            linalg::cholesky_decomposition_enum::LOWER_TRIANGULAR,
+            nullptr,
+            0,
+            nullptr);
     }
 
     // lu_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("lu_decomposition");
-        auto                    A = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         std::vector<linalg_int> pivot(static_cast<std::size_t>(n));
         const auto              ws = linalg::lu_decomposition<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
@@ -152,14 +157,24 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // svd_decomposition -----------------------------------------------------
     {
         PROFILER_SCOPE("svd_decomposition");
-        auto                A = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        auto A = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         std::vector<double> S(static_cast<std::size_t>(cols));
         std::vector<double> U(static_cast<std::size_t>(rows * rows));
         std::vector<double> Vt(static_cast<std::size_t>(cols * cols));
-        const auto          ws = linalg::svd_decomposition<double, Backend>::workspace_size(rows, cols);
+        const auto ws = linalg::svd_decomposition<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
-        linalg::svd_decomposition<double, Backend>::apply(
-            rows, cols, A.data(), cols, S.data(), U.data(), rows, Vt.data(), cols, workspace.data(), ws);
+        linalg::svd_decomposition<double, Backend>::apply(rows,
+            cols,
+            A.data(),
+            cols,
+            S.data(),
+            U.data(),
+            rows,
+            Vt.data(),
+            cols,
+            workspace.data(),
+            ws);
     }
 
     // symmetric_eigen_backend -----------------------------------------------
@@ -167,7 +182,7 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
         PROFILER_SCOPE("eigen_symmetric");
         auto                A = make_spd_matrix<double>(n);
         std::vector<double> eigenvalues(static_cast<std::size_t>(n));
-        const auto          ws = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
+        const auto ws = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
         linalg::symmetric_eigen_backend<double, Backend>::apply(
             A.data(), n, n, eigenvalues.data(), n, workspace.data(), ws);
@@ -176,10 +191,11 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // general_eigen_backend -------------------------------------------------
     {
         PROFILER_SCOPE("eigen_general");
-        auto                A = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         std::vector<double> ev_real(static_cast<std::size_t>(n));
         std::vector<double> ev_imag(static_cast<std::size_t>(n));
-        const auto          ws = linalg::general_eigen_backend<double, Backend>::workspace_size(n, false);
+        const auto ws = linalg::general_eigen_backend<double, Backend>::workspace_size(n, false);
         std::vector<unsigned char> workspace(ws);
         linalg::general_eigen_backend<double, Backend>::apply(
             A.data(), n, n, ev_real.data(), ev_imag.data(), false, n, workspace.data(), ws);
@@ -188,46 +204,66 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // inversion -------------------------------------------------------------
     {
         PROFILER_SCOPE("inversion");
-        auto                    A  = make_spd_matrix<double>(n);
+        auto                    A = make_spd_matrix<double>(n);
         std::vector<linalg_int> pivot(static_cast<std::size_t>(n));
-        const auto ws = linalg::inversion<double, Backend>::workspace_size(
+        const auto              ws = linalg::inversion<double, Backend>::workspace_size(
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> workspace(ws);
-        linalg::inversion<double, Backend>::apply(
-            A.data(), pivot.data(), n, linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
+        linalg::inversion<double, Backend>::apply(A.data(),
+            pivot.data(),
+            n,
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            workspace.data(),
+            ws);
     }
 
     // linear_solver ---------------------------------------------------------
     {
         PROFILER_SCOPE("linear_solver");
-        auto                A = make_spd_matrix<double>(n);
-        std::vector<double> b = make_random_matrix<double>(static_cast<std::size_t>(n), 1, 99);
+        auto                    A = make_spd_matrix<double>(n);
+        std::vector<double>     b = make_random_matrix<double>(static_cast<std::size_t>(n), 1, 99);
         std::vector<linalg_int> pivot(static_cast<std::size_t>(n));
-        const auto ws = linalg::linear_solver<double, Backend>::workspace_size(
+        const auto              ws = linalg::linear_solver<double, Backend>::workspace_size(
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> workspace(ws);
-        linalg::linear_solver<double, Backend>::apply(
-            A.data(), pivot.data(), n, b.data(), linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
+        linalg::linear_solver<double, Backend>::apply(A.data(),
+            pivot.data(),
+            n,
+            b.data(),
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            workspace.data(),
+            ws);
     }
 
     // least_squares ---------------------------------------------------------
     {
         PROFILER_SCOPE("least_squares");
-        auto                A = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        auto A = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         std::vector<double> b = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 77);
         std::vector<double> x_out(static_cast<std::size_t>(cols));
         const auto          ws = linalg::least_squares<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
-        linalg::least_squares<double, Backend>::apply(
-            rows, cols, static_cast<linalg_long>(1), A.data(), cols, b.data(), static_cast<linalg_long>(1), x_out.data(), cols, workspace.data(), ws);
+        linalg::least_squares<double, Backend>::apply(rows,
+            cols,
+            static_cast<linalg_long>(1),
+            A.data(),
+            cols,
+            b.data(),
+            static_cast<linalg_long>(1),
+            x_out.data(),
+            cols,
+            workspace.data(),
+            ws);
     }
 
     // pseudo_inverse --------------------------------------------------------
     {
         PROFILER_SCOPE("pseudo_inverse");
-        auto                A      = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        auto A = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
         std::vector<double> result(static_cast<std::size_t>(cols * rows));
-        const auto          ws = linalg::pseudo_inverse<double, Backend>::workspace_size(rows, cols);
+        const auto ws = linalg::pseudo_inverse<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
         linalg::pseudo_inverse<double, Backend>::apply(
             rows, cols, A.data(), cols, result.data(), rows, double(0), workspace.data(), ws);
@@ -236,24 +272,29 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // norm ------------------------------------------------------------------
     {
         PROFILER_SCOPE("norm_frobenius");
-        auto       A  = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        const auto ws = linalg::norm<double, Backend>::workspace_size(n, n, linalg::norm_type::FROBENIUS);
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        const auto ws =
+            linalg::norm<double, Backend>::workspace_size(n, n, linalg::norm_type::FROBENIUS);
         std::vector<unsigned char> workspace(ws);
-        linalg::norm<double, Backend>::apply(A.data(), n, n, n, linalg::norm_type::FROBENIUS, workspace.data(), ws);
+        linalg::norm<double, Backend>::apply(
+            A.data(), n, n, n, linalg::norm_type::FROBENIUS, workspace.data(), ws);
     }
 
     // trace -----------------------------------------------------------------
     {
         PROFILER_SCOPE("trace");
-        auto A = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         linalg::trace<double, Backend>::apply(A.data(), n, n);
     }
 
     // transpose -------------------------------------------------------------
     {
         PROFILER_SCOPE("transpose");
-        auto       A  = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        const auto ws = linalg::transpose<double, Backend>::workspace_size(n, n);
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        const auto                 ws = linalg::transpose<double, Backend>::workspace_size(n, n);
         std::vector<unsigned char> workspace(ws);
         linalg::transpose<double, Backend>::apply(n, n, A.data(), workspace.data(), ws);
     }
@@ -261,10 +302,12 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // rank ------------------------------------------------------------------
     {
         PROFILER_SCOPE("rank");
-        auto       A  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        const auto ws = linalg::rank<double, Backend>::workspace_size(rows, cols);
+        auto A = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        const auto                 ws = linalg::rank<double, Backend>::workspace_size(rows, cols);
         std::vector<unsigned char> workspace(ws);
-        linalg::rank<double, Backend>::apply(A.data(), rows, cols, cols, double(0), workspace.data(), ws);
+        linalg::rank<double, Backend>::apply(
+            A.data(), rows, cols, cols, double(0), workspace.data(), ws);
     }
 
     // condition_number -------------------------------------------------------
@@ -279,33 +322,41 @@ void profile_cpu_backend(const char* scope_name, linalg_int n)
     // determinant -----------------------------------------------------------
     {
         PROFILER_SCOPE("determinant");
-        auto                    A      = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         std::vector<linalg_int> pivot(static_cast<std::size_t>(n));
         const auto              ws = linalg::determinant<double, Backend>::workspace_size(
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         std::vector<unsigned char> workspace(ws);
-        linalg::determinant<double, Backend>::apply(
-            A.data(), pivot.data(), n, linalg::linear_solver_type::LU_LINEAR_SOLVER, workspace.data(), ws);
+        linalg::determinant<double, Backend>::apply(A.data(),
+            pivot.data(),
+            n,
+            linalg::linear_solver_type::LU_LINEAR_SOLVER,
+            workspace.data(),
+            ws);
     }
 
     // power -----------------------------------------------------------------
     {
         PROFILER_SCOPE("power");
-        auto                A      = make_spd_matrix<double>(n);
-        std::vector<double> result(static_cast<std::size_t>(n * n));
-        const auto          ws     = linalg::power<double, Backend>::workspace_size(n);
+        auto                       A = make_spd_matrix<double>(n);
+        std::vector<double>        result(static_cast<std::size_t>(n * n));
+        const auto                 ws = linalg::power<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
-        linalg::power<double, Backend>::apply(A.data(), n, n, 3, result.data(), n, workspace.data(), ws);
+        linalg::power<double, Backend>::apply(
+            A.data(), n, n, 3, result.data(), n, workspace.data(), ws);
     }
 
     // exponential (native only, scalar backend) ----------------------------
     {
         PROFILER_SCOPE("exponential");
-        auto                A      = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        std::vector<double> result(static_cast<std::size_t>(n * n));
-        const auto          ws     = linalg::exponential<double, Backend>::workspace_size(n);
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        std::vector<double>        result(static_cast<std::size_t>(n * n));
+        const auto                 ws = linalg::exponential<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
-        linalg::exponential<double, Backend>::apply(A.data(), n, n, result.data(), n, workspace.data(), ws);
+        linalg::exponential<double, Backend>::apply(
+            A.data(), n, n, result.data(), n, workspace.data(), ws);
     }
 }
 
@@ -337,7 +388,8 @@ void profile_scalar_only_ops(linalg_int n)
         std::vector<double> decomposed(3 * stride, 0.5);
         linalg::banded_operations::decomposition<double, 3>(decomposed, outer_dim, dim, inner_dim);
         std::vector<double> x(stride, 1.0);
-        linalg::banded_operations::solve_decomposed<double, 3>(x, decomposed, outer_dim, dim, inner_dim);
+        linalg::banded_operations::solve_decomposed<double, 3>(
+            x, decomposed, outer_dim, dim, inner_dim);
     }
 
     {
@@ -350,7 +402,8 @@ void profile_scalar_only_ops(linalg_int n)
         std::vector<double> mat(3 * stride, 0.1);
         std::vector<double> in(stride, 1.0);
         std::vector<double> result(stride, 0.0);
-        linalg::banded_operations::multiply<double, 3>(result, in, mat, outer_dim, dim, inner_dim, 1.0);
+        linalg::banded_operations::multiply<double, 3>(
+            result, in, mat, outer_dim, dim, inner_dim, 1.0);
     }
 
     // banded_operations (5-band / pentadiagonal) — output holds 5*stride entries.
@@ -375,7 +428,8 @@ void profile_scalar_only_ops(linalg_int n)
         std::vector<double> decomposed(5 * stride, 0.5);
         linalg::banded_operations::decomposition<double, 5>(decomposed, outer_dim, dim, inner_dim);
         std::vector<double> x(stride, 1.0);
-        linalg::banded_operations::solve_decomposed<double, 5>(x, decomposed, outer_dim, dim, inner_dim);
+        linalg::banded_operations::solve_decomposed<double, 5>(
+            x, decomposed, outer_dim, dim, inner_dim);
     }
 
     {
@@ -388,7 +442,8 @@ void profile_scalar_only_ops(linalg_int n)
         std::vector<double> mat(5 * stride, 0.1);
         std::vector<double> in(stride, 1.0);
         std::vector<double> result(stride, 0.0);
-        linalg::banded_operations::multiply<double, 5>(result, in, mat, outer_dim, dim, inner_dim, 1.0);
+        linalg::banded_operations::multiply<double, 5>(
+            result, in, mat, outer_dim, dim, inner_dim, 1.0);
     }
 }
 
@@ -400,8 +455,7 @@ void profile_scalar_only_ops(linalg_int n)
 
 // Allocate a device buffer, copy host data into it, and return the device ptr.
 // The caller owns the buffer and must cudaFree it.
-template <typename T>
-T* cuda_upload(const std::vector<T>& host)
+template <typename T> T* cuda_upload(const std::vector<T>& host)
 {
     T*           ptr = nullptr;
     const size_t sz  = host.size() * sizeof(T);
@@ -418,8 +472,7 @@ T* cuda_upload(const std::vector<T>& host)
 }
 
 // Allocate an uninitialised device buffer of `count` elements.
-template <typename T>
-T* cuda_alloc(std::size_t count)
+template <typename T> T* cuda_alloc(std::size_t count)
 {
     T* ptr = nullptr;
     cudaMalloc(reinterpret_cast<void**>(&ptr), count * sizeof(T));
@@ -437,7 +490,10 @@ void profile_gpu_ops(linalg_int n)
         linalg_long* rank   = cuda_alloc<linalg_long>(1);
         int*         info   = cuda_alloc<int>(1);
         linalg_int*  pivot;
-        explicit output_buffers(linalg_int n) : pivot(cuda_alloc<linalg_int>(static_cast<size_t>(n))) {}
+        explicit output_buffers(linalg_int n)
+            : pivot(cuda_alloc<linalg_int>(static_cast<size_t>(n)))
+        {
+        }
         ~output_buffers()
         {
             cudaFree(scalar);
@@ -453,8 +509,10 @@ void profile_gpu_ops(linalg_int n)
     // multiplication --------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/multiplication");
-        auto    ha = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        auto    hb = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
+        auto ha =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto hb = make_random_matrix<double>(
+            static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
         double* da = cuda_upload(ha);
         double* db = cuda_upload(hb);
         double* dc = cuda_alloc<double>(static_cast<std::size_t>(n * n));
@@ -495,11 +553,11 @@ void profile_gpu_ops(linalg_int n)
     // lu_decomposition ------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/lu_decomposition");
-        auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        double* dA = cuda_upload(hA);
-        const auto ws_bytes =
-            linalg::lu_decomposition<double, CB>::workspace_size(n);
-        void* d_ws = nullptr;
+        auto hA =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        double*    dA       = cuda_upload(hA);
+        const auto ws_bytes = linalg::lu_decomposition<double, CB>::workspace_size(n);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -542,14 +600,14 @@ void profile_gpu_ops(linalg_int n)
     // svd_decomposition -----------------------------------------------------
     {
         PROFILER_SCOPE("gpu/svd_decomposition");
-        auto    hA   = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA   = cuda_upload(hA);
-        double* d_S  = cuda_alloc<double>(static_cast<std::size_t>(cols));
-        double* d_U  = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
-        double* d_Vt = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
-        const auto ws_bytes =
-            linalg::svd_decomposition<double, CB>::workspace_size(rows, cols);
-        void* d_ws = nullptr;
+        auto hA = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double*    dA       = cuda_upload(hA);
+        double*    d_S      = cuda_alloc<double>(static_cast<std::size_t>(cols));
+        double*    d_U      = cuda_alloc<double>(static_cast<std::size_t>(rows * rows));
+        double*    d_Vt     = cuda_alloc<double>(static_cast<std::size_t>(cols * cols));
+        const auto ws_bytes = linalg::svd_decomposition<double, CB>::workspace_size(rows, cols);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -570,12 +628,11 @@ void profile_gpu_ops(linalg_int n)
     // symmetric_eigenvalue_decomposition ------------------------------------
     {
         PROFILER_SCOPE("gpu/eigen_symmetric");
-        auto    hA     = make_spd_matrix<double>(n);
-        double* dA     = cuda_upload(hA);
-        double* d_ev   = cuda_alloc<double>(static_cast<std::size_t>(n));
-        const auto ws_bytes =
-            linalg::symmetric_eigen_backend<double, CB>::workspace_size(n);
-        void* d_ws = nullptr;
+        auto       hA       = make_spd_matrix<double>(n);
+        double*    dA       = cuda_upload(hA);
+        double*    d_ev     = cuda_alloc<double>(static_cast<std::size_t>(n));
+        const auto ws_bytes = linalg::symmetric_eigen_backend<double, CB>::workspace_size(n);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -594,8 +651,8 @@ void profile_gpu_ops(linalg_int n)
     // inversion -------------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/inversion");
-        auto    hA = make_spd_matrix<double>(n);
-        double* dA = cuda_upload(hA);
+        auto       hA       = make_spd_matrix<double>(n);
+        double*    dA       = cuda_upload(hA);
         const auto ws_bytes = linalg::inversion<double, CB>::workspace_size(
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         void* d_ws = nullptr;
@@ -616,10 +673,10 @@ void profile_gpu_ops(linalg_int n)
     // linear_solver ---------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/linear_solver");
-        auto    hA = make_spd_matrix<double>(n);
-        auto    hb = make_random_matrix<double>(static_cast<std::size_t>(n), 1, 77);
-        double* dA = cuda_upload(hA);
-        double* db = cuda_upload(hb);
+        auto       hA       = make_spd_matrix<double>(n);
+        auto       hb       = make_random_matrix<double>(static_cast<std::size_t>(n), 1, 77);
+        double*    dA       = cuda_upload(hA);
+        double*    db       = cuda_upload(hb);
         const auto ws_bytes = linalg::linear_solver<double, CB>::workspace_size(
             n, linalg::linear_solver_type::LU_LINEAR_SOLVER);
         void* d_ws = nullptr;
@@ -641,14 +698,14 @@ void profile_gpu_ops(linalg_int n)
     // least_squares ---------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/least_squares");
-        auto    hA  = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        auto    hb  = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 55);
-        double* dA  = cuda_upload(hA);
-        double* db  = cuda_upload(hb);
-        double* d_X = cuda_alloc<double>(static_cast<std::size_t>(cols));
-        const auto ws_bytes =
-            linalg::least_squares<double, CB>::workspace_size(rows, cols);
-        void* d_ws = nullptr;
+        auto hA = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        auto       hb       = make_random_matrix<double>(static_cast<std::size_t>(rows), 1, 55);
+        double*    dA       = cuda_upload(hA);
+        double*    db       = cuda_upload(hb);
+        double*    d_X      = cuda_alloc<double>(static_cast<std::size_t>(cols));
+        const auto ws_bytes = linalg::least_squares<double, CB>::workspace_size(rows, cols);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -677,12 +734,12 @@ void profile_gpu_ops(linalg_int n)
     // pseudo_inverse --------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/pseudo_inverse");
-        auto    hA       = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA       = cuda_upload(hA);
-        double* d_result = cuda_alloc<double>(static_cast<std::size_t>(cols * rows));
-        const auto ws_bytes =
-            linalg::pseudo_inverse<double, CB>::workspace_size(rows, cols);
-        void* d_ws = nullptr;
+        auto hA = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double*    dA       = cuda_upload(hA);
+        double*    d_result = cuda_alloc<double>(static_cast<std::size_t>(cols * rows));
+        const auto ws_bytes = linalg::pseudo_inverse<double, CB>::workspace_size(rows, cols);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -701,10 +758,11 @@ void profile_gpu_ops(linalg_int n)
     // norm ------------------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/norm_frobenius");
-        auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        double* dA = cuda_upload(hA);
-        const auto ws_bytes = linalg::norm<double, CB>::workspace_size(
-            n, n, linalg::norm_type::FROBENIUS);
+        auto hA =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        double*    dA = cuda_upload(hA);
+        const auto ws_bytes =
+            linalg::norm<double, CB>::workspace_size(n, n, linalg::norm_type::FROBENIUS);
         void* d_ws = nullptr;
         if (ws_bytes > 0)
         {
@@ -723,7 +781,8 @@ void profile_gpu_ops(linalg_int n)
     // trace — no workspace param; allocates internally ---------------------
     {
         PROFILER_SCOPE("gpu/trace");
-        auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto hA =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         double* dA = cuda_upload(hA);
         if (dA)
         {
@@ -736,10 +795,11 @@ void profile_gpu_ops(linalg_int n)
     // transpose -------------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/transpose");
-        auto    hA = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
-        double* dA = cuda_upload(hA);
+        auto hA =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        double*    dA       = cuda_upload(hA);
         const auto ws_bytes = linalg::transpose<double, CB>::workspace_size(n, n);
-        void* d_ws = nullptr;
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -756,11 +816,11 @@ void profile_gpu_ops(linalg_int n)
     // rank ------------------------------------------------------------------
     {
         PROFILER_SCOPE("gpu/rank");
-        auto    hA = make_random_matrix<double>(static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
-        double* dA = cuda_upload(hA);
-        const auto ws_bytes =
-            linalg::rank<double, CB>::workspace_size(rows, cols);
-        void* d_ws = nullptr;
+        auto hA = make_random_matrix<double>(
+            static_cast<std::size_t>(rows), static_cast<std::size_t>(cols));
+        double*    dA       = cuda_upload(hA);
+        const auto ws_bytes = linalg::rank<double, CB>::workspace_size(rows, cols);
+        void*      d_ws     = nullptr;
         if (ws_bytes > 0)
         {
             cudaMalloc(&d_ws, ws_bytes);
@@ -793,15 +853,17 @@ int main(int argc, char** argv)
     }
 
     std::printf("=== LinearAlgebra matrix operation profiler ===\n");
-    std::printf("Matrix order n=%d  (rectangular rows=%d, cols=%d)\n\n", static_cast<int>(n),
-        static_cast<int>(n + n / 2), static_cast<int>(n));
+    std::printf("Matrix order n=%d  (rectangular rows=%d, cols=%d)\n\n",
+        static_cast<int>(n),
+        static_cast<int>(n + n / 2),
+        static_cast<int>(n));
 
     // --- CPU session -------------------------------------------------------
     {
         std::printf("--- CPU backends ---\n");
 
         profiler::session_options opts;
-        opts.activities         = {profiler::activity::cpu};
+        opts.activities           = {profiler::activity::cpu};
         opts.statistical_analysis = true;
 
         profiler::session session(opts);
@@ -844,15 +906,16 @@ int main(int argc, char** argv)
         int device_count = 0;
         if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0)
         {
-            std::printf("\n--- GPU backend ---\nNOTE: no CUDA device detected; skipping GPU profile.\n");
+            std::printf(
+                "\n--- GPU backend ---\nNOTE: no CUDA device detected; skipping GPU profile.\n");
         }
         else
         {
             std::printf("\n--- GPU backend (%d device(s)) ---\n", device_count);
 
             profiler::session_options gpu_opts;
-            gpu_opts.activities  = {profiler::activity::cpu, profiler::activity::cuda};
-            gpu_opts.gpu_tracing = true;
+            gpu_opts.activities           = {profiler::activity::cpu, profiler::activity::cuda};
+            gpu_opts.gpu_tracing          = true;
             gpu_opts.statistical_analysis = true;
 
             profiler::session gpu_session(gpu_opts);
@@ -883,6 +946,7 @@ int main(int argc, char** argv)
     std::printf("\nGPU backend: not compiled in (LINALG_HAS_CUBLAS=0)\n");
 #endif
 
-    std::printf("\nVisualization: open JSON traces in chrome://tracing or https://ui.perfetto.dev\n");
+    std::printf(
+        "\nVisualization: open JSON traces in chrome://tracing or https://ui.perfetto.dev\n");
     return 0;
 }

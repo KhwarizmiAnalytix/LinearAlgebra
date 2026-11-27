@@ -6,14 +6,14 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
-#include "include/matrix_operation/cholesky_decomposition.h"
-#include "include/matrix_operation/linear_solver.h"
-#include "include/matrix_operation/inversion.h"
-#include "include/matrix_operation/determinant.h"
-#include "include/matrix_operation/multiplication.h"
-#include "gtest/gtest.h"
 #include "include/logging.h"
+#include "include/matrix_operation/cholesky_decomposition.h"
+#include "include/matrix_operation/determinant.h"
+#include "include/matrix_operation/inversion.h"
+#include "include/matrix_operation/linear_solver.h"
+#include "include/matrix_operation/multiplication.h"
+#include "test_backend.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -244,8 +244,7 @@ void build_cholesky_matrix(
 
         IA = R;
         const auto invert_ws_size =
-            linalg::inversion<value_t, Backend>::workspace_size(
-                static_cast<linalg_int>(dim),
+            linalg::inversion<value_t, Backend>::workspace_size(static_cast<linalg_int>(dim),
                 linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER);
         std::vector<unsigned char> invert_ws(invert_ws_size);
         linalg::inversion<value_t, Backend>::apply(IA.data(),
@@ -273,8 +272,7 @@ void build_cholesky_matrix(
             details);
 
         IA = R;
-        linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(
-            IA.data(),
+        linalg::determinant<value_t, linalg::linalg_backend::NATIVE>::apply(IA.data(),
             pivot.data(),
             static_cast<linalg_int>(dim),
             linalg::linear_solver_type::CHOLESKY_UPFRONT_LINEAR_SOLVER,
@@ -377,12 +375,14 @@ template <typename value_t, linalg::linalg_backend Backend> void test_cholesky(s
 TEST(Math, CholeskyDecomposition)
 {
     const std::size_t dim = 128 + 24 + 16 + 12 + 8 + 4 + 3 + 2 + 1;
-    linalg_test::for_each_available_backend([&](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_cholesky<float, Backend>(dim);
-        test_cholesky<double, Backend>(dim);
+    linalg_test::for_each_available_backend(
+        [&](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_cholesky<float, Backend>(dim);
+            test_cholesky<double, Backend>(dim);
 
-        test_cholesky<float, Backend>(13);
-        test_cholesky<double, Backend>(13);
-    });
+            test_cholesky<float, Backend>(13);
+            test_cholesky<double, Backend>(13);
+        });
 }

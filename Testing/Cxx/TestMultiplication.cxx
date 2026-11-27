@@ -5,10 +5,10 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
 #include "include/matrix_operation/multiplication.h"
-#include "gtest/gtest.h"
+#include "test_backend.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 // #define DEBUG_MATRIXMULTIPLICATION
 
@@ -326,9 +326,9 @@ void matrix_multiplication_test(int rows,
     // existing absolute tolerance remains a floor for the small cases. Four
     // extra roundings cover the alpha scaling, the beta scaling, and the
     // final addition.
-    const long double roundoff = std::numeric_limits<value_t>::epsilon() / 2.0L;
-    const long double steps    = 2.0L * depth + 4.0L;
-    const long double gamma    = (steps * roundoff) / (1.0L - steps * roundoff);
+    const long double roundoff        = std::numeric_limits<value_t>::epsilon() / 2.0L;
+    const long double steps           = 2.0L * depth + 4.0L;
+    const long double gamma           = (steps * roundoff) / (1.0L - steps * roundoff);
     long double       max_error_ratio = 0;
     for (int i = 0; i < rows; ++i)
     {
@@ -349,12 +349,11 @@ void matrix_multiplication_test(int rows,
                 sum += product;
                 absolute_sum += std::fabs(product);
             }
-            const long double prior = beta == value_t(0)
-                                          ? 0.0L
-                                          : static_cast<long double>(beta) *
-                                                static_cast<long double>(C0(
-                                                    static_cast<std::size_t>(i),
-                                                    static_cast<std::size_t>(j)));
+            const long double prior =
+                beta == value_t(0) ? 0.0L
+                                   : static_cast<long double>(beta) *
+                                         static_cast<long double>(C0(static_cast<std::size_t>(i),
+                                             static_cast<std::size_t>(j)));
             const long double expected = static_cast<long double>(alpha) * sum + prior;
             const long double magnitude =
                 std::fabs(static_cast<long double>(alpha)) * absolute_sum + std::fabs(prior);
@@ -363,14 +362,18 @@ void matrix_multiplication_test(int rows,
             ASSERT_TRUE(std::isfinite(c)) << "row=" << i << ", column=" << j;
             const long double allowed_error =
                 std::max(static_cast<long double>(tol), gamma * magnitude);
-            max_error_ratio = std::max(max_error_ratio,
-                std::fabs(expected - static_cast<long double>(c)) / allowed_error);
+            max_error_ratio = std::max(
+                max_error_ratio, std::fabs(expected - static_cast<long double>(c)) / allowed_error);
         }
     }
 
     for (int i = 0; i < rows; ++i)
+    {
         for (int j = columns; j < columns + padding; ++j)
+        {
             EXPECT_EQ(C(i, j), value_t(123)) << "Output padding was overwritten";
+        }
+    }
 
 #ifdef DEBUG_MATRIXMULTIPLICATION
     (void)max_error_ratio;
@@ -386,24 +389,26 @@ TEST(Math, MatrixMultiplication)
     const int lda     = 64 + 3;
     const int columns = 64 + 32 + 8 + 4 + 1 + 9;
 
-    linalg_test::for_each_available_backend([&](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        matrix_vector_multiplication<double, Backend>(rows, columns);
-        matrix_vector_multiplication<float, Backend>(rows, columns);
+    linalg_test::for_each_available_backend(
+        [&](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            matrix_vector_multiplication<double, Backend>(rows, columns);
+            matrix_vector_multiplication<float, Backend>(rows, columns);
 
-        vector_matrix_multiplication<float, Backend>(rows, columns);
-        vector_matrix_multiplication<double, Backend>(rows, columns);
+            vector_matrix_multiplication<float, Backend>(rows, columns);
+            vector_matrix_multiplication<double, Backend>(rows, columns);
 
-        matrix_multiplication_test<float, Backend>(rows, lda, columns, false, false);
-        matrix_multiplication_test<float, Backend>(rows, lda, columns, true, false);
-        matrix_multiplication_test<float, Backend>(rows, lda, columns, false, true);
-        matrix_multiplication_test<float, Backend>(rows, lda, columns, true, true);
+            matrix_multiplication_test<float, Backend>(rows, lda, columns, false, false);
+            matrix_multiplication_test<float, Backend>(rows, lda, columns, true, false);
+            matrix_multiplication_test<float, Backend>(rows, lda, columns, false, true);
+            matrix_multiplication_test<float, Backend>(rows, lda, columns, true, true);
 
-        matrix_multiplication_test<double, Backend>(rows, lda, columns, false, false);
-        matrix_multiplication_test<double, Backend>(rows, lda, columns, true, false);
-        matrix_multiplication_test<double, Backend>(rows, lda, columns, false, true);
-        matrix_multiplication_test<double, Backend>(rows, lda, columns, true, true);
-    });
+            matrix_multiplication_test<double, Backend>(rows, lda, columns, false, false);
+            matrix_multiplication_test<double, Backend>(rows, lda, columns, true, false);
+            matrix_multiplication_test<double, Backend>(rows, lda, columns, false, true);
+            matrix_multiplication_test<double, Backend>(rows, lda, columns, true, true);
+        });
 }
 
 // The scalar backend's LINALG_HAS_VECTORIZATION path (multiplication.cpp)
@@ -419,24 +424,26 @@ TEST(Math, MatrixMultiplicationVectorizedBoundary)
 {
     constexpr int rows = 5;
 
-    linalg_test::for_each_available_backend([&](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        for (int columns = 1; columns <= 16; ++columns)
+    linalg_test::for_each_available_backend(
+        [&](auto backend)
         {
-            for (int depth = 1; depth <= 16; ++depth)
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            for (int columns = 1; columns <= 16; ++columns)
             {
-                matrix_multiplication_test<float, Backend>(rows, depth, columns, false, false);
-                matrix_multiplication_test<float, Backend>(rows, depth, columns, true, false);
-                matrix_multiplication_test<float, Backend>(rows, depth, columns, false, true);
-                matrix_multiplication_test<float, Backend>(rows, depth, columns, true, true);
+                for (int depth = 1; depth <= 16; ++depth)
+                {
+                    matrix_multiplication_test<float, Backend>(rows, depth, columns, false, false);
+                    matrix_multiplication_test<float, Backend>(rows, depth, columns, true, false);
+                    matrix_multiplication_test<float, Backend>(rows, depth, columns, false, true);
+                    matrix_multiplication_test<float, Backend>(rows, depth, columns, true, true);
 
-                matrix_multiplication_test<double, Backend>(rows, depth, columns, false, false);
-                matrix_multiplication_test<double, Backend>(rows, depth, columns, true, false);
-                matrix_multiplication_test<double, Backend>(rows, depth, columns, false, true);
-                matrix_multiplication_test<double, Backend>(rows, depth, columns, true, true);
+                    matrix_multiplication_test<double, Backend>(rows, depth, columns, false, false);
+                    matrix_multiplication_test<double, Backend>(rows, depth, columns, true, false);
+                    matrix_multiplication_test<double, Backend>(rows, depth, columns, false, true);
+                    matrix_multiplication_test<double, Backend>(rows, depth, columns, true, true);
+                }
             }
-        }
-    });
+        });
 }
 
 // Row strides must be preserved by both the scalar and blocked GEMM paths.
@@ -447,13 +454,19 @@ TEST(Math, MatrixMultiplicationPaddedStrides)
         {
             constexpr auto Backend = decltype(backend)::value;
             for (const int rows : {1, 5, 7, 33})
+            {
                 for (const int depth : {3, 9})
+                {
                     for (const bool ta : {false, true})
+                    {
                         for (const bool tb : {false, true})
                         {
                             matrix_multiplication_test<float, Backend>(rows, 7, depth, ta, tb, 2);
                             matrix_multiplication_test<double, Backend>(rows, 7, depth, ta, tb, 2);
                         }
+                    }
+                }
+            }
         });
 }
 
@@ -467,15 +480,16 @@ TEST(Math, MatrixMultiplicationAlphaBeta)
         double alpha;
         double beta;
     };
-    constexpr scales cases[] = {
-        {2.5, 0.0}, {1.0, 1.0}, {-0.5, 1.5}, {1.25, -1.0}, {-1.0, 0.25}};
+    constexpr scales cases[] = {{2.5, 0.0}, {1.0, 1.0}, {-0.5, 1.5}, {1.25, -1.0}, {-1.0, 0.25}};
 
     linalg_test::for_each_available_backend(
         [&](auto backend)
         {
             constexpr auto Backend = decltype(backend)::value;
             for (const auto& s : cases)
+            {
                 for (const bool ta : {false, true})
+                {
                     for (const bool tb : {false, true})
                     {
                         // Scalar fallback.
@@ -489,6 +503,8 @@ TEST(Math, MatrixMultiplicationAlphaBeta)
                         matrix_multiplication_test<double, Backend>(
                             111, 67, 118, ta, tb, 2, s.alpha, s.beta);
                     }
+                }
+            }
         });
 }
 
@@ -645,7 +661,7 @@ void gemm_formula_validation_test(value_t alpha, value_t beta)
         ws.data(),
         ws.size());
 
-    constexpr auto tol       = matrixTolerance<value_t>::tolerance;
+    constexpr auto    tol      = matrixTolerance<value_t>::tolerance;
     const long double roundoff = std::numeric_limits<value_t>::epsilon() / 2.0L;
     const long double steps    = 2.0L * depth + 4.0L;
     const long double gamma    = (steps * roundoff) / (1.0L - steps * roundoff);
@@ -654,21 +670,24 @@ void gemm_formula_validation_test(value_t alpha, value_t beta)
     {
         for (int j = 0; j < columns; ++j)
         {
-            long double product = 0;
+            long double product     = 0;
             long double abs_product = 0;
             for (int k = 0; k < depth; ++k)
             {
-                const long double ab = static_cast<long double>(A(static_cast<std::size_t>(i), static_cast<std::size_t>(k))) *
-                                       static_cast<long double>(B(static_cast<std::size_t>(k), static_cast<std::size_t>(j)));
+                const long double ab =
+                    static_cast<long double>(
+                        A(static_cast<std::size_t>(i), static_cast<std::size_t>(k))) *
+                    static_cast<long double>(
+                        B(static_cast<std::size_t>(k), static_cast<std::size_t>(j)));
                 product += ab;
                 abs_product += std::fabs(ab);
             }
 
-            const long double prior = static_cast<long double>(beta) *
-                                      static_cast<long double>(C_initial(
-                                          static_cast<std::size_t>(i), static_cast<std::size_t>(j)));
-            const long double expected =
-                static_cast<long double>(alpha) * product + prior;
+            const long double prior =
+                static_cast<long double>(beta) *
+                static_cast<long double>(
+                    C_initial(static_cast<std::size_t>(i), static_cast<std::size_t>(j)));
+            const long double expected = static_cast<long double>(alpha) * product + prior;
             const long double magnitude =
                 std::fabs(static_cast<long double>(alpha)) * abs_product + std::fabs(prior);
 
@@ -676,7 +695,8 @@ void gemm_formula_validation_test(value_t alpha, value_t beta)
             ASSERT_TRUE(std::isfinite(c_val))
                 << "row=" << i << ", column=" << j << ", alpha=" << alpha << ", beta=" << beta;
 
-            const long double allowed_error = std::max(static_cast<long double>(tol), gamma * magnitude);
+            const long double allowed_error =
+                std::max(static_cast<long double>(tol), gamma * magnitude);
             const long double error = std::fabs(expected - static_cast<long double>(c_val));
             EXPECT_LE(error, allowed_error)
                 << "row=" << i << ", column=" << j << ", alpha=" << alpha << ", beta=" << beta

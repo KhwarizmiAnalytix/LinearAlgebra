@@ -7,6 +7,7 @@
 
 namespace
 {
+// NOLINTNEXTLINE(performance-enum-size): preserve the vendor API enum representation in this runtime test double.
 enum class signed_code : int
 {
     failure = -7

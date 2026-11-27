@@ -41,8 +41,7 @@ find_package(CUDAToolkit REQUIRED)
 # SCALARS_CUDA_ARCHITECTURES. Use "native" for single-GPU developer builds.
 # ---------------------------------------------------------------------------
 if(NOT DEFINED LINALG_CUDA_ARCHITECTURES)
-    if(DEFINED CMAKE_CUDA_ARCHITECTURES
-       AND NOT CMAKE_CUDA_ARCHITECTURES STREQUAL ""
+    if(DEFINED CMAKE_CUDA_ARCHITECTURES AND NOT CMAKE_CUDA_ARCHITECTURES STREQUAL ""
        AND NOT CMAKE_CUDA_ARCHITECTURES STREQUAL "native"
     )
         set(LINALG_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
@@ -72,8 +71,7 @@ endif()
 # compiler is clang++. Empty string = let NVCC choose its own host compiler.
 # ---------------------------------------------------------------------------
 set(LINALG_CUDA_HOST_COMPILER ""
-    CACHE FILEPATH
-          "Host C++ compiler forwarded to nvcc as -ccbin (empty = nvcc picks its own)"
+    CACHE FILEPATH "Host C++ compiler forwarded to nvcc as -ccbin (empty = nvcc picks its own)"
 )
 mark_as_advanced(LINALG_CUDA_HOST_COMPILER)
 if(LINALG_CUDA_HOST_COMPILER AND NOT DEFINED CMAKE_CUDA_HOST_COMPILER)
@@ -106,19 +104,14 @@ endif()
 # ---------------------------------------------------------------------------
 enable_language(CUDA)
 
-if(WIN32
-   AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-)
-    set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_SHARED
-        "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib"
-        "${CUDAToolkit_LIBRARY_DIR}/cudart.lib"
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_SHARED "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib"
+                                                       "${CUDAToolkit_LIBRARY_DIR}/cudart.lib"
     )
     set(CMAKE_CUDA_RUNTIME_LIBRARY_LINK_OPTIONS_STATIC
-        "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib"
-        "${CUDAToolkit_LIBRARY_DIR}/cudart_static.lib"
+        "${CUDAToolkit_LIBRARY_DIR}/cudadevrt.lib" "${CUDAToolkit_LIBRARY_DIR}/cudart_static.lib"
     )
 endif()
-
 
 # ---------------------------------------------------------------------------
 # linalg_apply_cuda_flags(<target>)
@@ -137,11 +130,10 @@ endif()
 function(linalg_apply_cuda_flags target)
     set_target_properties(
         ${target}
-        PROPERTIES
-            CUDA_STANDARD ${LINALG_CXX_STANDARD}
-            CUDA_STANDARD_REQUIRED ON
-            CUDA_ARCHITECTURES "${LINALG_CUDA_ARCHITECTURES}"
-            CUDA_SEPARABLE_COMPILATION OFF
+        PROPERTIES CUDA_STANDARD ${LINALG_CXX_STANDARD}
+                   CUDA_STANDARD_REQUIRED ON
+                   CUDA_ARCHITECTURES "${LINALG_CUDA_ARCHITECTURES}"
+                   CUDA_SEPARABLE_COMPILATION OFF
     )
 
     target_compile_options(

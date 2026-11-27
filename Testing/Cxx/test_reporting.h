@@ -185,10 +185,9 @@ template <typename Actual, typename Expected, typename Tolerance>
     std::ostringstream difference_output;
     difference_output << std::setprecision(std::numeric_limits<long double>::max_digits10)
                       << difference;
-    return report(
-        (std::string(actual_expression) + " ~= " + expected_expression + " (tol=" +
-            std::string(tolerance_expression) + "=" + value_string(tolerance) + ")")
-            .c_str(),
+    return report((std::string(actual_expression) + " ~= " + expected_expression + " (tol=" +
+                      std::string(tolerance_expression) + "=" + value_string(tolerance) + ")")
+                      .c_str(),
         difference <= static_cast<long double>(tolerance),
         value_string(expected),
         value_string(actual),

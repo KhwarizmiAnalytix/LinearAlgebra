@@ -3,11 +3,11 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
 #include "include/matrix_operation/exponential.h"
 #include "include/matrix_operation/multiplication.h"
-#include "gtest/gtest.h"
+#include "test_backend.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -57,8 +57,7 @@ double max_abs_diff(const dense_matrix<value_t>& a, const dense_matrix<value_t>&
 }
 
 // exp(0) == I.
-template <typename value_t, linalg::linalg_backend Backend>
-void test_zero()
+template <typename value_t, linalg::linalg_backend Backend> void test_zero()
 {
     const std::size_t     n = 4;
     dense_matrix<value_t> A(n, n);
@@ -81,8 +80,7 @@ void test_zero()
 }
 
 // A diagonal: exp(A) is diagonal with exp of each entry.
-template <typename value_t, linalg::linalg_backend Backend>
-void test_diagonal()
+template <typename value_t, linalg::linalg_backend Backend> void test_diagonal()
 {
     const std::size_t     n = 3;
     dense_matrix<value_t> A(n, n);
@@ -111,8 +109,7 @@ void test_diagonal()
 }
 
 // Nilpotent N = [[0,1],[0,0]] (N^2 = 0): exp(N) = I + N = [[1,1],[0,1]].
-template <typename value_t, linalg::linalg_backend Backend>
-void test_nilpotent()
+template <typename value_t, linalg::linalg_backend Backend> void test_nilpotent()
 {
     dense_matrix<value_t> A(2, 2);
     A(0, 1) = value_t(1);
@@ -192,7 +189,8 @@ void test_against_taylor_series(std::size_t n, double scale = 1.0)
     for (int k = 1; k <= kTaylorTerms; ++k)
     {
         // Reference Taylor series always uses native to build the expected value.
-        auto gemm_ws = gemm_workspace<double, linalg::linalg_backend::NATIVE>(static_cast<linalg_int>(n));
+        auto gemm_ws =
+            gemm_workspace<double, linalg::linalg_backend::NATIVE>(static_cast<linalg_int>(n));
         linalg::multiplication<double, linalg::linalg_backend::NATIVE>::apply(false,
             false,
             static_cast<linalg_int>(n),
@@ -297,41 +295,43 @@ void test_inverse_property(std::size_t n)
 
 TEST(Math, MatrixExponential)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_zero<float, Backend>();
-        test_zero<double, Backend>();
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_zero<float, Backend>();
+            test_zero<double, Backend>();
 
-        test_diagonal<float, Backend>();
-        test_diagonal<double, Backend>();
+            test_diagonal<float, Backend>();
+            test_diagonal<double, Backend>();
 
-        test_nilpotent<float, Backend>();
-        test_nilpotent<double, Backend>();
+            test_nilpotent<float, Backend>();
+            test_nilpotent<double, Backend>();
 
-        test_rotation_generator<float, Backend>(0.7);
-        test_rotation_generator<double, Backend>(0.7);
-        test_rotation_generator<float, Backend>(20.0);
-        test_rotation_generator<double, Backend>(20.0);
+            test_rotation_generator<float, Backend>(0.7);
+            test_rotation_generator<double, Backend>(0.7);
+            test_rotation_generator<float, Backend>(20.0);
+            test_rotation_generator<double, Backend>(20.0);
 
-        test_against_taylor_series<float, Backend>(5);
-        test_against_taylor_series<double, Backend>(6);
+            test_against_taylor_series<float, Backend>(5);
+            test_against_taylor_series<double, Backend>(6);
 
-        // Double theta thresholds (degree: upper bound on ||A||_1) are
-        // T1: 2.22e-16, T2: 2.58e-8, T4: 3.40e-4, T8: 4.99e-2, T12: 3.00e-1,
-        // T18 (scale-and-square beyond): 1.09e0. These magnitudes keep ||A||_1
-        // comfortably inside each bracket in turn, so every degree path
-        // (T2/T4/T8/T12 in particular, not otherwise exercised above) is
-        // checked against the independent Taylor-series reference.
-        test_against_taylor_series<double, Backend>(3, 1e-8);    // T2 bracket
-        test_against_taylor_series<double, Backend>(3, 1e-4);    // T4 bracket
-        test_against_taylor_series<double, Backend>(3, 1e-2);    // T8 bracket
-        test_against_taylor_series<double, Backend>(3, 1.5e-1);  // T12 bracket
-        test_against_taylor_series<float, Backend>(3, 1e-8);     // T1 bracket (float)
-        test_against_taylor_series<float, Backend>(3, 3e-4);     // T2 bracket (float)
-        test_against_taylor_series<float, Backend>(3, 1e-2);     // T4 bracket (float)
-        test_against_taylor_series<float, Backend>(3, 3e-1);     // T8 bracket (float)
+            // Double theta thresholds (degree: upper bound on ||A||_1) are
+            // T1: 2.22e-16, T2: 2.58e-8, T4: 3.40e-4, T8: 4.99e-2, T12: 3.00e-1,
+            // T18 (scale-and-square beyond): 1.09e0. These magnitudes keep ||A||_1
+            // comfortably inside each bracket in turn, so every degree path
+            // (T2/T4/T8/T12 in particular, not otherwise exercised above) is
+            // checked against the independent Taylor-series reference.
+            test_against_taylor_series<double, Backend>(3, 1e-8);    // T2 bracket
+            test_against_taylor_series<double, Backend>(3, 1e-4);    // T4 bracket
+            test_against_taylor_series<double, Backend>(3, 1e-2);    // T8 bracket
+            test_against_taylor_series<double, Backend>(3, 1.5e-1);  // T12 bracket
+            test_against_taylor_series<float, Backend>(3, 1e-8);     // T1 bracket (float)
+            test_against_taylor_series<float, Backend>(3, 3e-4);     // T2 bracket (float)
+            test_against_taylor_series<float, Backend>(3, 1e-2);     // T4 bracket (float)
+            test_against_taylor_series<float, Backend>(3, 3e-1);     // T8 bracket (float)
 
-        test_inverse_property<float, Backend>(5);
-        test_inverse_property<double, Backend>(6);
-    });
+            test_inverse_property<float, Backend>(5);
+            test_inverse_property<double, Backend>(6);
+        });
 }

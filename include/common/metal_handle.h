@@ -71,8 +71,7 @@ inline id<MTLCommandQueue> metal_default_queue()
 // selects the process-wide default queue.
 inline id<MTLCommandQueue> metal_queue_from_stream(void* stream)
 {
-    return stream == nullptr ? metal_default_queue()
-                              : (__bridge id<MTLCommandQueue>)stream;
+    return stream == nullptr ? metal_default_queue() : (__bridge id<MTLCommandQueue>)stream;
 }
 
 // Wraps a caller-owned raw pointer as a zero-copy MTLBuffer. `bytes` is
@@ -89,13 +88,13 @@ inline id<MTLBuffer> metal_buffer_from_pointer(void* ptr, size_t bytes)
     LINALG_CHECK(reinterpret_cast<std::uintptr_t>(ptr) % page == 0,
         "METAL_BLAS requires page-aligned buffers (allocate with posix_memalign/mmap "
         "at the system page size) -- see include/common/metal_handle.h");
-    const size_t rounded = ((bytes + page - 1) / page) * page;
+    const size_t  rounded = ((bytes + page - 1) / page) * page;
     id<MTLBuffer> buffer  = [metal_device() newBufferWithBytesNoCopy:ptr
-                                                               length:rounded
-                                                              options:MTLResourceStorageModeShared
-                                                          deallocator:nil];
-    LINALG_CHECK(
-        buffer != nil, "MTLDevice newBufferWithBytesNoCopy failed (check pointer/length alignment)");
+                                                             length:rounded
+                                                            options:MTLResourceStorageModeShared
+                                                        deallocator:nil];
+    LINALG_CHECK(buffer != nil,
+        "MTLDevice newBufferWithBytesNoCopy failed (check pointer/length alignment)");
     return buffer;
 }
 

@@ -246,21 +246,25 @@ elseif(_linalg_system_processor_lower MATCHES "^(x86_64|amd64)$")
 else()
     set(_linalg_cpu_backend_default "no")
 endif()
-set(LINALG_CPU_BACKEND
-    "${_linalg_cpu_backend_default}"
+set(LINALG_CPU_BACKEND "${_linalg_cpu_backend_default}"
     CACHE STRING "CPU SIMD backend for LinearAlgebra: no, sse, avx, avx2, avx512, neon, sve"
 )
 unset(_linalg_cpu_backend_default)
 set_property(
     CACHE LINALG_CPU_BACKEND
-    PROPERTY STRINGS no sse avx avx2 avx512 neon sve
+    PROPERTY STRINGS
+             no
+             sse
+             avx
+             avx2
+             avx512
+             neon
+             sve
 )
 
 if(NOT LINALG_CPU_BACKEND MATCHES "^(no|sse|avx|avx2|avx512|neon|sve)$")
-    message(
-        FATAL_ERROR
-            "LINALG_CPU_BACKEND must be one of: no, sse, avx, avx2, avx512, neon, sve "
-            "(got '${LINALG_CPU_BACKEND}')"
+    message(FATAL_ERROR "LINALG_CPU_BACKEND must be one of: no, sse, avx, avx2, avx512, neon, sve "
+                        "(got '${LINALG_CPU_BACKEND}')"
     )
 endif()
 if(NOT LINALG_CPU_BACKEND STREQUAL "no")

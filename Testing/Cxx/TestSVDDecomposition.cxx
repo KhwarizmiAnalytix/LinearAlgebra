@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
 #include "include/matrix_operation/svd_decomposition.h"
-#include "gtest/gtest.h"
+#include "test_backend.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -97,7 +97,7 @@ void test_svd_singular_values_nonneg(std::size_t rows, std::size_t columns)
         }
     }
 
-    const std::size_t     k   = std::min(rows, columns);
+    const std::size_t     k = std::min(rows, columns);
     std::vector<value_t>  S(k);
     dense_matrix<value_t> U(rows, k);
     dense_matrix<value_t> VT(k, columns);
@@ -137,7 +137,7 @@ void test_svd_orthogonality(std::size_t rows, std::size_t columns)
         }
     }
 
-    const std::size_t     k   = std::min(rows, columns);
+    const std::size_t     k = std::min(rows, columns);
     std::vector<value_t>  S(k);
     dense_matrix<value_t> U(rows, k);
     dense_matrix<value_t> VT(k, columns);
@@ -195,11 +195,10 @@ void test_svd_orthogonality(std::size_t rows, std::size_t columns)
 // Rank-deficient matrix: trailing singular values must be near zero.
 // Built as A = u * v^T (rank 1) to give a known spectrum.
 // Mirrors PyTorch test_svd_rank_deficient.
-template <typename value_t, linalg::linalg_backend Backend>
-void test_svd_rank_deficient()
+template <typename value_t, linalg::linalg_backend Backend> void test_svd_rank_deficient()
 {
     const std::size_t rows = 5, columns = 4;
-    const std::size_t k    = std::min(rows, columns);
+    const std::size_t k = std::min(rows, columns);
 
     std::vector<value_t> u(rows), v(columns);
     for (std::size_t i = 0; i < rows; i++)
@@ -240,7 +239,7 @@ void test_svd_rank_deficient()
         ws_size);
 
     // Only 1 singular value should be non-negligible; the rest must be near 0.
-    value_t smax = *std::max_element(S.begin(), S.end());
+    value_t smax          = *std::max_element(S.begin(), S.end());
     int     nonzero_count = 0;
     for (std::size_t i = 0; i < k; i++)
     {
@@ -255,55 +254,63 @@ void test_svd_rank_deficient()
 
 TEST(Math, SVDDecomposition)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
 
-        std::size_t rows    = 6;
-        std::size_t columns = 5;
-        test_svd<float, Backend>(rows, columns);
-        test_svd<double, Backend>(rows, columns);
+            std::size_t rows    = 6;
+            std::size_t columns = 5;
+            test_svd<float, Backend>(rows, columns);
+            test_svd<double, Backend>(rows, columns);
 
-        rows    = 5;
-        columns = 6;
-        test_svd<float, Backend>(rows, columns);
-        test_svd<double, Backend>(rows, columns);
+            rows    = 5;
+            columns = 6;
+            test_svd<float, Backend>(rows, columns);
+            test_svd<double, Backend>(rows, columns);
 
-        rows    = 25;
-        columns = 11;
-        test_svd<float, Backend>(rows, columns);
-        test_svd<double, Backend>(rows, columns);
-    });
+            rows    = 25;
+            columns = 11;
+            test_svd<float, Backend>(rows, columns);
+            test_svd<double, Backend>(rows, columns);
+        });
 }
 
 TEST(Math, SVDSingularValuesNonneg)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_svd_singular_values_nonneg<float, Backend>(6, 5);
-        test_svd_singular_values_nonneg<float, Backend>(5, 6);
-        test_svd_singular_values_nonneg<double, Backend>(6, 5);
-        test_svd_singular_values_nonneg<double, Backend>(5, 6);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_svd_singular_values_nonneg<float, Backend>(6, 5);
+            test_svd_singular_values_nonneg<float, Backend>(5, 6);
+            test_svd_singular_values_nonneg<double, Backend>(6, 5);
+            test_svd_singular_values_nonneg<double, Backend>(5, 6);
+        });
 }
 
 TEST(Math, SVDOrthogonality)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_svd_orthogonality<float, Backend>(8, 5);
-        test_svd_orthogonality<float, Backend>(5, 8);
-        test_svd_orthogonality<double, Backend>(8, 5);
-        test_svd_orthogonality<double, Backend>(5, 8);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_svd_orthogonality<float, Backend>(8, 5);
+            test_svd_orthogonality<float, Backend>(5, 8);
+            test_svd_orthogonality<double, Backend>(8, 5);
+            test_svd_orthogonality<double, Backend>(5, 8);
+        });
 }
 
 TEST(Math, SVDRankDeficient)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_svd_rank_deficient<float, Backend>();
-        test_svd_rank_deficient<double, Backend>();
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_svd_rank_deficient<float, Backend>();
+            test_svd_rank_deficient<double, Backend>();
+        });
 }
 
 #if defined(_MSC_VER) && !LINALG_HAS_WIN32_WARNINGS

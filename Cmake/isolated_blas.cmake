@@ -63,7 +63,9 @@ function(linalg_configure_isolated_blas)
                 PATH_SUFFIXES bin lib
             )
         else()
-            get_filename_component(_linalg_lapacke_library_dir "${LINALG_LAPACKE_LIBRARY}" DIRECTORY)
+            get_filename_component(
+                _linalg_lapacke_library_dir "${LINALG_LAPACKE_LIBRARY}" DIRECTORY
+            )
             find_library(
                 _linalg_lapacke_runtime_default
                 NAMES lapacke

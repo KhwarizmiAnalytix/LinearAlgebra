@@ -4,11 +4,11 @@
 #include <vector>
 
 #include "dense_matrix_test_helper.h"
-#include "test_backend.h"
 #include "include/matrix_operation/norm.h"
 #include "include/matrix_operation/svd_decomposition.h"
-#include "gtest/gtest.h"
+#include "test_backend.h"
 #include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -49,14 +49,13 @@ void test_norms(std::size_t rows, std::size_t columns)
     }
     frob_expected = std::sqrt(frob_expected);
 
-    const auto frob =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::FROBENIUS,
-            nullptr,
-            0);
+    const auto frob = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        static_cast<linalg_long>(columns),
+        linalg::norm_type::FROBENIUS,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(frob), frob_expected, NormTolerance<value_t>::value);
 
     // One-norm: max absolute column sum.
@@ -70,14 +69,13 @@ void test_norms(std::size_t rows, std::size_t columns)
         }
         one_expected = std::max(one_expected, s);
     }
-    const auto one =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::ONE,
-            nullptr,
-            0);
+    const auto one = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        static_cast<linalg_long>(columns),
+        linalg::norm_type::ONE,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(one), one_expected, NormTolerance<value_t>::value);
 
     // Infinity-norm: max absolute row sum.
@@ -91,14 +89,13 @@ void test_norms(std::size_t rows, std::size_t columns)
         }
         inf_expected = std::max(inf_expected, s);
     }
-    const auto inf =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::INFINITY_NORM,
-            nullptr,
-            0);
+    const auto inf = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        static_cast<linalg_long>(columns),
+        linalg::norm_type::INFINITY_NORM,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(inf), inf_expected, NormTolerance<value_t>::value);
 
     // Two-norm: cross-check against the largest singular value from
@@ -112,7 +109,7 @@ void test_norms(std::size_t rows, std::size_t columns)
     std::vector<value_t>  S(k);
     dense_matrix<value_t> U(rows, k);
     dense_matrix<value_t> VT(k, columns);
-    const auto svd_ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
+    const auto            svd_ws_size = linalg::svd_decomposition<value_t, Backend>::workspace_size(
         static_cast<linalg_long>(rows), static_cast<linalg_long>(columns));
     std::vector<unsigned char> svd_ws(svd_ws_size);
     linalg::svd_decomposition<value_t, Backend>::apply(static_cast<linalg_long>(rows),
@@ -132,43 +129,36 @@ void test_norms(std::size_t rows, std::size_t columns)
         smax = std::max(smax, static_cast<value_t>(std::fabs(s)));
     }
 
-    const auto two_ws_size =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::TWO);
+    const auto two_ws_size = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns), linalg::norm_type::TWO);
     std::vector<unsigned char> two_ws(two_ws_size);
-    const auto                 two =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::TWO,
-            two_ws.data(),
-            two_ws_size);
+    const auto two = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        static_cast<linalg_long>(columns),
+        linalg::norm_type::TWO,
+        two_ws.data(),
+        two_ws_size);
     EXPECT_NEAR(static_cast<double>(two), static_cast<double>(smax), NormTolerance<value_t>::value);
 }
 
 // Zero matrix: every norm must be exactly 0.
 // Mirrors torch.linalg.norm on a zero tensor (PyTorch test_norm_zero_matrix).
-template <typename value_t>
-void test_norm_zero_matrix(std::size_t rows, std::size_t columns)
+template <typename value_t> void test_norm_zero_matrix(std::size_t rows, std::size_t columns)
 {
     dense_matrix<value_t> Z(rows, columns);
     Z.fill(value_t(0));
 
-    for (auto type : {linalg::norm_type::FROBENIUS,
-             linalg::norm_type::ONE,
-             linalg::norm_type::INFINITY_NORM})
+    for (auto type :
+        {linalg::norm_type::FROBENIUS, linalg::norm_type::ONE, linalg::norm_type::INFINITY_NORM})
     {
-        const auto n =
-            linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(Z.begin(),
-                static_cast<linalg_long>(rows),
-                static_cast<linalg_long>(columns),
-                static_cast<linalg_long>(columns),
-                type,
-                nullptr,
-                0);
+        const auto n = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(Z.begin(),
+            static_cast<linalg_long>(rows),
+            static_cast<linalg_long>(columns),
+            static_cast<linalg_long>(columns),
+            type,
+            nullptr,
+            0);
         EXPECT_EQ(static_cast<double>(n), 0.0);
     }
 }
@@ -176,8 +166,7 @@ void test_norm_zero_matrix(std::size_t rows, std::size_t columns)
 // Identity matrix: known exact norm values for n x n I.
 //   Frobenius = sqrt(n),  1-norm = 1,  inf-norm = 1,  2-norm = 1.
 // Mirrors torch.linalg.norm on torch.eye (PyTorch test_norm_known_matrix).
-template <typename value_t>
-void test_norm_identity(std::size_t n)
+template <typename value_t> void test_norm_identity(std::size_t n)
 {
     dense_matrix<value_t> I(n, n);
     I.fill(value_t(0));
@@ -186,50 +175,45 @@ void test_norm_identity(std::size_t n)
         I(i, i) = value_t(1);
     }
 
-    const auto frob =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            linalg::norm_type::FROBENIUS,
-            nullptr,
-            0);
-    EXPECT_NEAR(static_cast<double>(frob), std::sqrt(static_cast<double>(n)), NormTolerance<value_t>::value);
+    const auto frob = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        linalg::norm_type::FROBENIUS,
+        nullptr,
+        0);
+    EXPECT_NEAR(static_cast<double>(frob),
+        std::sqrt(static_cast<double>(n)),
+        NormTolerance<value_t>::value);
 
-    const auto one =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            linalg::norm_type::ONE,
-            nullptr,
-            0);
+    const auto one = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        linalg::norm_type::ONE,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(one), 1.0, NormTolerance<value_t>::value);
 
-    const auto inf =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            linalg::norm_type::INFINITY_NORM,
-            nullptr,
-            0);
+    const auto inf = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        linalg::norm_type::INFINITY_NORM,
+        nullptr,
+        0);
     EXPECT_NEAR(static_cast<double>(inf), 1.0, NormTolerance<value_t>::value);
 
-    const auto two_ws_size =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            linalg::norm_type::TWO);
+    const auto two_ws_size = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
+        static_cast<linalg_long>(n), static_cast<linalg_long>(n), linalg::norm_type::TWO);
     std::vector<unsigned char> two_ws(two_ws_size);
-    const auto                 two =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            static_cast<linalg_long>(n),
-            linalg::norm_type::TWO,
-            two_ws.data(),
-            two_ws_size);
+    const auto two = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(I.begin(),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        static_cast<linalg_long>(n),
+        linalg::norm_type::TWO,
+        two_ws.data(),
+        two_ws_size);
     EXPECT_NEAR(static_cast<double>(two), 1.0, NormTolerance<value_t>::value);
 }
 
@@ -248,34 +232,29 @@ void test_norm_inequality(std::size_t rows, std::size_t columns)
         }
     }
 
-    const auto frob =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::FROBENIUS,
-            nullptr,
-            0);
+    const auto frob = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M.begin(),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        static_cast<linalg_long>(columns),
+        linalg::norm_type::FROBENIUS,
+        nullptr,
+        0);
 
     dense_matrix<value_t> M_copy(rows, columns);
     for (std::size_t i = 0; i < rows * columns; i++)
     {
         M_copy.begin()[i] = M.begin()[i];
     }
-    const auto two_ws_size =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::TWO);
+    const auto two_ws_size = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::workspace_size(
+        static_cast<linalg_long>(rows), static_cast<linalg_long>(columns), linalg::norm_type::TWO);
     std::vector<unsigned char> two_ws(two_ws_size);
-    const auto                 two =
-        linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M_copy.begin(),
-            static_cast<linalg_long>(rows),
-            static_cast<linalg_long>(columns),
-            static_cast<linalg_long>(columns),
-            linalg::norm_type::TWO,
-            two_ws.data(),
-            two_ws_size);
+    const auto two = linalg::norm<value_t, linalg::linalg_backend::NATIVE>::apply(M_copy.begin(),
+        static_cast<linalg_long>(rows),
+        static_cast<linalg_long>(columns),
+        static_cast<linalg_long>(columns),
+        linalg::norm_type::TWO,
+        two_ws.data(),
+        two_ws_size);
 
     const double f = static_cast<double>(frob);
     const double s = static_cast<double>(two);
@@ -290,13 +269,15 @@ void test_norm_inequality(std::size_t rows, std::size_t columns)
 
 TEST(Math, MatrixNorm)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_norms<float, Backend>(6, 5);
-        test_norms<float, Backend>(5, 6);
-        test_norms<double, Backend>(6, 5);
-        test_norms<double, Backend>(5, 6);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_norms<float, Backend>(6, 5);
+            test_norms<float, Backend>(5, 6);
+            test_norms<double, Backend>(6, 5);
+            test_norms<double, Backend>(5, 6);
+        });
 }
 
 TEST(Math, MatrixNormZeroMatrix)
@@ -317,11 +298,13 @@ TEST(Math, MatrixNormIdentity)
 
 TEST(Math, MatrixNormInequality)
 {
-    linalg_test::for_each_available_backend([](auto backend) {
-        constexpr linalg::linalg_backend Backend = decltype(backend)::value;
-        test_norm_inequality<float, Backend>(6, 4);
-        test_norm_inequality<float, Backend>(4, 6);
-        test_norm_inequality<double, Backend>(6, 4);
-        test_norm_inequality<double, Backend>(4, 6);
-    });
+    linalg_test::for_each_available_backend(
+        [](auto backend)
+        {
+            constexpr linalg::linalg_backend Backend = decltype(backend)::value;
+            test_norm_inequality<float, Backend>(6, 4);
+            test_norm_inequality<float, Backend>(4, 6);
+            test_norm_inequality<double, Backend>(6, 4);
+            test_norm_inequality<double, Backend>(4, 6);
+        });
 }

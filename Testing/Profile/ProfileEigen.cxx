@@ -43,10 +43,9 @@ std::vector<T> make_random_matrix(std::size_t rows, std::size_t cols, unsigned s
 }
 
 // Returns a symmetric positive-definite n x n matrix: B * B^T + n * I.
-template <typename T>
-std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
+template <typename T> std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
 {
-    auto           B = make_random_matrix<T>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), seed);
+    auto B = make_random_matrix<T>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), seed);
     std::vector<T> A(static_cast<std::size_t>(n * n), T(0));
     for (linalg_int i = 0; i < n; ++i)
     {
@@ -55,8 +54,8 @@ std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
             T sum = T(0);
             for (linalg_int k = 0; k < n; ++k)
             {
-                sum += B[static_cast<std::size_t>(i * n + k)] *
-                       B[static_cast<std::size_t>(j * n + k)];
+                sum +=
+                    B[static_cast<std::size_t>(i * n + k)] * B[static_cast<std::size_t>(j * n + k)];
             }
             A[static_cast<std::size_t>(i * n + j)] = sum;
         }
@@ -69,8 +68,7 @@ std::vector<T> make_spd_matrix(linalg_int n, unsigned seed = 42)
 // Per-size eigen profiles
 // ---------------------------------------------------------------------------
 
-template <linalg::linalg_backend Backend>
-void profile_eigen_at_size(linalg_int n)
+template <linalg::linalg_backend Backend> void profile_eigen_at_size(linalg_int n)
 {
     // symmetric_eigen: eigenvalues + eigenvectors of SPD matrix. apply() is
     // in place -- A holds the symmetric input on entry and the eigenvectors
@@ -78,9 +76,9 @@ void profile_eigen_at_size(linalg_int n)
     // separate output buffer to pass.
     {
         PROFILER_SCOPE("symmetric/with_vectors");
-        auto                A           = make_spd_matrix<double>(n);
+        auto                A = make_spd_matrix<double>(n);
         std::vector<double> eigenvalues(static_cast<std::size_t>(n));
-        const auto          ws          = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
+        const auto ws = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
         linalg::symmetric_eigen_backend<double, Backend>::apply(
             A.data(), n, n, eigenvalues.data(), n, workspace.data(), ws);
@@ -90,9 +88,9 @@ void profile_eigen_at_size(linalg_int n)
     // eigenvalues-only mode, so this times the same in-place call as above.
     {
         PROFILER_SCOPE("symmetric/eigenvalues_only");
-        auto                A          = make_spd_matrix<double>(n, 43);
+        auto                A = make_spd_matrix<double>(n, 43);
         std::vector<double> eigenvalues(static_cast<std::size_t>(n));
-        const auto          ws         = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
+        const auto ws = linalg::symmetric_eigen_backend<double, Backend>::workspace_size(n);
         std::vector<unsigned char> workspace(ws);
         linalg::symmetric_eigen_backend<double, Backend>::apply(
             A.data(), n, n, eigenvalues.data(), n, workspace.data(), ws);
@@ -101,10 +99,11 @@ void profile_eigen_at_size(linalg_int n)
     // general_eigen: eigenvalues only (no eigenvectors)
     {
         PROFILER_SCOPE("general/eigenvalues_only");
-        auto                A         = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
+        auto A =
+            make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n));
         std::vector<double> ev_real(static_cast<std::size_t>(n));
         std::vector<double> ev_imag(static_cast<std::size_t>(n));
-        const auto          ws        = linalg::general_eigen_backend<double, Backend>::workspace_size(n, false);
+        const auto ws = linalg::general_eigen_backend<double, Backend>::workspace_size(n, false);
         std::vector<unsigned char> workspace(ws);
         linalg::general_eigen_backend<double, Backend>::apply(
             A.data(), n, n, ev_real.data(), ev_imag.data(), false, n, workspace.data(), ws);
@@ -120,10 +119,11 @@ void profile_eigen_at_size(linalg_int n)
     try
     {
         PROFILER_SCOPE("general/with_vectors");
-        auto                A            = make_random_matrix<double>(static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
+        auto A = make_random_matrix<double>(
+            static_cast<std::size_t>(n), static_cast<std::size_t>(n), 43);
         std::vector<double> ev_real(static_cast<std::size_t>(n));
         std::vector<double> ev_imag(static_cast<std::size_t>(n));
-        const auto          ws           = linalg::general_eigen_backend<double, Backend>::workspace_size(n, true);
+        const auto ws = linalg::general_eigen_backend<double, Backend>::workspace_size(n, true);
         std::vector<unsigned char> workspace(ws);
         linalg::general_eigen_backend<double, Backend>::apply(
             A.data(), n, n, ev_real.data(), ev_imag.data(), true, n, workspace.data(), ws);
@@ -181,7 +181,10 @@ int main(int argc, char** argv)
 
     std::printf("=== LinearAlgebra eigen profiler ===\n");
     std::printf("Base matrix order n=%d  (sweep: %d / %d / %d)\n\n",
-        static_cast<int>(n), static_cast<int>(n / 2), static_cast<int>(n), static_cast<int>(2 * n));
+        static_cast<int>(n),
+        static_cast<int>(n / 2),
+        static_cast<int>(n),
+        static_cast<int>(2 * n));
 
     profiler::session_options opts;
     opts.activities           = {profiler::activity::cpu};
@@ -218,6 +221,7 @@ int main(int argc, char** argv)
         report->print_detailed_report();
     }
 
-    std::printf("\nVisualization: open %s in chrome://tracing or https://ui.perfetto.dev\n", trace_path);
+    std::printf(
+        "\nVisualization: open %s in chrome://tracing or https://ui.perfetto.dev\n", trace_path);
     return 0;
 }

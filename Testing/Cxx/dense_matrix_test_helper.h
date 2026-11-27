@@ -28,8 +28,7 @@
 namespace linalg_test
 {
 
-template <typename T>
-class dense_matrix
+template <typename T> class dense_matrix
 {
 public:
     dense_matrix() : rows_(0), cols_(0) {}
@@ -42,7 +41,7 @@ public:
     std::size_t rows() const { return rows_; }
     std::size_t cols() const { return cols_; }
 
-    T& operator()(std::size_t i, std::size_t j) { return data_[i * cols_ + j]; }
+    T&       operator()(std::size_t i, std::size_t j) { return data_[i * cols_ + j]; }
     const T& operator()(std::size_t i, std::size_t j) const { return data_[i * cols_ + j]; }
 
     T*       data() { return data_.data(); }
@@ -61,8 +60,7 @@ private:
     std::vector<T> data_;
 };
 
-template <typename T>
-dense_matrix<T> transpose(const dense_matrix<T>& a)
+template <typename T> dense_matrix<T> transpose(const dense_matrix<T>& a)
 {
     // Apply in-place transpose to a copy of a's flat data, then move the
     // result into a new dense_matrix with swapped dimensions so that the
@@ -71,8 +69,7 @@ dense_matrix<T> transpose(const dense_matrix<T>& a)
     const auto      ws_size = linalg::transpose<T, linalg::linalg_backend::NATIVE>::workspace_size(
         static_cast<linalg_long>(a.rows()), static_cast<linalg_long>(a.cols()));
     std::vector<unsigned char> ws(ws_size);
-    linalg::transpose<T, linalg::linalg_backend::NATIVE>::apply(
-        static_cast<linalg_long>(a.rows()),
+    linalg::transpose<T, linalg::linalg_backend::NATIVE>::apply(static_cast<linalg_long>(a.rows()),
         static_cast<linalg_long>(a.cols()),
         scratch.data(),
         ws.data(),
@@ -84,15 +81,13 @@ dense_matrix<T> transpose(const dense_matrix<T>& a)
     return t;
 }
 
-template <typename T>
-dense_matrix<T> matmul(const dense_matrix<T>& a, const dense_matrix<T>& b)
+template <typename T> dense_matrix<T> matmul(const dense_matrix<T>& a, const dense_matrix<T>& b)
 {
     dense_matrix<T> c(a.rows(), b.cols());
-    const auto      ws_size =
-        linalg::multiplication<T, linalg::linalg_backend::NATIVE>::workspace_size(
-            static_cast<linalg_int>(a.rows()),
-            static_cast<linalg_int>(b.cols()),
-            static_cast<linalg_int>(a.cols()));
+    const auto ws_size = linalg::multiplication<T, linalg::linalg_backend::NATIVE>::workspace_size(
+        static_cast<linalg_int>(a.rows()),
+        static_cast<linalg_int>(b.cols()),
+        static_cast<linalg_int>(a.cols()));
     std::vector<unsigned char> ws(ws_size);
     linalg::multiplication<T, linalg::linalg_backend::NATIVE>::apply(false,
         false,

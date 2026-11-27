@@ -8,8 +8,8 @@
 #include <random>
 #include <vector>
 
-#include <benchmark/benchmark.h>
 #include <Eigen/Eigenvalues>
+#include <benchmark/benchmark.h>
 
 #include "include/common/backend.h"
 #include "include/matrix_operation/schur_decomposition.h"
@@ -24,9 +24,9 @@ using ComplexMatrix =
 
 template <typename T> std::vector<T> make_matrix(linalg_int n)
 {
-    std::mt19937 rng(42);
+    std::mt19937                      rng(42);
     std::uniform_real_distribution<T> distribution(T(-1), T(1));
-    std::vector<T> input(static_cast<std::size_t>(n) * n);
+    std::vector<T>                    input(static_cast<std::size_t>(n) * n);
     for (auto& value : input)
         value = distribution(rng);
     return input;
@@ -35,36 +35,49 @@ template <typename T> std::vector<T> make_matrix(linalg_int n)
 // Check the actual benchmark input before timing: A = Q S Q*, Q*Q = I,
 // and S upper triangular. This also rejects nonfinite outputs.
 template <typename T>
-bool valid_schur(const std::vector<T>& input, linalg_int n,
-    const RealMatrix<T>& sr, const RealMatrix<T>& si,
-    const RealMatrix<T>& qr, const RealMatrix<T>& qi)
+bool valid_schur(const std::vector<T>& input,
+    linalg_int                         n,
+    const RealMatrix<T>&               sr,
+    const RealMatrix<T>&               si,
+    const RealMatrix<T>&               qr,
+    const RealMatrix<T>&               qi)
 {
     const ComplexMatrix<T> s = sr.template cast<std::complex<T>>() +
-                              std::complex<T>(0, 1) * si.template cast<std::complex<T>>();
+                               std::complex<T>(0, 1) * si.template cast<std::complex<T>>();
     const ComplexMatrix<T> q = qr.template cast<std::complex<T>>() +
-                              std::complex<T>(0, 1) * qi.template cast<std::complex<T>>();
-    const ComplexMatrix<T> a = Eigen::Map<const RealMatrix<T>>(input.data(), n, n)
-                                  .template cast<std::complex<T>>();
+                               std::complex<T>(0, 1) * qi.template cast<std::complex<T>>();
+    const ComplexMatrix<T> a =
+        Eigen::Map<const RealMatrix<T>>(input.data(), n, n).template cast<std::complex<T>>();
     const T tolerance = T(256) * T(n) * std::numeric_limits<T>::epsilon();
-    const T residual = (a - q * s * q.adjoint()).norm() / a.norm();
+    const T residual  = (a - q * s * q.adjoint()).norm() / a.norm();
     const T orthogonality =
         (q.adjoint() * q - ComplexMatrix<T>::Identity(n, n)).norm() / std::sqrt(T(n));
     const T lower = s.template triangularView<Eigen::StrictlyLower>().toDenseMatrix().norm();
-    return s.allFinite() && q.allFinite() && std::isfinite(residual) &&
-           residual <= tolerance && orthogonality <= tolerance && lower <= tolerance * s.norm();
+    return s.allFinite() && q.allFinite() && std::isfinite(residual) && residual <= tolerance &&
+           orthogonality <= tolerance && lower <= tolerance * s.norm();
 }
 
 template <typename T, linalg::linalg_backend Backend>
 void BM_SchurDecomposition(benchmark::State& state)
 {
-    const auto n = static_cast<linalg_int>(state.range(0));
-    const auto input = make_matrix<T>(n);
-    RealMatrix<T> sr(n, n), si(n, n), qr(n, n), qi(n, n);
-    const auto bytes = linalg::schur_decomposition<T, Backend>::workspace_size(n);
+    const auto             n     = static_cast<linalg_int>(state.range(0));
+    const auto             input = make_matrix<T>(n);
+    RealMatrix<T>          sr(n, n), si(n, n), qr(n, n), qi(n, n);
+    const auto             bytes = linalg::schur_decomposition<T, Backend>::workspace_size(n);
     std::vector<std::byte> workspace(bytes);
-    const auto compute = [&] {
-        linalg::schur_decomposition<T, Backend>::apply(input.data(), n, n,
-            sr.data(), si.data(), n, qr.data(), qi.data(), n, workspace.data(), bytes);
+    const auto             compute = [&]
+    {
+        linalg::schur_decomposition<T, Backend>::apply(input.data(),
+            n,
+            n,
+            sr.data(),
+            si.data(),
+            n,
+            qr.data(),
+            qi.data(),
+            n,
+            workspace.data(),
+            bytes);
     };
     try
     {
@@ -92,13 +105,14 @@ void BM_SchurDecomposition(benchmark::State& state)
 
 template <typename T> void BM_EigenSchurDecomposition(benchmark::State& state)
 {
-    const auto n = static_cast<linalg_int>(state.range(0));
-    const auto input = make_matrix<T>(n);
+    const auto                            n     = static_cast<linalg_int>(state.range(0));
+    const auto                            input = make_matrix<T>(n);
     const Eigen::Map<const RealMatrix<T>> original(input.data(), n, n);
-    ComplexMatrix<T> work(n, n);
+    ComplexMatrix<T>                      work(n, n);
     Eigen::ComplexSchur<ComplexMatrix<T>> solver(n);
-    RealMatrix<T> sr(n, n), si(n, n), qr(n, n), qi(n, n);
-    const auto compute = [&] {
+    RealMatrix<T>                         sr(n, n), si(n, n), qr(n, n), qi(n, n);
+    const auto                            compute = [&]
+    {
         work = original.template cast<std::complex<T>>();
         solver.compute(work, true);
         sr = solver.matrixT().real();
@@ -132,17 +146,27 @@ template <typename T> void BM_EigenSchurDecomposition(benchmark::State& state)
 
 void sizes(benchmark::internal::Benchmark* registration)
 {
-    registration->Arg(8)->Arg(16)->Arg(32)->Arg(64)->Arg(96)->Arg(128)
-        ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)
-        ->ReportAggregatesOnly(true)->Threads(1);
+    registration->Arg(8)
+        ->Arg(16)
+        ->Arg(32)
+        ->Arg(64)
+        ->Arg(96)
+        ->Arg(128)
+        ->Unit(benchmark::kMicrosecond)
+        ->MinTime(0.1)
+        ->Repetitions(3)
+        ->ReportAggregatesOnly(true)
+        ->Threads(1);
 }
 }  // namespace
 
 BENCHMARK_TEMPLATE(BM_SchurDecomposition, float, linalg::linalg_backend::NATIVE)->Apply(sizes);
 BENCHMARK_TEMPLATE(BM_SchurDecomposition, double, linalg::linalg_backend::NATIVE)->Apply(sizes);
 #if LINALG_HAS_BLAS
-BENCHMARK_TEMPLATE(BM_SchurDecomposition, float, linalg::linalg_backend::BLAS_LAPACKE)->Apply(sizes);
-BENCHMARK_TEMPLATE(BM_SchurDecomposition, double, linalg::linalg_backend::BLAS_LAPACKE)->Apply(sizes);
+BENCHMARK_TEMPLATE(BM_SchurDecomposition, float, linalg::linalg_backend::BLAS_LAPACKE)
+    ->Apply(sizes);
+BENCHMARK_TEMPLATE(BM_SchurDecomposition, double, linalg::linalg_backend::BLAS_LAPACKE)
+    ->Apply(sizes);
 #endif
 #if LINALG_HAS_MKL
 BENCHMARK_TEMPLATE(BM_SchurDecomposition, float, linalg::linalg_backend::MKL)->Apply(sizes);

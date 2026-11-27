@@ -1,8 +1,6 @@
-# Every header in this repository uses #pragma once (a deliberate, universal
-# convention, not an oversight) — hence -portability-avoid-pragma-once below.
-# That check only becomes reachable once --header-filter actually matches
-# include/|src/ (see Cmake/clang_tidy.cmake); it used to match nothing here.
 ---
+# Preserve established parameter ordering and deliberate numeric conversions.
+# Headers intentionally use #pragma once rather than include guards.
 Checks: >
   -*,
   bugprone-*,
@@ -15,6 +13,6 @@ Checks: >
   -bugprone-easily-swappable-parameters,
   -bugprone-narrowing-conversions,
   -portability-avoid-pragma-once
-WarningsAsErrors: ''
-HeaderFilterRegex: ''
-FormatStyle: none
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|.*/)(include|src|Testing|Tests|examples|Examples)/'
+FormatStyle: file

@@ -3,9 +3,9 @@
 #include <limits>
 #include <vector>
 
-#include "gtest/gtest.h"
-#include "test_reporting.h"
 #include "include/matrix_operation/banded_operations.h"
+#include "test_reporting.h"
+#include "gtest/gtest.h"
 
 namespace
 {
@@ -49,13 +49,13 @@ TEST(BandedOperations3, DecompositionWrongSize)
 
     std::vector<double> output(2, 1.0);
 
-    EXPECT_THROW((decomposition<double, 3>(output, outer_dim, dim, inner_dim)),
-        std::invalid_argument);
+    EXPECT_THROW(
+        (decomposition<double, 3>(output, outer_dim, dim, inner_dim)), std::invalid_argument);
 }
 
 TEST(BandedOperations3, SolveBanded)
 {
-    const size_t n = 3;
+    const size_t        n = 3;
     std::vector<double> L(n, 0.5);
     std::vector<double> D(n, 2.0);
     std::vector<double> U(n, 0.5);
@@ -66,19 +66,19 @@ TEST(BandedOperations3, SolveBanded)
 
 TEST(BandedOperations3, SolveBandedSmallN)
 {
-    const size_t n = 2;
+    const size_t        n = 2;
     std::vector<double> L(n, 0.5);
     std::vector<double> D(n, 2.0);
     std::vector<double> U(n, 0.5);
     std::vector<double> output(n, 1.0);
 
-    EXPECT_THROW(solve_banded(output.data(), n, L.data(), D.data(), U.data()),
-        std::invalid_argument);
+    EXPECT_THROW(
+        solve_banded(output.data(), n, L.data(), D.data(), U.data()), std::invalid_argument);
 }
 
 TEST(BandedOperations3, SolveBandedFloat)
 {
-    const size_t n = 3;
+    const size_t       n = 3;
     std::vector<float> L(n, 0.5f);
     std::vector<float> D(n, 2.0f);
     std::vector<float> U(n, 0.5f);

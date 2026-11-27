@@ -229,9 +229,15 @@ void BM_EigenEigensolver(benchmark::State& state)
 
 void general_vector_sizes(benchmark::internal::Benchmark* registration)
 {
-    registration->Arg(8)->Arg(32)->Arg(64)->Arg(128)
-        ->Unit(benchmark::kMicrosecond)->MinTime(0.1)->Repetitions(3)
-        ->ReportAggregatesOnly(true)->Threads(1);
+    registration->Arg(8)
+        ->Arg(32)
+        ->Arg(64)
+        ->Arg(128)
+        ->Unit(benchmark::kMicrosecond)
+        ->MinTime(0.1)
+        ->Repetitions(3)
+        ->ReportAggregatesOnly(true)
+        ->Threads(1);
 }
 
 }  // namespace
